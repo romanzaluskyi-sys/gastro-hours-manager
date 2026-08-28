@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, { useState, useEffect } from "react";
 import {
   Clock,
@@ -25,6 +24,9 @@ import {
   Bell,
   Info,
   WifiOff,
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
 // ==========================================
@@ -65,6 +67,35 @@ const getMonthName = (monthIdx) =>
     "Listopad",
     "Grudzień",
   ][monthIdx];
+const getAvailableYears = () => {
+  const startYear = 2026;
+  const currentYear = new Date().getFullYear();
+  const endYear = Math.max(startYear, currentYear) + 1;
+  const years = [];
+  for (let y = startYear; y <= endYear; y++) years.push(y);
+  return years;
+};
+
+const formatNotificationText = (n, showEmployeeName) => {
+  const dateStr = n.shift_date
+    ? new Date(n.shift_date + "T00:00:00").toLocaleDateString("pl-PL")
+    : "";
+  const who = showEmployeeName
+    ? `zmianę pracownika ${n.user_name}`
+    : "Twoją zmianę";
+  if (n.action === "delete") {
+    return `${n.actor_name} usunął ${who} z dnia ${dateStr}${
+      n.old_start
+        ? ` (była ${n.old_start}${n.old_end ? "–" + n.old_end : ""})`
+        : ""
+    }`;
+  }
+  return `${n.actor_name} edytował ${who} z dnia ${dateStr}: było ${
+    n.old_start || "?"
+  }${n.old_end ? "–" + n.old_end : ""}, jest ${n.new_start || "?"}${
+    n.new_end ? "–" + n.new_end : ""
+  }`;
+};
 
 // --- API SUPABASE (REST) ---
 const api = {
@@ -75,15 +106,30 @@ const api = {
     Prefer: "return=representation",
   },
   get: async (table) => {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=*`, {
-      headers: api.headers,
-    });
-    const json = await res.json();
-    if (!res.ok)
-      throw new Error(
-        json.message || json.error_description || `Błąd pobierania z ${table}`
+    const pageSize = 1000;
+    let allRows = [];
+    let from = 0;
+    while (true) {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/${table}?select=*&order=id.asc`,
+        {
+          headers: {
+            ...api.headers,
+            Range: `${from}-${from + pageSize - 1}`,
+          },
+        }
       );
-    return json;
+      const json = await res.json();
+      if (!res.ok)
+        throw new Error(
+          json.message || json.error_description || `Błąd pobierania z ${table}`
+        );
+      if (!Array.isArray(json)) return json;
+      allRows = allRows.concat(json);
+      if (json.length < pageSize) break;
+      from += pageSize;
+    }
+    return allRows;
   },
   post: async (table, data) => {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
@@ -113,9 +159,26 @@ const api = {
     if (!res.ok) throw new Error("Błąd usuwania");
     return true;
   },
+  patchByFilter: async (table, filterQuery, data) => {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${filterQuery}`, {
+      method: "PATCH",
+      headers: api.headers,
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error("Błąd aktualizacji");
+    return true;
+  },
 };
 
 // --- API GOOGLE SHEETS (DODANO UUID I AKCJE) ---
+const toLocalYMD = (d) => {
+  const dt = new Date(d);
+  const y = dt.getFullYear();
+  const m = String(dt.getMonth() + 1).padStart(2, "0");
+  const day = String(dt.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+
 const sendToGoogleSheets = async (shift, actionType = "ADD_SHIFT") => {
   if (!GOOGLE_SCRIPT_URL.includes("script.google.com")) return;
   try {
@@ -128,7 +191,7 @@ const sendToGoogleSheets = async (shift, actionType = "ADD_SHIFT") => {
         shift_id: shift.id, // Ważne dla edycji i usuwania!
         pracownik: shift.user_name,
         lokal: shift.lokal,
-        dataPracy: new Date(shift.start_time).toISOString().split("T")[0],
+        dataPracy: toLocalYMD(shift.start_time),
         start: new Date(shift.start_time).toLocaleTimeString([], {
           hour: "2-digit",
           minute: "2-digit",
@@ -200,7 +263,7 @@ const LoginScreen = ({
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
       <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-md border-t-4 border-blue-600">
         <h1 className="text-2xl font-bold text-center mb-6 text-gray-800">
-          Godziny Gastro Emka v0.0.8.3 (MVP)
+          Godziny Gastro Emka v0.1.2
         </h1>
         {dbError && (
           <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6 rounded shadow-sm">
@@ -225,7 +288,7 @@ const LoginScreen = ({
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="mt-1 block w-full p-3 border border-gray-300 rounded-md bg-gray-50"
-              placeholder="osoba/lokal@test.pl"
+              placeholder="lokal@gmail.com"
               required
             />
           </div>
@@ -647,7 +710,7 @@ const HoursReport = ({
           onChange={(e) => setSelectedYear(Number(e.target.value))}
           className="p-2 border rounded-lg bg-gray-50"
         >
-          {[2024, 2025, 2026].map((y) => (
+          {getAvailableYears().map((y) => (
             <option key={y} value={y}>
               {y}
             </option>
@@ -808,6 +871,42 @@ const IssueForm = ({ userObj, activeUsers, issues, setIssues, showMsg }) => {
 // ==========================================
 // PRACOWNIK ZAMKNIĘTY DASHBOARD
 // ==========================================
+// ==========================================
+// PANEL POWIADOMIEŃ (WSPÓLNY DLA CLOSED I OPEN)
+// ==========================================
+const NotificationsPanel = ({ items, showEmployeeName }) => {
+  const sorted = [...items].sort(
+    (a, b) => new Date(b.created_at) - new Date(a.created_at)
+  );
+  return (
+    <div className="space-y-3">
+      {sorted.length === 0 && (
+        <div className="text-center p-10 text-gray-400">
+          <Bell className="mx-auto mb-2 opacity-40" size={40} />
+          Brak powiadomień
+        </div>
+      )}
+      {sorted.map((n) => (
+        <div
+          key={n.id}
+          className={`p-3 rounded-lg border text-sm ${
+            n.is_read ? "bg-white" : "bg-blue-50 border-blue-200"
+          }`}
+        >
+          <p className="font-semibold text-gray-800">
+            {formatNotificationText(n, showEmployeeName)}
+          </p>
+          {n.created_at && (
+            <p className="text-xs text-gray-400 mt-1">
+              {new Date(n.created_at).toLocaleString("pl-PL")}
+            </p>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+};
+
 const ClosedEmployeeDashboard = ({
   currentUser,
   setCurrentView,
@@ -817,9 +916,36 @@ const ClosedEmployeeDashboard = ({
   setShifts,
   issues,
   setIssues,
+  notifications,
+  setNotifications,
   showMsg,
 }) => {
   const [tab, setTab] = useState("form");
+
+  const myNotifications = notifications.filter(
+    (n) => n.user_name === currentUser.name
+  );
+  const unreadCount = myNotifications.filter((n) => !n.is_read).length;
+
+  useEffect(() => {
+    if (tab !== "wiad") return;
+    const unreadIds = myNotifications
+      .filter((n) => !n.is_read)
+      .map((n) => n.id);
+    if (unreadIds.length === 0) return;
+    api
+      .patchByFilter("notifications", `id=in.(${unreadIds.join(",")})`, {
+        is_read: true,
+      })
+      .then(() => {
+        setNotifications((prev) =>
+          prev.map((n) =>
+            unreadIds.includes(n.id) ? { ...n, is_read: true } : n
+          )
+        );
+      })
+      .catch(() => {});
+  }, [tab]);
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -863,6 +989,12 @@ const ClosedEmployeeDashboard = ({
             showMsg={showMsg}
           />
         )}
+        {tab === "wiad" && (
+          <NotificationsPanel
+            items={myNotifications}
+            showEmployeeName={false}
+          />
+        )}
       </div>
       <div className="bg-white border-t flex justify-around p-3 pb-safe z-10">
         <button
@@ -892,6 +1024,20 @@ const ClosedEmployeeDashboard = ({
           <AlertCircle size={24} />
           <span className="text-xs mt-1">Zgłoś</span>
         </button>
+        <button
+          onClick={() => setTab("wiad")}
+          className={`relative flex flex-col items-center ${
+            tab === "wiad" ? "text-blue-600" : "text-gray-500"
+          }`}
+        >
+          <Bell size={24} />
+          {unreadCount > 0 && (
+            <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+              {unreadCount}
+            </span>
+          )}
+          <span className="text-xs mt-1">Wiadomości</span>
+        </button>
       </div>
     </div>
   );
@@ -910,6 +1056,8 @@ const OpenDeviceDashboard = ({
   users,
   issues,
   setIssues,
+  notifications,
+  setNotifications,
   showMsg,
 }) => {
   const [tab, setTab] = useState("form");
@@ -923,6 +1071,32 @@ const OpenDeviceDashboard = ({
       u.role === "open" &&
       allowed.includes(u.default_lokal)
   );
+
+  const activeNames = new Set(activeUsers.map((u) => u.name));
+  const myNotifications = notifications.filter((n) =>
+    activeNames.has(n.user_name)
+  );
+  const unreadCount = myNotifications.filter((n) => !n.is_read).length;
+
+  useEffect(() => {
+    if (tab !== "wiad") return;
+    const unreadIds = myNotifications
+      .filter((n) => !n.is_read)
+      .map((n) => n.id);
+    if (unreadIds.length === 0) return;
+    api
+      .patchByFilter("notifications", `id=in.(${unreadIds.join(",")})`, {
+        is_read: true,
+      })
+      .then(() => {
+        setNotifications((prev) =>
+          prev.map((n) =>
+            unreadIds.includes(n.id) ? { ...n, is_read: true } : n
+          )
+        );
+      })
+      .catch(() => {});
+  }, [tab]);
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col items-center">
@@ -972,9 +1146,24 @@ const OpenDeviceDashboard = ({
           >
             Zgłoś
           </button>
+          <button
+            onClick={() => setTab("wiad")}
+            className={`relative flex-1 p-3 ${
+              tab === "wiad"
+                ? "border-b-4 border-blue-500 text-blue-600"
+                : "text-gray-500 bg-gray-50"
+            }`}
+          >
+            Wiadomości
+            {unreadCount > 0 && (
+              <span className="absolute top-1 right-2 bg-red-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                {unreadCount}
+              </span>
+            )}
+          </button>
         </div>
         <div className="p-4 flex-grow overflow-y-auto">
-          {activeUsers.length === 0 ? (
+          {activeUsers.length === 0 && tab !== "wiad" ? (
             <div className="text-center p-8 text-gray-500">
               <AlertCircle className="mx-auto mb-2 opacity-50" size={48} />
               Brak przypisanych pracowników.
@@ -1006,6 +1195,12 @@ const OpenDeviceDashboard = ({
                   showMsg={showMsg}
                 />
               )}
+              {tab === "wiad" && (
+                <NotificationsPanel
+                  items={myNotifications}
+                  showEmployeeName={true}
+                />
+              )}
             </>
           )}
         </div>
@@ -1030,10 +1225,46 @@ const ManagerDashboard = ({
   setShifts,
   issues,
   setIssues,
+  notifications,
+  setNotifications,
   showMsg,
 }) => {
   const [tab, setTab] = useState("godziny");
   const [przewodnikTab, setPrzewodnikTab] = useState("pracownicy");
+
+  // --- POWIADOMIENIA DLA PRACOWNIKA O ZMIANIE/USUNIĘCIU ZMIANY ---
+  const fmtTime = (d) =>
+    d ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : null;
+
+  const notifyEmployee = async (
+    shiftLike,
+    action,
+    oldStart,
+    oldEnd,
+    newStart,
+    newEnd
+  ) => {
+    try {
+      const dateSrc = oldStart || newStart;
+      const created = await api.post("notifications", {
+        user_name: shiftLike.user_name,
+        lokal: shiftLike.lokal,
+        actor_name: currentUser.name,
+        action,
+        shift_date: dateSrc
+          ? dateSrc.toISOString().split("T")[0]
+          : new Date().toISOString().split("T")[0],
+        old_start: fmtTime(oldStart),
+        old_end: fmtTime(oldEnd),
+        new_start: fmtTime(newStart),
+        new_end: fmtTime(newEnd),
+        is_read: false,
+      });
+      setNotifications((prev) => [...prev, created]);
+    } catch (err) {
+      console.error("Błąd tworzenia powiadomienia:", err);
+    }
+  };
 
   const isLocalManager = currentUser.role === "manager_lokalu";
   const managerLokaleList = currentUser.allowed_lokale
@@ -1090,6 +1321,126 @@ const ManagerDashboard = ({
 
   const archivedLokale = lokale.filter((l) => l.archived);
   const archivedStanowiska = stanowiska.filter((s) => s.archived);
+
+  // --- PULPIT (Dashboard godzin) ---
+  const ALLOWED_PULPIT_ROLES = ["closed", "open", "manager_lokalu"];
+
+  const [pMode, setPMode] = useState("miesiac"); // "tydzien" | "miesiac"
+  const [pMonday, setPMonday] = useState(() => {
+    const d = new Date();
+    const day = d.getDay();
+    const diff = (day === 0 ? -6 : 1) - day;
+    d.setDate(d.getDate() + diff);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
+  const [pMonth, setPMonth] = useState(new Date().getMonth());
+  const [pYear, setPYear] = useState(new Date().getFullYear());
+  const [pLokal, setPLokal] = useState("");
+
+  const pShiftWeek = (delta) => {
+    const d = new Date(pMonday);
+    d.setDate(d.getDate() + delta * 7);
+    setPMonday(d);
+  };
+  const pShiftMonth = (delta) => {
+    let m = pMonth + delta;
+    let y = pYear;
+    if (m < 0) {
+      m = 11;
+      y -= 1;
+    }
+    if (m > 11) {
+      m = 0;
+      y += 1;
+    }
+    setPMonth(m);
+    setPYear(y);
+  };
+
+  let pPeriodStart, pPeriodEnd, pDays;
+  if (pMode === "tydzien") {
+    pPeriodStart = new Date(pMonday);
+    pPeriodEnd = new Date(pMonday);
+    pPeriodEnd.setDate(pPeriodEnd.getDate() + 7);
+    pDays = Array.from({ length: 7 }).map((_, i) => {
+      const d = new Date(pMonday);
+      d.setDate(d.getDate() + i);
+      return d;
+    });
+  } else {
+    pPeriodStart = new Date(pYear, pMonth, 1);
+    pPeriodEnd = new Date(pYear, pMonth + 1, 1);
+    const daysInMonth = new Date(pYear, pMonth + 1, 0).getDate();
+    pDays = Array.from({ length: daysInMonth }).map(
+      (_, i) => new Date(pYear, pMonth, i + 1)
+    );
+  }
+
+  const pPeriodLenMs = pPeriodEnd.getTime() - pPeriodStart.getTime();
+  const pPrevStart = new Date(pPeriodStart.getTime() - pPeriodLenMs);
+  const pPrevEnd = new Date(pPeriodStart);
+
+  const computeHours = (s) =>
+    s.end_time ? (s.end_time - s.start_time) / (1000 * 60 * 60) : 0;
+
+  const pMatchesFilters = (s) =>
+    hasAccessToLokal(s.lokal) && (!pLokal || s.lokal === pLokal);
+
+  const pShiftsInRange = (start, end) =>
+    shifts.filter(
+      (s) => pMatchesFilters(s) && s.start_time >= start && s.start_time < end
+    );
+
+  const pulpitShifts = pShiftsInRange(pPeriodStart, pPeriodEnd);
+  const pPrevShifts = pShiftsInRange(pPrevStart, pPrevEnd);
+
+  const pNamesWithShifts = new Set(pulpitShifts.map((s) => s.user_name));
+  const pulpitEmployees = users
+    .filter((u) => !u.archived && ALLOWED_PULPIT_ROLES.includes(u.role))
+    .filter((u) => hasAccessToLokal(u.default_lokal))
+    .filter(
+      (u) =>
+        !pLokal || u.default_lokal === pLokal || pNamesWithShifts.has(u.name)
+    )
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const pRows = pulpitEmployees.map((u) => {
+    const dayValues = pDays.map((d) => {
+      const dayShifts = pulpitShifts.filter(
+        (s) =>
+          s.user_name === u.name &&
+          s.start_time.toDateString() === d.toDateString()
+      );
+      const hours = dayShifts.reduce((sum, s) => sum + computeHours(s), 0);
+      return { hours, shifts: dayShifts };
+    });
+    const totalHours = dayValues.reduce((sum, v) => sum + v.hours, 0);
+    const workDays = dayValues.filter((v) => v.shifts.length > 0).length;
+    return { user: u, dayValues, totalHours, workDays };
+  });
+
+  const pCurrentTotal = pRows.reduce((sum, r) => sum + r.totalHours, 0);
+  const pPrevTotal = pPrevShifts.reduce((sum, s) => sum + computeHours(s), 0);
+  const pDynamika =
+    pPrevTotal > 0 ? ((pCurrentTotal - pPrevTotal) / pPrevTotal) * 100 : null;
+  const pActiveCount = pRows.filter((r) => r.totalHours > 0).length;
+  const pAvgPerEmployee = pActiveCount > 0 ? pCurrentTotal / pActiveCount : 0;
+  const pMaxPerEmployee = pRows.reduce(
+    (max, r) => Math.max(max, r.totalHours),
+    0
+  );
+  const pWorkingDays = pDays.filter((d) =>
+    pulpitShifts.some((s) => s.start_time.toDateString() === d.toDateString())
+  ).length;
+  const pAvgPerDay = pWorkingDays > 0 ? pCurrentTotal / pWorkingDays : 0;
+
+  const fmtH = (n) => (n || 0).toFixed(1).replace(".", ",");
+
+  const openPulpitCell = (dayValue) => {
+    if (!dayValue || dayValue.shifts.length === 0) return;
+    openEditShift(dayValue.shifts[0]);
+  };
 
   const handleSaveUser = async (e) => {
     e.preventDefault();
@@ -1254,6 +1605,16 @@ const ManagerDashboard = ({
       };
       setShifts(shifts.map((s) => (s.id === parsed.id ? parsed : s)));
 
+      // Powiadomienie dla pracownika o edycji zmiany
+      const oldStart = editingShift.start_time;
+      const oldEnd = editingShift.end_time;
+      const changed =
+        oldStart.getTime() !== startD.getTime() ||
+        (oldEnd ? oldEnd.getTime() : null) !== (endD ? endD.getTime() : null);
+      if (changed) {
+        notifyEmployee(parsed, "edit", oldStart, oldEnd, startD, endD);
+      }
+
       // Automatyczna poprawka w Google Sheets
       await sendToGoogleSheets(parsed, "EDIT_SHIFT");
 
@@ -1275,6 +1636,16 @@ const ManagerDashboard = ({
     try {
       await api.delete("shifts", editingShift.id);
       setShifts(shifts.filter((s) => s.id !== editingShift.id));
+
+      // Powiadomienie dla pracownika o usunięciu zmiany
+      notifyEmployee(
+        editingShift,
+        "delete",
+        editingShift.start_time,
+        editingShift.end_time,
+        null,
+        null
+      );
 
       // Automatyczne usunięcie z Google Sheets
       await sendToGoogleSheets(editingShift, "DELETE_SHIFT");
@@ -1342,6 +1713,22 @@ const ManagerDashboard = ({
             }`}
           >
             <Filter size={18} /> Rejestr Godzin
+          </button>
+          <button
+            onClick={() => setTab("pulpit")}
+            className={`p-4 text-left border-b border-gray-800 flex items-center gap-2 whitespace-nowrap ${
+              tab === "pulpit" ? "bg-blue-600" : "hover:bg-gray-800"
+            }`}
+          >
+            <Users size={18} /> Pulpit godzin
+          </button>
+          <button
+            onClick={() => setTab("grafik")}
+            className={`p-4 text-left border-b border-gray-800 flex items-center gap-2 whitespace-nowrap ${
+              tab === "grafik" ? "bg-blue-600" : "hover:bg-gray-800"
+            }`}
+          >
+            <Calendar size={18} /> Grafik
           </button>
           <button
             onClick={() => setTab("aktywni")}
@@ -1520,6 +1907,231 @@ const ManagerDashboard = ({
           </div>
         )}
 
+        {tab === "pulpit" && (
+          <div className="max-w-full mx-auto">
+            <div className="flex flex-wrap items-center gap-3 mb-4">
+              <h2 className="text-2xl font-bold mr-auto">Pulpit godzin</h2>
+
+              <div className="flex bg-white border rounded-lg p-1 shadow-sm">
+                <button
+                  onClick={() => setPMode("tydzien")}
+                  className={`px-3 py-1.5 rounded text-sm font-bold ${
+                    pMode === "tydzien"
+                      ? "bg-blue-600 text-white"
+                      : "text-gray-500"
+                  }`}
+                >
+                  Tydzień
+                </button>
+                <button
+                  onClick={() => setPMode("miesiac")}
+                  className={`px-3 py-1.5 rounded text-sm font-bold ${
+                    pMode === "miesiac"
+                      ? "bg-blue-600 text-white"
+                      : "text-gray-500"
+                  }`}
+                >
+                  Miesiąc
+                </button>
+              </div>
+
+              {pMode === "tydzien" ? (
+                <div className="flex items-center gap-1 bg-white border rounded-lg p-1 shadow-sm">
+                  <button
+                    onClick={() => pShiftWeek(-1)}
+                    className="p-2 hover:bg-gray-100 rounded"
+                  >
+                    <ChevronLeft size={18} />
+                  </button>
+                  <span className="font-bold text-sm px-2 whitespace-nowrap">
+                    {pMonday.toLocaleDateString("pl-PL", {
+                      day: "numeric",
+                      month: "short",
+                    })}{" "}
+                    -{" "}
+                    {new Date(
+                      pPeriodEnd.getTime() - 86400000
+                    ).toLocaleDateString("pl-PL", {
+                      day: "numeric",
+                      month: "short",
+                    })}
+                  </span>
+                  <button
+                    onClick={() => pShiftWeek(1)}
+                    className="p-2 hover:bg-gray-100 rounded"
+                  >
+                    <ChevronRight size={18} />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1 bg-white border rounded-lg p-1 shadow-sm">
+                  <button
+                    onClick={() => pShiftMonth(-1)}
+                    className="p-2 hover:bg-gray-100 rounded"
+                  >
+                    <ChevronLeft size={18} />
+                  </button>
+                  <span className="font-bold text-sm px-2 whitespace-nowrap capitalize">
+                    {getMonthName(pMonth)} {pYear}
+                  </span>
+                  <button
+                    onClick={() => pShiftMonth(1)}
+                    className="p-2 hover:bg-gray-100 rounded"
+                  >
+                    <ChevronRight size={18} />
+                  </button>
+                </div>
+              )}
+
+              <select
+                value={pLokal}
+                onChange={(e) => setPLokal(e.target.value)}
+                className="p-2 border rounded-lg bg-white text-sm"
+              >
+                <option value="">Wszystkie lokale</option>
+                {availableLokaleForManager.map((l) => (
+                  <option key={l.id} value={l.name}>
+                    {l.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
+              <div className="bg-white p-3 rounded-lg border shadow-sm">
+                <p className="text-xs text-gray-500">⬅️ Poprz. okres</p>
+                <p className="text-lg font-bold">{fmtH(pPrevTotal)} h</p>
+              </div>
+              <div className="bg-white p-3 rounded-lg border shadow-sm">
+                <p className="text-xs text-gray-500">📊 Dynamika</p>
+                <p
+                  className={`text-lg font-bold ${
+                    pDynamika === null
+                      ? "text-gray-400"
+                      : pDynamika >= 0
+                      ? "text-green-600"
+                      : "text-red-500"
+                  }`}
+                >
+                  {pDynamika === null
+                    ? "-"
+                    : `${pDynamika >= 0 ? "+" : ""}${pDynamika.toFixed(1)}%`}
+                </p>
+              </div>
+              <div className="bg-white p-3 rounded-lg border shadow-sm">
+                <p className="text-xs text-gray-500">👥 Średnio na prac.</p>
+                <p className="text-lg font-bold">{fmtH(pAvgPerEmployee)} h</p>
+              </div>
+              <div className="bg-white p-3 rounded-lg border shadow-sm">
+                <p className="text-xs text-gray-500">📅 Dni robocze</p>
+                <p className="text-lg font-bold">{pWorkingDays}</p>
+              </div>
+              <div className="bg-white p-3 rounded-lg border shadow-sm">
+                <p className="text-xs text-gray-500">🔥 Max godzin/prac.</p>
+                <p className="text-lg font-bold">{fmtH(pMaxPerEmployee)} h</p>
+              </div>
+              <div className="bg-white p-3 rounded-lg border shadow-sm">
+                <p className="text-xs text-gray-500">📈 Średnio dziennie</p>
+                <p className="text-lg font-bold">{fmtH(pAvgPerDay)} h</p>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow border overflow-x-auto">
+              <table className="text-sm border-collapse">
+                <thead>
+                  <tr>
+                    <th className="sticky left-0 bg-gray-100 p-2 text-left border-b border-r z-20 min-w-[130px]">
+                      Imię
+                    </th>
+                    <th className="sticky left-[130px] bg-gray-100 p-2 text-center border-b border-r z-20 min-w-[70px]">
+                      Godzin
+                    </th>
+                    <th className="sticky left-[200px] bg-gray-100 p-2 text-center border-b border-r z-20 min-w-[70px]">
+                      Dni
+                    </th>
+                    {pDays.map((d, i) => {
+                      const isToday =
+                        d.toDateString() === new Date().toDateString();
+                      return (
+                        <th
+                          key={i}
+                          className={`p-1 text-center border-b min-w-[52px] ${
+                            isToday ? "bg-blue-50" : "bg-gray-100"
+                          }`}
+                        >
+                          <div className="text-[10px] text-gray-400 uppercase">
+                            {getDayOfWeek(d)}
+                          </div>
+                          <div className="font-bold text-xs">{d.getDate()}</div>
+                        </th>
+                      );
+                    })}
+                  </tr>
+                </thead>
+                <tbody>
+                  {pRows.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={3 + pDays.length}
+                        className="p-6 text-center text-gray-400"
+                      >
+                        Brak pracowników do wyświetlenia
+                      </td>
+                    </tr>
+                  )}
+                  {pRows.map((row) => (
+                    <tr key={row.user.id} className="border-b hover:bg-gray-50">
+                      <td className="sticky left-0 bg-white p-2 font-semibold border-r whitespace-nowrap z-10">
+                        {row.user.name}
+                      </td>
+                      <td className="sticky left-[130px] bg-blue-50 p-2 text-center font-bold text-blue-700 border-r z-10">
+                        {fmtH(row.totalHours)}
+                      </td>
+                      <td className="sticky left-[200px] bg-white p-2 text-center text-gray-500 border-r z-10">
+                        {row.workDays}
+                      </td>
+                      {row.dayValues.map((dv, i) => (
+                        <td
+                          key={i}
+                          onClick={() => openPulpitCell(dv)}
+                          className={`p-1 text-center text-xs border-r ${
+                            dv.shifts.length > 0
+                              ? "cursor-pointer hover:bg-blue-100 font-semibold text-gray-800"
+                              : "text-gray-300"
+                          }`}
+                          title={
+                            dv.shifts.length > 0
+                              ? "Kliknij aby edytować zmianę"
+                              : ""
+                          }
+                        >
+                          {dv.shifts.length > 0
+                            ? dv.hours > 0
+                              ? fmtH(dv.hours)
+                              : "trwa"
+                            : "-"}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {tab === "grafik" && (
+          <div className="max-w-3xl mx-auto text-center py-20">
+            <Calendar size={64} className="mx-auto mb-4 text-gray-300" />
+            <h2 className="text-2xl font-bold text-gray-400 mb-2">
+              Grafik tygodniowy
+            </h2>
+            <p className="text-gray-400">
+              🚧 Ta funkcja jest w budowie. Wkrótce dostępna.
+            </p>
+          </div>
+        )}
+
         {tab === "godziny" && (
           <div className="max-w-6xl mx-auto">
             <h2 className="text-2xl font-bold mb-4">Rejestr i Edycja Godzin</h2>
@@ -1550,7 +2162,7 @@ const ManagerDashboard = ({
                       onChange={(e) => setFYear(Number(e.target.value))}
                       className="w-24 p-2 border rounded text-sm"
                     >
-                      {[2024, 2025, 2026].map((y) => (
+                      {getAvailableYears().map((y) => (
                         <option key={y} value={y}>
                           {y}
                         </option>
@@ -2425,6 +3037,7 @@ export default function App() {
   const [stanowiska, setStanowiska] = useState([]);
   const [shifts, setShifts] = useState([]);
   const [issues, setIssues] = useState([]);
+  const [notifications, setNotifications] = useState([]);
 
   const [currentView, setCurrentView] = useState("login");
   const [currentUser, setCurrentUser] = useState(null);
@@ -2471,6 +3084,23 @@ export default function App() {
       setIsLoading(false);
     };
     fetchData();
+
+    // Powiadomienia ładujemy osobno - brak tabeli w bazie nie blokuje reszty apki
+    const loadNotifications = () => {
+      api
+        .get("notifications")
+        .then((n) => setNotifications(Array.isArray(n) ? n : []))
+        .catch((err) => {
+          console.error("Błąd pobierania powiadomień:", err.message || err);
+          setNotifications([]);
+        });
+    };
+    loadNotifications();
+
+    // Odświeżamy powiadomienia co 45s, żeby już otwarta sesja też je widziała
+    // bez konieczności przeładowania strony.
+    const notifInterval = setInterval(loadNotifications, 45000);
+    return () => clearInterval(notifInterval);
   }, []);
 
   return (
@@ -2510,6 +3140,8 @@ export default function App() {
           setShifts={setShifts}
           issues={issues}
           setIssues={setIssues}
+          notifications={notifications}
+          setNotifications={setNotifications}
           showMsg={showMsg}
         />
       )}
@@ -2524,6 +3156,8 @@ export default function App() {
           users={users}
           issues={issues}
           setIssues={setIssues}
+          notifications={notifications}
+          setNotifications={setNotifications}
           showMsg={showMsg}
         />
       )}
@@ -2541,6 +3175,8 @@ export default function App() {
           setShifts={setShifts}
           issues={issues}
           setIssues={setIssues}
+          notifications={notifications}
+          setNotifications={setNotifications}
           showMsg={showMsg}
         />
       )}
