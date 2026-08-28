@@ -15,3 +15,16 @@ export const createManagerNotification = async (lokal, message, type) => {
     is_read: false,
   });
 };
+
+// Lustrzane odbicie powyższej funkcji, dla powiadomień samego pracownika
+// (np. "Twój termin książeczki sanepid kończy się..."). Trafia do tej samej
+// zakładki Wiadomości co powiadomienia o edycji/usunięciu zmiany.
+export const createEmployeeNotification = async (userName, message, type) => {
+  return api.post("notifications", {
+    audience: "employee",
+    user_name: userName,
+    message,
+    type,
+    is_read: false,
+  });
+};
