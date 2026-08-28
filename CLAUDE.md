@@ -54,6 +54,7 @@ src/
   api/
     supabase.ts               — obiekt `api` (get z paginacją/post/patch/delete/patchByFilter)
     googleSheets.ts            — sendToGoogleSheets, toLocalYMD
+    notifications.ts           — createManagerNotification(lokal, message, type)
   utils/
     format.ts                 — getShort, getDayOfWeek, getMonthName, getAvailableYears, formatNotificationText
   components/
@@ -61,7 +62,7 @@ src/
     TimeEntryForm.tsx          — wspólny formularz start/koniec zmiany (kiosk i self-tracking)
     HoursReport.tsx            — raport miesięczny (zakładka "Raport")
     IssueForm.tsx               — zakładka "Zgłoś"
-    NotificationsPanel.tsx      — zakładka "Wiadomości" (wspólna dla closed i open)
+    NotificationsPanel.tsx      — zakładka "Wiadomości"/"Powiadomienia" (wspólna dla closed, open i managera)
     ClosedEmployeeDashboard.tsx — dashboard na osobisty telefon pracownika
     OpenDeviceDashboard.tsx     — dashboard "Tablet Służbowy" (kiosk)
     ManagerDashboard.tsx        — panel kierownika, w całości w jednym pliku
@@ -109,12 +110,21 @@ głównym — pracownik nic nie wpisuje ręcznie.
 Zakładki: Rejestr Godzin (edycja zmian), **Pulpit godzin** (dashboard godzin
 — filtr tydzień/miesiąc, tylko role `closed`/`open`/`manager_lokalu`, klik
 na komórkę godzin → edycja zmiany), Grafik (obecnie tylko placeholder "w
-budowie" — NIE ruszać, patrz Roadmap), Aktywni, Zgłoszenia, Pracownicy,
-Przewodnik.
+budowie" — NIE ruszać, patrz Roadmap), Aktywni, **Powiadomienia**,
+Zgłoszenia, Pracownicy, Przewodnik.
 
-⚠️ **Kierownicy NIE MAJĄ obecnie własnej zakładki powiadomień** — to
-świadoma luka, którą trzeba domknąć przed modułem Sanepid i Zadania (patrz
-Roadmap, punkt 0).
+Zakładka **Powiadomienia** (`ManagerDashboard`, tab `"powiadomienia"`) —
+własna dla kierowników (`admin` i `manager_lokalu`), analogiczna do
+`NotificationsPanel` u pracownika. Pokazuje wiersze z tabeli `notifications`
+gdzie `audience === "manager"`, przefiltrowane przez `hasAccessToLokal(n.lokal)`
+— `manager_lokalu` widzi tylko swoje `allowed_lokale`, `admin` widzi
+wszystko. Znaczek z liczbą nieprzeczytanych jak w wersji dla pracowników;
+oznaczanie jako przeczytane też działa tak samo (patch przy wejściu na
+zakładkę). Tworzenie takich powiadomień idzie przez ogólną funkcję
+`createManagerNotification(lokal, message, type)` w
+[`api/notifications.ts`](src/api/notifications.ts) — nie twórz nowej
+funkcji ad-hoc, wywołuj tę, będzie reużywana w modułach Sanepid i
+Zadania/Sprzątanie (Roadmap punkty 1 i 2).
 
 ## Schemat Supabase (tabele używane obecnie)
 
@@ -125,11 +135,23 @@ Roadmap, punkt 0).
 - **shifts** — `id, user_name, user_id?, lokal, stanowisko, start_time
   (timestamptz), end_time (timestamptz | null), godzin`
 - **issues** — zgłoszenia problemów od pracowników
-- **notifications** — `id, user_name, lokal, actor_name, action ('edit' |
-  'delete'), shift_date, old_start, old_end, new_start, new_end, is_read,
-  created_at`. RLS: polityka otwarta (`for all using (true) with check
-  (true)`) — jeśli dodajesz nowe tabele, rób tak samo albo świadomie
-  zawężaj.
+- **notifications** — dwa "typy" wierszy we wspólnej tabeli, odróżnione
+  polem `audience`:
+  - `audience = 'employee'` (domyślne, dla starych wierszy sprzed tej
+    kolumny — traktuj `NULL` jak `'employee'`): powiadomienie dla
+    pracownika o edycji/usunięciu jego zmiany. Pola: `user_name, lokal,
+    actor_name, action ('edit' | 'delete'), shift_date, old_start,
+    old_end, new_start, new_end, is_read, created_at`.
+  - `audience = 'manager'`: ogólne powiadomienie dla kierowników danego
+    `lokal` (tworzone przez `createManagerNotification`). Pola: `lokal,
+    message, type, is_read, created_at` (`user_name`, `actor_name`, `action`
+    i pola `*_start`/`*_end` są wtedy puste — `formatNotificationText`
+    rozpoznaje ten wariant po obecności `message` i zwraca je wprost).
+  - RLS: polityka otwarta (`for all using (true) with check (true)`) —
+    jeśli dodajesz nowe tabele, rób tak samo albo świadomie zawężaj.
+  - ⚠️ Kolumny `audience`, `message`, `type` trzeba dodać ręcznie w
+    Supabase (Claude Code nie ma tam bezpośredniego dostępu) — patrz SQL
+    w historii tej sesji/PR, jeśli jeszcze nie zastosowany.
 
 ## Znane błędy — JUŻ NAPRAWIONE, nie wprowadzaj ponownie
 
@@ -197,12 +219,16 @@ się i polubił system. Grafik (planowanie zmian) to najbardziej wartościowy,
 ale i najbardziej ryzykowny moduł — celowo na końcu, gdy reszta jest
 stabilna i ludzie już ufają systemowi.
 
-### 0. Fundament: refaktoryzacja + powiadomienia dla kierowników
+### 0. Fundament: refaktoryzacja + powiadomienia dla kierowników — **ZROBIONE**
 Rozbić `App.tsx` na komponenty/pliki (`components/`, `api/`, `utils/`) —
-mniejszy blast radius przy każdej kolejnej zmianie. **Zrobione** — patrz
-"Struktura plików" wyżej. Zostało: dodać kierownikom własną zakładkę
-powiadomień (obecnie jest tylko dla pracowników) — to wspólna infrastruktura
-potrzebna dla punktów 1 i 2 niżej.
+mniejszy blast radius przy każdej kolejnej zmianie. Dodać kierownikom
+własną zakładkę powiadomień — patrz "Panel kierownika" i "Struktura
+plików" wyżej, oraz `createManagerNotification` w `api/notifications.ts`.
+To wspólna infrastruktura dla punktów 1 i 2 niżej — nowe funkcje mają
+wywoływać tę funkcję, nie tworzyć własnego mechanizmu powiadomień.
+⚠️ Wymaga ręcznego dodania kolumn `audience`/`message`/`type` do tabeli
+`notifications` w Supabase (patrz Schemat Supabase wyżej) — sprawdź, że
+zostało zastosowane, zanim zaczniesz punkt 1 lub 2.
 
 ### 1. Sanepid / terminy dokumentów
 Dodatkowe pola w karcie pracownika (data ważności książeczki sanepid, data

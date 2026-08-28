@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Clock,
   User,
@@ -17,6 +17,7 @@ import {
   Trash2,
   Archive,
   Info,
+  Bell,
   Calendar,
   ChevronLeft,
   ChevronRight,
@@ -26,6 +27,7 @@ import { sendToGoogleSheets } from "../api/googleSheets";
 import { getShort, getDayOfWeek, getMonthName, getAvailableYears } from "../utils/format";
 import TimeEntryForm from "./TimeEntryForm";
 import HoursReport from "./HoursReport";
+import NotificationsPanel from "./NotificationsPanel";
 
 // ==========================================
 // KIEROWNIK DASHBOARD
@@ -91,6 +93,34 @@ const ManagerDashboard = ({
 
   const hasAccessToLokal = (lokalName) =>
     !isLocalManager || managerLokaleList.includes(lokalName);
+
+  // --- POWIADOMIENIA DLA KIEROWNIKA (audience: "manager") ---
+  const managerNotifications = notifications.filter(
+    (n) => n.audience === "manager" && hasAccessToLokal(n.lokal)
+  );
+  const unreadManagerCount = managerNotifications.filter(
+    (n) => !n.is_read
+  ).length;
+
+  useEffect(() => {
+    if (tab !== "powiadomienia") return;
+    const unreadIds = managerNotifications
+      .filter((n) => !n.is_read)
+      .map((n) => n.id);
+    if (unreadIds.length === 0) return;
+    api
+      .patchByFilter("notifications", `id=in.(${unreadIds.join(",")})`, {
+        is_read: true,
+      })
+      .then(() => {
+        setNotifications((prev) =>
+          prev.map((n) =>
+            unreadIds.includes(n.id) ? { ...n, is_read: true } : n
+          )
+        );
+      })
+      .catch(() => {});
+  }, [tab]);
 
   const [fMonth, setFMonth] = useState(new Date().getMonth());
   const [fYear, setFYear] = useState(new Date().getFullYear());
@@ -574,6 +604,19 @@ const ManagerDashboard = ({
             {issues.filter((i) => i.status === "nowe").length > 0 && (
               <span className="bg-red-500 text-xs px-2 py-1 rounded-full ml-1">
                 {issues.filter((i) => i.status === "nowe").length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setTab("powiadomienia")}
+            className={`p-4 text-left border-b border-gray-800 flex items-center gap-2 whitespace-nowrap ${
+              tab === "powiadomienia" ? "bg-blue-600" : "hover:bg-gray-800"
+            }`}
+          >
+            <Bell size={18} /> Powiadomienia{" "}
+            {unreadManagerCount > 0 && (
+              <span className="bg-red-500 text-xs px-2 py-1 rounded-full ml-1">
+                {unreadManagerCount}
               </span>
             )}
           </button>
@@ -1221,6 +1264,16 @@ const ManagerDashboard = ({
                   </div>
                 ))}
             </div>
+          </div>
+        )}
+
+        {tab === "powiadomienia" && (
+          <div className="max-w-4xl mx-auto">
+            <h2 className="text-2xl font-bold mb-6">Powiadomienia</h2>
+            <NotificationsPanel
+              items={managerNotifications}
+              showEmployeeName={false}
+            />
           </div>
         )}
 

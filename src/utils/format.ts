@@ -36,6 +36,11 @@ export const getAvailableYears = () => {
 };
 
 export const formatNotificationText = (n, showEmployeeName) => {
+  // Powiadomienia dla kierowników (audience: "manager") mają gotowy tekst
+  // w polu message zamiast szczegółów zmiany — patrz createManagerNotification.
+  if (n.message) {
+    return n.message;
+  }
   const dateStr = n.shift_date
     ? new Date(n.shift_date + "T00:00:00").toLocaleDateString("pl-PL")
     : "";
