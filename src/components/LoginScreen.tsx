@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useState } from "react";
 import { LogIn, RefreshCw, WifiOff } from "lucide-react";
+import { APP_VERSION } from "../config";
 
 // ==========================================
 // EKRAN LOGOWANIA
@@ -56,7 +57,7 @@ const LoginScreen = ({
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
       <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-md border-t-4 border-blue-600">
         <h1 className="text-2xl font-bold text-center mb-6 text-gray-800">
-          Godziny Gastro Emka v0.1.2
+          Godziny Gastro Emka v{APP_VERSION}
         </h1>
         {dbError && (
           <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6 rounded shadow-sm">

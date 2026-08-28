@@ -72,10 +72,11 @@ api/                         — root-level, POZA src/ — funkcje Vercel Cron
     check-document-terms.js    — codzienna weryfikacja terminów sanepid/umowy,
                                  patrz Roadmap punkt 1 i sekcja "Cron" wyżej
 vercel.json                  — harmonogram crona
+CHANGELOG.md                 — historia wersji, patrz "Wersjonowanie i CHANGELOG" niżej
 src/
   index.tsx                  — punkt wejścia (bez zmian)
   App.tsx                    — globalny stan, fetch danych z Supabase, routing widoków
-  config.ts                  — SUPABASE_URL/KEY, GOOGLE_SCRIPT_URL, isConfigured
+  config.ts                  — SUPABASE_URL/KEY, GOOGLE_SCRIPT_URL, isConfigured, APP_VERSION
   types.ts                   — (jeszcze nie istnieje — miejsce na wspólne typy przy przyszłej migracji)
   api/
     supabase.ts               — obiekt `api` (get z paginacją/post/patch/delete/patchByFilter)
@@ -304,6 +305,34 @@ wg kolumny `Supabase_Shift_ID`), `resetSyncStatus` (czyści
 Po KAŻDEJ zmianie w skrypcie: Deploy → Manage deployments → edytuj →
 "New version" → Deploy (sam zapis w edytorze NIE aktualizuje żywego Web
 App). Zweryfikuj przez `doGet` w przeglądarce.
+
+## Wersjonowanie i CHANGELOG
+
+Aplikacja ma numer wersji (`APP_VERSION` w `src/config.ts`), widoczny na
+ekranie logowania. Historia zmian jest w [`CHANGELOG.md`](CHANGELOG.md)
+w katalogu głównym repo.
+
+**Rób to samodzielnie, bez pytania właściciela** — za każdym razem, gdy
+kończysz zmianę widoczną dla użytkownika (nowa funkcja, poprawka
+zachowania, zauważalna poprawa UX/wydajności):
+1. Podbij `APP_VERSION` w `src/config.ts`:
+   - PATCH (`0.4.0` → `0.4.1`) — poprawka błędu, drobne dopracowanie.
+   - MINOR (`0.4.1` → `0.5.0`) — nowa funkcja albo ukończony punkt
+     Roadmapy.
+   - MAJOR — zarezerwowane na przyszły "prawdziwy" launch 1.0, nie używaj
+     bez wyraźnej prośby właściciela.
+2. Dodaj wpis na górze `CHANGELOG.md` (nowa wersja = nowa sekcja, data w
+   formacie RRRR-MM-DD) — krótko, po polsku, z perspektywy użytkownika
+   ("co się zmieniło dla mnie", nie szczegóły implementacji techniczne;
+   te są w komunikacie commita/PR).
+
+**Czego NIE wpisywać**: refaktoryzacja bez zmiany zachowania, zmiany
+tylko w dokumentacji (CLAUDE.md, komentarze), poprawki, które nigdy nie
+trafiły na produkcję (np. bug znaleziony i naprawiony w tej samej sesji
+zanim ktokolwiek zdążył go zobaczyć) — patrz przykład w historii: refaktor
+`App.tsx` (0.2.0) dostał wpis mimo braku zmiany zachowania, bo był na tyle
+duży, że warto było zaznaczyć moment w historii; kolejne drobne refaktory
+raczej nie potrzebują własnego wpisu.
 
 ## Konwencje designu
 

@@ -465,11 +465,12 @@ const ManagerDashboard = ({
         notifyEmployee(parsed, "edit", oldStart, oldEnd, startD, endD);
       }
 
-      // Automatyczna poprawka w Google Sheets
-      await sendToGoogleSheets(parsed, "EDIT_SHIFT");
+      // Automatyczna poprawka w Google Sheets — w tle, nie czekamy (Supabase
+      // to źródło prawdy, Apps Script bywa wolny).
+      sendToGoogleSheets(parsed, "EDIT_SHIFT");
 
       setEditingShift(null);
-      showMsg("Zmiana zaktualizowana w Bazie i Google Sheets!");
+      showMsg("Zmiana zaktualizowana!");
     } catch (err) {
       showMsg("Błąd aktualizacji!", "error");
     }
@@ -497,11 +498,12 @@ const ManagerDashboard = ({
         null
       );
 
-      // Automatyczne usunięcie z Google Sheets
-      await sendToGoogleSheets(editingShift, "DELETE_SHIFT");
+      // Automatyczne usunięcie z Google Sheets — w tle, patrz komentarz
+      // w handleSaveShiftEdit.
+      sendToGoogleSheets(editingShift, "DELETE_SHIFT");
 
       setEditingShift(null);
-      showMsg("Zapis usunięty z Bazy i Google Sheets.");
+      showMsg("Zapis usunięty z Bazy.");
     } catch (err) {
       showMsg("Błąd usuwania.", "error");
     }

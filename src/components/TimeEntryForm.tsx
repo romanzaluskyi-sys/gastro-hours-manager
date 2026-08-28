@@ -82,7 +82,10 @@ const TimeEntryForm = ({
       };
       setShifts(shifts.map((s) => (s.id === openShift.id ? parsed : s)));
 
-      await sendToGoogleSheets(parsed, "EDIT_SHIFT"); // Uaktualnienie istniejacego wiersza
+      // Nie czekamy na Google Sheets — to tylko druga kopia danych (Supabase
+      // jest źródłem prawdy), a Apps Script bywa wolny (skanuje arkusz).
+      // Leci w tle, błędy i tak są tylko logowane w sendToGoogleSheets.
+      sendToGoogleSheets(parsed, "EDIT_SHIFT");
 
       showMsg("Zmiana zakończona pomyślnie!");
       setEndTime("");
@@ -142,7 +145,8 @@ const TimeEntryForm = ({
       };
       setShifts([...shifts, parsed]);
 
-      await sendToGoogleSheets(parsed, "ADD_SHIFT"); // Zawsze wysylamy nowy wiersz
+      // Nie czekamy na Google Sheets — patrz komentarz w handleCloseShift.
+      sendToGoogleSheets(parsed, "ADD_SHIFT");
 
       showMsg(hasEndTime ? "Zmiana zapisana!" : "Rozpoczęto zmianę!");
       setStartTime("");
