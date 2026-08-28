@@ -38,8 +38,13 @@ export const getAvailableYears = () => {
 export const formatNotificationText = (n, showEmployeeName) => {
   // Powiadomienia dla kierowników (audience: "manager") mają gotowy tekst
   // w polu message zamiast szczegółów zmiany — patrz createManagerNotification.
+  // Na kiosku (showEmployeeName=true) kilku pracowników "open" dzieli tę samą
+  // listę, więc doklejamy imię z user_name — inaczej nie wiadomo, czyj to
+  // termin (message dla audience="employee" mówi ogólnie "Twój termin...").
   if (n.message) {
-    return n.message;
+    return showEmployeeName && n.user_name
+      ? `${n.user_name}: ${n.message}`
+      : n.message;
   }
   const dateStr = n.shift_date
     ? new Date(n.shift_date + "T00:00:00").toLocaleDateString("pl-PL")
