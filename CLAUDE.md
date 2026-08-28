@@ -35,14 +35,45 @@ istniejącego MVP, żeby zespół polubił system, zanim dodamy duże nowe modu�
   `syncFormEntriesToSupabase()` czyta historyczne wpisy z Google Forms i
   wstawia je do Supabase (uruchamiane cyklicznie triggerem czasowym).
 
-## Struktura plików (STAN OBECNY — do refaktoryzacji)
+## Struktura plików
 
-Cała logika frontendowa jest obecnie w **jednym pliku `src/App.tsx`**
-(~2600 linii, `// @ts-nocheck` na górze bo kod nie jest w pełni otypowany).
-To pierwsza rzecz do zrobienia przed dodawaniem nowych modułów — patrz
-"Najbliższe zadanie" niżej. `tsconfig.json` ma `"skipLibCheck": true`
-(potrzebne, inaczej crash na `@types/react` + starym `typescript` w
-`package.json` — nie usuwaj tego ustawienia).
+Frontend jest rozbity na moduły wg odpowiedzialności (refaktoryzacja z
+jednego pliku `App.tsx` — patrz Roadmap punkt 0, część "rozbicie na pliki"
+zrobiona; zakładka powiadomień dla kierowników z tego punktu — jeszcze nie).
+Każdy plik komponentu/modułu ma `// @ts-nocheck` na górze, tak jak miał
+oryginalny `App.tsx` — kod nie jest w pełni otypowany, nie usuwaj tej linii
+przy edycji istniejących plików (chyba że robisz świadomą migrację do
+prawdziwych typów).
+
+```
+src/
+  index.tsx                  — punkt wejścia (bez zmian)
+  App.tsx                    — globalny stan, fetch danych z Supabase, routing widoków
+  config.ts                  — SUPABASE_URL/KEY, GOOGLE_SCRIPT_URL, isConfigured
+  types.ts                   — (jeszcze nie istnieje — miejsce na wspólne typy przy przyszłej migracji)
+  api/
+    supabase.ts               — obiekt `api` (get z paginacją/post/patch/delete/patchByFilter)
+    googleSheets.ts            — sendToGoogleSheets, toLocalYMD
+  utils/
+    format.ts                 — getShort, getDayOfWeek, getMonthName, getAvailableYears, formatNotificationText
+  components/
+    LoginScreen.tsx
+    TimeEntryForm.tsx          — wspólny formularz start/koniec zmiany (kiosk i self-tracking)
+    HoursReport.tsx            — raport miesięczny (zakładka "Raport")
+    IssueForm.tsx               — zakładka "Zgłoś"
+    NotificationsPanel.tsx      — zakładka "Wiadomości" (wspólna dla closed i open)
+    ClosedEmployeeDashboard.tsx — dashboard na osobisty telefon pracownika
+    OpenDeviceDashboard.tsx     — dashboard "Tablet Służbowy" (kiosk)
+    ManagerDashboard.tsx        — panel kierownika, w całości w jednym pliku
+                                  (~1850 linii — wewnętrznie spójny, dalszy
+                                  podział na zakładki to osobne, świadome
+                                  zadanie, nie blokuje Roadmapy)
+```
+
+`tsconfig.json` ma `"skipLibCheck": true` (potrzebne, inaczej crash na
+`@types/react` + starym `typescript` w `package.json` — nie usuwaj tego
+ustawienia). Plik był wcześniej uszkodzony (dwa sklejone obiekty JSON,
+nieprawidłowy JSON) — naprawione.
 
 ## Role użytkowników i widoki
 
@@ -120,9 +151,18 @@ Roadmap, punkt 0).
    ostatniego zajętego wiersza po konkretnej kolumnie ("Imię"), nie po
    całym arkuszu.
 4. Node/TypeScript: `tsconfig.json` wymaga `"skipLibCheck": true` (konflikt
-   wersji `typescript` z `@types/react`), a `App.tsx` ma `// @ts-nocheck`
-   (kod pisany bez pełnego typowania — nie usuwaj tej linii, chyba że
-   robisz świadomą migrację do prawdziwych typów).
+   wersji `typescript` z `@types/react`), a każdy plik frontendowy (dawniej
+   tylko `App.tsx`, dziś każdy plik w `components/`, `api/`, `utils/`) ma
+   `// @ts-nocheck` (kod pisany bez pełnego typowania — nie usuwaj tej linii,
+   chyba że robisz świadomą migrację do prawdziwych typów).
+5. `// @ts-nocheck` w `App.tsx` był kiedyś przypadkowo usunięty jednym z
+   commitów, mimo `strict: true` w `tsconfig.json` — build z tym combo by
+   się wysypał (implicit-any wszędzie). Przywrócone; jeśli edytujesz plik
+   frontendowy i widzisz, że brakuje tej linii, dodaj ją z powrotem zamiast
+   naprawiać setki typów naraz.
+6. `tsconfig.json` był kiedyś dwoma sklejonymi obiektami JSON (przypadkowy
+   duplikat przy wklejaniu) — nieprawidłowy JSON. Naprawione do jednego
+   obiektu ze `strict: true` i `skipLibCheck: true`.
 
 ## Google Apps Script (`Odbior_Danych.gs`)
 
@@ -158,10 +198,11 @@ ale i najbardziej ryzykowny moduł — celowo na końcu, gdy reszta jest
 stabilna i ludzie już ufają systemowi.
 
 ### 0. Fundament: refaktoryzacja + powiadomienia dla kierowników
-Rozbić `App.tsx` na komponenty/pliki (`components/`, `hooks/`, `api/`) —
-mniejszy blast radius przy każdej kolejnej zmianie. Dodać kierownikom
-własną zakładkę powiadomień (obecnie jest tylko dla pracowników) — to
-wspólna infrastruktura potrzebna dla punktów 1 i 2 niżej.
+Rozbić `App.tsx` na komponenty/pliki (`components/`, `api/`, `utils/`) —
+mniejszy blast radius przy każdej kolejnej zmianie. **Zrobione** — patrz
+"Struktura plików" wyżej. Zostało: dodać kierownikom własną zakładkę
+powiadomień (obecnie jest tylko dla pracowników) — to wspólna infrastruktura
+potrzebna dla punktów 1 i 2 niżej.
 
 ### 1. Sanepid / terminy dokumentów
 Dodatkowe pola w karcie pracownika (data ważności książeczki sanepid, data
