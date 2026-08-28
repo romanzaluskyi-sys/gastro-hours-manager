@@ -35,14 +35,46 @@ istniejącego MVP, żeby zespół polubił system, zanim dodamy duże nowe modu�
   `syncFormEntriesToSupabase()` czyta historyczne wpisy z Google Forms i
   wstawia je do Supabase (uruchamiane cyklicznie triggerem czasowym).
 
-## Struktura plików (STAN OBECNY — do refaktoryzacji)
+## Struktura plików
 
-Cała logika frontendowa jest obecnie w **jednym pliku `src/App.tsx`**
-(~2600 linii, `// @ts-nocheck` na górze bo kod nie jest w pełni otypowany).
-To pierwsza rzecz do zrobienia przed dodawaniem nowych modułów — patrz
-"Najbliższe zadanie" niżej. `tsconfig.json` ma `"skipLibCheck": true`
-(potrzebne, inaczej crash na `@types/react` + starym `typescript` w
-`package.json` — nie usuwaj tego ustawienia).
+Frontend jest rozbity na moduły wg odpowiedzialności (refaktoryzacja z
+jednego pliku `App.tsx` — patrz Roadmap punkt 0, część "rozbicie na pliki"
+zrobiona; zakładka powiadomień dla kierowników z tego punktu — jeszcze nie).
+Każdy plik komponentu/modułu ma `// @ts-nocheck` na górze, tak jak miał
+oryginalny `App.tsx` — kod nie jest w pełni otypowany, nie usuwaj tej linii
+przy edycji istniejących plików (chyba że robisz świadomą migrację do
+prawdziwych typów).
+
+```
+src/
+  index.tsx                  — punkt wejścia (bez zmian)
+  App.tsx                    — globalny stan, fetch danych z Supabase, routing widoków
+  config.ts                  — SUPABASE_URL/KEY, GOOGLE_SCRIPT_URL, isConfigured
+  types.ts                   — (jeszcze nie istnieje — miejsce na wspólne typy przy przyszłej migracji)
+  api/
+    supabase.ts               — obiekt `api` (get z paginacją/post/patch/delete/patchByFilter)
+    googleSheets.ts            — sendToGoogleSheets, toLocalYMD
+    notifications.ts           — createManagerNotification(lokal, message, type)
+  utils/
+    format.ts                 — getShort, getDayOfWeek, getMonthName, getAvailableYears, formatNotificationText
+  components/
+    LoginScreen.tsx
+    TimeEntryForm.tsx          — wspólny formularz start/koniec zmiany (kiosk i self-tracking)
+    HoursReport.tsx            — raport miesięczny (zakładka "Raport")
+    IssueForm.tsx               — zakładka "Zgłoś"
+    NotificationsPanel.tsx      — zakładka "Wiadomości"/"Powiadomienia" (wspólna dla closed, open i managera)
+    ClosedEmployeeDashboard.tsx — dashboard na osobisty telefon pracownika
+    OpenDeviceDashboard.tsx     — dashboard "Tablet Służbowy" (kiosk)
+    ManagerDashboard.tsx        — panel kierownika, w całości w jednym pliku
+                                  (~1850 linii — wewnętrznie spójny, dalszy
+                                  podział na zakładki to osobne, świadome
+                                  zadanie, nie blokuje Roadmapy)
+```
+
+`tsconfig.json` ma `"skipLibCheck": true` (potrzebne, inaczej crash na
+`@types/react` + starym `typescript` w `package.json` — nie usuwaj tego
+ustawienia). Plik był wcześniej uszkodzony (dwa sklejone obiekty JSON,
+nieprawidłowy JSON) — naprawione.
 
 ## Role użytkowników i widoki
 
@@ -78,12 +110,21 @@ głównym — pracownik nic nie wpisuje ręcznie.
 Zakładki: Rejestr Godzin (edycja zmian), **Pulpit godzin** (dashboard godzin
 — filtr tydzień/miesiąc, tylko role `closed`/`open`/`manager_lokalu`, klik
 na komórkę godzin → edycja zmiany), Grafik (obecnie tylko placeholder "w
-budowie" — NIE ruszać, patrz Roadmap), Aktywni, Zgłoszenia, Pracownicy,
-Przewodnik.
+budowie" — NIE ruszać, patrz Roadmap), Aktywni, **Powiadomienia**,
+Zgłoszenia, Pracownicy, Przewodnik.
 
-⚠️ **Kierownicy NIE MAJĄ obecnie własnej zakładki powiadomień** — to
-świadoma luka, którą trzeba domknąć przed modułem Sanepid i Zadania (patrz
-Roadmap, punkt 0).
+Zakładka **Powiadomienia** (`ManagerDashboard`, tab `"powiadomienia"`) —
+własna dla kierowników (`admin` i `manager_lokalu`), analogiczna do
+`NotificationsPanel` u pracownika. Pokazuje wiersze z tabeli `notifications`
+gdzie `audience === "manager"`, przefiltrowane przez `hasAccessToLokal(n.lokal)`
+— `manager_lokalu` widzi tylko swoje `allowed_lokale`, `admin` widzi
+wszystko. Znaczek z liczbą nieprzeczytanych jak w wersji dla pracowników;
+oznaczanie jako przeczytane też działa tak samo (patch przy wejściu na
+zakładkę). Tworzenie takich powiadomień idzie przez ogólną funkcję
+`createManagerNotification(lokal, message, type)` w
+[`api/notifications.ts`](src/api/notifications.ts) — nie twórz nowej
+funkcji ad-hoc, wywołuj tę, będzie reużywana w modułach Sanepid i
+Zadania/Sprzątanie (Roadmap punkty 1 i 2).
 
 ## Schemat Supabase (tabele używane obecnie)
 
@@ -94,11 +135,23 @@ Roadmap, punkt 0).
 - **shifts** — `id, user_name, user_id?, lokal, stanowisko, start_time
   (timestamptz), end_time (timestamptz | null), godzin`
 - **issues** — zgłoszenia problemów od pracowników
-- **notifications** — `id, user_name, lokal, actor_name, action ('edit' |
-  'delete'), shift_date, old_start, old_end, new_start, new_end, is_read,
-  created_at`. RLS: polityka otwarta (`for all using (true) with check
-  (true)`) — jeśli dodajesz nowe tabele, rób tak samo albo świadomie
-  zawężaj.
+- **notifications** — dwa "typy" wierszy we wspólnej tabeli, odróżnione
+  polem `audience`:
+  - `audience = 'employee'` (domyślne, dla starych wierszy sprzed tej
+    kolumny — traktuj `NULL` jak `'employee'`): powiadomienie dla
+    pracownika o edycji/usunięciu jego zmiany. Pola: `user_name, lokal,
+    actor_name, action ('edit' | 'delete'), shift_date, old_start,
+    old_end, new_start, new_end, is_read, created_at`.
+  - `audience = 'manager'`: ogólne powiadomienie dla kierowników danego
+    `lokal` (tworzone przez `createManagerNotification`). Pola: `lokal,
+    message, type, is_read, created_at` (`user_name`, `actor_name`, `action`
+    i pola `*_start`/`*_end` są wtedy puste — `formatNotificationText`
+    rozpoznaje ten wariant po obecności `message` i zwraca je wprost).
+  - RLS: polityka otwarta (`for all using (true) with check (true)`) —
+    jeśli dodajesz nowe tabele, rób tak samo albo świadomie zawężaj.
+  - ⚠️ Kolumny `audience`, `message`, `type` trzeba dodać ręcznie w
+    Supabase (Claude Code nie ma tam bezpośredniego dostępu) — patrz SQL
+    w historii tej sesji/PR, jeśli jeszcze nie zastosowany.
 
 ## Znane błędy — JUŻ NAPRAWIONE, nie wprowadzaj ponownie
 
@@ -120,9 +173,18 @@ Roadmap, punkt 0).
    ostatniego zajętego wiersza po konkretnej kolumnie ("Imię"), nie po
    całym arkuszu.
 4. Node/TypeScript: `tsconfig.json` wymaga `"skipLibCheck": true` (konflikt
-   wersji `typescript` z `@types/react`), a `App.tsx` ma `// @ts-nocheck`
-   (kod pisany bez pełnego typowania — nie usuwaj tej linii, chyba że
-   robisz świadomą migrację do prawdziwych typów).
+   wersji `typescript` z `@types/react`), a każdy plik frontendowy (dawniej
+   tylko `App.tsx`, dziś każdy plik w `components/`, `api/`, `utils/`) ma
+   `// @ts-nocheck` (kod pisany bez pełnego typowania — nie usuwaj tej linii,
+   chyba że robisz świadomą migrację do prawdziwych typów).
+5. `// @ts-nocheck` w `App.tsx` był kiedyś przypadkowo usunięty jednym z
+   commitów, mimo `strict: true` w `tsconfig.json` — build z tym combo by
+   się wysypał (implicit-any wszędzie). Przywrócone; jeśli edytujesz plik
+   frontendowy i widzisz, że brakuje tej linii, dodaj ją z powrotem zamiast
+   naprawiać setki typów naraz.
+6. `tsconfig.json` był kiedyś dwoma sklejonymi obiektami JSON (przypadkowy
+   duplikat przy wklejaniu) — nieprawidłowy JSON. Naprawione do jednego
+   obiektu ze `strict: true` i `skipLibCheck: true`.
 
 ## Google Apps Script (`Odbior_Danych.gs`)
 
@@ -157,11 +219,16 @@ się i polubił system. Grafik (planowanie zmian) to najbardziej wartościowy,
 ale i najbardziej ryzykowny moduł — celowo na końcu, gdy reszta jest
 stabilna i ludzie już ufają systemowi.
 
-### 0. Fundament: refaktoryzacja + powiadomienia dla kierowników
-Rozbić `App.tsx` na komponenty/pliki (`components/`, `hooks/`, `api/`) —
+### 0. Fundament: refaktoryzacja + powiadomienia dla kierowników — **ZROBIONE**
+Rozbić `App.tsx` na komponenty/pliki (`components/`, `api/`, `utils/`) —
 mniejszy blast radius przy każdej kolejnej zmianie. Dodać kierownikom
-własną zakładkę powiadomień (obecnie jest tylko dla pracowników) — to
-wspólna infrastruktura potrzebna dla punktów 1 i 2 niżej.
+własną zakładkę powiadomień — patrz "Panel kierownika" i "Struktura
+plików" wyżej, oraz `createManagerNotification` w `api/notifications.ts`.
+To wspólna infrastruktura dla punktów 1 i 2 niżej — nowe funkcje mają
+wywoływać tę funkcję, nie tworzyć własnego mechanizmu powiadomień.
+⚠️ Wymaga ręcznego dodania kolumn `audience`/`message`/`type` do tabeli
+`notifications` w Supabase (patrz Schemat Supabase wyżej) — sprawdź, że
+zostało zastosowane, zanim zaczniesz punkt 1 lub 2.
 
 ### 1. Sanepid / terminy dokumentów
 Dodatkowe pola w karcie pracownika (data ważności książeczki sanepid, data
