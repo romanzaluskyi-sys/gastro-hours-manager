@@ -8,6 +8,22 @@ import ClosedEmployeeDashboard from "./components/ClosedEmployeeDashboard";
 import OpenDeviceDashboard from "./components/OpenDeviceDashboard";
 import ManagerDashboard from "./components/ManagerDashboard";
 
+// Trzyma zalogowanego użytkownika w localStorage, żeby odświeżenie strony
+// (albo nowy deploy) nie wylogowywało — bez tego sesja żyła tylko w pamięci
+// Reacta. `pin` świadomie pomijamy przy zapisie, nie jest już potrzebny
+// po zalogowaniu.
+const SESSION_KEY = "gastro_session";
+
+const loadSession = () => {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return { currentUser: null, currentView: "login" };
+    return JSON.parse(raw);
+  } catch {
+    return { currentUser: null, currentView: "login" };
+  }
+};
+
 export default function App() {
   const [users, setUsers] = useState([]);
   const [lokale, setLokale] = useState([]);
@@ -16,8 +32,8 @@ export default function App() {
   const [issues, setIssues] = useState([]);
   const [notifications, setNotifications] = useState([]);
 
-  const [currentView, setCurrentView] = useState("login");
-  const [currentUser, setCurrentUser] = useState(null);
+  const [currentView, setCurrentView] = useState(() => loadSession().currentView);
+  const [currentUser, setCurrentUser] = useState(() => loadSession().currentUser);
   const [isLoading, setIsLoading] = useState(false);
   const [dbError, setDbError] = useState("");
   const [toast, setToast] = useState({
@@ -30,6 +46,27 @@ export default function App() {
     setToast({ show: true, message, type });
     setTimeout(() => setToast({ show: false }), 3000);
   };
+
+  // Zapisuje sesję przy każdej zmianie loginu/widoku. "Wyloguj" w każdym
+  // dashboardzie ustawia tylko currentView na "login" (nie czyści
+  // currentUser) — tu i tak usuwamy zapisaną sesję, gdy widok wraca do
+  // ekranu logowania, więc osobne czyszczenie currentUser nie jest potrzebne.
+  useEffect(() => {
+    try {
+      if (currentUser && currentView !== "login") {
+        const { pin, ...userToStore } = currentUser;
+        localStorage.setItem(
+          SESSION_KEY,
+          JSON.stringify({ currentUser: userToStore, currentView })
+        );
+      } else {
+        localStorage.removeItem(SESSION_KEY);
+      }
+    } catch {
+      // localStorage niedostępny (np. tryb prywatny) — sesja po prostu nie
+      // przetrwa odświeżenia, reszta apki działa normalnie.
+    }
+  }, [currentUser, currentView]);
 
   useEffect(() => {
     if (!isConfigured) return;

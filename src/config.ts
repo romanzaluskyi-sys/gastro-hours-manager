@@ -8,3 +8,7 @@ export const GOOGLE_SCRIPT_URL =
 
 export const isConfigured =
   SUPABASE_URL.includes("supabase.co") && SUPABASE_KEY.includes("sb_");
+
+// Podbijana przy każdej zmianie widocznej dla użytkownika — historia w
+// CHANGELOG.md. Wyświetlana na ekranie logowania (LoginScreen.tsx).
+export const APP_VERSION = "0.4.0";
