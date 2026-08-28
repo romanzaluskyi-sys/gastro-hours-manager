@@ -176,7 +176,25 @@ samego pracownika (`createEmployeeNotification`), po czym zapisuje
 `sanepid_last_notified`/`umowa_last_notified = dzisiaj` — to pole służy
 tylko do ochrony przed podwójnym powiadomieniem tego samego dnia; zatrzymanie
 powiadomień po aktualizacji terminu działa samoistnie (nowa data wypada poza
-okna, więc przestaje być "due"), nie przez reset tego pola.
+okna, więc przestaje być "due"), nie przez reset tego pola. Jeśli
+pojedynczy `createManagerNotification`/`createEmployeeNotification`/`patchUser`
+rzuci błąd, ten jeden `(pracownik, termin)` trafia do `failures` w
+odpowiedzi zamiast wywalać cały request — i celowo NIE ustawia
+`*_last_notified`, więc spróbuje ponownie następnego dnia.
+
+Treść powiadomienia dla kierownika (`buildManagerMessage`) jest świadomie
+rozbudowana — zawiera imię, stanowisko (`default_stanowisko`), lokal, datę
+w formacie DD.MM.RRRR i liczbę dni, żeby kierownik miał kontekst bez
+wchodzenia do apki, np.:
+`"Dla pracownika Wojtek (Kierowca) z lokalu Bułka i Jacek, umowa dobiega
+końca w dniu 01.09.2026, do zakończenia pozostało 4 dni."` (albo
+`"... umowa upłynęła w dniu DD.MM.RRRR — termin przekroczony o N dni."`
+po terminie). Powiadomienie dla pracownika (`buildEmployeeMessage`) ma tę
+samą strukturę daty/dni, zaczyna się od `"Twój termin: ..."`. Na kiosku
+(`OpenDeviceDashboard`, `showEmployeeName={true}`) `formatNotificationText`
+dokleja z przodu `user_name` (`"Wojtek: Twój termin: ..."`) — bez tego,
+przy kilku pracownikach `open` na jednym urządzeniu nie było wiadomo, do
+kogo należy powiadomienie.
 
 ## Schemat Supabase (tabele używane obecnie)
 
