@@ -34,18 +34,33 @@ istniejącego MVP, żeby zespół polubił system, zanim dodamy duże nowe modu�
   — `doPost` odbiera zapisy z aplikacji i pisze do arkuszy per-lokal;
   `syncFormEntriesToSupabase()` czyta historyczne wpisy z Google Forms i
   wstawia je do Supabase (uruchamiane cyklicznie triggerem czasowym).
+- **Cron**: Vercel Cron (`vercel.json` → `crons`), NIE Supabase Edge
+  Function — wybrane świadomie, żeby zostać na jednym stacku (Vercel +
+  zwykły `fetch` do Supabase REST, ten sam styl co reszta `api/`) bez
+  dokładania Supabase CLI/Deno do projektu. Funkcje cron żyją w
+  root-level `api/` (konwencja Vercel Functions — **osobne** od
+  `src/api/`, które jest wbudowywane do bundla Reacta; `tsconfig.json`
+  ma `include: ["./src/**/*"]`, więc `api/` na roocie świadomie NIE jest
+  przez niego pokrywane). Każda funkcja cron wymaga nagłówka
+  `Authorization: Bearer $CRON_SECRET` — zmienna `CRON_SECRET` musi być
+  ustawiona w Vercel → Project Settings → Environment Variables, inaczej
+  wywołania z harmonogramu dostaną 401.
 
 ## Struktura plików
 
 Frontend jest rozbity na moduły wg odpowiedzialności (refaktoryzacja z
-jednego pliku `App.tsx` — patrz Roadmap punkt 0, część "rozbicie na pliki"
-zrobiona; zakładka powiadomień dla kierowników z tego punktu — jeszcze nie).
-Każdy plik komponentu/modułu ma `// @ts-nocheck` na górze, tak jak miał
-oryginalny `App.tsx` — kod nie jest w pełni otypowany, nie usuwaj tej linii
-przy edycji istniejących plików (chyba że robisz świadomą migrację do
-prawdziwych typów).
+jednego pliku `App.tsx` — Roadmap punkt 0, zrobione w całości, łącznie z
+zakładką powiadomień dla kierowników). Każdy plik komponentu/modułu ma
+`// @ts-nocheck` na górze, tak jak miał oryginalny `App.tsx` — kod nie
+jest w pełni otypowany, nie usuwaj tej linii przy edycji istniejących
+plików (chyba że robisz świadomą migrację do prawdziwych typów).
 
 ```
+api/                         — root-level, POZA src/ — funkcje Vercel Cron
+  cron/
+    check-document-terms.ts   — codzienna weryfikacja terminów sanepid/umowy,
+                                 patrz Roadmap punkt 1 i sekcja "Cron" wyżej
+vercel.json                  — harmonogram crona
 src/
   index.tsx                  — punkt wejścia (bez zmian)
   App.tsx                    — globalny stan, fetch danych z Supabase, routing widoków
@@ -54,7 +69,8 @@ src/
   api/
     supabase.ts               — obiekt `api` (get z paginacją/post/patch/delete/patchByFilter)
     googleSheets.ts            — sendToGoogleSheets, toLocalYMD
-    notifications.ts           — createManagerNotification(lokal, message, type)
+    notifications.ts           — createManagerNotification(lokal, message, type),
+                                  createEmployeeNotification(userName, message, type)
   utils/
     format.ts                 — getShort, getDayOfWeek, getMonthName, getAvailableYears, formatNotificationText
   components/
@@ -122,14 +138,41 @@ wszystko. Znaczek z liczbą nieprzeczytanych jak w wersji dla pracowników;
 oznaczanie jako przeczytane też działa tak samo (patch przy wejściu na
 zakładkę). Tworzenie takich powiadomień idzie przez ogólną funkcję
 `createManagerNotification(lokal, message, type)` w
-[`api/notifications.ts`](src/api/notifications.ts) — nie twórz nowej
-funkcji ad-hoc, wywołuj tę, będzie reużywana w modułach Sanepid i
-Zadania/Sprzątanie (Roadmap punkty 1 i 2).
+[`api/notifications.ts`](src/api/notifications.ts) — analogiczna
+`createEmployeeNotification(userName, message, type)` robi to samo dla
+zakładki Wiadomości pracownika. Nie twórz nowych funkcji ad-hoc do
+wysyłania powiadomień, wywołuj te dwie — pierwszy konsument to codzienna
+weryfikacja terminów sanepid/umowy (patrz niżej), drugi będzie moduł
+Zadania/Sprzątanie (Roadmap punkt 2).
+
+W zakładce **Pracownicy** formularz edycji pracownika (dla wszystkich ról
+oprócz `kiosk` — czyli też dla `admin`/`manager_lokalu`, bo oni też
+odbijają godziny i mają własne terminy) ma dwa nieobowiązkowe pola daty:
+"Termin książeczki sanepid" (`sanepid_expiry`) i "Termin umowy"
+(`umowa_expiry`). Puste pole jest podświetlone na czerwono w formularzu, a
+na karcie aktywnego pracownika na liście pokazuje się żółty badge "Brak
+terminu ...". To świadomie zamknięty zestaw dwóch terminów — nie dodawaj
+trzeciego bez wyraźnej prośby, to nie jest zaprojektowane jako otwarty
+system dowolnych typów terminów.
+
+**Codzienna weryfikacja terminów** — `api/cron/check-document-terms.ts`
+(Vercel Cron, patrz sekcja "Cron" wyżej). Dla każdego aktywnego
+(`active && !archived`) pracownika i każdego z dwóch terminów: jeśli data
+jest ustawiona i dzisiejsza różnica dni trafia w okno (dokładnie 30 dni,
+dokładnie 14 dni, 0–7 dni, lub ujemna = przeterminowane), wysyła
+powiadomienie do kierowników lokalu (`createManagerNotification`) i do
+samego pracownika (`createEmployeeNotification`), po czym zapisuje
+`sanepid_last_notified`/`umowa_last_notified = dzisiaj` — to pole służy
+tylko do ochrony przed podwójnym powiadomieniem tego samego dnia; zatrzymanie
+powiadomień po aktualizacji terminu działa samoistnie (nowa data wypada poza
+okna, więc przestaje być "due"), nie przez reset tego pola.
 
 ## Schemat Supabase (tabele używane obecnie)
 
 - **users** — `id, name, email, pin, role, default_lokal, allowed_lokale[],
-  active, archived, stanowisko`
+  active, archived, stanowisko, sanepid_expiry, sanepid_last_notified,
+  umowa_expiry, umowa_last_notified` (ostatnie 4 kolumny: `date`, nullable
+  — terminy dokumentów pracownika, patrz "Panel kierownika" wyżej)
 - **lokale** — `id, name, archived`
 - **stanowiska** — `id, name, lokal_name, archived`
 - **shifts** — `id, user_name, user_id?, lokal, stanowisko, start_time
@@ -138,15 +181,19 @@ Zadania/Sprzątanie (Roadmap punkty 1 i 2).
 - **notifications** — dwa "typy" wierszy we wspólnej tabeli, odróżnione
   polem `audience`:
   - `audience = 'employee'` (domyślne, dla starych wierszy sprzed tej
-    kolumny — traktuj `NULL` jak `'employee'`): powiadomienie dla
-    pracownika o edycji/usunięciu jego zmiany. Pola: `user_name, lokal,
-    actor_name, action ('edit' | 'delete'), shift_date, old_start,
-    old_end, new_start, new_end, is_read, created_at`.
+    kolumny — traktuj `NULL` jak `'employee'`): dwa warianty. (a) stare,
+    specyficzne dla edycji/usunięcia zmiany: `user_name, lokal, actor_name,
+    action ('edit' | 'delete'), shift_date, old_start, old_end, new_start,
+    new_end, is_read, created_at`. (b) ogólne, tworzone przez
+    `createEmployeeNotification(userName, message, type)` — `user_name,
+    message, type, is_read, created_at` (pierwszy konsument: powiadomienia
+    o zbliżającym się terminie sanepid/umowy).
   - `audience = 'manager'`: ogólne powiadomienie dla kierowników danego
     `lokal` (tworzone przez `createManagerNotification`). Pola: `lokal,
-    message, type, is_read, created_at` (`user_name`, `actor_name`, `action`
-    i pola `*_start`/`*_end` są wtedy puste — `formatNotificationText`
-    rozpoznaje ten wariant po obecności `message` i zwraca je wprost).
+    message, type, is_read, created_at`.
+  - Warianty (a) i (b) rozróżnia `formatNotificationText` po obecności
+    pola `message` — jeśli jest, zwraca je wprost, inaczej składa tekst ze
+    starych pól `action`/`old_start`/itd.
   - RLS: polityka otwarta (`for all using (true) with check (true)`) —
     jeśli dodajesz nowe tabele, rób tak samo albo świadomie zawężaj.
   - ⚠️ Kolumny `audience`, `message`, `type` trzeba dodać ręcznie w
@@ -230,10 +277,13 @@ wywoływać tę funkcję, nie tworzyć własnego mechanizmu powiadomień.
 `notifications` w Supabase (patrz Schemat Supabase wyżej) — sprawdź, że
 zostało zastosowane, zanim zaczniesz punkt 1 lub 2.
 
-### 1. Sanepid / terminy dokumentów
-Dodatkowe pola w karcie pracownika (data ważności książeczki sanepid, data
-"umowy", inne pola wg potrzeby). Codzienna weryfikacja (cron) i
-powiadomienie kierownika: miesiąc przed, 2 tygodnie przed, codziennie w
+### 1. Sanepid / terminy dokumentów — **ZROBIONE** (zamknięte na 2 terminach)
+Pola w karcie pracownika: data ważności książeczki sanepid + data umowy.
+Świadomie **nie** "inne pola wg potrzeby" — właściciel zdecydował zamknąć
+zestaw na tych dwóch terminach, bez mechanizmu dodawania kolejnych bez
+zmiany kodu (patrz "Panel kierownika" wyżej). Codzienna weryfikacja
+(Vercel Cron, `api/cron/check-document-terms.ts`) i powiadomienie
+kierownika ORAZ pracownika: miesiąc przed, 2 tygodnie przed, codziennie w
 ostatnim tygodniu, i codziennie po przekroczeniu terminu aż do poprawy.
 
 ### 2. Zadania + Sprzątanie

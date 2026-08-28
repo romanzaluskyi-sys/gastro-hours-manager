@@ -152,6 +152,8 @@ const ManagerDashboard = ({
       default_lokal: "",
       default_stanowisko: "",
       allowed_lokale: [],
+      sanepid_expiry: "",
+      umowa_expiry: "",
     });
 
   const activeLokale = lokale.filter((l) => !l.archived);
@@ -1550,6 +1552,60 @@ const ManagerDashboard = ({
                             </div>
                           </div>
                         )}
+                        {editingUser.role !== "kiosk" && (
+                          <div className="grid grid-cols-2 gap-3 bg-gray-50 p-2 rounded border">
+                            <div>
+                              <label className="block text-xs font-bold text-gray-600">
+                                Termin książeczki sanepid
+                              </label>
+                              <input
+                                type="date"
+                                value={editingUser.sanepid_expiry || ""}
+                                onChange={(e) =>
+                                  setEditingUser({
+                                    ...editingUser,
+                                    sanepid_expiry: e.target.value,
+                                  })
+                                }
+                                className={`w-full p-2 border rounded ${
+                                  !editingUser.sanepid_expiry
+                                    ? "border-red-400 bg-red-50"
+                                    : ""
+                                }`}
+                              />
+                              {!editingUser.sanepid_expiry && (
+                                <p className="text-xs text-red-600 mt-1">
+                                  Brak terminu — przypomnienia wyłączone
+                                </p>
+                              )}
+                            </div>
+                            <div>
+                              <label className="block text-xs font-bold text-gray-600">
+                                Termin umowy
+                              </label>
+                              <input
+                                type="date"
+                                value={editingUser.umowa_expiry || ""}
+                                onChange={(e) =>
+                                  setEditingUser({
+                                    ...editingUser,
+                                    umowa_expiry: e.target.value,
+                                  })
+                                }
+                                className={`w-full p-2 border rounded ${
+                                  !editingUser.umowa_expiry
+                                    ? "border-red-400 bg-red-50"
+                                    : ""
+                                }`}
+                              />
+                              {!editingUser.umowa_expiry && (
+                                <p className="text-xs text-red-600 mt-1">
+                                  Brak terminu — przypomnienia wyłączone
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        )}
                         <label className="flex items-center gap-2 pt-2 cursor-pointer">
                           <input
                             type="checkbox"
@@ -1599,6 +1655,16 @@ const ManagerDashboard = ({
                           {!u.active && (
                             <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded ml-2">
                               Odłączony
+                            </span>
+                          )}
+                          {u.active && u.role !== "kiosk" && !u.sanepid_expiry && (
+                            <span className="text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded ml-2">
+                              Brak terminu sanepid
+                            </span>
+                          )}
+                          {u.active && u.role !== "kiosk" && !u.umowa_expiry && (
+                            <span className="text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded ml-2">
+                              Brak terminu umowy
                             </span>
                           )}
                         </p>
