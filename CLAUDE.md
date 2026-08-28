@@ -210,6 +210,12 @@ okna, więc przestaje być "due"), nie przez reset tego pola.
   - ⚠️ Kolumny `audience`, `message`, `type` trzeba dodać ręcznie w
     Supabase (Claude Code nie ma tam bezpośredniego dostępu) — patrz SQL
     w historii tej sesji/PR, jeśli jeszcze nie zastosowany.
+  - ⚠️ `user_name` i `action` były pierwotnie `NOT NULL` (z czasów, gdy
+    tabela obsługiwała tylko powiadomienia o edycji zmiany) — trzeba było
+    ręcznie zdjąć te ograniczenia (`alter column ... drop not null`),
+    inaczej `createManagerNotification`/`createEmployeeNotification`
+    dostają 400 z Postgresa. Sprawdź, że zostało zastosowane, zanim
+    zaczniesz kolejny moduł korzystający z tych funkcji (Zadania/Sprzątanie).
 
 ## Znane błędy — JUŻ NAPRAWIONE, nie wprowadzaj ponownie
 
@@ -252,6 +258,18 @@ okna, więc przestaje być "due"), nie przez reset tego pola.
    logów/wywołania endpointu). Naprawione przez przepisanie na zwykły
    CommonJS `.js` — patrz ostrzeżenie w sekcji "Cron" wyżej, dotyczy
    każdej przyszłej funkcji w root-level `api/`.
+8. Pierwsza wersja `createManagerNotification`/`createEmployeeNotification`
+   w `api/cron/check-document-terms.js` nie sprawdzała statusu odpowiedzi
+   z Supabase po `POST` — insert padał 400 (patrz błąd `user_name`/`action`
+   NOT NULL wyżej), ale kod tego nie zauważał i szedł dalej do
+   `patchUser(..., last_notified: dzisiaj)`, więc pracownik wyglądał na
+   "obsłużonego dzisiaj" mimo że nikt nie dostał powiadomienia — cichy
+   fałszywy sukces. Naprawione: obie funkcje rzucają błąd przy `!res.ok`,
+   a pętla w cronie łapie błąd per (pracownik, termin) osobno i NIE
+   ustawia `last_notified` przy niepowodzeniu (więc spróbuje ponownie
+   następnego dnia) zamiast łapać wszystko jednym try/catch na cały batch.
+   Każda przyszła funkcja pisząca do Supabase z `api/` musi tak samo
+   sprawdzać `res.ok`, nie tylko `await fetch(...)`.
 
 ## Google Apps Script (`Odbior_Danych.gs`)
 
