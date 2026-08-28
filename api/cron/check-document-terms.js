@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Wywoływane raz dziennie przez Vercel Cron (patrz vercel.json). Sprawdza
 // terminy sanepid/umowy aktywnych pracowników i powiadamia kierowników ich
 // lokalu oraz samych pracowników w rytmie: miesiąc przed, 2 tygodnie przed,
@@ -6,11 +5,80 @@
 //
 // Lista terminów jest świadomie zamknięta na tych dwóch pozycjach — nie jest
 // to mechanizm pozwalający dodać dowolny trzeci termin bez zmiany kodu.
-import { api } from "../../src/api/supabase";
-import {
-  createManagerNotification,
-  createEmployeeNotification,
-} from "../../src/api/notifications";
+//
+// Zwykły CommonJS .js (nie .ts): Vercel buduje funkcje w api/ przez osobny,
+// legacy tsc zamiast tego samego pipeline'u co CRA, a stara wersja
+// `typescript` w package.json (4.4.4, potrzebna dla reszty projektu — patrz
+// CLAUDE.md) powoduje tam błąd "TS6046" i zepsutą kompilację ("Cannot use
+// import statement outside a module" w runtime). Samodzielny CommonJS
+// omija ten problem całkowicie, kosztem zduplikowania (nie importowania)
+// paru linijek z src/api/supabase.ts i src/api/notifications.ts — jeśli te
+// pliki się zmienią, sprawdź czy trzeba przenieść zmianę też tutaj.
+
+const SUPABASE_URL = "https://gdzossvaauznqsrfqovw.supabase.co";
+const SUPABASE_KEY = "sb_publishable_4SuEM6I6VujiuBtqGze1Nw_vFoeoM3S";
+
+const headers = {
+  apikey: SUPABASE_KEY,
+  Authorization: `Bearer ${SUPABASE_KEY}`,
+  "Content-Type": "application/json",
+  Prefer: "return=representation",
+};
+
+const getUsers = async () => {
+  const pageSize = 1000;
+  let allRows = [];
+  let from = 0;
+  while (true) {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/users?select=*&order=id.asc`,
+      { headers: { ...headers, Range: `${from}-${from + pageSize - 1}` } }
+    );
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || "Błąd pobierania users");
+    allRows = allRows.concat(json);
+    if (json.length < pageSize) break;
+    from += pageSize;
+  }
+  return allRows;
+};
+
+const patchUser = async (id, data) => {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/users?id=eq.${id}`, {
+    method: "PATCH",
+    headers,
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Błąd aktualizacji użytkownika");
+};
+
+const createManagerNotification = async (lokal, message, type) => {
+  await fetch(`${SUPABASE_URL}/rest/v1/notifications`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      audience: "manager",
+      lokal,
+      message,
+      type,
+      is_read: false,
+    }),
+  });
+};
+
+const createEmployeeNotification = async (userName, message, type) => {
+  await fetch(`${SUPABASE_URL}/rest/v1/notifications`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      audience: "employee",
+      user_name: userName,
+      message,
+      type,
+      is_read: false,
+    }),
+  });
+};
 
 const DOCUMENT_TERMS = [
   {
@@ -47,7 +115,7 @@ const buildEmployeeMessage = (term, expiryStr, days) =>
     ? `Twój termin "${term.label}" jest przeterminowany od ${-days} dni (był ${expiryStr}). Zgłoś się do kierownika.`
     : `Twój termin "${term.label}" upływa ${expiryStr}. Zgłoś się do kierownika, aby go zaktualizować.`;
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   const authHeader = req.headers.authorization || "";
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     res.status(401).json({ error: "Unauthorized" });
@@ -60,7 +128,7 @@ export default async function handler(req, res) {
 
   let notified = 0;
   try {
-    const allUsers = await api.get("users");
+    const allUsers = await getUsers();
     const activeUsers = (Array.isArray(allUsers) ? allUsers : []).filter(
       (u) => u.active && !u.archived
     );
@@ -84,9 +152,7 @@ export default async function handler(req, res) {
           buildEmployeeMessage(term, expiryStr, days),
           term.key
         );
-        await api.patch("users", user.id, {
-          [term.lastNotifiedCol]: todayStr,
-        });
+        await patchUser(user.id, { [term.lastNotifiedCol]: todayStr });
         notified++;
       }
     }
@@ -96,4 +162,4 @@ export default async function handler(req, res) {
     console.error("check-document-terms failed:", err);
     res.status(500).json({ ok: false, error: err.message || String(err) });
   }
-}
+};

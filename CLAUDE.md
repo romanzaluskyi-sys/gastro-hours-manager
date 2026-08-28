@@ -45,6 +45,17 @@ istniejącego MVP, żeby zespół polubił system, zanim dodamy duże nowe modu�
   `Authorization: Bearer $CRON_SECRET` — zmienna `CRON_SECRET` musi być
   ustawiona w Vercel → Project Settings → Environment Variables, inaczej
   wywołania z harmonogramu dostaną 401.
+  ⚠️ **Pliki w root-level `api/` pisz jako zwykły CommonJS `.js`, NIE
+  `.ts`.** Vercel buduje je osobnym, legacy `tsc`-pipeline'em (innym niż
+  babel, który kompiluje CRA) i stara wersja `typescript` w `package.json`
+  (4.4.4, patrz błąd #4 niżej — nie da się jej bezpiecznie podbić bez
+  ryzyka zepsucia reszty builda) powoduje tam błąd `TS6046` i zepsutą
+  kompilację (`SyntaxError: Cannot use import statement outside a module`
+  w runtime, mimo że sam build się "kończy sukcesem"). Sprawdzone na
+  `api/cron/check-document-terms.js` — jeśli dodajesz kolejną funkcję
+  cron, pisz ją tak samo: `.js`, `module.exports = async (req, res) => {}`,
+  bez `import`/`export`, bez importów z `src/` (duplikuj potrzebne parę
+  linijek zamiast importować — patrz komentarz na górze tego pliku).
 
 ## Struktura plików
 
@@ -58,7 +69,7 @@ plików (chyba że robisz świadomą migrację do prawdziwych typów).
 ```
 api/                         — root-level, POZA src/ — funkcje Vercel Cron
   cron/
-    check-document-terms.ts   — codzienna weryfikacja terminów sanepid/umowy,
+    check-document-terms.js    — codzienna weryfikacja terminów sanepid/umowy,
                                  patrz Roadmap punkt 1 i sekcja "Cron" wyżej
 vercel.json                  — harmonogram crona
 src/
@@ -155,7 +166,7 @@ terminu ...". To świadomie zamknięty zestaw dwóch terminów — nie dodawaj
 trzeciego bez wyraźnej prośby, to nie jest zaprojektowane jako otwarty
 system dowolnych typów terminów.
 
-**Codzienna weryfikacja terminów** — `api/cron/check-document-terms.ts`
+**Codzienna weryfikacja terminów** — `api/cron/check-document-terms.js`
 (Vercel Cron, patrz sekcja "Cron" wyżej). Dla każdego aktywnego
 (`active && !archived`) pracownika i każdego z dwóch terminów: jeśli data
 jest ustawiona i dzisiejsza różnica dni trafia w okno (dokładnie 30 dni,
@@ -232,6 +243,15 @@ okna, więc przestaje być "due"), nie przez reset tego pola.
 6. `tsconfig.json` był kiedyś dwoma sklejonymi obiektami JSON (przypadkowy
    duplikat przy wklejaniu) — nieprawidłowy JSON. Naprawione do jednego
    obiektu ze `strict: true` i `skipLibCheck: true`.
+7. Pierwsza wersja `api/cron/check-document-terms` była napisana jako `.ts`
+   i budowała się "pomyślnie" na Vercelu, ale funkcja crashowała w runtime
+   (`FUNCTION_INVOCATION_FAILED` / `SyntaxError: Cannot use import
+   statement outside a module`) — legacy `tsc`-pipeline Vercela dla funkcji
+   w `api/` nie radzi sobie ze starą `typescript@4.4.4` z `package.json`
+   (błąd `TS6046` w logach builda, niewidoczny bez sprawdzenia runtime
+   logów/wywołania endpointu). Naprawione przez przepisanie na zwykły
+   CommonJS `.js` — patrz ostrzeżenie w sekcji "Cron" wyżej, dotyczy
+   każdej przyszłej funkcji w root-level `api/`.
 
 ## Google Apps Script (`Odbior_Danych.gs`)
 
@@ -282,7 +302,7 @@ Pola w karcie pracownika: data ważności książeczki sanepid + data umowy.
 Świadomie **nie** "inne pola wg potrzeby" — właściciel zdecydował zamknąć
 zestaw na tych dwóch terminach, bez mechanizmu dodawania kolejnych bez
 zmiany kodu (patrz "Panel kierownika" wyżej). Codzienna weryfikacja
-(Vercel Cron, `api/cron/check-document-terms.ts`) i powiadomienie
+(Vercel Cron, `api/cron/check-document-terms.js`) i powiadomienie
 kierownika ORAZ pracownika: miesiąc przed, 2 tygodnie przed, codziennie w
 ostatnim tygodniu, i codziennie po przekroczeniu terminu aż do poprawy.
 
