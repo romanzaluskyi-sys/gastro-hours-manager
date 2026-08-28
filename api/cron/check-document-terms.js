@@ -91,19 +91,26 @@ const createEmployeeNotification = async (userName, message, type) => {
 const DOCUMENT_TERMS = [
   {
     key: "sanepid",
-    label: "Termin książeczki sanepid",
+    // Rzeczownik (r.ż.) wstawiany jako podmiot zdania w buildManagerMessage/
+    // buildEmployeeMessage — musi się zgadzać rodzajem z "dobiega"/"upłynęła".
+    subject: "książeczka sanitarno-epidemiologiczna",
     dateCol: "sanepid_expiry",
     lastNotifiedCol: "sanepid_last_notified",
   },
   {
     key: "umowa",
-    label: "Termin umowy",
+    subject: "umowa",
     dateCol: "umowa_expiry",
     lastNotifiedCol: "umowa_last_notified",
   },
 ];
 
 const toYMD = (d) => d.toISOString().split("T")[0];
+
+const toPolishDate = (dateStr) => {
+  const [y, m, d] = dateStr.split("-");
+  return `${d}.${m}.${y}`;
+};
 
 const daysUntil = (dateStr, today) => {
   const expiry = new Date(dateStr + "T00:00:00");
@@ -113,15 +120,30 @@ const daysUntil = (dateStr, today) => {
 const isDueToday = (days) =>
   days === 30 || days === 14 || (days >= 0 && days <= 7) || days < 0;
 
-const buildManagerMessage = (userName, term, expiryStr, days) =>
-  days < 0
-    ? `${userName}: ${term.label} przeterminowany od ${-days} dni (był ${expiryStr}).`
-    : `${userName}: ${term.label} upływa ${expiryStr}.`;
+const buildManagerMessage = (user, term, expiryStr, days) => {
+  const dateFmt = toPolishDate(expiryStr);
+  const stanowisko = user.default_stanowisko ? ` (${user.default_stanowisko})` : "";
+  const lokal = user.default_lokal || "brak przypisanego lokalu";
+  const who = `Dla pracownika ${user.name}${stanowisko} z lokalu ${lokal}`;
+  if (days < 0) {
+    return `${who}, ${term.subject} upłynęła w dniu ${dateFmt} — termin przekroczony o ${-days} dni.`;
+  }
+  if (days === 0) {
+    return `${who}, ${term.subject} dobiega końca dzisiaj (${dateFmt}).`;
+  }
+  return `${who}, ${term.subject} dobiega końca w dniu ${dateFmt}, do zakończenia pozostało ${days} dni.`;
+};
 
-const buildEmployeeMessage = (term, expiryStr, days) =>
-  days < 0
-    ? `Twój termin "${term.label}" jest przeterminowany od ${-days} dni (był ${expiryStr}). Zgłoś się do kierownika.`
-    : `Twój termin "${term.label}" upływa ${expiryStr}. Zgłoś się do kierownika, aby go zaktualizować.`;
+const buildEmployeeMessage = (term, expiryStr, days) => {
+  const dateFmt = toPolishDate(expiryStr);
+  if (days < 0) {
+    return `Twój termin: ${term.subject} upłynęła w dniu ${dateFmt} — termin przekroczony o ${-days} dni. Zgłoś się do kierownika.`;
+  }
+  if (days === 0) {
+    return `Twój termin: ${term.subject} dobiega końca dzisiaj (${dateFmt}). Zgłoś się do kierownika.`;
+  }
+  return `Twój termin: ${term.subject} dobiega końca w dniu ${dateFmt}, do zakończenia pozostało ${days} dni. Zgłoś się do kierownika, aby go zaktualizować.`;
+};
 
 module.exports = async function handler(req, res) {
   const authHeader = req.headers.authorization || "";
@@ -158,7 +180,7 @@ module.exports = async function handler(req, res) {
         try {
           await createManagerNotification(
             user.default_lokal,
-            buildManagerMessage(user.name, term, expiryStr, days),
+            buildManagerMessage(user, term, expiryStr, days),
             term.key
           );
           await createEmployeeNotification(
