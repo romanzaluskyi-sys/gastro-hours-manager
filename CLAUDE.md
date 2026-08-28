@@ -203,8 +203,9 @@ okna, więc przestaje być "due"), nie przez reset tego pola.
     `lokal` (tworzone przez `createManagerNotification`). Pola: `lokal,
     message, type, is_read, created_at`.
   - Warianty (a) i (b) rozróżnia `formatNotificationText` po obecności
-    pola `message` — jeśli jest, zwraca je wprost, inaczej składa tekst ze
-    starych pól `action`/`old_start`/itd.
+    pola `message` — jeśli jest, zwraca je (z doklejonym `user_name` z
+    przodu, gdy `showEmployeeName=true` — patrz niżej), inaczej składa
+    tekst ze starych pól `action`/`old_start`/itd.
   - RLS: polityka otwarta (`for all using (true) with check (true)`) —
     jeśli dodajesz nowe tabele, rób tak samo albo świadomie zawężaj.
   - ⚠️ Kolumny `audience`, `message`, `type` trzeba dodać ręcznie w
