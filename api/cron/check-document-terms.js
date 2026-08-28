@@ -53,7 +53,7 @@ const patchUser = async (id, data) => {
 };
 
 const createManagerNotification = async (lokal, message, type) => {
-  await fetch(`${SUPABASE_URL}/rest/v1/notifications`, {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/notifications`, {
     method: "POST",
     headers,
     body: JSON.stringify({
@@ -64,10 +64,14 @@ const createManagerNotification = async (lokal, message, type) => {
       is_read: false,
     }),
   });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`createManagerNotification failed: ${res.status} ${body}`);
+  }
 };
 
 const createEmployeeNotification = async (userName, message, type) => {
-  await fetch(`${SUPABASE_URL}/rest/v1/notifications`, {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/notifications`, {
     method: "POST",
     headers,
     body: JSON.stringify({
@@ -78,6 +82,10 @@ const createEmployeeNotification = async (userName, message, type) => {
       is_read: false,
     }),
   });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`createEmployeeNotification failed: ${res.status} ${body}`);
+  }
 };
 
 const DOCUMENT_TERMS = [
@@ -127,6 +135,7 @@ module.exports = async function handler(req, res) {
   const todayStr = toYMD(today);
 
   let notified = 0;
+  const failures = [];
   try {
     const allUsers = await getUsers();
     const activeUsers = (Array.isArray(allUsers) ? allUsers : []).filter(
@@ -142,22 +151,41 @@ module.exports = async function handler(req, res) {
         if (!isDueToday(days)) continue;
         if (user[term.lastNotifiedCol] === todayStr) continue;
 
-        await createManagerNotification(
-          user.default_lokal,
-          buildManagerMessage(user.name, term, expiryStr, days),
-          term.key
-        );
-        await createEmployeeNotification(
-          user.name,
-          buildEmployeeMessage(term, expiryStr, days),
-          term.key
-        );
-        await patchUser(user.id, { [term.lastNotifiedCol]: todayStr });
-        notified++;
+        // Każdy (pracownik, termin) osobno: błąd jednego nie przerywa
+        // reszty batcha i — kluczowe — NIE ustawia last_notified, więc
+        // nieudana próba zostanie powtórzona przy następnym uruchomieniu
+        // zamiast zostać cicho uznana za wysłaną.
+        try {
+          await createManagerNotification(
+            user.default_lokal,
+            buildManagerMessage(user.name, term, expiryStr, days),
+            term.key
+          );
+          await createEmployeeNotification(
+            user.name,
+            buildEmployeeMessage(term, expiryStr, days),
+            term.key
+          );
+          await patchUser(user.id, { [term.lastNotifiedCol]: todayStr });
+          notified++;
+        } catch (itemErr) {
+          console.error(
+            `check-document-terms: failed for user=${user.id} term=${term.key}:`,
+            itemErr
+          );
+          failures.push({
+            userId: user.id,
+            userName: user.name,
+            term: term.key,
+            error: itemErr.message || String(itemErr),
+          });
+        }
       }
     }
 
-    res.status(200).json({ ok: true, checked: activeUsers.length, notified });
+    res
+      .status(200)
+      .json({ ok: true, checked: activeUsers.length, notified, failures });
   } catch (err) {
     console.error("check-document-terms failed:", err);
     res.status(500).json({ ok: false, error: err.message || String(err) });
