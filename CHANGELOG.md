@@ -5,6 +5,22 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.5.0 — 2026-08-28
+
+- **Nie da się już zapisać dwóch nakładających się zmian.** Jeśli nowy
+  wpis pokrywa się czasowo z już zapisaną zmianą tej samej osoby, zapis
+  jest odrzucany z komunikatem (pracownik zgłasza pomyłkę przez "Zgłoś").
+  Kierownik przy edycji zmiany dostaje zamiast tego pytanie
+  potwierdzające — czasem trzeba poprawić już niespójne dane.
+- **Przypomnienie o dzisiejszych zmianach.** Po wybraniu pracownika w
+  zakładce Wpisz widać, jakie zmiany już zarejestrowano dziś — przydatne,
+  gdy w ciągu dnia trzeba dopisać kolejną (grafik w gastro potrafi się
+  zmienić).
+- Naprawiono błąd przy dodawaniu nowego pracownika z pustymi terminami
+  sanepid/umowy (zapis się nie udawał). Czerwone podświetlenie pustego
+  terminu pokazuje się teraz tylko przy edycji istniejącego pracownika,
+  nie przy tworzeniu nowego.
+
 ## 0.4.0 — 2026-08-28
 
 - **Zapisywanie zmiany jest teraz natychmiastowe.** Wcześniej formularz

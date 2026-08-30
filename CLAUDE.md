@@ -85,6 +85,7 @@ src/
                                   createEmployeeNotification(userName, message, type)
   utils/
     format.ts                 — getShort, getDayOfWeek, getMonthName, getAvailableYears, formatNotificationText
+    shifts.ts                  — findOverlappingShift, getTodaysShiftsForUser
   components/
     LoginScreen.tsx
     TimeEntryForm.tsx          — wspólny formularz start/koniec zmiany (kiosk i self-tracking)
@@ -123,7 +124,17 @@ głównym — pracownik nic nie wpisuje ręcznie.
 - **Wpisz / Zmiana** — `TimeEntryForm`: rozpoczęcie zmiany (można zapisać
   sam start — "Tylko start" — albo od razu start+koniec jednym wpisem,
   zaznaczając checkbox "Znam" przy polu Zakończenie), oraz zakończenie
-  trwającej zmiany.
+  trwającej zmiany. Po wybraniu pracownika (kiosk) / od razu (konto
+  własne) widać żółte przypomnienie o już zapisanych dziś zmianach tego
+  pracownika (`getTodaysShiftsForUser`) — pracownicy mają różne nawyki,
+  czasem trzeba wpisać drugą zmianę tego samego dnia, więc to celowo
+  widoczne z góry, nie dopiero przy próbie zapisu. Nowa zmiana, która
+  nakłada się czasowo na już zapisaną (ta sama osoba), jest **twardo
+  blokowana** (`findOverlappingShift` w `utils/shifts.ts`) — pracownik
+  nie może sam tego obejść, w razie pomyłki zgłasza przez "Zgłoś".
+  Kierownik przy edycji zmiany (`ManagerDashboard`) dostaje tę samą
+  weryfikację, ale jako miękkie potwierdzenie (`window.confirm`), nie
+  blokadę — czasem musi poprawiać już niespójne dane.
 - **Raport** — `HoursReport` / `MonthlyReport`: przegląd własnych
   przepracowanych godzin wg miesiąca/roku.
 - **Zgłoś** — `IssueForm`: zgłoszenie problemu z zapisanymi godzinami do
@@ -290,6 +301,13 @@ kogo należy powiadomienie.
    następnego dnia) zamiast łapać wszystko jednym try/catch na cały batch.
    Każda przyszła funkcja pisząca do Supabase z `api/` musi tak samo
    sprawdzać `res.ok`, nie tylko `await fetch(...)`.
+9. Zapisywanie pracownika z pustymi polami `sanepid_expiry`/`umowa_expiry`
+   dawało `Błąd zapisu pracownika!` bez dalszego wyjaśnienia (wypełnienie
+   losowej daty działało). Przyczyna: `<input type="date">` przy pustej
+   wartości daje `""`, a Postgres odrzuca `""` jako nieprawidłową datę dla
+   kolumny `date` (akceptuje `null`). Naprawione w `handleSaveUser` —
+   `""` → `null` przed wysyłką. Każde przyszłe pole typu `date` na
+   formularzu musi przejść przez tę samą konwersję.
 
 ## Google Apps Script (`Odbior_Danych.gs`)
 
@@ -400,3 +418,45 @@ twardą walidację: zatwierdzonego urlopu nie da się nadpisać zmianą, chyba
 ### 5. Grafik
 Ostatni etap. Nie opisany szczegółowo celowo — wracamy do tego, gdy reszta
 jest stabilna i przetestowana w realnym użyciu.
+
+### 6. Automatyczne wylogowanie po nieaktywności — ODŁOŻONE
+Świadomie odłożone (2026-08-28) — obecni główni użytkownicy to kiosk i
+konto właściciela, więc ryzyko niewielkie. **Zrobić przed podłączeniem
+drugiego lokalu do systemu** — wtedy więcej osobistych kont, ryzyko
+rośnie.
+
+Zakres: 60 minut nieaktywności → automatyczne wylogowanie, **tylko** dla
+`closed`/`manager_lokalu`/`admin`. Rola `kiosk` świadomie WYŁĄCZONA —
+to wspólne urządzenie z zapisanymi danymi logowania (autouzupełnianie),
+ma zostać zalogowane stale; tam ochroną jest fizyczna kontrola nad
+urządzeniem, nie sesja. Szkic mechanizmu: `lastActivityAt` timestamp w
+tej samej strukturze co sesja w `localStorage` (patrz `App.tsx`),
+nasłuch click/keydown/touchstart (z throttle) do odświeżania go,
+okresowe sprawdzanie (np. co 60s) i wylogowanie po przekroczeniu progu.
+
+### 7. Zatwierdzanie zmian przez kierownika — ODŁOŻONE
+Świadomie odłożone (2026-08-28) na potem, ale z ustalonym już kształtem
+docelowym, żeby nie projektować tego od zera przy starcie:
+
+Nowa kolumna `shifts.confirmed` (boolean, domyślnie `true` — nic się nie
+zmienia dla nikogo, dopóki funkcja nie zostanie świadomie włączona).
+Niepotwierdzona zmiana (`confirmed = false`) ma być **niewidoczna
+wszędzie** — Pulpit godzin, Rejestr Godzin, raport pracownika — poza
+osobną listą "Do zatwierdzenia" u kierownika.
+
+Docelowo (przyszłe ustawienia, do wyboru przez kierownika/właściciela —
+nie hardkodować jednej opcji):
+- **Wszystko ręcznie** — każda zmiana wymaga zatwierdzenia kierownika.
+- **Zgodnie z grafikiem auto, reszta do zatwierdzenia** — wymaga
+  najpierw Grafiku (punkt 5 wyżej), więc ta opcja gotowa później niż
+  pozostałe dwie.
+- **Druga zmiana tego samego dnia → do zatwierdzenia** — pierwsza zmiana
+  dnia automatycznie zatwierdzona, kolejne tego samego dnia trafiają do
+  kierownika. Można zbudować niezależnie od Grafiku — `utils/shifts.ts`
+  ma już `getTodaysShiftsForUser(shifts, userId)` (dodane dla
+  przypomnienia "Dziś już zarejestrowano..." w `TimeEntryForm`), więc
+  wykrycie "to już druga dzisiaj" to gotowy budulec.
+
+Domyślna wartość ("prawda") pozostaje: wszystko automatycznie
+zatwierdzone, dopóki właściciel świadomie nie wybierze innej opcji w
+przyszłych ustawieniach.

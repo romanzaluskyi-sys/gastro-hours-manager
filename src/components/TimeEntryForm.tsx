@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import { Clock, CheckCircle, RefreshCw } from "lucide-react";
 import { api } from "../api/supabase";
 import { sendToGoogleSheets } from "../api/googleSheets";
+import { findOverlappingShift, getTodaysShiftsForUser } from "../utils/shifts";
 
 // ==========================================
 // WSPÓLNE KOMPONENTY
@@ -37,6 +38,14 @@ const TimeEntryForm = ({
   const openShift = selectedUserId
     ? shifts.find((s) => s.user_id === selectedUserId && !s.end_time)
     : null;
+  // Przypomnienie o już zapisanych dziś zmianach — pracownicy mają różne
+  // nawyki i czasem trzeba wpisać drugą zmianę tego samego dnia (gastro,
+  // grafik potrafi się zmienić); to dodatkowe przypomnienie obok twardej
+  // blokady nakładania się (patrz handleCreateShift). Otwartą zmianę
+  // wykluczamy — ta ma już własny, osobny blok informacyjny niżej.
+  const todaysClosedShifts = selectedUserId
+    ? getTodaysShiftsForUser(shifts, selectedUserId).filter((s) => s.end_time)
+    : [];
   const dostepneStanowiska = stanowiska.filter((s) => s.lokal_name === lokal);
 
   useEffect(() => {
@@ -124,6 +133,21 @@ const TimeEntryForm = ({
       hrs = parseFloat(((endD - startD) / (1000 * 60 * 60)).toFixed(2));
     }
 
+    const overlapping = findOverlappingShift(shifts, user.id, startD, endD, null);
+    if (overlapping) {
+      setSaving(false);
+      const fmt = (d) =>
+        d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      return showMsg(
+        `Ta zmiana nakłada się na już zapisaną (${fmt(
+          overlapping.start_time
+        )}–${fmt(
+          overlapping.end_time
+        )}). Jeśli to pomyłka, zgłoś się przez zakładkę "Zgłoś".`,
+        "error"
+      );
+    }
+
     const newShiftData = {
       user_id: user.id,
       user_name: user.name,
@@ -187,6 +211,27 @@ const TimeEntryForm = ({
               </option>
             ))}
           </select>
+        </div>
+      )}
+      {todaysClosedShifts.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 p-3 rounded-lg mb-4 text-sm">
+          <p className="font-bold text-amber-800 mb-1">
+            Dziś już zarejestrowano:
+          </p>
+          {todaysClosedShifts.map((s) => (
+            <p key={s.id} className="text-amber-700">
+              {s.start_time.toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+              {" – "}
+              {s.end_time.toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}{" "}
+              ({s.lokal}, {s.stanowisko})
+            </p>
+          ))}
         </div>
       )}
       {openShift ? (

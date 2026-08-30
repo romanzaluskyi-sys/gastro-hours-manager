@@ -25,6 +25,7 @@ import {
 import { api } from "../api/supabase";
 import { sendToGoogleSheets } from "../api/googleSheets";
 import { getShort, getDayOfWeek, getMonthName, getAvailableYears } from "../utils/format";
+import { findOverlappingShift } from "../utils/shifts";
 import TimeEntryForm from "./TimeEntryForm";
 import HoursReport from "./HoursReport";
 import NotificationsPanel from "./NotificationsPanel";
@@ -300,6 +301,10 @@ const ManagerDashboard = ({
         dataToSave.email = "";
         dataToSave.pin = "";
       }
+      // Puste "" z <input type="date"> Postgres odrzuca jako nieprawidłową
+      // datę (kolumna date, nullable) — trzeba jawnie zamienić na null.
+      if (!dataToSave.sanepid_expiry) dataToSave.sanepid_expiry = null;
+      if (!dataToSave.umowa_expiry) dataToSave.umowa_expiry = null;
       if (
         (dataToSave.role === "kiosk" || dataToSave.role === "manager_lokalu") &&
         Array.isArray(dataToSave.allowed_lokale)
@@ -318,7 +323,7 @@ const ManagerDashboard = ({
       setEditingUser(null);
       showMsg("Zapisano pracownika!");
     } catch (err) {
-      showMsg("Błąd zapisu pracownika!", "error");
+      showMsg(`Błąd zapisu pracownika: ${err.message || "nieznany błąd"}`, "error");
     }
   };
 
@@ -441,6 +446,26 @@ const ManagerDashboard = ({
         hrs = parseFloat(((endD - startD) / (1000 * 60 * 60)).toFixed(2));
       }
 
+      // Kierownik może naprawiać już niespójne dane, więc tylko ostrzegamy
+      // (w przeciwieństwie do twardej blokady u pracownika w TimeEntryForm).
+      const overlapping = findOverlappingShift(
+        shifts,
+        editingShift.user_id,
+        startD,
+        endD,
+        editingShift.id
+      );
+      if (overlapping) {
+        const fmt = (d) =>
+          d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        const confirmed = window.confirm(
+          `Ta zmiana nakłada się na inną zapisaną zmianę tego pracownika (${fmt(
+            overlapping.start_time
+          )}–${fmt(overlapping.end_time)}). Zapisać mimo to?`
+        );
+        if (!confirmed) return;
+      }
+
       const updated = await api.patch("shifts", editingShift.id, {
         start_time: startD.toISOString(),
         end_time: endD ? endD.toISOString() : null,
@@ -547,6 +572,10 @@ const ManagerDashboard = ({
   });
 
   const isEmailPinRequired = editingUser && editingUser.role !== "open";
+  // Przy tworzeniu nowego pracownika terminy są zawsze puste na starcie —
+  // czerwone podświetlenie tam tylko myli (wygląda na wymagane, choć nie
+  // jest). Pokazujemy je dopiero przy edycji istniejącego pracownika.
+  const showTermWarnings = editingUser && !!editingUser.id;
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col md:flex-row">
@@ -1570,12 +1599,12 @@ const ManagerDashboard = ({
                                   })
                                 }
                                 className={`w-full p-2 border rounded ${
-                                  !editingUser.sanepid_expiry
+                                  showTermWarnings && !editingUser.sanepid_expiry
                                     ? "border-red-400 bg-red-50"
                                     : ""
                                 }`}
                               />
-                              {!editingUser.sanepid_expiry && (
+                              {showTermWarnings && !editingUser.sanepid_expiry && (
                                 <p className="text-xs text-red-600 mt-1">
                                   Brak terminu — przypomnienia wyłączone
                                 </p>
@@ -1595,12 +1624,12 @@ const ManagerDashboard = ({
                                   })
                                 }
                                 className={`w-full p-2 border rounded ${
-                                  !editingUser.umowa_expiry
+                                  showTermWarnings && !editingUser.umowa_expiry
                                     ? "border-red-400 bg-red-50"
                                     : ""
                                 }`}
                               />
-                              {!editingUser.umowa_expiry && (
+                              {showTermWarnings && !editingUser.umowa_expiry && (
                                 <p className="text-xs text-red-600 mt-1">
                                   Brak terminu — przypomnienia wyłączone
                                 </p>
