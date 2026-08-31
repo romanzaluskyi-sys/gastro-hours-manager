@@ -91,6 +91,91 @@ const checkboxRowCls = (checked) =>
     checked ? "border-[2.5px] border-[#171714]" : "border-[#B7B6AE]"
   }`;
 
+// Poza komponentem nadrzędnym celowo — Shell był kiedyś zdefiniowany w środku
+// KioskDashboard, przez co żywy zegar (setInterval co 1s) wymuszał na Reakcie
+// traktowanie <Shell> jako nowego typu komponentu przy każdym tickу i
+// odmontowywanie/montowanie go od nowa (razem z polami formularza w środku —
+// traciły focus co sekundę). Trzymaj Shell tutaj, na poziomie modułu.
+const Shell = ({
+  screen,
+  setScreen,
+  goList,
+  unreadCount,
+  title,
+  showPill = false,
+  showBell = true,
+  footer = null,
+  children,
+}) => {
+  const activeTabKey = ["WIECEJ", "WIADOMOSCI", "ZGLOS"].includes(screen)
+    ? "WIECEJ"
+    : screen;
+  return (
+    <div className="min-h-screen bg-white flex flex-col items-center">
+      <div className="w-full max-w-md bg-white min-h-screen flex flex-col shadow-lg">
+        <header className="px-[18px] pt-[22px] pb-[14px] bg-[#F1F1EE] border-b-[1.5px] border-[#B7B6AE] flex items-center justify-between gap-2.5 flex-shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              onClick={goList}
+              className="flex items-center gap-1 border-2 border-[#B7B6AE] rounded font-['Archivo'] font-bold text-sm px-3 py-2 text-[#171714] flex-shrink-0"
+            >
+              <ChevronLeft size={16} strokeWidth={2.5} /> Zmień
+            </button>
+            <span className="font-['Archivo'] font-extrabold text-[19px] text-[#171714] truncate">
+              {title}
+            </span>
+          </div>
+          {showPill ? (
+            <span className="flex-shrink-0 bg-[#FAEAE6] text-[#8A3A2B] text-[13px] font-semibold px-3.5 py-2 rounded">
+              na zmianie
+            </span>
+          ) : showBell ? (
+            <button
+              onClick={() => setScreen("WIADOMOSCI")}
+              className="relative border-2 border-[#B7B6AE] rounded w-11 h-11 flex items-center justify-center text-[#171714] flex-shrink-0"
+            >
+              <Bell size={19} />
+              {unreadCount > 0 && (
+                <span className="absolute -top-2 -right-2 bg-[#DE3A22] text-white font-['Archivo'] font-extrabold text-[11px] min-w-[18px] h-[18px] rounded flex items-center justify-center px-1">
+                  {unreadCount}
+                </span>
+              )}
+            </button>
+          ) : null}
+        </header>
+        <main className="flex-1 overflow-y-auto px-5 pt-6 pb-5 flex flex-col">
+          {children}
+        </main>
+        {footer}
+        <nav className="flex border-t-[1.5px] border-[#B7B6AE] bg-white flex-shrink-0">
+          {TABS.map(({ key, label, Icon }) => {
+            const active = activeTabKey === key;
+            return (
+              <button
+                key={key}
+                onClick={() => setScreen(key)}
+                className={`flex-1 flex flex-col items-center gap-1 py-3 pb-3.5 relative border-t-[2.5px] ${
+                  active
+                    ? "text-[#DE3A22] border-[#DE3A22]"
+                    : "text-[#8F8E86] border-transparent"
+                }`}
+              >
+                <Icon size={20} />
+                <span className="text-[11px] font-semibold">{label}</span>
+                {key === "WIECEJ" && unreadCount > 0 && (
+                  <span className="absolute top-1 right-[18%] bg-[#DE3A22] text-white font-['Archivo'] font-extrabold text-[9.5px] min-w-[15px] h-[15px] rounded-[3px] flex items-center justify-center px-0.5">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+      </div>
+    </div>
+  );
+};
+
 const KioskDashboard = ({
   currentUser,
   setCurrentView,
@@ -455,7 +540,8 @@ const KioskDashboard = ({
         issue_text: zgText,
         status: "nowe",
         is_anonymous: zgAnon,
-        shift_id: zgShiftId && zgShiftId !== "none" ? zgShiftId : null,
+        // select value jest zawsze stringiem — shift_id w bazie to liczba.
+        shift_id: zgShiftId && zgShiftId !== "none" ? Number(zgShiftId) : null,
       });
       setIssues([...issues, issue]);
       setZgText("");
@@ -713,83 +799,6 @@ const KioskDashboard = ({
     );
   };
 
-  // ---- powłoka wspólna dla ekranów sesji (nagłówek "&lt; Zmień" + treść + tabbar) ----
-  const Shell = ({
-    title,
-    showPill = false,
-    showBell = true,
-    footer = null,
-    children,
-  }) => {
-    const activeTabKey = ["WIECEJ", "WIADOMOSCI", "ZGLOS"].includes(screen)
-      ? "WIECEJ"
-      : screen;
-    return (
-      <div className="min-h-screen bg-white flex flex-col items-center">
-        <div className="w-full max-w-md bg-white min-h-screen flex flex-col shadow-lg">
-          <header className="px-[18px] pt-[22px] pb-[14px] bg-[#F1F1EE] border-b-[1.5px] border-[#B7B6AE] flex items-center justify-between gap-2.5 flex-shrink-0">
-            <div className="flex items-center gap-3 min-w-0">
-              <button
-                onClick={goList}
-                className="flex items-center gap-1 border-2 border-[#B7B6AE] rounded font-['Archivo'] font-bold text-sm px-3 py-2 text-[#171714] flex-shrink-0"
-              >
-                <ChevronLeft size={16} strokeWidth={2.5} /> Zmień
-              </button>
-              <span className="font-['Archivo'] font-extrabold text-[19px] text-[#171714] truncate">
-                {title}
-              </span>
-            </div>
-            {showPill ? (
-              <span className="flex-shrink-0 bg-[#FAEAE6] text-[#8A3A2B] text-[13px] font-semibold px-3.5 py-2 rounded">
-                na zmianie
-              </span>
-            ) : showBell ? (
-              <button
-                onClick={() => setScreen("WIADOMOSCI")}
-                className="relative border-2 border-[#B7B6AE] rounded w-11 h-11 flex items-center justify-center text-[#171714] flex-shrink-0"
-              >
-                <Bell size={19} />
-                {unreadCount > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-[#DE3A22] text-white font-['Archivo'] font-extrabold text-[11px] min-w-[18px] h-[18px] rounded flex items-center justify-center px-1">
-                    {unreadCount}
-                  </span>
-                )}
-              </button>
-            ) : null}
-          </header>
-          <main className="flex-1 overflow-y-auto px-5 pt-6 pb-5 flex flex-col">
-            {children}
-          </main>
-          {footer}
-          <nav className="flex border-t-[1.5px] border-[#B7B6AE] bg-white flex-shrink-0">
-            {TABS.map(({ key, label, Icon }) => {
-              const active = activeTabKey === key;
-              return (
-                <button
-                  key={key}
-                  onClick={() => setScreen(key)}
-                  className={`flex-1 flex flex-col items-center gap-1 py-3 pb-3.5 relative border-t-[2.5px] ${
-                    active
-                      ? "text-[#DE3A22] border-[#DE3A22]"
-                      : "text-[#8F8E86] border-transparent"
-                  }`}
-                >
-                  <Icon size={20} />
-                  <span className="text-[11px] font-semibold">{label}</span>
-                  {key === "WIECEJ" && unreadCount > 0 && (
-                    <span className="absolute top-1 right-[18%] bg-[#DE3A22] text-white font-['Archivo'] font-extrabold text-[9.5px] min-w-[15px] h-[15px] rounded-[3px] flex items-center justify-center px-0.5">
-                      {unreadCount}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-      </div>
-    );
-  };
-
   // ==========================================
   // EKRAN: LIST — wybór pracownika
   // ==========================================
@@ -956,7 +965,7 @@ const KioskDashboard = ({
   // ==========================================
   if (screen === "PULPIT") {
     return (
-      <Shell title={selectedEmployee.name} showPill={!!openShift}>
+      <Shell screen={screen} setScreen={setScreen} goList={goList} unreadCount={unreadCount} title={selectedEmployee.name} showPill={!!openShift}>
         {openShift ? (
           renderShiftInProgress()
         ) : (
@@ -975,7 +984,14 @@ const KioskDashboard = ({
             </div>
             <div className="flex-1" />
             <button
-              onClick={() => setScreen("ZMIANA")}
+              onClick={() => {
+                // Bez tego, jeśli pracownik wcześniej dziś zamknął zmianę,
+                // wejście tutaj pokazywałoby stare podsumowanie zamiast
+                // formularza — kliknięcie ma znaczyć "chcę zacząć", nie
+                // "pokaż mi ponownie ostatnie podsumowanie".
+                setJustClosed(false);
+                setScreen("ZMIANA");
+              }}
               className={ctaPrimaryCls}
             >
               <Clock size={19} /> Rozpocznij zmianę
@@ -991,7 +1007,7 @@ const KioskDashboard = ({
   // ==========================================
   if (screen === "ZMIANA") {
     return (
-      <Shell title={selectedEmployee.name} showPill={!!openShift}>
+      <Shell screen={screen} setScreen={setScreen} goList={goList} unreadCount={unreadCount} title={selectedEmployee.name} showPill={!!openShift}>
         {openShift
           ? renderShiftInProgress()
           : justClosed
@@ -1007,6 +1023,10 @@ const KioskDashboard = ({
   if (screen === "RAPORT") {
     return (
       <Shell
+        screen={screen}
+        setScreen={setScreen}
+        goList={goList}
+        unreadCount={unreadCount}
         title="Raport"
         footer={
           <div className="flex-shrink-0 border-t-[2.5px] border-[#171714] bg-white px-5 pt-[18px] pb-[22px] flex items-baseline justify-between">
@@ -1120,7 +1140,7 @@ const KioskDashboard = ({
   // ==========================================
   if (screen === "ZADANIA") {
     return (
-      <Shell title="Zadania">
+      <Shell screen={screen} setScreen={setScreen} goList={goList} unreadCount={unreadCount} title="Zadania">
         <div className="border-2 border-dashed border-[#B7B6AE] rounded p-6 text-center mt-6">
           <div className="text-2xl mb-2">🚧</div>
           <div className="font-['Archivo'] font-extrabold text-lg text-[#171714] mb-1.5">
@@ -1140,7 +1160,7 @@ const KioskDashboard = ({
   // ==========================================
   if (screen === "WIECEJ") {
     return (
-      <Shell title="Więcej">
+      <Shell screen={screen} setScreen={setScreen} goList={goList} unreadCount={unreadCount} title="Więcej">
         <button
           onClick={() => setGrafikToastShown((v) => !v)}
           className={menuRowCls}
@@ -1207,7 +1227,7 @@ const KioskDashboard = ({
       (a, b) => new Date(b.created_at) - new Date(a.created_at)
     );
     return (
-      <Shell title="Wiadomości" showBell={false}>
+      <Shell screen={screen} setScreen={setScreen} goList={goList} unreadCount={unreadCount} title="Wiadomości" showBell={false}>
         {sortedNotifications.length === 0 && (
           <div className="text-center py-10 text-[#8F8E86]">
             <Bell className="mx-auto mb-2 opacity-40" size={40} />
@@ -1244,7 +1264,7 @@ const KioskDashboard = ({
   // ==========================================
   if (screen === "ZGLOS") {
     return (
-      <Shell title="Zgłoś poprawkę">
+      <Shell screen={screen} setScreen={setScreen} goList={goList} unreadCount={unreadCount} title="Zgłoś poprawkę">
         <div>
           <span className={fieldLabelCls}>Kto zgłasza</span>
           <div className={selectWrapCls}>
