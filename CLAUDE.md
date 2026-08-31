@@ -178,6 +178,26 @@ terminu ...". To świadomie zamknięty zestaw dwóch terminów — nie dodawaj
 trzeciego bez wyraźnej prośby, to nie jest zaprojektowane jako otwarty
 system dowolnych typów terminów.
 
+**Blokada PIN-em na kiosku** (ustalone 2026-08-31 podczas redesignu ekranów
+pracownika/kiosku — jeszcze NIE zaimplementowane, opisane tu żeby nie
+projektować od zera, gdy przyjdzie kolej na kod). Trzeci, niezależny
+mechanizm bezpieczeństwa — **nie myl z rolami logowania `closed`/`open`**,
+to zupełnie inna warstwa. Na Tablet Służbowy (`kiosk`) każdy pracownik jest
+domyślnie "otwarty": dotyka swojego imienia na liście wyboru i od razu
+wchodzi do swojego mini-konta (osobisty pulpit na wspólnym urządzeniu, patrz
+Roadmap — redesign kiosku). Kierownik będzie mógł punktowo zablokować
+pojedynczego pracownika na kiosku 4-cyfrowym PIN-em (osobnym od 6-cyfrowego
+PIN-u logowania Email+PIN) — wtedy kiosk najpierw pyta o ten PIN, zanim
+pokaże dane tego pracownika. Domyślnie PIN pusty = zachowanie bez zmian,
+jak dziś.
+
+UI kierownika: przełącznik "Zablokuj PIN-em na kiosku" w formularzu edycji
+pracownika (zakładka Pracownicy). Włączenie przełącznika otwiera osobne
+okno do wpisania 4-cyfrowego PIN-u dla tego pracownika — analogicznie do
+istniejącego okna Email+PIN przy koncie `closed`, nie wpisujemy PIN-u
+bezpośrednio w głównym formularzu. Nowa kolumna `users.kiosk_pin` (text,
+nullable, 4 cyfry) — patrz Schemat Supabase.
+
 **Codzienna weryfikacja terminów** — `api/cron/check-document-terms.js`
 (Vercel Cron, patrz sekcja "Cron" wyżej). Dla każdego aktywnego
 (`active && !archived`) pracownika i każdego z dwóch terminów: jeśli data
@@ -213,7 +233,10 @@ kogo należy powiadomienie.
 - **users** — `id, name, email, pin, role, default_lokal, allowed_lokale[],
   active, archived, stanowisko, sanepid_expiry, sanepid_last_notified,
   umowa_expiry, umowa_last_notified` (ostatnie 4 kolumny: `date`, nullable
-  — terminy dokumentów pracownika, patrz "Panel kierownika" wyżej)
+  — terminy dokumentów pracownika, patrz "Panel kierownika" wyżej).
+  Planowana (jeszcze niedodana) kolumna `kiosk_pin` (text, nullable, 4
+  cyfry) — blokada PIN-em na kiosku, patrz "Panel kierownika" wyżej; NIE
+  mylić z kolumną `pin` (6-cyfrowy PIN logowania Email+PIN).
 - **lokale** — `id, name, archived`
 - **stanowiska** — `id, name, lokal_name, archived`
 - **shifts** — `id, user_name, user_id?, lokal, stanowisko, start_time
