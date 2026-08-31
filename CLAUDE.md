@@ -288,6 +288,40 @@ dokleja z przodu `user_name` (`"Wojtek: Twój termin: ..."`) — bez tego,
 przy kilku pracownikach `open` na jednym urządzeniu nie było wiadomo, do
 kogo należy powiadomienie.
 
+## Zgłoszenia i powiadomienia — pełna mapa (ustalone 2026-08-31)
+
+Zebrane w jednym miejscu, bo kanałów zrobiło się kilka i łatwo pomylić,
+który mechanizm czego dotyczy. Kolumna "Tabela" odsyła do "Schemat
+Supabase" niżej.
+
+| # | Co | Kto wysyła → kto dostaje | Tabela | Status |
+|---|---|---|---|---|
+| 1 | Kierownik ręcznie edytował/usunął czyjąś zmianę | `ManagerDashboard` → pracownik | `notifications`, `audience='employee'`, stare pola (`action`/`old_start`/...) | ZROBIONE |
+| 2 | Zbliża się/minął termin sanepid albo umowy | cron `check-document-terms.js` → kierownik LOKALU i sam pracownik | `notifications`, `audience='manager'` i `audience='employee'` (`message`/`type`) | ZROBIONE |
+| 3 | Ogólne info dla kierowników lokalu (przyszłe moduły) | dowolna funkcja przez `createManagerNotification` → kierownik | `notifications`, `audience='manager'` | infrastruktura gotowa, czeka na kolejnych konsumentów (Zadania itd.) |
+| 4 | **Zgłoś → "Popraw zmianę"**: pracownik proponuje inne godziny konkretnej zmiany | pracownik → kierownik | `issues`, nowe pole `type='correction'` + `proposed_start_time`/`proposed_end_time` (patrz niżej) | **ZAPROJEKTOWANE, NIE zaimplementowane** — makiet zatwierdzony, kod jeszcze nie napisany |
+| 5 | **Zgłoś → "Zgłoś problem"**: dowolna uwaga, opcjonalnie anonimowo | pracownik → kierownik | `issues`, `type='problem'` (to jest dotychczasowe "Zgłoś", tylko nazwane) | **ZAPROJEKTOWANE** — patrz wyżej |
+| 6 | Odpowiedź kierownika na zgłoszenie typu "Popraw zmianę" (zatwierdzone/odrzucone) | kierownik → pracownik | **BRAK jeszcze mechanizmu** — najprościej: `createEmployeeNotification` po kliknięciu Zatwierdź/Odrzuć w panelu kierownika | **DO ZROBIENIA razem z UI kierownika dla p. 4** |
+| 7 | Wiadomości/Zgłoszenia widoczne w panelu kierownika (`ManagerDashboard`, zakładka "Zgłoszenia") | — | `issues` | ZROBIONE, ale NIE rozróżnia jeszcze typu 4 vs 5 (do zrobienia razem z p. 4) |
+
+**Rozdzielenie "Zgłoś" na dwa typy** (ustalone 2026-08-31, patrz makiet
+"Zgłoś — Dwa Typy" z sesji projektowej) — dwa różne procesy po stronie
+kierownika, dlatego dwa typy w jednej tabeli `issues`, nie osobne
+funkcje: **typ `correction`** ("Popraw zmianę") to prośba o zmianę
+konkretnych godzin zmiany — ZAWSZE z imieniem (`is_anonymous` zawsze
+`false`), bo inaczej nie da się ani zweryfikować, ani zastosować; wymaga
+nowych, nullable kolumn `proposed_start_time`/`proposed_end_time`
+(timestamptz) na `issues`, obok istniejącego `shift_id` (które przy tym
+typie jest OBOWIĄZKOWE, nie opcjonalne jak wcześniej). **Typ `problem`**
+("Zgłoś problem") to dotychczasowe zachowanie — wolny tekst, opcjonalna
+anonimowość, `shift_id` nadal opcjonalny.
+
+⚠️ Kod kliencki (formularz "Zgłoś" w `employeeSessionShared.tsx`) i UI
+kierownika do zatwierdzania/odrzucania propozycji z p. 4 (pkt 6 w tabeli
+wyżej) **jeszcze nie napisane** — to osobne zadanie, do zrobienia razem:
+bez UI kierownika, wysłana propozycja `correction` wisiałaby w bazie bez
+żadnego sposobu jej zastosowania do `shifts`.
+
 ## Schemat Supabase (tabele używane obecnie)
 
 - **users** — `id, name, email, pin, role, default_lokal, allowed_lokale[],
