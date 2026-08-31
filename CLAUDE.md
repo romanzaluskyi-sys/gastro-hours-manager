@@ -93,7 +93,15 @@ src/
     IssueForm.tsx               — zakładka "Zgłoś"
     NotificationsPanel.tsx      — zakładka "Wiadomości"/"Powiadomienia" (wspólna dla closed, open i managera)
     ClosedEmployeeDashboard.tsx — dashboard na osobisty telefon pracownika
-    OpenDeviceDashboard.tsx     — dashboard "Tablet Służbowy" (kiosk)
+    KioskDashboard.tsx          — dashboard "Tablet Służbowy" (kiosk),
+                                  redesign z 2026-08-31 — patrz niżej
+    OpenDeviceDashboard.tsx     — POPRZEDNIA wersja dashboardu kiosku,
+                                  zastąpiona przez KioskDashboard.tsx w
+                                  App.tsx (już nierenderowana). Zostawiona
+                                  w repo świadomie jako łatwy rollback —
+                                  usuń dopiero po tym, jak nowy design
+                                  postoi w produkcji jakiś czas bez
+                                  problemów, nie od razu.
     ManagerDashboard.tsx        — panel kierownika, w całości w jednym pliku
                                   (~1850 linii — wewnętrznie spójny, dalszy
                                   podział na zakładki to osobne, świadome
@@ -111,7 +119,7 @@ nieprawidłowy JSON) — naprawione.
 |---|---|---|
 | `admin` | manager_dashboard | pełny dostęp do wszystkich lokali |
 | `manager_lokalu` | manager_dashboard | dostęp tylko do przypisanych lokali (`allowed_lokale`) |
-| `kiosk` | open_dashboard ("Tablet Służbowy") | wspólne urządzenie w lokalu, pracownik wybiera siebie z listy przy każdej akcji |
+| `kiosk` | open_dashboard ("Tablet Służbowy", renderowany przez `KioskDashboard.tsx`) | wspólne urządzenie w lokalu — pracownik wybiera siebie RAZ z listy (nie przy każdej akcji, patrz niżej) |
 | `closed` | closed_dashboard | osobisty telefon pracownika, zalogowany jako on sam |
 | `open` | closed_dashboard | wariant "otwartego konta" (mniej używany) |
 
@@ -119,17 +127,20 @@ Login: `Email konta` + `PIN` (6 cyfr). Kioski mają zapisane dane logowania
 w przeglądarce telefonu służbowego (autouzupełnianie) + skrót na ekranie
 głównym — pracownik nic nie wpisuje ręcznie.
 
-### Zakładki (dolna nawigacja u pracownika/kiosku)
+### Zakładki na osobistym koncie (`ClosedEmployeeDashboard`, role `closed`/`open`)
+
+Ten flat, 4-zakładkowy układ dotyczy TYLKO osobistego telefonu pracownika
+(`ClosedEmployeeDashboard.tsx`). Kiosk ma od 2026-08-31 zupełnie inną,
+5-zakładkową strukturę — patrz "Tablet Służbowy — `KioskDashboard`" niżej.
 
 - **Wpisz / Zmiana** — `TimeEntryForm`: rozpoczęcie zmiany (można zapisać
   sam start — "Tylko start" — albo od razu start+koniec jednym wpisem,
   zaznaczając checkbox "Znam" przy polu Zakończenie), oraz zakończenie
-  trwającej zmiany. Po wybraniu pracownika (kiosk) / od razu (konto
-  własne) widać żółte przypomnienie o już zapisanych dziś zmianach tego
-  pracownika (`getTodaysShiftsForUser`) — pracownicy mają różne nawyki,
-  czasem trzeba wpisać drugą zmianę tego samego dnia, więc to celowo
-  widoczne z góry, nie dopiero przy próbie zapisu. Nowa zmiana, która
-  nakłada się czasowo na już zapisaną (ta sama osoba), jest **twardo
+  trwającej zmiany. Widać żółte przypomnienie o już zapisanych dziś
+  zmianach tego pracownika (`getTodaysShiftsForUser`) — pracownicy mają
+  różne nawyki, czasem trzeba wpisać drugą zmianę tego samego dnia, więc
+  to celowo widoczne z góry, nie dopiero przy próbie zapisu. Nowa zmiana,
+  która nakłada się czasowo na już zapisaną (ta sama osoba), jest **twardo
   blokowana** (`findOverlappingShift` w `utils/shifts.ts`) — pracownik
   nie może sam tego obejść, w razie pomyłki zgłasza przez "Zgłoś".
   Kierownik przy edycji zmiany (`ManagerDashboard`) dostaje tę samą
@@ -140,9 +151,44 @@ głównym — pracownik nic nie wpisuje ręcznie.
 - **Zgłoś** — `IssueForm`: zgłoszenie problemu z zapisanymi godzinami do
   kierownika (pracownik NIE może sam edytować zapisanych zmian).
 - **Wiadomości** — `NotificationsPanel`: powiadomienia gdy kierownik
-  edytował/usunął czyjąś zmianę (kto, kiedy, stare/nowe godziny). Na kiosku
-  pokazuje powiadomienia dla WSZYSTKICH pracowników przypisanych do lokalu
-  (`showEmployeeName={true}`), na osobistym koncie tylko własne.
+  edytował/usunął czyjąś zmianę (kto, kiedy, stare/nowe godziny), tylko
+  własne.
+
+### Tablet Służbowy — `KioskDashboard.tsx` (redesign 2026-08-31)
+
+Zaprojektowane iteracyjnie przez cały wątek sesji jako klikalny prototyp
+HTML, potem przeniesione 1:1 w logice na prawdziwe komponenty (wizualnie
+zaadaptowane do Tailwind — wireframe'owy język: grube 2/2.5px obramowania,
+pogrubione nagłówki `font-['Archivo']`, czerwony akcent `#DE3A22`, różowe/
+szare odznaki statusu). Zastępuje stary, płaski 4-zakładkowy `TimeEntryForm`
++ wewnętrzny `<select>` pracownika (patrz `OpenDeviceDashboard.tsx` —
+zachowane w repo jako rollback, ale już nieużywane).
+
+Nowy flow: pracownik wybiera siebie RAZ z listy (`activeUsers`, ci sami co
+wcześniej: `active && !archived && role === "open"` w przypisanym lokalu)
+— stąd "mini-konto" na czas sesji z 5 zakładkami: **Pulpit** (powitanie /
+żywy licznik trwającej zmiany), **Zmiana** (formularz startu z dwiema
+metodami — "tylko start" / cała zmiana naraz, dokładnie logika
+`TimeEntryForm.handleCreateShift`/`handleCloseShift` przepisana na nowy
+UI — NIE reużywa samego komponentu `TimeEntryForm`, bo ten renderuje
+własny picker pracownika, którego tu nie chcemy), **Raport**, **Zadania**
+(placeholder "w budowie" — moduł Zadania z Roadmapy punkt 2 jeszcze nie
+istnieje, świadomie NIE ma fałszywego, nieinteraktywnego checklisty),
+**Więcej** (Grafik-placeholder, Zgłoś, Wiadomości, powrót do listy,
+przycisk "Wyloguj to urządzenie" — mały, podkreślony link, nie duży
+przycisk, bo wylogowanie kiosku wymaga ponownego Email+PIN). Przycisk
+"< Zmień" w nagłówku KAŻDEGO ekranu wraca prosto do listy pracowników
+(bez stosu "wstecz" — świadoma decyzja z sesji projektowej).
+
+Reużywa bez zmian: `findOverlappingShift`, `getTodaysShiftsForUser`,
+`sendToGoogleSheets`, formattery z `utils/format.ts`, oraz dokładnie ten
+sam wzorzec oznaczania powiadomień jako przeczytane co stary
+`OpenDeviceDashboard.tsx`.
+
+**Blokada PIN-em na kiosku** — zaimplementowana (patrz niżej, Schemat
+Supabase i sekcja "Panel kierownika"). Pracownik z ustawionym
+`kiosk_pin` dostaje ekran z klawiaturą numeryczną (10 cyfr + backspace)
+zamiast od razu wejść do mini-konta po kliknięciu na liście.
 
 ### Panel kierownika (`ManagerDashboard`)
 
@@ -178,25 +224,27 @@ terminu ...". To świadomie zamknięty zestaw dwóch terminów — nie dodawaj
 trzeciego bez wyraźnej prośby, to nie jest zaprojektowane jako otwarty
 system dowolnych typów terminów.
 
-**Blokada PIN-em na kiosku** (ustalone 2026-08-31 podczas redesignu ekranów
-pracownika/kiosku — jeszcze NIE zaimplementowane, opisane tu żeby nie
-projektować od zera, gdy przyjdzie kolej na kod). Trzeci, niezależny
+**Blokada PIN-em na kiosku** — zaimplementowana 2026-08-31 (konsument:
+`KioskDashboard.tsx`, patrz "Tablet Służbowy" wyżej). Trzeci, niezależny
 mechanizm bezpieczeństwa — **nie myl z rolami logowania `closed`/`open`**,
-to zupełnie inna warstwa. Na Tablet Służbowy (`kiosk`) każdy pracownik jest
-domyślnie "otwarty": dotyka swojego imienia na liście wyboru i od razu
-wchodzi do swojego mini-konta (osobisty pulpit na wspólnym urządzeniu, patrz
-Roadmap — redesign kiosku). Kierownik będzie mógł punktowo zablokować
-pojedynczego pracownika na kiosku 4-cyfrowym PIN-em (osobnym od 6-cyfrowego
-PIN-u logowania Email+PIN) — wtedy kiosk najpierw pyta o ten PIN, zanim
-pokaże dane tego pracownika. Domyślnie PIN pusty = zachowanie bez zmian,
-jak dziś.
+to zupełnie inna warstwa. Na Tablet Służbowy każdy pracownik jest domyślnie
+"otwarty": dotyka swojego imienia na liście wyboru i od razu wchodzi do
+swojego mini-konta. Jeśli pracownik ma ustawioną kolumnę `users.kiosk_pin`
+(text, nullable, 4 cyfry — NIE mylić z kolumną `pin`, 6-cyfrowym PIN-em
+logowania Email+PIN), kiosk najpierw pyta o ten PIN na osobnym ekranie z
+klawiaturą numeryczną, zanim pokaże jego dane. Puste `kiosk_pin` = bez
+zmian, jak dziś (kiosk nie pyta o nic).
 
-UI kierownika: przełącznik "Zablokuj PIN-em na kiosku" w formularzu edycji
-pracownika (zakładka Pracownicy). Włączenie przełącznika otwiera osobne
-okno do wpisania 4-cyfrowego PIN-u dla tego pracownika — analogicznie do
-istniejącego okna Email+PIN przy koncie `closed`, nie wpisujemy PIN-u
-bezpośrednio w głównym formularzu. Nowa kolumna `users.kiosk_pin` (text,
-nullable, 4 cyfry) — patrz Schemat Supabase.
+⚠️ **UI kierownika do USTAWIANIA `kiosk_pin` jeszcze NIE istnieje** —
+świadomie odłożone przy pierwszym wdrożeniu (poza zakresem redesignu
+kiosku). Formularz edycji pracownika w zakładce Pracownicy (`ManagerDashboard`)
+NIE ma jeszcze przełącznika "Zablokuj PIN-em na kiosku" ani okna do wpisania
+PIN-u — żeby przetestować blokadę, trzeba na razie wpisać `kiosk_pin`
+bezpośrednio w Supabase Table Editor. Gdy przyjdzie kolej na tę funkcję:
+przełącznik w formularzu edycji pracownika, włączenie otwiera osobne okno
+do wpisania 4-cyfrowego PIN-u — analogicznie do istniejącego okna
+Email+PIN przy koncie `closed`, nie wpisuj PIN-u bezpośrednio w głównym
+formularzu.
 
 **Codzienna weryfikacja terminów** — `api/cron/check-document-terms.js`
 (Vercel Cron, patrz sekcja "Cron" wyżej). Dla każdego aktywnego
@@ -223,7 +271,7 @@ końca w dniu 01.09.2026, do zakończenia pozostało 4 dni."` (albo
 `"... umowa upłynęła w dniu DD.MM.RRRR — termin przekroczony o N dni."`
 po terminie). Powiadomienie dla pracownika (`buildEmployeeMessage`) ma tę
 samą strukturę daty/dni, zaczyna się od `"Twój termin: ..."`. Na kiosku
-(`OpenDeviceDashboard`, `showEmployeeName={true}`) `formatNotificationText`
+(`KioskDashboard`, `showEmployeeName={true}`) `formatNotificationText`
 dokleja z przodu `user_name` (`"Wojtek: Twój termin: ..."`) — bez tego,
 przy kilku pracownikach `open` na jednym urządzeniu nie było wiadomo, do
 kogo należy powiadomienie.
@@ -232,16 +280,24 @@ kogo należy powiadomienie.
 
 - **users** — `id, name, email, pin, role, default_lokal, allowed_lokale[],
   active, archived, stanowisko, sanepid_expiry, sanepid_last_notified,
-  umowa_expiry, umowa_last_notified` (ostatnie 4 kolumny: `date`, nullable
-  — terminy dokumentów pracownika, patrz "Panel kierownika" wyżej).
-  Planowana (jeszcze niedodana) kolumna `kiosk_pin` (text, nullable, 4
-  cyfry) — blokada PIN-em na kiosku, patrz "Panel kierownika" wyżej; NIE
-  mylić z kolumną `pin` (6-cyfrowy PIN logowania Email+PIN).
+  umowa_expiry, umowa_last_notified, kiosk_pin`. Ostatnie 4 kolumny przed
+  `kiosk_pin`: `date`, nullable — terminy dokumentów pracownika, patrz
+  "Panel kierownika" wyżej. `kiosk_pin` (text, nullable, 4 cyfry, dodana
+  2026-08-31) — blokada PIN-em na kiosku, patrz "Panel kierownika" i
+  "Tablet Służbowy" wyżej; NIE mylić z kolumną `pin` (6-cyfrowy PIN
+  logowania Email+PIN). Na razie ustawiana ręcznie w Supabase (brak UI
+  kierownika, patrz "Panel kierownika" wyżej).
 - **lokale** — `id, name, archived`
 - **stanowiska** — `id, name, lokal_name, archived`
 - **shifts** — `id, user_name, user_id?, lokal, stanowisko, start_time
   (timestamptz), end_time (timestamptz | null), godzin`
-- **issues** — zgłoszenia problemów od pracowników
+- **issues** — zgłoszenia problemów od pracowników. Podstawowe:
+  `id, user_id, user_name, issue_text, status`. Od 2026-08-31 też
+  `is_anonymous` (bool, default `false`) i `shift_id` (bigint, references
+  `shifts(id)`, nullable) — dodane dla nowego "Zgłoś" w `KioskDashboard.tsx`
+  (anonimowe zgłoszenie i/albo przypięte do konkretnej zmiany, np. przez
+  chorągiewkę przy wierszu w Raporcie). Gdy `is_anonymous`, `user_id`/
+  `user_name` są `null`.
 - **notifications** — dwa "typy" wierszy we wspólnej tabeli, odróżnione
   polem `audience`:
   - `audience = 'employee'` (domyślne, dla starych wierszy sprzed tej
@@ -331,6 +387,30 @@ kogo należy powiadomienie.
    kolumny `date` (akceptuje `null`). Naprawione w `handleSaveUser` —
    `""` → `null` przed wysyłką. Każde przyszłe pole typu `date` na
    formularzu musi przejść przez tę samą konwersję.
+10. Pierwsza wersja `KioskDashboard.tsx` definiowała współdzielony
+    komponent `Shell` (nagłówek + tabbar sesji) WEWNĄTRZ komponentu
+    nadrzędnego. Ten komponent ma żywy zegar (`setInterval` co 1s, licznik
+    trwającej zmiany) — każdy tick re-renderował rodzica, co tworzyło
+    `Shell` jako NOWĄ referencję funkcji przy każdym renderze. React
+    traktuje to jako nowy typ komponentu i odmontowuje/montuje całe
+    poddrzewo od nowa — pola formularza (np. textarea w "Zgłoś") traciłyby
+    focus co sekundę, scroll by się resetował. Naprawione przeniesieniem
+    `Shell` na poziom modułu (poza komponentem), z `screen`/`setScreen`/
+    `goList`/`unreadCount` przekazywanymi jako propsy. Ogólna zasada:
+    **nigdy nie definiuj komponentu wewnątrz komponentu, który ma stan
+    zmieniający się w pętli/interwale** — nawet pozornie niewinny żywy
+    zegar w rodzicu psuje całe poddrzewo.
+11. Pierwsza wersja `KioskDashboard.tsx` miała cztery komentarze
+    `// eslint-disable-next-line react-hooks/exhaustive-deps` — build na
+    Vercelu (`npm run build`, `CI=true`) padał z `Definition for rule
+    'react-hooks/exhaustive-deps' was not found`, bo w konfiguracji ESLint
+    tego repo (sam CRA, bez własnego `eslintConfig` w `package.json`) to
+    prawidło nie jest załadowane — referencja do niego w komentarzu
+    disable jest sama w sobie błędem lintu przy CI. W tym repo NIGDZIE
+    indziej nie ma komentarzy `eslint-disable` (np. `TimeEntryForm.tsx` ma
+    podobne "niepełne" tablice zależności `useEffect` bez żadnego
+    komentarza) — nie dodawaj takich komentarzy, po prostu zostaw
+    zależności tak jak reszta kodu w tym repo.
 
 ## Google Apps Script (`Odbior_Danych.gs`)
 
@@ -352,6 +432,18 @@ App). Zweryfikuj przez `doGet` w przeglądarce.
 Aplikacja ma numer wersji (`APP_VERSION` w `src/config.ts`), widoczny na
 ekranie logowania. Historia zmian jest w [`CHANGELOG.md`](CHANGELOG.md)
 w katalogu głównym repo.
+
+⚠️ Od 2026-08-31 `APP_VERSION` ma dodatkowy efekt: sesja w `localStorage`
+(`App.tsx`, `SESSION_KEY = "gastro_session"`) jest otagowana wersją, z
+którą powstała, i przy ładowaniu apki `loadSession()` porównuje ją z
+aktualnym `APP_VERSION` — przy niezgodności czyści sesję i wraca do ekranu
+logowania. Innymi słowy: **każdy bump `APP_VERSION` wylogowuje wszystkich
+użytkowników przy ich najbliższym odświeżeniu strony** (nie ma tabeli
+sesji w bazie, więc "wyloguj wszystkich" nie da się zrobić zapytaniem SQL
+— to jedyny mechanizm). To NIE wymusza samo z siebie odświeżenia już
+otwartej karty przeglądarki (np. na kiosku) — dopiero po ręcznym
+odświeżeniu/restarcie urządzenie dostanie i nowy bundle JS, i czysty ekran
+logowania zamiast wznowienia starej sesji.
 
 **Rób to samodzielnie, bez pytania właściciela** — za każdym razem, gdy
 kończysz zmianę widoczną dla użytkownika (nowa funkcja, poprawka
