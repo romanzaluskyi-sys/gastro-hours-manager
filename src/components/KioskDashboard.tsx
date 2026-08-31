@@ -1208,9 +1208,16 @@ const KioskDashboard = ({
             Uwaga
           </div>
           <div className="text-[15px] text-[#171714] leading-relaxed">
-            Na urządzeniu wspólnym nie ma wylogowania — robi to kierownik.
+            To urządzenie zostaje zalogowane na stałe — nie wylogowuj go bez
+            potrzeby, bo trzeba będzie zalogować się ponownie danymi kiosku.
           </div>
         </div>
+        <button
+          onClick={() => setCurrentView("login")}
+          className="mt-3.5 text-[13px] text-[#8F8E86] underline underline-offset-2 self-center"
+        >
+          Wyloguj to urządzenie
+        </button>
       </Shell>
     );
   }
