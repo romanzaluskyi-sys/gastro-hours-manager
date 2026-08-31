@@ -5,7 +5,7 @@ import { isConfigured } from "./config";
 import { api } from "./api/supabase";
 import LoginScreen from "./components/LoginScreen";
 import ClosedEmployeeDashboard from "./components/ClosedEmployeeDashboard";
-import OpenDeviceDashboard from "./components/OpenDeviceDashboard";
+import KioskDashboard from "./components/KioskDashboard";
 import ManagerDashboard from "./components/ManagerDashboard";
 
 // Trzyma zalogowanego użytkownika w localStorage, żeby odświeżenie strony
@@ -160,7 +160,7 @@ export default function App() {
         />
       )}
       {currentView === "open_dashboard" && (
-        <OpenDeviceDashboard
+        <KioskDashboard
           currentUser={currentUser}
           setCurrentView={setCurrentView}
           lokale={lokale}
