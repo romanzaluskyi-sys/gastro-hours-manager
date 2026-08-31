@@ -5,6 +5,15 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.7.0 — 2026-08-31
+
+- **Ten sam nowy wygląd, teraz też na osobistym telefonie.** Jeśli
+  logujesz się na swoje własne konto (nie na wspólny tablet), masz teraz
+  ten sam czytelny pulpit z zakładkami Pulpit / Zmiana / Raport / Zadania
+  / Więcej co na Tablet Służbowy — bez ekranu wyboru pracownika, bo to
+  już Twoje konto.
+- Małe podkreślone "Wyloguj" w zakładce Więcej.
+
 ## 0.6.0 — 2026-08-31
 
 - **Nowy wygląd Tabletu Służbowego.** Po zalogowaniu na wspólnym urządzeniu
