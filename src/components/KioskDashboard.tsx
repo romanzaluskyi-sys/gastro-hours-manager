@@ -299,7 +299,6 @@ const KioskDashboard = ({
   };
   useEffect(() => {
     if (selectedEmployee) resetShiftForm(selectedEmployee);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedEmployee]);
 
   // ---- korekta stanowiska, gdy zmienia się lokal (jak w TimeEntryForm) ----
@@ -310,7 +309,6 @@ const KioskDashboard = ({
     if (!dostepne.find((s) => s.name === formStanowisko)) {
       setFormStanowisko(dostepne.length > 0 ? dostepne[0].name : "");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formLokal, stanowiska]);
 
   // ---- oznaczanie powiadomień jako przeczytane (jak w OpenDeviceDashboard) ----
@@ -332,7 +330,6 @@ const KioskDashboard = ({
         );
       })
       .catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screen]);
 
   // ---- reset formularza Zgłoś przy wejściu na ekran ----
@@ -343,7 +340,6 @@ const KioskDashboard = ({
       setZgSent(false);
       setZgText("");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screen]);
 
   // ---- nawigacja ----
