@@ -299,7 +299,7 @@ Supabase" niżej.
 | 1 | Kierownik ręcznie edytował/usunął czyjąś zmianę | `ManagerDashboard` → pracownik | `notifications`, `audience='employee'`, stare pola (`action`/`old_start`/...) | ZROBIONE |
 | 2 | Zbliża się/minął termin sanepid albo umowy | cron `check-document-terms.js` → kierownik LOKALU i sam pracownik | `notifications`, `audience='manager'` i `audience='employee'` (`message`/`type`) | ZROBIONE |
 | 3 | Ogólne info dla kierowników lokalu (przyszłe moduły) | dowolna funkcja przez `createManagerNotification` → kierownik | `notifications`, `audience='manager'` | infrastruktura gotowa, czeka na kolejnych konsumentów (Zadania itd.) |
-| 4 | **Zgłoś → "Popraw zmianę"**: pracownik proponuje inne godziny konkretnej zmiany | pracownik → kierownik | `issues`, nowe pole `type='correction'` + `proposed_start_time`/`proposed_end_time` (patrz niżej) | **ZAPROJEKTOWANE, NIE zaimplementowane** — makiet zatwierdzony, kod jeszcze nie napisany |
+| 4 | **Zgłoś → "Popraw zmianę"**: pracownik proponuje inne dane konkretnej zmiany (data/lokal/stanowisko/godziny) albo zgłasza całkiem brakującą zmianę | pracownik → kierownik | `issues`, nowe pole `type='correction'` + `proposed_date`/`proposed_lokal`/`proposed_stanowisko`/`proposed_start_time`/`proposed_end_time` (patrz niżej) | **ZAPROJEKTOWANE, NIE zaimplementowane** — makiet zatwierdzony, kod jeszcze nie napisany |
 | 5 | **Zgłoś → "Zgłoś problem"**: dowolna uwaga, opcjonalnie anonimowo | pracownik → kierownik | `issues`, `type='problem'` (to jest dotychczasowe "Zgłoś", tylko nazwane) | **ZAPROJEKTOWANE** — patrz wyżej |
 | 6 | Odpowiedź kierownika na zgłoszenie typu "Popraw zmianę" (zatwierdzone/odrzucone) | kierownik → pracownik | **BRAK jeszcze mechanizmu** — najprościej: `createEmployeeNotification` po kliknięciu Zatwierdź/Odrzuć w panelu kierownika | **DO ZROBIENIA razem z UI kierownika dla p. 4** |
 | 7 | Wiadomości/Zgłoszenia widoczne w panelu kierownika (`ManagerDashboard`, zakładka "Zgłoszenia") | — | `issues` | ZROBIONE, ale NIE rozróżnia jeszcze typu 4 vs 5 (do zrobienia razem z p. 4) |
@@ -308,13 +308,23 @@ Supabase" niżej.
 "Zgłoś — Dwa Typy" z sesji projektowej) — dwa różne procesy po stronie
 kierownika, dlatego dwa typy w jednej tabeli `issues`, nie osobne
 funkcje: **typ `correction`** ("Popraw zmianę") to prośba o zmianę
-konkretnych godzin zmiany — ZAWSZE z imieniem (`is_anonymous` zawsze
-`false`), bo inaczej nie da się ani zweryfikować, ani zastosować; wymaga
-nowych, nullable kolumn `proposed_start_time`/`proposed_end_time`
-(timestamptz) na `issues`, obok istniejącego `shift_id` (które przy tym
-typie jest OBOWIĄZKOWE, nie opcjonalne jak wcześniej). **Typ `problem`**
-("Zgłoś problem") to dotychczasowe zachowanie — wolny tekst, opcjonalna
-anonimowość, `shift_id` nadal opcjonalny.
+konkretnych danych zmiany — pracownik wybiera zmianę z listy ("Która
+zmiana"), widzi jej obecne dane (data/lokal/stanowisko/godziny) jako
+punkt odniesienia, i wpisuje poprawione wartości dla WSZYSTKICH tych pól
+(nie tylko godzin — data/lokal/stanowisko też edytowalne, to była
+świadoma zmiana względem pierwszej wersji makietu, gdzie dało się
+poprawić tylko godziny). `shift_id` NADAL opcjonalny (mimo że to typ
+`correction`) — lista "Która zmiana" ma dodatkową opcję "Zapomniałem/łam
+odbić", która chowa pole "Obecnie zapisane" (nie ma z czym porównywać) i
+zamienia formularz w zgłoszenie zupełnie nowej, brakującej zmiany; wtedy
+`shift_id` jest `null`. ZAWSZE z imieniem (`is_anonymous` zawsze
+`false`), bo inaczej nie da się ani zweryfikować, ani zastosować. Wymaga
+nowych, nullable kolumn `proposed_date`/`proposed_lokal`/
+`proposed_stanowisko`/`proposed_start_time`/`proposed_end_time` na
+`issues` (rozszerzone względem pierwszej wersji planu, patrz niżej —
+data/lokal/stanowisko doszły później). **Typ `problem`** ("Zgłoś
+problem") to dotychczasowe zachowanie — wolny tekst, opcjonalna
+anonimowość, `shift_id` opcjonalny, bez pól `proposed_*`.
 
 ⚠️ Kod kliencki (formularz "Zgłoś" w `employeeSessionShared.tsx`) i UI
 kierownika do zatwierdzania/odrzucania propozycji z p. 4 (pkt 6 w tabeli
