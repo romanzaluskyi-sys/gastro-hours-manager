@@ -92,7 +92,24 @@ src/
     HoursReport.tsx            — raport miesięczny (zakładka "Raport")
     IssueForm.tsx               — zakładka "Zgłoś"
     NotificationsPanel.tsx      — zakładka "Wiadomości"/"Powiadomienia" (wspólna dla closed, open i managera)
-    ClosedEmployeeDashboard.tsx — dashboard na osobisty telefon pracownika
+    employeeSessionShared.tsx   — WSPÓLNE dla KioskDashboard.tsx i
+                                  PersonalDashboard.tsx: `Shell` (nagłówek +
+                                  tabbar) i `EmployeeSessionScreens`
+                                  (ekrany Pulpit/Zmiana/Raport/Zadania/
+                                  Więcej/Wiadomości/Zgłoś) — patrz "Tablet
+                                  Służbowy — KioskDashboard" niżej. NIE
+                                  duplikuj tej logiki przy kolejnych
+                                  zmianach, edytuj tu.
+    PersonalDashboard.tsx       — dashboard na osobisty telefon pracownika
+                                  (role `closed`/`open`), redesign
+                                  2026-08-31, korzysta z
+                                  employeeSessionShared.tsx bez ekranu
+                                  wyboru/PIN-u (konto to już jedna
+                                  konkretna osoba) — patrz niżej.
+    ClosedEmployeeDashboard.tsx — POPRZEDNIA wersja dashboardu osobistego,
+                                  zastąpiona przez PersonalDashboard.tsx w
+                                  App.tsx (już nierenderowana). Zostawiona
+                                  jako rollback, tak jak OpenDeviceDashboard.tsx.
     KioskDashboard.tsx          — dashboard "Tablet Służbowy" (kiosk),
                                   redesign z 2026-08-31 — patrz niżej
     OpenDeviceDashboard.tsx     — POPRZEDNIA wersja dashboardu kiosku,
@@ -120,75 +137,70 @@ nieprawidłowy JSON) — naprawione.
 | `admin` | manager_dashboard | pełny dostęp do wszystkich lokali |
 | `manager_lokalu` | manager_dashboard | dostęp tylko do przypisanych lokali (`allowed_lokale`) |
 | `kiosk` | open_dashboard ("Tablet Służbowy", renderowany przez `KioskDashboard.tsx`) | wspólne urządzenie w lokalu — pracownik wybiera siebie RAZ z listy (nie przy każdej akcji, patrz niżej) |
-| `closed` | closed_dashboard | osobisty telefon pracownika, zalogowany jako on sam |
-| `open` | closed_dashboard | wariant "otwartego konta" (mniej używany) |
+| `closed` | closed_dashboard (renderowany przez `PersonalDashboard.tsx`) | osobisty telefon pracownika, zalogowany jako on sam |
+| `open` | closed_dashboard (renderowany przez `PersonalDashboard.tsx`) | wariant "otwartego konta" (mniej używany) |
 
 Login: `Email konta` + `PIN` (6 cyfr). Kioski mają zapisane dane logowania
 w przeglądarce telefonu służbowego (autouzupełnianie) + skrót na ekranie
 głównym — pracownik nic nie wpisuje ręcznie.
 
-### Zakładki na osobistym koncie (`ClosedEmployeeDashboard`, role `closed`/`open`)
-
-Ten flat, 4-zakładkowy układ dotyczy TYLKO osobistego telefonu pracownika
-(`ClosedEmployeeDashboard.tsx`). Kiosk ma od 2026-08-31 zupełnie inną,
-5-zakładkową strukturę — patrz "Tablet Służbowy — `KioskDashboard`" niżej.
-
-- **Wpisz / Zmiana** — `TimeEntryForm`: rozpoczęcie zmiany (można zapisać
-  sam start — "Tylko start" — albo od razu start+koniec jednym wpisem,
-  zaznaczając checkbox "Znam" przy polu Zakończenie), oraz zakończenie
-  trwającej zmiany. Widać żółte przypomnienie o już zapisanych dziś
-  zmianach tego pracownika (`getTodaysShiftsForUser`) — pracownicy mają
-  różne nawyki, czasem trzeba wpisać drugą zmianę tego samego dnia, więc
-  to celowo widoczne z góry, nie dopiero przy próbie zapisu. Nowa zmiana,
-  która nakłada się czasowo na już zapisaną (ta sama osoba), jest **twardo
-  blokowana** (`findOverlappingShift` w `utils/shifts.ts`) — pracownik
-  nie może sam tego obejść, w razie pomyłki zgłasza przez "Zgłoś".
-  Kierownik przy edycji zmiany (`ManagerDashboard`) dostaje tę samą
-  weryfikację, ale jako miękkie potwierdzenie (`window.confirm`), nie
-  blokadę — czasem musi poprawiać już niespójne dane.
-- **Raport** — `HoursReport` / `MonthlyReport`: przegląd własnych
-  przepracowanych godzin wg miesiąca/roku.
-- **Zgłoś** — `IssueForm`: zgłoszenie problemu z zapisanymi godzinami do
-  kierownika (pracownik NIE może sam edytować zapisanych zmian).
-- **Wiadomości** — `NotificationsPanel`: powiadomienia gdy kierownik
-  edytował/usunął czyjąś zmianę (kto, kiedy, stare/nowe godziny), tylko
-  własne.
-
-### Tablet Służbowy — `KioskDashboard.tsx` (redesign 2026-08-31)
+### Zakładki na osobistym koncie i kiosku — `employeeSessionShared.tsx` (redesign 2026-08-31)
 
 Zaprojektowane iteracyjnie przez cały wątek sesji jako klikalny prototyp
 HTML, potem przeniesione 1:1 w logice na prawdziwe komponenty (wizualnie
 zaadaptowane do Tailwind — wireframe'owy język: grube 2/2.5px obramowania,
 pogrubione nagłówki `font-['Archivo']`, czerwony akcent `#DE3A22`, różowe/
-szare odznaki statusu). Zastępuje stary, płaski 4-zakładkowy `TimeEntryForm`
-+ wewnętrzny `<select>` pracownika (patrz `OpenDeviceDashboard.tsx` —
-zachowane w repo jako rollback, ale już nieużywane).
+szare odznaki statusu). Ten sam "mini-konto" z 5 zakładkami (**Pulpit**,
+**Zmiana**, **Raport**, **Zadania**, **Więcej**) obsługuje DWA różne
+dashboardy przez wspólny komponent `EmployeeSessionScreens` w
+`employeeSessionShared.tsx`:
 
-Nowy flow: pracownik wybiera siebie RAZ z listy (`activeUsers`, ci sami co
-wcześniej: `active && !archived && role === "open"` w przypisanym lokalu)
-— stąd "mini-konto" na czas sesji z 5 zakładkami: **Pulpit** (powitanie /
-żywy licznik trwającej zmiany), **Zmiana** (formularz startu z dwiema
-metodami — "tylko start" / cała zmiana naraz, dokładnie logika
-`TimeEntryForm.handleCreateShift`/`handleCloseShift` przepisana na nowy
-UI — NIE reużywa samego komponentu `TimeEntryForm`, bo ten renderuje
-własny picker pracownika, którego tu nie chcemy), **Raport**, **Zadania**
-(placeholder "w budowie" — moduł Zadania z Roadmapy punkt 2 jeszcze nie
-istnieje, świadomie NIE ma fałszywego, nieinteraktywnego checklisty),
-**Więcej** (Grafik-placeholder, Zgłoś, Wiadomości, powrót do listy,
-przycisk "Wyloguj to urządzenie" — mały, podkreślony link, nie duży
-przycisk, bo wylogowanie kiosku wymaga ponownego Email+PIN). Przycisk
-"< Zmień" w nagłówku KAŻDEGO ekranu wraca prosto do listy pracowników
-(bez stosu "wstecz" — świadoma decyzja z sesji projektowej).
+- **`KioskDashboard.tsx`** (Tablet Służbowy, rola `kiosk`, `open_dashboard`)
+  — wspólne urządzenie. Pracownik wybiera siebie RAZ z listy (`activeUsers`:
+  `active && !archived && role === "open"` w przypisanym lokalu), potem
+  `EmployeeSessionScreens` z `onBack` ustawionym na powrót do tej listy —
+  stąd w nagłówku każdego ekranu przycisk "< Zmień" (bez stosu "wstecz",
+  zawsze prosto do listy — świadoma decyzja z sesji projektowej), a w
+  "Więcej" wiersz "Wróć do listy osób" i notatka "Uwaga" o tym, że
+  urządzenie zostaje zalogowane na stałe.
+- **`PersonalDashboard.tsx`** (osobisty telefon, role `closed`/`open`,
+  `closed_dashboard`) — `currentUser` to już konkretna osoba, więc od razu
+  `EmployeeSessionScreens` BEZ `onBack` — nagłówki bez "< Zmień", "Więcej"
+  bez "Wróć do listy osób" i bez notatki o urządzeniu. Blokada PIN-em na
+  kiosku (`kiosk_pin`) się tu nie stosuje — to koncepcja czysto kioskowa,
+  konto osobiste jest już chronione własnym Email+PIN przy logowaniu.
+
+Obie stare wersje (`OpenDeviceDashboard.tsx`, `ClosedEmployeeDashboard.tsx`
+— flat, 4-zakładkowy układ z `TimeEntryForm`/`HoursReport`/`IssueForm`/
+`NotificationsPanel`) zostały w repo jako rollback, ale App.tsx już ich
+nie renderuje.
+
+**Zmiana** (obie wersje): formularz startu z dwiema metodami — "tylko
+start" / cała zmiana naraz, dokładnie logika
+`TimeEntryForm.handleCreateShift`/`handleCloseShift` przepisana na nowy UI
+w `EmployeeSessionScreens` — NIE reużywa samego komponentu `TimeEntryForm`,
+bo ten renderuje własny picker pracownika, którego tu nie chcemy.
+**Zadania**: placeholder "w budowie" — moduł Zadania z Roadmapy punkt 2
+jeszcze nie istnieje, świadomie NIE ma fałszywego, nieinteraktywnego
+checklisty. **Więcej**: Grafik-placeholder, Zgłoś, Wiadomości, mały
+podkreślony link "Wyloguj" (nie duży przycisk — na kiosku wylogowanie
+wymaga ponownego Email+PIN, na koncie osobistym to zwykłe wylogowanie).
 
 Reużywa bez zmian: `findOverlappingShift`, `getTodaysShiftsForUser`,
-`sendToGoogleSheets`, formattery z `utils/format.ts`, oraz dokładnie ten
-sam wzorzec oznaczania powiadomień jako przeczytane co stary
-`OpenDeviceDashboard.tsx`.
+`sendToGoogleSheets`, formattery z `utils/format.ts`, oraz ten sam wzorzec
+oznaczania powiadomień jako przeczytane co stare dashboardy — z tą różnicą,
+że KAŻDY z dwóch konsumentów sam filtruje `myNotifications`/`unreadCount`
+przed przekazaniem do `EmployeeSessionScreens` (kiosk: wszyscy `activeUsers`
+na urządzeniu, `showEmployeeNameInMessages=true`; konto osobiste: tylko
+`currentUser.name`, `showEmployeeNameInMessages=false`) — **nie przenoś
+tego filtrowania do środka komponentu współdzielonego**, to jedyna
+świadoma różnica logiki między dwoma konsumentami.
 
 **Blokada PIN-em na kiosku** — zaimplementowana (patrz niżej, Schemat
-Supabase i sekcja "Panel kierownika"). Pracownik z ustawionym
-`kiosk_pin` dostaje ekran z klawiaturą numeryczną (10 cyfr + backspace)
-zamiast od razu wejść do mini-konta po kliknięciu na liście.
+Supabase i sekcja "Panel kierownika"), TYLKO w `KioskDashboard.tsx`.
+Pracownik z ustawionym `kiosk_pin` dostaje ekran z klawiaturą numeryczną
+(10 cyfr + backspace) zamiast od razu wejść do mini-konta po kliknięciu na
+liście.
 
 ### Panel kierownika (`ManagerDashboard`)
 
@@ -294,10 +306,11 @@ kogo należy powiadomienie.
 - **issues** — zgłoszenia problemów od pracowników. Podstawowe:
   `id, user_id, user_name, issue_text, status`. Od 2026-08-31 też
   `is_anonymous` (bool, default `false`) i `shift_id` (bigint, references
-  `shifts(id)`, nullable) — dodane dla nowego "Zgłoś" w `KioskDashboard.tsx`
-  (anonimowe zgłoszenie i/albo przypięte do konkretnej zmiany, np. przez
-  chorągiewkę przy wierszu w Raporcie). Gdy `is_anonymous`, `user_id`/
-  `user_name` są `null`.
+  `shifts(id)`, nullable) — dodane dla nowego "Zgłoś" w
+  `employeeSessionShared.tsx` (używane przez `KioskDashboard.tsx` I
+  `PersonalDashboard.tsx`): anonimowe zgłoszenie i/albo przypięte do
+  konkretnej zmiany, np. przez chorągiewkę przy wierszu w Raporcie. Gdy
+  `is_anonymous`, `user_id`/`user_name` są `null`.
 - **notifications** — dwa "typy" wierszy we wspólnej tabeli, odróżnione
   polem `audience`:
   - `audience = 'employee'` (domyślne, dla starych wierszy sprzed tej
@@ -387,19 +400,20 @@ kogo należy powiadomienie.
    kolumny `date` (akceptuje `null`). Naprawione w `handleSaveUser` —
    `""` → `null` przed wysyłką. Każde przyszłe pole typu `date` na
    formularzu musi przejść przez tę samą konwersję.
-10. Pierwsza wersja `KioskDashboard.tsx` definiowała współdzielony
-    komponent `Shell` (nagłówek + tabbar sesji) WEWNĄTRZ komponentu
-    nadrzędnego. Ten komponent ma żywy zegar (`setInterval` co 1s, licznik
-    trwającej zmiany) — każdy tick re-renderował rodzica, co tworzyło
-    `Shell` jako NOWĄ referencję funkcji przy każdym renderze. React
-    traktuje to jako nowy typ komponentu i odmontowuje/montuje całe
-    poddrzewo od nowa — pola formularza (np. textarea w "Zgłoś") traciłyby
-    focus co sekundę, scroll by się resetował. Naprawione przeniesieniem
-    `Shell` na poziom modułu (poza komponentem), z `screen`/`setScreen`/
-    `goList`/`unreadCount` przekazywanymi jako propsy. Ogólna zasada:
-    **nigdy nie definiuj komponentu wewnątrz komponentu, który ma stan
-    zmieniający się w pętli/interwale** — nawet pozornie niewinny żywy
-    zegar w rodzicu psuje całe poddrzewo.
+10. Pierwsza wersja `KioskDashboard.tsx` (dziś: `Shell` w
+    `employeeSessionShared.tsx`) definiowała współdzielony komponent
+    `Shell` (nagłówek + tabbar sesji) WEWNĄTRZ komponentu nadrzędnego. Ten
+    komponent ma żywy zegar (`setInterval` co 1s, licznik trwającej
+    zmiany) — każdy tick re-renderował rodzica, co tworzyło `Shell` jako
+    NOWĄ referencję funkcji przy każdym renderze. React traktuje to jako
+    nowy typ komponentu i odmontowuje/montuje całe poddrzewo od nowa —
+    pola formularza (np. textarea w "Zgłoś") traciłyby focus co sekundę,
+    scroll by się resetował. Naprawione przeniesieniem `Shell` na poziom
+    modułu (poza komponentem), z `screen`/`setScreen`/`onBack`/
+    `unreadCount` przekazywanymi jako propsy. Ogólna zasada: **nigdy nie
+    definiuj komponentu wewnątrz komponentu, który ma stan zmieniający
+    się w pętli/interwale** — nawet pozornie niewinny żywy zegar w
+    rodzicu psuje całe poddrzewo.
 11. Pierwsza wersja `KioskDashboard.tsx` miała cztery komentarze
     `// eslint-disable-next-line react-hooks/exhaustive-deps` — build na
     Vercelu (`npm run build`, `CI=true`) padał z `Definition for rule

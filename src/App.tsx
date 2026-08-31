@@ -4,7 +4,7 @@ import { CheckCircle, AlertCircle } from "lucide-react";
 import { isConfigured, APP_VERSION } from "./config";
 import { api } from "./api/supabase";
 import LoginScreen from "./components/LoginScreen";
-import ClosedEmployeeDashboard from "./components/ClosedEmployeeDashboard";
+import PersonalDashboard from "./components/PersonalDashboard";
 import KioskDashboard from "./components/KioskDashboard";
 import ManagerDashboard from "./components/ManagerDashboard";
 
@@ -165,7 +165,7 @@ export default function App() {
         />
       )}
       {currentView === "closed_dashboard" && (
-        <ClosedEmployeeDashboard
+        <PersonalDashboard
           currentUser={currentUser}
           setCurrentView={setCurrentView}
           lokale={lokale}
