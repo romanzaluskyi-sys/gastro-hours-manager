@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect } from "react";
 import { CheckCircle, AlertCircle } from "lucide-react";
-import { isConfigured } from "./config";
+import { isConfigured, APP_VERSION } from "./config";
 import { api } from "./api/supabase";
 import LoginScreen from "./components/LoginScreen";
 import ClosedEmployeeDashboard from "./components/ClosedEmployeeDashboard";
@@ -9,16 +9,32 @@ import KioskDashboard from "./components/KioskDashboard";
 import ManagerDashboard from "./components/ManagerDashboard";
 
 // Trzyma zalogowanego użytkownika w localStorage, żeby odświeżenie strony
-// (albo nowy deploy) nie wylogowywało — bez tego sesja żyła tylko w pamięci
-// Reacta. `pin` świadomie pomijamy przy zapisie, nie jest już potrzebny
-// po zalogowaniu.
+// nie wylogowywało — bez tego sesja żyła tylko w pamięci Reacta. `pin`
+// świadomie pomijamy przy zapisie, nie jest już potrzebny po zalogowaniu.
+//
+// Sesja jest też otagowana wersją apki (`appVersion`, patrz APP_VERSION w
+// config.ts). Loginy/widoki nie sprawdzają się z serwerem — nie ma tabeli
+// sesji w bazie, więc nie da się "wylogować wszystkich" zapytaniem SQL.
+// Zamiast tego: przy każdym MINOR/MAJOR bumpie APP_VERSION (patrz
+// "Wersjonowanie i CHANGELOG" w CLAUDE.md) stara, zapisana sesja przestaje
+// pasować i zostaje odrzucona — użytkownik ląduje z powrotem na ekranie
+// logowania, świeży JS bundle jest już wtedy pobrany. To NIE działa samo z
+// siebie na już otwartej karcie przeglądarki (kiosk musi dostać
+// odświeżenie/reload, żeby w ogóle pobrać nowy bundle) — dopiero PO
+// odświeżeniu ten mechanizm gwarantuje czysty ekran logowania zamiast
+// starej sesji.
 const SESSION_KEY = "gastro_session";
 
 const loadSession = () => {
   try {
     const raw = localStorage.getItem(SESSION_KEY);
     if (!raw) return { currentUser: null, currentView: "login" };
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (parsed.appVersion !== APP_VERSION) {
+      localStorage.removeItem(SESSION_KEY);
+      return { currentUser: null, currentView: "login" };
+    }
+    return parsed;
   } catch {
     return { currentUser: null, currentView: "login" };
   }
@@ -57,7 +73,11 @@ export default function App() {
         const { pin, ...userToStore } = currentUser;
         localStorage.setItem(
           SESSION_KEY,
-          JSON.stringify({ currentUser: userToStore, currentView })
+          JSON.stringify({
+            currentUser: userToStore,
+            currentView,
+            appVersion: APP_VERSION,
+          })
         );
       } else {
         localStorage.removeItem(SESSION_KEY);
