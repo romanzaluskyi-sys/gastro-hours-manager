@@ -117,9 +117,9 @@ export default function RaportyIKoszty({
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div>
           <h2 className={pageTitleCls}>Raporty i koszty</h2>
-          <p className="font-['Archivo'] font-extrabold text-xl text-[#171714] mt-1">
+          <span className="inline-block bg-[#171714] text-white font-['Archivo'] font-extrabold text-base px-3 py-1 rounded mt-1.5">
             {getMonthName(month)} {year}
-          </p>
+          </span>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <button onClick={() => shiftMonth(-1)} className={btnSecondaryCls}>

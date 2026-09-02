@@ -48,6 +48,9 @@ export default function PulpitHome({
   const weekDay = weekStart.getDay();
   weekStart.setDate(weekStart.getDate() - (weekDay === 0 ? 6 : weekDay - 1));
   weekStart.setHours(0, 0, 0, 0);
+  const prevWeekStart = new Date(weekStart);
+  prevWeekStart.setDate(prevWeekStart.getDate() - 7);
+  const prevWeekEnd = new Date(weekStart);
 
   const visibleShifts = shifts.filter((s) => matchesFilter(s.lokal));
   const hoursOf = (s) =>
@@ -74,6 +77,9 @@ export default function PulpitHome({
 
   const todayShifts = visibleShifts.filter((s) => isToday(s.start_time));
   const weekShifts = visibleShifts.filter((s) => s.start_time >= weekStart);
+  const prevWeekShifts = visibleShifts.filter(
+    (s) => s.start_time >= prevWeekStart && s.start_time < prevWeekEnd
+  );
   const monthShifts = visibleShifts.filter((s) => s.start_time >= monthStart);
   const prevMonthShifts = visibleShifts.filter(
     (s) => s.start_time >= prevMonthStart && s.start_time < monthStart
@@ -81,6 +87,11 @@ export default function PulpitHome({
 
   const todayHours = todayShifts.reduce((a, s) => a + hoursOf(s), 0);
   const weekHours = weekShifts.reduce((a, s) => a + hoursOf(s), 0);
+  const prevWeekHours = prevWeekShifts.reduce((a, s) => a + hoursOf(s), 0);
+  const weekDelta =
+    prevWeekHours > 0
+      ? (((weekHours - prevWeekHours) / prevWeekHours) * 100).toFixed(0)
+      : null;
   const monthHours = monthShifts.reduce((a, s) => a + hoursOf(s), 0);
   const prevMonthHours = prevMonthShifts.reduce((a, s) => a + hoursOf(s), 0);
   const hoursDelta =
@@ -159,6 +170,16 @@ export default function PulpitHome({
         <div className={statTileCls}>
           <p className={statLabelCls}>Tydzień</p>
           <p className={statValueCls}>{fmtH(weekHours)}</p>
+          {weekDelta != null && (
+            <p
+              className={`${statSubCls} font-bold ${
+                weekDelta >= 0 ? "text-[#2E6B44]" : "text-[#DE3A22]"
+              }`}
+            >
+              {weekDelta >= 0 ? "+" : ""}
+              {weekDelta}% vs poprzedni tydzień
+            </p>
+          )}
         </div>
         <div className={statTileCls}>
           <p className={statLabelCls}>Koszt miesiąca</p>
