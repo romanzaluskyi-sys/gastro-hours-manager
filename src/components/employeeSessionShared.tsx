@@ -273,9 +273,16 @@ export const EmployeeSessionScreens = ({
     .sort((a, b) => b.start_time - a.start_time)
     .slice(0, 8);
 
-  const korektaStanowiska = stanowiskaOptions.filter(
+  // Jeśli żadne stanowisko nie pasuje do wybranego lokalu (np. rozjazd
+  // nazwy lokalu w starszych/zmigrowanych danych zmiany), pokazujemy
+  // wszystkie stanowiska zamiast blokować formularz pustą listą.
+  const korektaStanowiskaMatching = stanowiskaOptions.filter(
     (s) => s.lokal_name === zgPropLokal
   );
+  const korektaStanowiska =
+    korektaStanowiskaMatching.length > 0
+      ? korektaStanowiskaMatching
+      : stanowiskaOptions;
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
@@ -299,9 +306,13 @@ export const EmployeeSessionScreens = ({
   }, [formLokal, stanowiskaOptions]);
 
   // ---- to samo dla propozycji lokalu w formularzu "Popraw zmianę" ----
+  // (z tym samym awaryjnym fallbackiem na pełną listę co korektaStanowiska)
   useEffect(() => {
     if (screen !== "ZGLOS" || zgType !== "correction") return;
-    const dostepne = stanowiskaOptions.filter((s) => s.lokal_name === zgPropLokal);
+    const matching = stanowiskaOptions.filter(
+      (s) => s.lokal_name === zgPropLokal
+    );
+    const dostepne = matching.length > 0 ? matching : stanowiskaOptions;
     if (!dostepne.find((s) => s.name === zgPropStanowisko)) {
       setZgPropStanowisko(dostepne.length > 0 ? dostepne[0].name : "");
     }
@@ -513,7 +524,7 @@ export const EmployeeSessionScreens = ({
       setZgSent(true);
       showMsg("Zgłoszenie wysłane pomyślnie!");
     } catch (err) {
-      showMsg("Błąd połączenia.", "error");
+      showMsg(`Błąd połączenia: ${err.message || "nieznany błąd"}`, "error");
     }
     setZgSaving(false);
   };
@@ -546,7 +557,7 @@ export const EmployeeSessionScreens = ({
       setZgSent(true);
       showMsg("Poprawka wysłana do kierownika!");
     } catch (err) {
-      showMsg("Błąd połączenia.", "error");
+      showMsg(`Błąd połączenia: ${err.message || "nieznany błąd"}`, "error");
     }
     setZgSaving(false);
   };
