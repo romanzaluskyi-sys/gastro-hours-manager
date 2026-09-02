@@ -117,7 +117,7 @@ export default function RaportyIKoszty({
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div>
           <h2 className={pageTitleCls}>Raporty i koszty</h2>
-          <p className="text-sm text-[#6E6E66] mt-1">
+          <p className="font-['Archivo'] font-extrabold text-xl text-[#171714] mt-1">
             {getMonthName(month)} {year}
           </p>
         </div>
@@ -207,7 +207,9 @@ export default function RaportyIKoszty({
               >
                 <div className="min-w-0">
                   <p className="font-bold text-sm truncate">{r.user.name}</p>
-                  <p className="text-xs text-[#6E6E66]">{r.count} zmiany</p>
+                  <p className="text-xs text-[#6E6E66] truncate">
+                    {r.user.default_stanowisko || "—"} · {r.count} zmiany
+                  </p>
                 </div>
                 <div className="text-right flex-shrink-0">
                   <p className="font-['Archivo'] font-bold text-sm tabular-nums">

@@ -49,7 +49,7 @@ export const NAV_ITEMS = [
   { key: "grafik", label: "Grafik", Icon: Calendar },
   { key: "zgloszenia", label: "Zgłoszenia", Icon: Flag, badgeKey: "zgloszenia" },
   { key: "powiadomienia", label: "Powiadomienia", Icon: Bell, badgeKey: "powiadomienia" },
-  { key: "pracownicy", label: "Pracownicy, umowy, sanepid", Icon: Users, badgeKey: "pracownicy" },
+  { key: "pracownicy", label: "Pracownicy", Icon: Users, badgeKey: "pracownicy" },
   { key: "raporty", label: "Raporty i koszty", Icon: BarChart3 },
   { key: "przewodnik", label: "Przewodnik", Icon: HelpCircle },
 ];

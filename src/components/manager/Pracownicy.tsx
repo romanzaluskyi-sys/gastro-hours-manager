@@ -99,7 +99,7 @@ export default function Pracownicy({
   return (
     <div className="max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-        <h2 className={pageTitleCls}>Pracownicy, umowy, sanepid</h2>
+        <h2 className={pageTitleCls}>Pracownicy</h2>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setView("aktywni")}

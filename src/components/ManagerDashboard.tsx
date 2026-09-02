@@ -31,6 +31,7 @@ import Aktywni from "./manager/Aktywni";
 import Zgloszenia from "./manager/Zgloszenia";
 import Pracownicy from "./manager/Pracownicy";
 import RaportyIKoszty from "./manager/RaportyIKoszty";
+import Przewodnik from "./manager/Przewodnik";
 
 // ==========================================
 // KIEROWNIK DASHBOARD
@@ -894,6 +895,8 @@ const ManagerDashboard = ({
           />
         )}
 
+        {tab === "przewodnik" && <Przewodnik />}
+
         {tab !== "pulpit" &&
           tab !== "moja_praca" &&
           tab !== "godziny" &&
@@ -901,7 +904,8 @@ const ManagerDashboard = ({
           tab !== "aktywni" &&
           tab !== "zgloszenia" &&
           tab !== "pracownicy" &&
-          tab !== "raporty" && (
+          tab !== "raporty" &&
+          tab !== "przewodnik" && (
           <WBudowie
             label={wBudowieLabel}
             hasOldContent={tabsWithOldContent.includes(tab)}

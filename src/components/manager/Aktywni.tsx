@@ -69,17 +69,18 @@ export default function Aktywni({ shifts, matchesFilter, onEndShift, onNameClick
                     {s.lokal} · {s.stanowisko}
                   </p>
                 </button>
-                <span className="hidden md:inline text-sm text-[#6E6E66] w-16 flex-shrink-0">
-                  od {fmtHM(s.start_time)}
-                </span>
-                <span
-                  className={`font-['Archivo'] font-extrabold text-[13px] md:text-lg tabular-nums w-12 md:w-16 flex-shrink-0 text-right ${
-                    long ? "text-[#DE3A22]" : "text-[#171714]"
-                  }`}
-                  title={`Od ${fmtHM(s.start_time)}`}
-                >
-                  {fmtElapsed(elapsedMs)}
-                </span>
+                <div className="flex flex-col items-end bg-[#FAEAE6] text-[#8A3A2B] rounded px-2 py-1 flex-shrink-0 leading-tight">
+                  <span className="text-[9px] md:text-[10px] font-bold uppercase tracking-wide whitespace-nowrap">
+                    od {fmtHM(s.start_time)}
+                  </span>
+                  <span
+                    className={`font-['Archivo'] font-extrabold text-[13px] md:text-lg tabular-nums ${
+                      long ? "text-[#DE3A22]" : "text-[#8A3A2B]"
+                    }`}
+                  >
+                    {fmtElapsed(elapsedMs)}
+                  </span>
+                </div>
                 <button
                   onClick={() => onEndShift(s)}
                   className="bg-[#DE3A22] text-white font-['Archivo'] font-bold rounded hover:opacity-90 px-2.5 py-1.5 text-[11px] md:px-4 md:py-2.5 md:text-sm flex-shrink-0 whitespace-nowrap"

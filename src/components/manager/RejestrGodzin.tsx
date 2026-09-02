@@ -157,7 +157,7 @@ export default function RejestrGodzin({
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div>
           <h2 className={pageTitleCls}>Rejestr Godzin</h2>
-          <p className="text-sm text-[#6E6E66] mt-1">
+          <p className="font-['Archivo'] font-extrabold text-xl text-[#171714] mt-1">
             {getMonthName(month)} {year}
           </p>
         </div>
