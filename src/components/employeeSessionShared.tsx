@@ -109,8 +109,8 @@ export const Shell = ({
     ? "WIECEJ"
     : screen;
   return (
-    <div className="min-h-screen bg-white flex flex-col items-center">
-      <div className="w-full max-w-md bg-white min-h-screen flex flex-col shadow-lg">
+    <div className="h-screen bg-white flex flex-col items-center overflow-hidden">
+      <div className="w-full max-w-md bg-white h-full flex flex-col shadow-lg overflow-hidden">
         <header className="px-[18px] pt-[22px] pb-[14px] bg-[#F1F1EE] border-b-[1.5px] border-[#B7B6AE] flex items-center justify-between gap-2.5 flex-shrink-0">
           <div className="flex items-center gap-3 min-w-0">
             {onBack && (
