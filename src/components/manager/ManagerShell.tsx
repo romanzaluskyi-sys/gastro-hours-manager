@@ -24,6 +24,7 @@ import {
   HelpCircle,
   LogOut,
   MoreHorizontal,
+  User,
 } from "lucide-react";
 import { shellSidebarCls, shellNavBtnCls, shellBadgeCls, lokalTabCls } from "./designTokens";
 
@@ -44,6 +45,7 @@ export const NAV_ITEMS = [
     shortLabel: "Zadania",
     Icon: ClipboardCheck,
   },
+  { key: "moja_praca", label: "Moja Praca", Icon: User },
   { key: "grafik", label: "Grafik", Icon: Calendar },
   { key: "zgloszenia", label: "Zgłoszenia", Icon: Flag, badgeKey: "zgloszenia" },
   { key: "powiadomienia", label: "Powiadomienia", Icon: Bell, badgeKey: "powiadomienia" },
@@ -147,6 +149,17 @@ export default function ManagerShell({
             <span className="capitalize hidden sm:inline">
               {dateLabel} · {timeLabel}
             </span>
+            <button
+              onClick={() => setActiveTab("moja_praca")}
+              title="Moja Praca — moje własne godziny"
+              className={`relative border-[2px] rounded w-9 h-9 flex items-center justify-center flex-shrink-0 ${
+                activeTab === "moja_praca"
+                  ? "border-[#171714] bg-[#171714] text-white"
+                  : "border-[#B7B6AE] text-[#171714] hover:border-[#171714]"
+              }`}
+            >
+              <User size={16} />
+            </button>
             <button
               onClick={() => setActiveTab("powiadomienia")}
               className="relative border-[2px] border-[#B7B6AE] rounded w-9 h-9 flex items-center justify-center text-[#171714] hover:border-[#171714] flex-shrink-0"

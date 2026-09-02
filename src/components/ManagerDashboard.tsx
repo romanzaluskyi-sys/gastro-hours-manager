@@ -634,12 +634,13 @@ const ManagerDashboard = ({
   const tabsWithOldContent = [
     "godziny",
     "aktywni",
-    "moja_praca",
     "zgloszenia",
     "powiadomienia",
     "pracownicy",
     "zatwierdzanie",
   ];
+  // "moja_praca" jest już aktywna (nie w kolejności makiet, ale kierownik
+  // sam odbija godziny i nie mógł ich zapisać podczas przebudowy reszty).
 
   return (
     <ManagerShell
@@ -793,7 +794,7 @@ const ManagerDashboard = ({
             setActiveTab={setTab}
           />
         )}
-        {tab !== "pulpit" && (
+        {tab !== "pulpit" && tab !== "moja_praca" && (
           <WBudowie
             label={wBudowieLabel}
             hasOldContent={tabsWithOldContent.includes(tab)}
@@ -1262,9 +1263,11 @@ const ManagerDashboard = ({
           </div>
         )}
 
-        {false && tab === "moja_praca" && (
+        {tab === "moja_praca" && (
           <div className="max-w-4xl mx-auto space-y-6">
-            <h2 className="text-2xl font-bold mb-4">Moje Godziny Pracy</h2>
+            <h2 className="font-['Archivo'] font-extrabold text-2xl text-[#171714] mb-4">
+              Moje Godziny Pracy
+            </h2>
             <TimeEntryForm
               userObj={currentUser}
               activeUsers={[]}
