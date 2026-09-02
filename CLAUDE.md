@@ -73,6 +73,10 @@ api/                         — root-level, POZA src/ — funkcje Vercel Cron
                                  patrz Roadmap punkt 1 i sekcja "Cron" wyżej
 vercel.json                  — harmonogram crona
 CHANGELOG.md                 — historia wersji, patrz "Wersjonowanie i CHANGELOG" niżej
+public/
+  version.json                — { "version": "X.Y.Z" }, czytany przez
+                                 UpdateBanner.tsx — patrz "Wersjonowanie i
+                                 CHANGELOG" niżej
 src/
   index.tsx                  — punkt wejścia (bez zmian)
   App.tsx                    — globalny stan, fetch danych z Supabase, routing widoków
@@ -86,8 +90,17 @@ src/
   utils/
     format.ts                 — getShort, getDayOfWeek, getMonthName, getAvailableYears, formatNotificationText
     shifts.ts                  — findOverlappingShift, getTodaysShiftsForUser
+    corrections.ts              resolveCorrection/askAboutCorrection —
+                                  wspólna logika zatwierdzania korekt godzin
+                                  (Zatwierdzanie zmian + inline w Rejestr
+                                  Godzin), patrz "Panel kierownika" niżej
   components/
-    LoginScreen.tsx
+    LoginScreen.tsx             redesign 2026-09-02, ten sam język wizualny
+                                  co reszta apki (patrz niżej)
+    UpdateBanner.tsx            pasek "dostępna nowa wersja — odśwież
+                                  stronę", zamontowany w App.tsx dla
+                                  wszystkich ról, patrz "Wersjonowanie i
+                                  CHANGELOG" niżej
     TimeEntryForm.tsx          — wspólny formularz start/koniec zmiany (kiosk i self-tracking)
     HoursReport.tsx            — raport miesięczny (zakładka "Raport")
     IssueForm.tsx               — zakładka "Zgłoś"
@@ -119,10 +132,34 @@ src/
                                   usuń dopiero po tym, jak nowy design
                                   postoi w produkcji jakiś czas bez
                                   problemów, nie od razu.
-    ManagerDashboard.tsx        — panel kierownika, w całości w jednym pliku
-                                  (~1850 linii — wewnętrznie spójny, dalszy
-                                  podział na zakładki to osobne, świadome
-                                  zadanie, nie blokuje Roadmapy)
+    ManagerDashboard.tsx        — redesign 2026-09-02 (patrz "Panel
+                                  kierownika" niżej): host/orkiestrator —
+                                  cały wspólny stan (editingUser/
+                                  editingShift/shiftForm/przewodnikTab...),
+                                  handlery (handleSaveUser,
+                                  handleSaveShiftEdit z trybem tworzenia,
+                                  handleArchiveEntity...) i routing tab →
+                                  komponent z manager/. Stare wersje
+                                  poszczególnych zakładek WCIĄŻ w tym pliku,
+                                  za `{false && tab === "..." && (...)}` —
+                                  celowo nieusunięte (żywa referencja przy
+                                  dalszych zmianach), NIE dodawaj tam kodu.
+    manager/                    — nowe komponenty zakładek Panelu
+                                  Kierownika, po jednym pliku na zakładkę:
+      designTokens.ts              wspólne kolory/klasy Tailwind (ten sam
+                                    język co employeeSessionShared.tsx —
+                                    #DE3A22, font Archivo, grube ramki),
+                                    import stąd zamiast wpisywać hexy ręcznie
+      ManagerShell.tsx              sidebar (desktop) / dolny pasek +
+                                    "Więcej" (mobile) — patrz "Panel
+                                    kierownika" niżej po szczegóły nawigacji
+      WBudowie.tsx                  wspólny placeholder dla zakładek bez
+                                    jeszcze własnej treści (Grafik, Zadania)
+      PulpitHome.tsx, RejestrGodzin.tsx, ZatwierdzanieZmian.tsx,
+      Aktywni.tsx, Zgloszenia.tsx, Pracownicy.tsx, RaportyIKoszty.tsx,
+      Przewodnik.tsx, MojaPraca.tsx
+                                    — po jednej zakładce Panelu Kierownika
+                                    każdy, patrz "Panel kierownika" niżej
 ```
 
 `tsconfig.json` ma `"skipLibCheck": true` (potrzebne, inaczej crash na
@@ -202,39 +239,92 @@ Pracownik z ustawionym `kiosk_pin` dostaje ekran z klawiaturą numeryczną
 (10 cyfr + backspace) zamiast od razu wejść do mini-konta po kliknięciu na
 liście.
 
-### Panel kierownika (`ManagerDashboard`)
+### Panel kierownika (`ManagerDashboard` + `components/manager/`) — redesign 2026-09-02
 
-Zakładki: Rejestr Godzin (edycja zmian), **Pulpit godzin** (dashboard godzin
-— filtr tydzień/miesiąc, tylko role `closed`/`open`/`manager_lokalu`, klik
-na komórkę godzin → edycja zmiany), Grafik (obecnie tylko placeholder "w
-budowie" — NIE ruszać, patrz Roadmap), Aktywni, **Powiadomienia**,
-Zgłoszenia, Pracownicy, Przewodnik.
+Przebudowany od zera pod ten sam wireframe'owy język co
+`employeeSessionShared.tsx` (patrz wyżej), makieta po makiecie w kolejności
+w jakiej właściciel je przysyłał w sesji projektowej. `ManagerDashboard.tsx`
+sam jest teraz tylko hostem: trzyma wspólny stan i handlery, renderuje
+`<ManagerShell>` (`manager/ManagerShell.tsx`) i wewnątrz niego routuje
+`tab` → właściwy komponent z `manager/`. Stare, sprzed-redesignu wersje
+poszczególnych zakładek WCIĄŻ są w tym pliku, każda za literalnym
+`{false && tab === "..." && (...)}` — celowo nieusunięte (żywa referencja
+do starej logiki, na wypadek gdyby coś trzeba było odtworzyć), NIE dopisuj
+tam nic i NIE usuwaj bez wyraźnej potrzeby.
 
-Zakładka **Powiadomienia** (`ManagerDashboard`, tab `"powiadomienia"`) —
-własna dla kierowników (`admin` i `manager_lokalu`), analogiczna do
-`NotificationsPanel` u pracownika. Pokazuje wiersze z tabeli `notifications`
-gdzie `audience === "manager"`, przefiltrowane przez `hasAccessToLokal(n.lokal)`
-— `manager_lokalu` widzi tylko swoje `allowed_lokale`, `admin` widzi
-wszystko. Znaczek z liczbą nieprzeczytanych jak w wersji dla pracowników;
-oznaczanie jako przeczytane też działa tak samo (patch przy wejściu na
-zakładkę). Tworzenie takich powiadomień idzie przez ogólną funkcję
-`createManagerNotification(lokal, message, type)` w
-[`api/notifications.ts`](src/api/notifications.ts) — analogiczna
-`createEmployeeNotification(userName, message, type)` robi to samo dla
-zakładki Wiadomości pracownika. Nie twórz nowych funkcji ad-hoc do
-wysyłania powiadomień, wywołuj te dwie — pierwszy konsument to codzienna
-weryfikacja terminów sanepid/umowy (patrz niżej), drugi będzie moduł
-Zadania/Sprzątanie (Roadmap punkt 2).
+**`ManagerShell.tsx`** — cała rama: na desktopie stały sidebar (lista
+zakładek z `NAV_ITEMS`, licznik nieprzeczytanych z `badges`, "Wersja
+{APP_VERSION}" na dole) + górny pasek (taby lokali — "Cała sieć"/"Wszystkie
+moje" + po jednym per dostępny lokal, zegar, placeholder pogody, ikona
+"Moja Praca", dzwonek powiadomień). Na mobile sidebar znika, zamiast niego
+dolny stały pasek z 4 najczęstszymi zakładkami (`MOBILE_PRIMARY_KEYS`:
+Pulpit/Zatwierdzanie zmian/Aktywni/Zadania) + "Więcej" z resztą jako
+pełnoekranowa lista — świadomie NIE poziomy scroll po wszystkich 11
+pozycjach (to był pierwszy feedback po wdrożeniu). Layout to
+`h-screen overflow-hidden` na korzeniu + `min-h-0` w dół całego łańcucha
+flex (te same klasy w `employeeSessionShared.tsx` Shell) — bez `min-h-0`
+na każdym poziomie `flex-1`/`overflow-y-auto` przestaje faktycznie się
+stosować (domyślne `min-height: auto` na elementach flex) i strona
+przestaje się scrollować w ogóle zamiast scrollować tylko `<main>`.
 
-W zakładce **Pracownicy** formularz edycji pracownika (dla wszystkich ról
-oprócz `kiosk` — czyli też dla `admin`/`manager_lokalu`, bo oni też
-odbijają godziny i mają własne terminy) ma dwa nieobowiązkowe pola daty:
-"Termin książeczki sanepid" (`sanepid_expiry`) i "Termin umowy"
-(`umowa_expiry`). Puste pole jest podświetlone na czerwono w formularzu, a
-na karcie aktywnego pracownika na liście pokazuje się żółty badge "Brak
+**Zakładki** (kolejność z `NAV_ITEMS`): **Pulpit** (`PulpitHome.tsx`, "Dziś
+w liczbach" — godziny dziś/tydzień z porównaniem do poprzedniego tygodnia,
+koszt miesiąca z `users.stawka`, podgląd "Wymaga Twojej decyzji"/"Teraz na
+zmianie"/"Terminy i dokumenty"), **Zatwierdzanie zmian**
+(`ZatwierdzanieZmian.tsx`, patrz niżej), **Rejestr Godzin**
+(`RejestrGodzin.tsx` — grupowanie po stanowisku, jeden pasek wyszukiwania,
+"+ Dodaj wpis", CSV, "Historia" per wiersz), **Aktywni** (`Aktywni.tsx` —
+żywy licznik czasu trwania zmiany, "Zakończ zmianę"), **Zadania i
+Grafik** (świadomie nadal placeholder — patrz Roadmap), **Zgłoszenia**
+(`Zgloszenia.tsx`, tylko `type !== "correction"`), **Powiadomienia** (patrz
+niżej, bez zmian w logice), **Pracownicy** (`Pracownicy.tsx`, patrz niżej),
+**Raporty i koszty** (`RaportyIKoszty.tsx`, patrz niżej), **Przewodnik**
+(`Przewodnik.tsx` — statyczna mini-instrukcja + "Historia wersji"),
+**Moja Praca** (`MojaPraca.tsx` — kierownik jest też pracownikiem;
+dostępna też z ikony przy dzwonku w każdej zakładce, nie tylko z sidebaru).
+
+Klik na imię pracownika w Rejestr Godzin i Aktywni woła
+`goToEmployeeReport(userId)` z `ManagerDashboard.tsx` — ustawia
+`reportUserId` i przełącza `tab` na `"raporty"`, gdzie `RaportyIKoszty.tsx`
+od razu pokazuje kartę tej osoby.
+
+**Zatwierdzanie zmian** (`ZatwierdzanieZmian.tsx` + `utils/corrections.ts`)
+— kolejka decyzji dla `issues.type === "correction"` (patrz "Zgłoszenia i
+powiadomienia" niżej — ta funkcja jest już w pełni zaimplementowana i
+przetestowana end-to-end). Dla każdego zgłoszenia: **Zatwierdź** (przyjmuje
+`proposed_*` bez zmian), **Popraw** (kierownik wpisuje własne wartości +
+`reason`, widoczny dla pracownika), **Zapytaj** (gdy `proposed_end_time`
+puste — wysyła pytanie, nie rozwiązuje zgłoszenia). Zatwierdzone/poprawione
+dane trafiają do `shifts` (patch istniejącej albo `post` nowej, gdy
+`shift_id` był `null` — "Zapomniałem/łam odbić"), zapisują wiersz w nowej
+tabeli **`shift_edits`** (audit trail — patrz Schemat Supabase niżej) i
+wysyłają `createEmployeeNotification` z imieniem konkretnego kierownika
+(nie generycznie "Kierownik"). `resolveCorrection()` w `corrections.ts` to
+JEDYNE miejsce, które to robi — wywołuje go i `ZatwierdzanieZmian.tsx`, i
+przyszłe inline akcje gdziekolwiek indziej; nie duplikuj tej logiki.
+`shift_edits` jest ładowane osobno w `App.tsx` (nie w głównym
+`Promise.all`, ten sam powód co `notifications` — błąd nie może blokować
+reszty), bez pollingu (rośnie tylko przez akcję kierownika w tej samej
+sesji, więc lokalny dopisek po zatwierdzeniu wystarczy).
+
+W zakładce **Pracownicy** (`Pracownicy.tsx`, layout lista+karta zamiast
+modala) formularz edycji pracownika (dla wszystkich ról oprócz `kiosk` —
+czyli też dla `admin`/`manager_lokalu`) ma: imię, typ konta, email+PIN
+(wymagane, gdy `role !== "open"`) albo `kiosk_pin` (opcjonalny, tylko dla
+`role === "open"`), lokal+stanowisko (**wymagane** od 2026-09-02 — realny
+`required` na `<select>`, nie tylko konwencja), stawka/etat/notatki
+(wszystkie opcjonalne), dwa nieobowiązkowe pola daty — "Termin książeczki
+sanepid" (`sanepid_expiry`) i "Termin umowy" (`umowa_expiry`). Puste pole
+terminu podświetlone na czerwono (tylko przy edycji istniejącego, nie przy
+tworzeniu — patrz błąd #9 niżej), na karcie na liście żółty badge "Brak
 terminu ...". To świadomie zamknięty zestaw dwóch terminów — nie dodawaj
-trzeciego bez wyraźnej prośby, to nie jest zaprojektowane jako otwarty
-system dowolnych typów terminów.
+trzeciego bez wyraźnej prośby. Trwałe usunięcie (`handlePermanentDelete`,
+już generyczne dla dowolnej tabeli) dostępne TYLKO z widoku Archiwum —
+najpierw archiwizacja, potem usunięcie, nigdy bezpośrednio z listy
+aktywnych. Lokale/Stanowiska (słownik nazw, admin-only) to dwa dodatkowe
+`view` w tym samym komponencie, przeniesione z dawnego `Przewodnik`
+(`przewodnikTab` w `ManagerDashboard.tsx`) — logika bez zmian, tylko nowy
+wygląd.
 
 **Blokada PIN-em na kiosku** — zaimplementowana 2026-08-31 (konsument:
 `KioskDashboard.tsx`, patrz "Tablet Służbowy" wyżej). Trzeci, niezależny
@@ -245,18 +335,30 @@ swojego mini-konta. Jeśli pracownik ma ustawioną kolumnę `users.kiosk_pin`
 (text, nullable, 4 cyfry — NIE mylić z kolumną `pin`, 6-cyfrowym PIN-em
 logowania Email+PIN), kiosk najpierw pyta o ten PIN na osobnym ekranie z
 klawiaturą numeryczną, zanim pokaże jego dane. Puste `kiosk_pin` = bez
-zmian, jak dziś (kiosk nie pyta o nic).
+zmian, jak dziś (kiosk nie pyta o nic). **UI kierownika do ustawiania tego
+PIN-u już istnieje** (od 2026-09-02, `Pracownicy.tsx` — pole widoczne
+tylko dla `role === "open"`) — wcześniejsza notatka o ręcznym wpisywaniu w
+Supabase Table Editor jest nieaktualna.
 
-⚠️ **UI kierownika do USTAWIANIA `kiosk_pin` jeszcze NIE istnieje** —
-świadomie odłożone przy pierwszym wdrożeniu (poza zakresem redesignu
-kiosku). Formularz edycji pracownika w zakładce Pracownicy (`ManagerDashboard`)
-NIE ma jeszcze przełącznika "Zablokuj PIN-em na kiosku" ani okna do wpisania
-PIN-u — żeby przetestować blokadę, trzeba na razie wpisać `kiosk_pin`
-bezpośrednio w Supabase Table Editor. Gdy przyjdzie kolej na tę funkcję:
-przełącznik w formularzu edycji pracownika, włączenie otwiera osobne okno
-do wpisania 4-cyfrowego PIN-u — analogicznie do istniejącego okna
-Email+PIN przy koncie `closed`, nie wpisuj PIN-u bezpośrednio w głównym
-formularzu.
+Zakładka **Powiadomienia** (`ManagerDashboard`, tab `"powiadomienia"`,
+NIE ma jeszcze własnego komponentu w `manager/` — nadal renderowana wprost
+w `ManagerDashboard.tsx`, reużywa `NotificationsPanel`) — analogiczna do
+`NotificationsPanel` u pracownika. Pokazuje wiersze z tabeli `notifications`
+gdzie `audience === "manager"`, przefiltrowane przez `hasAccessToLokal(n.lokal)`
+— `manager_lokalu` widzi tylko swoje `allowed_lokale`, `admin` widzi
+wszystko. Znaczek z liczbą nieprzeczytanych jak w wersji dla pracowników;
+oznaczanie jako przeczytane też działa tak samo (patch przy wejściu na
+zakładkę). Tworzenie takich powiadomień idzie przez ogólną funkcję
+`createManagerNotification(lokal, message, type)` w
+[`api/notifications.ts`](src/api/notifications.ts) — analogiczna
+`createEmployeeNotification(userName, message, type)` robi to samo dla
+zakładki Wiadomości pracownika. Nie twórz nowych funkcji ad-hoc do
+wysyłania powiadomień, wywołuj te dwie. ⚠️ Ta zakładka była chwilowo
+faktycznie zepsuta (2026-09-02, między redesignem shellu a jego naprawą)
+— stara treść trafiła za `{false && ...}` razem z resztą starych zakładek
+i nikt nie podpiął jej z powrotem od razu. Jeśli widzisz podobny wzorzec
+(`tab` bez odpowiadającego mu żywego bloku) w innej zakładce — to ten sam
+błąd, podłącz z powrotem tak jak tu.
 
 **Codzienna weryfikacja terminów** — `api/cron/check-document-terms.js`
 (Vercel Cron, patrz sekcja "Cron" wyżej). Dla każdego aktywnego
@@ -299,10 +401,10 @@ Supabase" niżej.
 | 1 | Kierownik ręcznie edytował/usunął czyjąś zmianę | `ManagerDashboard` → pracownik | `notifications`, `audience='employee'`, stare pola (`action`/`old_start`/...) | ZROBIONE |
 | 2 | Zbliża się/minął termin sanepid albo umowy | cron `check-document-terms.js` → kierownik LOKALU i sam pracownik | `notifications`, `audience='manager'` i `audience='employee'` (`message`/`type`) | ZROBIONE |
 | 3 | Ogólne info dla kierowników lokalu (przyszłe moduły) | dowolna funkcja przez `createManagerNotification` → kierownik | `notifications`, `audience='manager'` | infrastruktura gotowa, czeka na kolejnych konsumentów (Zadania itd.) |
-| 4 | **Zgłoś → "Popraw zmianę"**: pracownik proponuje inne dane konkretnej zmiany (data/lokal/stanowisko/godziny) albo zgłasza całkiem brakującą zmianę | pracownik → kierownik | `issues`, nowe pole `type='correction'` + `proposed_date`/`proposed_lokal`/`proposed_stanowisko`/`proposed_start_time`/`proposed_end_time` (patrz niżej) | **ZAPROJEKTOWANE, NIE zaimplementowane** — makiet zatwierdzony, kod jeszcze nie napisany |
-| 5 | **Zgłoś → "Zgłoś problem"**: dowolna uwaga, opcjonalnie anonimowo | pracownik → kierownik | `issues`, `type='problem'` (to jest dotychczasowe "Zgłoś", tylko nazwane) | **ZAPROJEKTOWANE** — patrz wyżej |
-| 6 | Odpowiedź kierownika na zgłoszenie typu "Popraw zmianę" (zatwierdzone/odrzucone) | kierownik → pracownik | **BRAK jeszcze mechanizmu** — najprościej: `createEmployeeNotification` po kliknięciu Zatwierdź/Odrzuć w panelu kierownika | **DO ZROBIENIA razem z UI kierownika dla p. 4** |
-| 7 | Wiadomości/Zgłoszenia widoczne w panelu kierownika (`ManagerDashboard`, zakładka "Zgłoszenia") | — | `issues` | ZROBIONE, ale NIE rozróżnia jeszcze typu 4 vs 5 (do zrobienia razem z p. 4) |
+| 4 | **Zgłoś → "Popraw zmianę"**: pracownik proponuje inne dane konkretnej zmiany (data/lokal/stanowisko/godziny) albo zgłasza całkiem brakującą zmianę | pracownik → kierownik | `issues`, `type='correction'` + `proposed_date`/`proposed_lokal`/`proposed_stanowisko`/`proposed_start_time`/`proposed_end_time` (patrz niżej) | **ZROBIONE** (2026-09-02) |
+| 5 | **Zgłoś → "Zgłoś problem"**: dowolna uwaga, opcjonalnie anonimowo | pracownik → kierownik | `issues`, `type='problem'` (to jest dotychczasowe "Zgłoś", tylko nazwane) | ZROBIONE |
+| 6 | Odpowiedź kierownika na zgłoszenie typu "Popraw zmianę" (Zatwierdź/Popraw/Zapytaj) | kierownik → pracownik | `createEmployeeNotification` z `utils/corrections.ts` (`resolveCorrection`/`askAboutCorrection`), imię konkretnego kierownika w treści | **ZROBIONE** (2026-09-02) |
+| 7 | Kolejka korekt w panelu kierownika, zakładka **Zatwierdzanie zmian** (`manager/ZatwierdzanieZmian.tsx`) | — | `issues` (`type='correction'`) | **ZROBIONE** — osobna zakładka, nie miesza się z p. 5 (Zgłoszenia pokazuje tylko `type !== "correction"`) |
 
 **Rozdzielenie "Zgłoś" na dwa typy** (ustalone 2026-08-31, patrz makiet
 "Zgłoś — Dwa Typy" z sesji projektowej) — dwa różne procesy po stronie
@@ -326,37 +428,66 @@ data/lokal/stanowisko doszły później). **Typ `problem`** ("Zgłoś
 problem") to dotychczasowe zachowanie — wolny tekst, opcjonalna
 anonimowość, `shift_id` opcjonalny, bez pól `proposed_*`.
 
-⚠️ Kod kliencki (formularz "Zgłoś" w `employeeSessionShared.tsx`) i UI
-kierownika do zatwierdzania/odrzucania propozycji z p. 4 (pkt 6 w tabeli
-wyżej) **jeszcze nie napisane** — to osobne zadanie, do zrobienia razem:
-bez UI kierownika, wysłana propozycja `correction` wisiałaby w bazie bez
-żadnego sposobu jej zastosowania do `shifts`.
+Zaimplementowane 2026-09-02: formularz "Zgłoś" w `employeeSessionShared.tsx`
+(stan `zgType`/`zgCorrectionShiftId`/`zgProp*` — osobny od `zgAnon`/`zgShiftId`/
+`zgText` używanych przez typ `problem`) i UI kierownika do
+zatwierdzania/poprawiania w `manager/ZatwierdzanieZmian.tsx` + wspólna
+logika zapisu w `utils/corrections.ts`. Biржа zmian z Grafiku (drugi,
+odłożony typ decyzji z pierwotnego planu tej zakładki) świadomie POZA
+zakresem — wymaga Grafiku, którego nie ma.
 
 ## Schemat Supabase (tabele używane obecnie)
 
 - **users** — `id, name, email, pin, role, default_lokal, allowed_lokale[],
   active, archived, stanowisko, sanepid_expiry, sanepid_last_notified,
-  umowa_expiry, umowa_last_notified, kiosk_pin`. Ostatnie 4 kolumny przed
-  `kiosk_pin`: `date`, nullable — terminy dokumentów pracownika, patrz
+  umowa_expiry, umowa_last_notified, kiosk_pin`. `sanepid_expiry`/
+  `umowa_expiry`: `date`, nullable — terminy dokumentów pracownika, patrz
   "Panel kierownika" wyżej. `kiosk_pin` (text, nullable, 4 cyfry, dodana
   2026-08-31) — blokada PIN-em na kiosku, patrz "Panel kierownika" i
   "Tablet Służbowy" wyżej; NIE mylić z kolumną `pin` (6-cyfrowy PIN
-  logowania Email+PIN). Na razie ustawiana ręcznie w Supabase (brak UI
-  kierownika, patrz "Panel kierownika" wyżej).
+  logowania Email+PIN). Formularz kierownika do jej ustawiania istnieje
+  od 2026-09-02 (`Pracownicy.tsx`). Od 2026-09-02 dodatkowo: `stawka`
+  (numeric, nullable, zł/h — puste = brak, NIE `0`; liczone w Pulpit/
+  Raporty i koszty/karcie pracownika, z jawnym "brak stawki"/"dane
+  niepełne" zamiast cichego liczenia jako 0), `etat` (text, nullable,
+  wolna wartość z zamkniętej listy w formularzu — nie osobny słownik),
+  `notatki` (text, nullable), `notatki_updated_by`/`notatki_updated_at`
+  (text/timestamptz, nullable — ustawiane w `handleSaveUser` TYLKO gdy
+  `notatki` faktycznie się zmieniło względem tego, co jest w bazie, nie
+  przy każdym zapisie karty).
 - **lokale** — `id, name, archived`
 - **stanowiska** — `id, name, lokal_name, archived`
 - **shifts** — `id, user_name, user_id?, lokal, stanowisko, start_time
-  (timestamptz), end_time (timestamptz | null), godzin`
-- **issues** — zgłoszenia problemów od pracowników. Podstawowe:
-  `id, user_id, user_name, issue_text, status`. Od 2026-08-31 też
-  `is_anonymous` (bool, default `false`) i `shift_id` (uuid — WSZYSTKIE id w
-  tym projekcie to uuid, nie bigint, zweryfikowane bezpośrednio w Supabase
-  2026-09-02 — nie ufaj typom kolumn opisanym gdzie indziej w tym pliku bez
-  sprawdzenia, references `shifts(id)`, nullable) — dodane dla nowego "Zgłoś" w
-  `employeeSessionShared.tsx` (używane przez `KioskDashboard.tsx` I
-  `PersonalDashboard.tsx`): anonimowe zgłoszenie i/albo przypięte do
-  konkretnej zmiany, np. przez chorągiewkę przy wierszu w Raporcie. Gdy
-  `is_anonymous`, `user_id`/`user_name` są `null`.
+  (timestamptz), end_time (timestamptz | null), godzin`. `id` to **uuid**
+  (zweryfikowane bezpośrednio w Supabase 2026-09-02 — wcześniejsze wzmianki
+  o `bigint` w tym pliku były błędne; nie ufaj typom kolumn opisanym tu bez
+  świeżej weryfikacji przez `information_schema.columns`, jeśli coś na tym
+  zależy).
+- **issues** — zgłoszenia od pracowników, dwa typy w jednej tabeli (patrz
+  "Zgłoszenia i powiadomienia" wyżej). Podstawowe:
+  `id, user_id, user_name, issue_text, status, is_anonymous, shift_id`
+  (uuid, nullable, references `shifts(id)`). Od 2026-09-02 też `type`
+  (text, default `'problem'` — stare wiersze bez wartości traktuj jak
+  `'problem'`) i, tylko dla `type='correction'`: `proposed_date` (date),
+  `proposed_lokal`/`proposed_stanowisko` (text), `proposed_start_time`/
+  `proposed_end_time` (text, format `"HH:MM"`, NIE `time` — budowane przez
+  `buildLocalDate()` w `utils/corrections.ts`). Gdy `is_anonymous`,
+  `user_id`/`user_name` są `null` (tylko dla `type='problem'` — korekty
+  są zawsze z imieniem).
+- **shift_edits** — NOWA tabela (2026-09-02), audit trail korekt zmian:
+  `id (bigint identity), shift_id (text), issue_id (text), editor_name,
+  reason, old_date/old_lokal/old_stanowisko/old_start_time/old_end_time,
+  new_date/new_lokal/new_stanowisko/new_start_time/new_end_time, source
+  ('correction_approved' | 'correction_adjusted'), created_at`. `shift_id`/
+  `issue_id` świadomie `text`, NIE `uuid` z FK — pierwsza próba z prawdziwym
+  FK (`references shifts(id)`) padła na niezgodność typów w Supabase SQL
+  Editor (`bigint` vs `uuid`, patrz błąd #12 niżej); zamiast zgadywać
+  poprawny typ drugi raz, zostawione jako luźne, niewymuszone odwołanie —
+  ten sam wzorzec co reszta tabel w tym projekcie (żadna nie ma prawdziwych
+  FK). RLS: otwarta polityka jak reszta. Czytane przez "Historia" w Rejestr
+  Godzin i licznik "Korekty" w Raporty i koszty; zapisywane WYŁĄCZNIE przez
+  `resolveCorrection()` w `utils/corrections.ts` — nie pisz do tej tabeli
+  z innego miejsca.
 - **notifications** — dwa "typy" wierszy we wspólnej tabeli, odróżnione
   polem `audience`:
   - `audience = 'employee'` (domyślne, dla starych wierszy sprzed tej
@@ -376,15 +507,17 @@ bez UI kierownika, wysłana propozycja `correction` wisiałaby w bazie bez
     tekst ze starych pól `action`/`old_start`/itd.
   - RLS: polityka otwarta (`for all using (true) with check (true)`) —
     jeśli dodajesz nowe tabele, rób tak samo albo świadomie zawężaj.
-  - ⚠️ Kolumny `audience`, `message`, `type` trzeba dodać ręcznie w
-    Supabase (Claude Code nie ma tam bezpośredniego dostępu) — patrz SQL
-    w historii tej sesji/PR, jeśli jeszcze nie zastosowany.
-  - ⚠️ `user_name` i `action` były pierwotnie `NOT NULL` (z czasów, gdy
-    tabela obsługiwała tylko powiadomienia o edycji zmiany) — trzeba było
-    ręcznie zdjąć te ograniczenia (`alter column ... drop not null`),
-    inaczej `createManagerNotification`/`createEmployeeNotification`
-    dostają 400 z Postgresa. Sprawdź, że zostało zastosowane, zanim
-    zaczniesz kolejny moduł korzystający z tych funkcji (Zadania/Sprzątanie).
+  - Kolumny `audience`, `message`, `type` dodane ręcznie w Supabase (Claude
+    Code nie ma tam bezpośredniego dostępu — każda taka zmiana schematu w
+    tym repo idzie przez właściciela wklejającego SQL do Supabase SQL
+    Editor, patrz błędy #12/#13 niżej po pułapki tego trybu pracy).
+  - `user_name` i `action` były pierwotnie `NOT NULL` (z czasów, gdy
+    tabela obsługiwała tylko powiadomienia o edycji zmiany) — ograniczenie
+    zdjęte (`alter column ... drop not null`), inaczej
+    `createManagerNotification`/`createEmployeeNotification` dostają 400 z
+    Postgresa. Potwierdzone działające — obie funkcje są już głównym,
+    wielokrotnie używanym kanałem powiadomień (patrz "Zgłoszenia i
+    powiadomienia" wyżej).
 
 ## Znane błędy — JUŻ NAPRAWIONE, nie wprowadzaj ponownie
 
@@ -471,6 +604,31 @@ bez UI kierownika, wysłana propozycja `correction` wisiałaby w bazie bez
     podobne "niepełne" tablice zależności `useEffect` bez żadnego
     komentarza) — nie dodawaj takich komentarzy, po prostu zostaw
     zależności tak jak reszta kodu w tym repo.
+12. Migracja SQL wklejona jako jeden wieloliniowy skrypt w Supabase SQL
+    Editor wykonuje się jako JEDNA transakcja — błąd w którymkolwiek
+    poleceniu (np. `create table ... references shifts(id)` z niezgodnym
+    typem, patrz `shift_edits` w Schemacie Supabase wyżej) cofa też
+    WSZYSTKIE wcześniejsze polecenia z tego samego wklejenia, nawet jeśli
+    wyglądały na wykonane. W tej sesji poprawki `alter table issues`/
+    `alter table users` z pierwszej (nieudanej) próby zniknęły razem z
+    błędnym `create table` i zostały odkryte dopiero jako "Could not find
+    the 'proposed_date' column ... in the schema cache" kilka kroków
+    później — nie od razu jako oczywisty błąd migracji. Po KAŻDEJ
+    wieloliniowej migracji, zwłaszcza po jakiejkolwiek wcześniejszej
+    porażce, zweryfikuj realny stan przez
+    `select column_name, data_type from information_schema.columns
+    where table_name = '...'` zamiast ufać, że "sukces" na kolejnej,
+    poprawionej migracji oznacza że wcześniejsze też się zapisały.
+13. Podobny błąd typu jak w #12: pierwsza próba `shift_edits.shift_id`
+    jako `bigint references shifts(id)` padła, bo `shifts.id` jest `uuid`
+    — nie `bigint`, wbrew temu co ten plik (błędnie) sugerował wcześniej.
+    Sprawdzone bezpośrednio 2026-09-02: **wszystkie** id w tym projekcie
+    (`shifts`, `issues`, `users`) to `uuid`. Nie zakładaj typu kolumny na
+    podstawie tego co jest napisane w CLAUDE.md ani na podstawie tego, jak
+    kod jednego miejsca traktuje daną wartość (np. stary
+    `Number(zgShiftId)` w `employeeSessionShared.tsx` zakładał liczbę i był
+    cichym błędem — poprawione na zwykły string) — sprawdź
+    `information_schema.columns`, jeśli cokolwiek na tym zależy.
 
 ## Google Apps Script (`Odbior_Danych.gs`)
 
@@ -553,6 +711,14 @@ raczej nie potrzebują własnego wpisu.
 - Mobile-first — duża część użytkowników wchodzi z telefonu/tabletu w
   kuchni, nie z laptopa. Duże przyciski, duży tekst na formularzach czasu.
 - Ikony z `lucide-react`, nie SVG inline.
+- **Jeden wireframe'owy język wizualny w całej aplikacji**, nie tylko u
+  pracownika: `#DE3A22` akcent, `font-['Archivo']` na nagłówkach, grube
+  2/2.5px obramowania. Źródło prawdy dla stałych — `employeeSessionShared.tsx`
+  (mobilne ekrany pracownika: `fieldLabelCls`, `ctaPrimaryCls`, `selectElCls`
+  itd.) i `components/manager/designTokens.ts` (desktopowy Panel Kierownika:
+  `statTileCls`, `sectionCardCls`, `btnPrimaryCls` itd.) — importuj stamtąd
+  zamiast wpisywać hexy/klasy ręcznie w nowym komponencie, żeby nie
+  rozjeżdżały się dwa niby-te-same odcienie czerwieni w różnych miejscach.
 
 ---
 
@@ -627,9 +793,17 @@ tej samej strukturze co sesja w `localStorage` (patrz `App.tsx`),
 nasłuch click/keydown/touchstart (z throttle) do odświeżania go,
 okresowe sprawdzanie (np. co 60s) i wylogowanie po przekroczeniu progu.
 
-### 7. Zatwierdzanie zmian przez kierownika — ODŁOŻONE
-Świadomie odłożone (2026-08-28) na potem, ale z ustalonym już kształtem
-docelowym, żeby nie projektować tego od zera przy starcie:
+### 7. Zatwierdzanie zmian przez kierownika — CZĘŚCIOWO ZROBIONE, inaczej niż tu opisano
+⚠️ To, co poniżej opisuje ten punkt (`shifts.confirmed`, WSZYSTKIE zmiany
+niewidoczne dopóki kierownik ich nie zatwierdzi), NIE zostało zbudowane i
+nadal jest tylko planem. Zamiast tego 2026-09-02 powstał węższy, inny
+mechanizm: kierownik zatwierdza tylko te zmiany, które pracownik SAM
+oznaczył jako wymagające poprawki (zakładka Zatwierdzanie zmian, patrz
+"Panel kierownika" wyżej) — reszta zmian jest widoczna od razu, bez
+żadnego zatwierdzania. To NIE spełnia opisu niżej (nie ma globalnego
+`shifts.confirmed`, nie da się włączyć "wszystko ręcznie") — jeśli
+właściciel poprosi o pełną wersję z tego punktu, projektuj ją od zera wg
+poniższego planu, nie zakładaj że już istnieje.
 
 Nowa kolumna `shifts.confirmed` (boolean, domyślnie `true` — nic się nie
 zmienia dla nikogo, dopóki funkcja nie zostanie świadomie włączona).
