@@ -61,7 +61,7 @@ export default function Aktywni({ shifts, matchesFilter, onEndShift }) {
                   <p className="font-['Archivo'] font-bold text-[13px] md:text-base truncate">
                     {s.user_name}
                   </p>
-                  <p className="hidden md:block text-xs text-[#6E6E66]">
+                  <p className="text-[11px] md:text-xs text-[#6E6E66] truncate">
                     {s.lokal} · {s.stanowisko}
                   </p>
                 </div>
