@@ -28,6 +28,7 @@ import WBudowie from "./manager/WBudowie";
 import MojaPraca from "./manager/MojaPraca";
 import RejestrGodzin from "./manager/RejestrGodzin";
 import Aktywni from "./manager/Aktywni";
+import Zgloszenia from "./manager/Zgloszenia";
 
 // ==========================================
 // KIEROWNIK DASHBOARD
@@ -673,7 +674,7 @@ const ManagerDashboard = ({
   const showTermWarnings = editingUser && !!editingUser.id;
 
   const wBudowieLabel = NAV_ITEMS.find((n) => n.key === tab)?.label || tab;
-  const tabsWithOldContent = ["zgloszenia", "powiadomienia", "pracownicy"];
+  const tabsWithOldContent = ["powiadomienia", "pracownicy"];
   // "moja_praca" jest już aktywna (nie w kolejności makiet, ale kierownik
   // sam odbija godziny i nie mógł ich zapisać podczas przebudowy reszty).
 
@@ -859,7 +860,8 @@ const ManagerDashboard = ({
           tab !== "moja_praca" &&
           tab !== "godziny" &&
           tab !== "zatwierdzanie" &&
-          tab !== "aktywni" && (
+          tab !== "aktywni" &&
+          tab !== "zgloszenia" && (
           <WBudowie
             label={wBudowieLabel}
             hasOldContent={tabsWithOldContent.includes(tab)}
@@ -1368,6 +1370,15 @@ const ManagerDashboard = ({
             availableLokale={availableLokaleForManager}
             activeStanowiska={activeStanowiska}
             showMsg={showMsg}
+          />
+        )}
+
+        {tab === "zgloszenia" && (
+          <Zgloszenia
+            issues={issues}
+            users={users}
+            hasAccessToLokal={hasAccessToLokal}
+            onResolve={resolveIssue}
           />
         )}
 
