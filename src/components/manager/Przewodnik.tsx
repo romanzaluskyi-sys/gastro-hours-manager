@@ -23,6 +23,15 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.9.0",
+    date: "2026-09-02",
+    items: [
+      "Nowa zakładka Zadania i sprzątanie — checklisty na zmianę (poranne/obiadowe/wieczorne) i zadania cykliczne, wspólne dla lokalu albo osobne dla każdego pracownika.",
+      "Panel „Kontrola wykonania po osobach” — kierownik widzi na bieżąco postęp każdego pracownika i zadania wspólne dla lokalu.",
+      "Pracownik widzi swoje zadania na dziś, z paskiem postępu w trakcie zmiany i podsumowaniem po jej zakończeniu.",
+    ],
+  },
+  {
     version: "0.8.0",
     date: "2026-09-02",
     items: [

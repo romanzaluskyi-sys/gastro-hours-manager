@@ -20,8 +20,10 @@ import { api } from "../api/supabase";
 import { sendToGoogleSheets } from "../api/googleSheets";
 import { getShort, getDayOfWeek, getMonthName, getAvailableYears } from "../utils/format";
 import { findOverlappingShift } from "../utils/shifts";
+import { isTaskDueOn, findSharedCompletion, toLocalYMD } from "../utils/tasks";
 import NotificationsPanel from "./NotificationsPanel";
 import ZatwierdzanieZmian from "./manager/ZatwierdzanieZmian";
+import ZadaniaISprzatanie from "./manager/ZadaniaISprzatanie";
 import ManagerShell, { NAV_ITEMS } from "./manager/ManagerShell";
 import PulpitHome from "./manager/PulpitHome";
 import WBudowie from "./manager/WBudowie";
@@ -53,6 +55,10 @@ const ManagerDashboard = ({
   setNotifications,
   shiftEdits,
   setShiftEdits,
+  tasks,
+  setTasks,
+  taskCompletions,
+  setTaskCompletions,
   showMsg,
 }) => {
   const [tab, setTab] = useState("pulpit");
@@ -230,12 +236,29 @@ const ManagerDashboard = ({
     return overdue("sanepid_expiry") || overdue("umowa_expiry");
   }).length;
 
+  // Tylko zadania wspólne dla lokalu (scope="lokal"), po terminie, bez
+  // wykonania — świadomie NIE rozbite po pracownikach, żeby jedno
+  // przeterminowane zadanie nie zawyżało licznika przez wielu ludzi.
+  const todayStrForBadge = toLocalYMD(new Date());
+  const nowTimeStr = new Date().toTimeString().slice(0, 5);
+  const zadaniaOverdueCount = tasks.filter(
+    (t) =>
+      t.scope === "lokal" &&
+      !t.archived &&
+      hasAccessToLokal(t.lokal) &&
+      t.deadline_time &&
+      t.deadline_time.slice(0, 5) < nowTimeStr &&
+      isTaskDueOn(t, taskCompletions, todayStrForBadge) &&
+      !findSharedCompletion(taskCompletions, t.id, todayStrForBadge)
+  ).length;
+
   const shellBadges = {
     zatwierdzanie: pendingCorrections.length,
     zgloszenia: issues.filter((i) => i.status === "nowe" && i.type !== "correction")
       .length,
     powiadomienia: unreadManagerCount,
     pracownicy: pracownicyTerminyCount,
+    zadania: zadaniaOverdueCount,
   };
 
   // --- PULPIT (Dashboard godzin) ---
@@ -897,6 +920,23 @@ const ManagerDashboard = ({
 
         {tab === "przewodnik" && <Przewodnik />}
 
+        {tab === "zadania" && (
+          <ZadaniaISprzatanie
+            currentUser={currentUser}
+            users={users}
+            shifts={shifts}
+            tasks={tasks}
+            setTasks={setTasks}
+            taskCompletions={taskCompletions}
+            setTaskCompletions={setTaskCompletions}
+            matchesFilter={matchesLokalFilter}
+            availableLokale={availableLokaleForManager}
+            activeStanowiska={activeStanowiska}
+            selectedLokal={selectedLokal}
+            showMsg={showMsg}
+          />
+        )}
+
         {tab !== "pulpit" &&
           tab !== "moja_praca" &&
           tab !== "godziny" &&
@@ -906,7 +946,8 @@ const ManagerDashboard = ({
           tab !== "pracownicy" &&
           tab !== "raporty" &&
           tab !== "przewodnik" &&
-          tab !== "powiadomienia" && (
+          tab !== "powiadomienia" &&
+          tab !== "zadania" && (
           <WBudowie
             label={wBudowieLabel}
             hasOldContent={tabsWithOldContent.includes(tab)}

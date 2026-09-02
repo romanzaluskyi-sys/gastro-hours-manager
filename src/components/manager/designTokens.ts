@@ -45,3 +45,14 @@ export const btnPrimaryCls =
   "bg-[#DE3A22] text-white font-['Archivo'] font-bold text-sm px-4 py-2.5 rounded hover:opacity-90 disabled:opacity-50";
 export const btnSecondaryCls =
   "bg-white text-[#171714] font-['Archivo'] font-bold text-sm px-4 py-2.5 rounded border-[2px] border-[#171714] hover:bg-[#F1F1EE] disabled:opacity-50";
+
+// Zadania i sprzątanie — pasek postępu i wiersz zadania na desktopie
+// (kiosk/konto osobiste mają własny checkboxRowCls w employeeSessionShared.tsx,
+// to jest gęstszy odpowiednik pod Panel Kierownika).
+export const progressTrackCls = "h-2.5 rounded-full bg-[#E7E7E2] overflow-hidden";
+export const progressFillStyle = (pct) => ({
+  width: `${Math.max(0, Math.min(100, pct))}%`,
+  backgroundColor: COLORS.ink,
+});
+export const taskRowCls =
+  "flex items-start gap-3 px-4 py-3 border-b-[2px] border-[#171714] last:border-b-0";

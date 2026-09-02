@@ -5,6 +5,21 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.9.0 — 2026-09-02
+
+- **Nowa zakładka "Zadania i sprzątanie".** Kierownik tworzy zadania na
+  zmianę (poranne/obiadowe/wieczorne) i zadania cykliczne ("co N dni"),
+  wspólne dla lokalu albo osobne dla każdego pracownika (dla wszystkich
+  albo tylko wybranego stanowiska), i widzi na bieżąco kto co odhaczył —
+  panel "Kontrola wykonania po osobach".
+- Pracownik widzi swoje zadania na dziś w zakładce "Zadania" (z
+  przełącznikiem "Twoje stanowisko"/"Wszystkie" — przydatne na wspólnym
+  tablecie), a w trakcie zmiany pasek postępu "Zadania na zmianę" z
+  delikatnym przypomnieniem, jeśli coś zostało — zakończenie zmiany dalej
+  działa bez ograniczeń.
+- Podsumowanie dnia po zamknięciu zmiany pokazuje też "Zadania: X z Y
+  wykonanych".
+
 ## 0.8.0 — 2026-09-02
 
 - **Nowy Panel Kierownika.** Cały wygląd przebudowany pod ten sam, czytelny
