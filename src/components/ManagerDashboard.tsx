@@ -31,6 +31,9 @@ import TimeEntryForm from "./TimeEntryForm";
 import HoursReport from "./HoursReport";
 import NotificationsPanel from "./NotificationsPanel";
 import ZatwierdzanieZmian from "./manager/ZatwierdzanieZmian";
+import ManagerShell, { NAV_ITEMS } from "./manager/ManagerShell";
+import PulpitHome from "./manager/PulpitHome";
+import WBudowie from "./manager/WBudowie";
 
 // ==========================================
 // KIEROWNIK DASHBOARD
@@ -52,8 +55,9 @@ const ManagerDashboard = ({
   setNotifications,
   showMsg,
 }) => {
-  const [tab, setTab] = useState("godziny");
+  const [tab, setTab] = useState("pulpit");
   const [przewodnikTab, setPrzewodnikTab] = useState("pracownicy");
+  const [selectedLokal, setSelectedLokal] = useState("ALL");
 
   // --- POWIADOMIENIA DLA PRACOWNIKA O ZMIANIE/USUNIĘCIU ZMIANY ---
   const fmtTime = (d) =>
@@ -184,6 +188,43 @@ const ManagerDashboard = ({
 
   const archivedLokale = lokale.filter((l) => l.archived);
   const archivedStanowiska = stanowiska.filter((s) => s.archived);
+
+  // --- NOWA RAMKA (ManagerShell): pasek lokali u góry + filtr na Pulpicie ---
+  const lokaleForTabs =
+    !isLocalManager || managerLokaleList.length > 1
+      ? [
+          { key: "ALL", label: isLocalManager ? "Wszystkie moje" : "Cała sieć" },
+          ...availableLokaleForManager.map((l) => ({ key: l.name, label: l.name })),
+        ]
+      : availableLokaleForManager.map((l) => ({ key: l.name, label: l.name }));
+  useEffect(() => {
+    if (lokaleForTabs.length > 0 && !lokaleForTabs.find((l) => l.key === selectedLokal)) {
+      setSelectedLokal(lokaleForTabs[0].key);
+    }
+  }, [isLocalManager, managerLokaleList.join(",")]);
+  const matchesLokalFilter = (lokalName) =>
+    hasAccessToLokal(lokalName) &&
+    (selectedLokal === "ALL" || lokalName === selectedLokal);
+
+  const today0ForTerminy = new Date();
+  today0ForTerminy.setHours(0, 0, 0, 0);
+  const pracownicyTerminyCount = users.filter((u) => {
+    if (!u.active || u.archived || u.role === "kiosk") return false;
+    if (!hasAccessToLokal(u.default_lokal)) return false;
+    const overdue = (field) => {
+      if (!u[field]) return true;
+      return new Date(u[field] + "T00:00:00") < today0ForTerminy;
+    };
+    return overdue("sanepid_expiry") || overdue("umowa_expiry");
+  }).length;
+
+  const shellBadges = {
+    zatwierdzanie: pendingCorrections.length,
+    zgloszenia: issues.filter((i) => i.status === "nowe" && i.type !== "correction")
+      .length,
+    powiadomienia: unreadManagerCount,
+    pracownicy: pracownicyTerminyCount,
+  };
 
   // --- PULPIT (Dashboard godzin) ---
   const ALLOWED_PULPIT_ROLES = ["closed", "open", "manager_lokalu"];
@@ -589,114 +630,30 @@ const ManagerDashboard = ({
   // jest). Pokazujemy je dopiero przy edycji istniejącego pracownika.
   const showTermWarnings = editingUser && !!editingUser.id;
 
-  return (
-    <div className="min-h-screen bg-gray-100 flex flex-col md:flex-row">
-      <div className="w-full md:w-64 bg-gray-900 text-white flex flex-col flex-shrink-0">
-        <div className="p-4 bg-gray-950 font-bold text-xl flex flex-col">
-          Gastro Manager{" "}
-          <span className="text-xs font-normal text-gray-400">
-            {isLocalManager ? `Kierownik lokalu` : "Szef (Admin)"}
-          </span>
-        </div>
-        <nav className="flex-grow flex md:flex-col overflow-x-auto">
-          <button
-            onClick={() => setTab("godziny")}
-            className={`p-4 text-left border-b border-gray-800 flex items-center gap-2 whitespace-nowrap ${
-              tab === "godziny" ? "bg-blue-600" : "hover:bg-gray-800"
-            }`}
-          >
-            <Filter size={18} /> Rejestr Godzin
-          </button>
-          <button
-            onClick={() => setTab("zatwierdzanie")}
-            className={`p-4 text-left border-b border-gray-800 flex items-center gap-2 whitespace-nowrap ${
-              tab === "zatwierdzanie" ? "bg-blue-600" : "hover:bg-gray-800"
-            }`}
-          >
-            <CheckCircle2 size={18} /> Zatwierdzanie zmian{" "}
-            {pendingCorrections.length > 0 && (
-              <span className="bg-red-500 text-xs px-2 py-1 rounded-full ml-1">
-                {pendingCorrections.length}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setTab("pulpit")}
-            className={`p-4 text-left border-b border-gray-800 flex items-center gap-2 whitespace-nowrap ${
-              tab === "pulpit" ? "bg-blue-600" : "hover:bg-gray-800"
-            }`}
-          >
-            <Users size={18} /> Pulpit godzin
-          </button>
-          <button
-            onClick={() => setTab("grafik")}
-            className={`p-4 text-left border-b border-gray-800 flex items-center gap-2 whitespace-nowrap ${
-              tab === "grafik" ? "bg-blue-600" : "hover:bg-gray-800"
-            }`}
-          >
-            <Calendar size={18} /> Grafik
-          </button>
-          <button
-            onClick={() => setTab("aktywni")}
-            className={`p-4 text-left border-b border-gray-800 flex items-center gap-2 whitespace-nowrap ${
-              tab === "aktywni" ? "bg-blue-600" : "hover:bg-gray-800"
-            }`}
-          >
-            <Clock size={18} /> Aktywne Zmiany
-          </button>
-          <button
-            onClick={() => setTab("moja_praca")}
-            className={`p-4 text-left border-b border-gray-800 flex items-center gap-2 whitespace-nowrap ${
-              tab === "moja_praca" ? "bg-blue-600" : "hover:bg-gray-800"
-            }`}
-          >
-            <User size={18} /> Moja Praca
-          </button>
-          <button
-            onClick={() => setTab("zgloszenia")}
-            className={`p-4 text-left border-b border-gray-800 flex items-center gap-2 whitespace-nowrap ${
-              tab === "zgloszenia" ? "bg-blue-600" : "hover:bg-gray-800"
-            }`}
-          >
-            <AlertCircle size={18} /> Zgłoszenia{" "}
-            {issues.filter((i) => i.status === "nowe" && i.type !== "correction").length >
-              0 && (
-              <span className="bg-red-500 text-xs px-2 py-1 rounded-full ml-1">
-                {issues.filter((i) => i.status === "nowe" && i.type !== "correction").length}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setTab("powiadomienia")}
-            className={`p-4 text-left border-b border-gray-800 flex items-center gap-2 whitespace-nowrap ${
-              tab === "powiadomienia" ? "bg-blue-600" : "hover:bg-gray-800"
-            }`}
-          >
-            <Bell size={18} /> Powiadomienia{" "}
-            {unreadManagerCount > 0 && (
-              <span className="bg-red-500 text-xs px-2 py-1 rounded-full ml-1">
-                {unreadManagerCount}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setTab("pracownicy")}
-            className={`p-4 text-left border-b border-gray-800 flex items-center gap-2 whitespace-nowrap ${
-              tab === "pracownicy" ? "bg-blue-600" : "hover:bg-gray-800"
-            }`}
-          >
-            <Settings size={18} /> Przewodnik
-          </button>
-        </nav>
-        <button
-          onClick={() => setCurrentView("login")}
-          className="p-4 hover:bg-gray-800 border-t border-gray-800 flex items-center gap-2 text-gray-400"
-        >
-          <LogOut size={18} /> Wyloguj
-        </button>
-      </div>
+  const wBudowieLabel = NAV_ITEMS.find((n) => n.key === tab)?.label || tab;
+  const tabsWithOldContent = [
+    "godziny",
+    "aktywni",
+    "moja_praca",
+    "zgloszenia",
+    "powiadomienia",
+    "pracownicy",
+    "zatwierdzanie",
+  ];
 
-      <div className="flex-grow p-4 md:p-8 overflow-y-auto w-full relative">
+  return (
+    <ManagerShell
+      currentUser={currentUser}
+      isLocalManager={isLocalManager}
+      lokaleForTabs={lokaleForTabs}
+      selectedLokal={selectedLokal}
+      setSelectedLokal={setSelectedLokal}
+      activeTab={tab}
+      setActiveTab={setTab}
+      badges={shellBadges}
+      onLogout={() => setCurrentView("login")}
+    >
+      <div className="relative">
         {editingShift && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
             <div className="bg-white p-6 rounded-xl w-full max-w-md shadow-2xl">
@@ -828,7 +785,27 @@ const ManagerDashboard = ({
         )}
 
         {tab === "pulpit" && (
-          <div className="max-w-full mx-auto">
+          <PulpitHome
+            users={users}
+            shifts={shifts}
+            issues={issues}
+            matchesFilter={matchesLokalFilter}
+            setActiveTab={setTab}
+          />
+        )}
+        {tab !== "pulpit" && (
+          <WBudowie
+            label={wBudowieLabel}
+            hasOldContent={tabsWithOldContent.includes(tab)}
+          />
+        )}
+
+        {/* Poniżej stara zawartość zakładek — celowo martwa (false &&),
+            budujemy nowy wygląd po kolei zgodnie z makietami; żeby
+            "przywrócić" zakładkę, wystarczy wyjąć jej blok spod tego
+            wrappera i podpiąć pod nowy tab === "..." dispatch wyżej. */}
+        {false && (
+        <div className="max-w-full mx-auto">
             <div className="flex flex-wrap items-center gap-3 mb-4">
               <h2 className="text-2xl font-bold mr-auto">Pulpit godzin</h2>
 
@@ -1040,7 +1017,7 @@ const ManagerDashboard = ({
           </div>
         )}
 
-        {tab === "grafik" && (
+        {false && tab === "grafik" && (
           <div className="max-w-3xl mx-auto text-center py-20">
             <Calendar size={64} className="mx-auto mb-4 text-gray-300" />
             <h2 className="text-2xl font-bold text-gray-400 mb-2">
@@ -1052,7 +1029,7 @@ const ManagerDashboard = ({
           </div>
         )}
 
-        {tab === "godziny" && (
+        {false && tab === "godziny" && (
           <div className="max-w-6xl mx-auto">
             <h2 className="text-2xl font-bold mb-4">Rejestr i Edycja Godzin</h2>
             <div className="bg-white p-4 rounded-xl shadow mb-6 border">
@@ -1246,7 +1223,7 @@ const ManagerDashboard = ({
           </div>
         )}
 
-        {tab === "aktywni" && (
+        {false && tab === "aktywni" && (
           <div className="max-w-6xl mx-auto">
             <h2 className="text-2xl font-bold mb-6">Trwające zmiany</h2>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -1285,7 +1262,7 @@ const ManagerDashboard = ({
           </div>
         )}
 
-        {tab === "moja_praca" && (
+        {false && tab === "moja_praca" && (
           <div className="max-w-4xl mx-auto space-y-6">
             <h2 className="text-2xl font-bold mb-4">Moje Godziny Pracy</h2>
             <TimeEntryForm
@@ -1306,7 +1283,7 @@ const ManagerDashboard = ({
           </div>
         )}
 
-        {tab === "zatwierdzanie" && (
+        {false && tab === "zatwierdzanie" && (
           <ZatwierdzanieZmian
             currentUser={currentUser}
             shifts={shifts}
@@ -1320,7 +1297,7 @@ const ManagerDashboard = ({
           />
         )}
 
-        {tab === "zgloszenia" && (
+        {false && tab === "zgloszenia" && (
           <div className="max-w-4xl mx-auto">
             <h2 className="text-2xl font-bold mb-6">Zgłoszenia do poprawy</h2>
             <div className="space-y-4">
@@ -1372,7 +1349,7 @@ const ManagerDashboard = ({
           </div>
         )}
 
-        {tab === "powiadomienia" && (
+        {false && tab === "powiadomienia" && (
           <div className="max-w-4xl mx-auto">
             <h2 className="text-2xl font-bold mb-6">Powiadomienia</h2>
             <NotificationsPanel
@@ -1382,7 +1359,7 @@ const ManagerDashboard = ({
           </div>
         )}
 
-        {tab === "pracownicy" && (
+        {false && tab === "pracownicy" && (
           <div className="max-w-5xl mx-auto">
             <h2 className="text-2xl font-bold mb-4">Przewodnik</h2>
             <div className="flex border-b mb-6 overflow-x-auto">
@@ -2067,7 +2044,7 @@ const ManagerDashboard = ({
           </div>
         )}
       </div>
-    </div>
+    </ManagerShell>
   );
 };
 

@@ -349,8 +349,10 @@ bez UI kierownika, wysłana propozycja `correction` wisiałaby w bazie bez
   (timestamptz), end_time (timestamptz | null), godzin`
 - **issues** — zgłoszenia problemów od pracowników. Podstawowe:
   `id, user_id, user_name, issue_text, status`. Od 2026-08-31 też
-  `is_anonymous` (bool, default `false`) i `shift_id` (bigint, references
-  `shifts(id)`, nullable) — dodane dla nowego "Zgłoś" w
+  `is_anonymous` (bool, default `false`) i `shift_id` (uuid — WSZYSTKIE id w
+  tym projekcie to uuid, nie bigint, zweryfikowane bezpośrednio w Supabase
+  2026-09-02 — nie ufaj typom kolumn opisanym gdzie indziej w tym pliku bez
+  sprawdzenia, references `shifts(id)`, nullable) — dodane dla nowego "Zgłoś" w
   `employeeSessionShared.tsx` (używane przez `KioskDashboard.tsx` I
   `PersonalDashboard.tsx`): anonimowe zgłoszenie i/albo przypięte do
   konkretnej zmiany, np. przez chorągiewkę przy wierszu w Raporcie. Gdy
