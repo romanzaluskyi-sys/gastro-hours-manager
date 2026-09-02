@@ -47,6 +47,7 @@ export default function App() {
   const [shifts, setShifts] = useState([]);
   const [issues, setIssues] = useState([]);
   const [notifications, setNotifications] = useState([]);
+  const [shiftEdits, setShiftEdits] = useState([]);
 
   const [currentView, setCurrentView] = useState(() => loadSession().currentView);
   const [currentUser, setCurrentUser] = useState(() => loadSession().currentUser);
@@ -142,6 +143,18 @@ export default function App() {
     };
     loadNotifications();
 
+    // shift_edits (audit trail korekt) — ładujemy raz, bez pollingu: rośnie
+    // tylko przez akcję samego kierownika w tej samej sesji (Zatwierdzanie
+    // zmian), więc lokalny dopisek po zatwierdzeniu wystarczy. Osobno od
+    // głównego Promise.all z tego samego powodu co notifications — błąd
+    // tu nie może zablokować reszty apki.
+    api
+      .get("shift_edits")
+      .then((se) => setShiftEdits(Array.isArray(se) ? se : []))
+      .catch((err) => {
+        console.error("Błąd pobierania historii korekt:", err.message || err);
+      });
+
     // Odświeżamy co 45s, żeby już otwarta sesja też widziała zmiany bez
     // konieczności przeładowania strony.
     const pollInterval = setInterval(() => {
@@ -225,6 +238,8 @@ export default function App() {
           setIssues={setIssues}
           notifications={notifications}
           setNotifications={setNotifications}
+          shiftEdits={shiftEdits}
+          setShiftEdits={setShiftEdits}
           showMsg={showMsg}
         />
       )}

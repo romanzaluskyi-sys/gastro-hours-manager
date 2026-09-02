@@ -86,7 +86,7 @@ export const resolveCorrection = async ({
 
   await api.patch("issues", issue.id, { status: "rozwiazane" });
 
-  await api.post("shift_edits", {
+  const shiftEdit = await api.post("shift_edits", {
     shift_id: savedShift.id,
     issue_id: issue.id,
     editor_name: editorName,
@@ -123,9 +123,8 @@ export const resolveCorrection = async ({
   }
 
   return {
-    ...savedShift,
-    start_time: startD,
-    end_time: endD,
+    shift: { ...savedShift, start_time: startD, end_time: endD },
+    shiftEdit,
   };
 };
 

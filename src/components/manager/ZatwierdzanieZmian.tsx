@@ -29,6 +29,8 @@ export default function ZatwierdzanieZmian({
   setShifts,
   issues,
   setIssues,
+  shiftEdits,
+  setShiftEdits,
   hasAccessToLokal,
   availableLokale,
   activeStanowiska,
@@ -53,18 +55,19 @@ export default function ZatwierdzanieZmian({
       (a, b) => new Date(a.issue.created_at) - new Date(b.issue.created_at)
     );
 
-  const onSaved = (issueId, savedShift) => {
+  const onSaved = (issueId, { shift, shiftEdit }) => {
     setIssues(
       issues.map((iss) =>
         iss.id === issueId ? { ...iss, status: "rozwiazane" } : iss
       )
     );
     setShifts((prev) => {
-      const exists = prev.some((s) => s.id === savedShift.id);
+      const exists = prev.some((s) => s.id === shift.id);
       return exists
-        ? prev.map((s) => (s.id === savedShift.id ? savedShift : s))
-        : [...prev, savedShift];
+        ? prev.map((s) => (s.id === shift.id ? shift : s))
+        : [...prev, shift];
     });
+    setShiftEdits((prev) => [...prev, shiftEdit]);
   };
 
   const handleZatwierdz = async (row) => {
