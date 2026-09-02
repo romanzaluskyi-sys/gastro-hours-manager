@@ -23,6 +23,17 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.8.0",
+    date: "2026-09-02",
+    items: [
+      "Nowy Panel Kierownika — Pulpit, Zatwierdzanie zmian, Rejestr Godzin, Aktywni, Zgłoszenia, Pracownicy, Raporty i koszty w nowym, spójnym stylu.",
+      "Poprawka godzin od pracownika trafia do prawdziwej kolejki decyzji (Zatwierdzanie zmian) zamiast tylko zgłoszenia tekstowego.",
+      "Karta pracownika: stawka, etat, notatki kierownika, PIN blokady na kiosku ustawiane wprost w formularzu.",
+      "Raport godzin i kosztów per pracownik + historia poprawek każdej zmiany.",
+      "Nowy ekran logowania i pasek „dostępna nowa wersja”.",
+    ],
+  },
+  {
     version: "0.7.0",
     date: "2026-08-31",
     items: [

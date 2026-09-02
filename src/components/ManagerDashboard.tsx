@@ -702,7 +702,7 @@ const ManagerDashboard = ({
   const showTermWarnings = editingUser && !!editingUser.id;
 
   const wBudowieLabel = NAV_ITEMS.find((n) => n.key === tab)?.label || tab;
-  const tabsWithOldContent = ["powiadomienia"];
+  const tabsWithOldContent = [];
   // "moja_praca" jest już aktywna (nie w kolejności makiet, ale kierownik
   // sam odbija godziny i nie mógł ich zapisać podczas przebudowy reszty).
 
@@ -905,7 +905,8 @@ const ManagerDashboard = ({
           tab !== "zgloszenia" &&
           tab !== "pracownicy" &&
           tab !== "raporty" &&
-          tab !== "przewodnik" && (
+          tab !== "przewodnik" &&
+          tab !== "powiadomienia" && (
           <WBudowie
             label={wBudowieLabel}
             hasOldContent={tabsWithOldContent.includes(tab)}
@@ -1484,9 +1485,11 @@ const ManagerDashboard = ({
           </div>
         )}
 
-        {false && tab === "powiadomienia" && (
+        {tab === "powiadomienia" && (
           <div className="max-w-4xl mx-auto">
-            <h2 className="text-2xl font-bold mb-6">Powiadomienia</h2>
+            <h2 className="font-['Archivo'] font-extrabold text-2xl text-[#171714] mb-6">
+              Powiadomienia
+            </h2>
             <NotificationsPanel
               items={managerNotifications}
               showEmployeeName={false}
