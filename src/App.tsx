@@ -129,12 +129,26 @@ export default function App() {
           setNotifications([]);
         });
     };
+    // Zgłoszenia (issues) odświeżamy tym samym rytmem, żeby otwarty Panel
+    // Kierownika zobaczył nową korektę godzin od pracownika bez ręcznego
+    // odświeżenia strony (patrz "Zatwierdzanie zmian").
+    const loadIssues = () => {
+      api
+        .get("issues")
+        .then((i) => setIssues(Array.isArray(i) ? i : []))
+        .catch((err) => {
+          console.error("Błąd pobierania zgłoszeń:", err.message || err);
+        });
+    };
     loadNotifications();
 
-    // Odświeżamy powiadomienia co 45s, żeby już otwarta sesja też je widziała
-    // bez konieczności przeładowania strony.
-    const notifInterval = setInterval(loadNotifications, 45000);
-    return () => clearInterval(notifInterval);
+    // Odświeżamy co 45s, żeby już otwarta sesja też widziała zmiany bez
+    // konieczności przeładowania strony.
+    const pollInterval = setInterval(() => {
+      loadNotifications();
+      loadIssues();
+    }, 45000);
+    return () => clearInterval(pollInterval);
   }, []);
 
   return (

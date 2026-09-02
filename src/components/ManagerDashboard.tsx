@@ -21,6 +21,7 @@ import {
   Calendar,
   ChevronLeft,
   ChevronRight,
+  CheckCircle2,
 } from "lucide-react";
 import { api } from "../api/supabase";
 import { sendToGoogleSheets } from "../api/googleSheets";
@@ -29,6 +30,7 @@ import { findOverlappingShift } from "../utils/shifts";
 import TimeEntryForm from "./TimeEntryForm";
 import HoursReport from "./HoursReport";
 import NotificationsPanel from "./NotificationsPanel";
+import ZatwierdzanieZmian from "./manager/ZatwierdzanieZmian";
 
 // ==========================================
 // KIEROWNIK DASHBOARD
@@ -102,6 +104,16 @@ const ManagerDashboard = ({
   const unreadManagerCount = managerNotifications.filter(
     (n) => !n.is_read
   ).length;
+
+  // --- KOREKTY GODZIN OCZEKUJĄCE NA DECYZJĘ (issues.type === "correction") ---
+  const pendingCorrections = issues.filter((iss) => {
+    if (iss.type !== "correction" || iss.status !== "nowe") return false;
+    const existingShift = iss.shift_id
+      ? shifts.find((s) => s.id === iss.shift_id)
+      : null;
+    const lokal = existingShift ? existingShift.lokal : iss.proposed_lokal;
+    return hasAccessToLokal(lokal);
+  });
 
   useEffect(() => {
     if (tab !== "powiadomienia") return;
@@ -596,6 +608,19 @@ const ManagerDashboard = ({
             <Filter size={18} /> Rejestr Godzin
           </button>
           <button
+            onClick={() => setTab("zatwierdzanie")}
+            className={`p-4 text-left border-b border-gray-800 flex items-center gap-2 whitespace-nowrap ${
+              tab === "zatwierdzanie" ? "bg-blue-600" : "hover:bg-gray-800"
+            }`}
+          >
+            <CheckCircle2 size={18} /> Zatwierdzanie zmian{" "}
+            {pendingCorrections.length > 0 && (
+              <span className="bg-red-500 text-xs px-2 py-1 rounded-full ml-1">
+                {pendingCorrections.length}
+              </span>
+            )}
+          </button>
+          <button
             onClick={() => setTab("pulpit")}
             className={`p-4 text-left border-b border-gray-800 flex items-center gap-2 whitespace-nowrap ${
               tab === "pulpit" ? "bg-blue-600" : "hover:bg-gray-800"
@@ -634,9 +659,10 @@ const ManagerDashboard = ({
             }`}
           >
             <AlertCircle size={18} /> Zgłoszenia{" "}
-            {issues.filter((i) => i.status === "nowe").length > 0 && (
+            {issues.filter((i) => i.status === "nowe" && i.type !== "correction").length >
+              0 && (
               <span className="bg-red-500 text-xs px-2 py-1 rounded-full ml-1">
-                {issues.filter((i) => i.status === "nowe").length}
+                {issues.filter((i) => i.status === "nowe" && i.type !== "correction").length}
               </span>
             )}
           </button>
@@ -1137,11 +1163,16 @@ const ManagerDashboard = ({
                     <th className="p-3">Lokal/Stan.</th>
                     <th className="p-3">Godziny</th>
                     <th className="p-3 text-right">Suma</th>
+                    <th className="p-3 text-center">Status</th>
                     <th className="p-3 text-center">Akcja</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {filteredShifts.map((shift) => (
+                  {filteredShifts.map((shift) => {
+                    const pendingCorrection = pendingCorrections.find(
+                      (iss) => iss.shift_id === shift.id
+                    );
+                    return (
                     <tr key={shift.id} className="hover:bg-gray-50">
                       <td className="p-3 whitespace-nowrap">
                         {shift.start_time.toLocaleDateString()}
@@ -1180,6 +1211,25 @@ const ManagerDashboard = ({
                           : "-"}
                       </td>
                       <td className="p-3 text-center">
+                        {pendingCorrection ? (
+                          <button
+                            onClick={() => setTab("zatwierdzanie")}
+                            className="text-xs px-2 py-1 rounded font-bold bg-red-100 text-red-700 hover:bg-red-200"
+                            title="Pracownik zgłosił poprawkę tej zmiany"
+                          >
+                            Do decyzji
+                          </button>
+                        ) : !shift.end_time ? (
+                          <span className="text-xs px-2 py-1 rounded font-bold bg-amber-100 text-amber-700">
+                            Na zmianie
+                          </span>
+                        ) : (
+                          <span className="text-xs px-2 py-1 rounded font-bold bg-green-100 text-green-700">
+                            Zatwierdzone
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-3 text-center">
                         <button
                           onClick={() => openEditShift(shift)}
                           className="p-2 text-blue-600 bg-blue-50 rounded hover:bg-blue-100 mx-auto block"
@@ -1188,7 +1238,8 @@ const ManagerDashboard = ({
                         </button>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1209,13 +1260,19 @@ const ManagerDashboard = ({
                     <div className="bg-green-100 p-3 rounded-full text-green-600">
                       <Clock size={24} />
                     </div>
-                    <div>
+                    <div className="flex-1">
                       <p className="font-bold text-lg">{active.user_name}</p>
                       <p className="text-sm text-gray-600">
                         Od: {active.start_time.toLocaleTimeString()} |{" "}
                         {active.lokal}
                       </p>
                     </div>
+                    <button
+                      onClick={() => openEditShift(active)}
+                      className="bg-blue-600 text-white text-xs font-bold px-3 py-2 rounded hover:bg-blue-700 flex-shrink-0"
+                    >
+                      Zakończ zmianę
+                    </button>
                     <button
                       onClick={() => openEditShift(active)}
                       className="absolute top-2 right-2 text-gray-400 hover:text-blue-600 p-1"
@@ -1249,11 +1306,26 @@ const ManagerDashboard = ({
           </div>
         )}
 
+        {tab === "zatwierdzanie" && (
+          <ZatwierdzanieZmian
+            currentUser={currentUser}
+            shifts={shifts}
+            setShifts={setShifts}
+            issues={issues}
+            setIssues={setIssues}
+            hasAccessToLokal={hasAccessToLokal}
+            availableLokale={availableLokaleForManager}
+            activeStanowiska={activeStanowiska}
+            showMsg={showMsg}
+          />
+        )}
+
         {tab === "zgloszenia" && (
           <div className="max-w-4xl mx-auto">
             <h2 className="text-2xl font-bold mb-6">Zgłoszenia do poprawy</h2>
             <div className="space-y-4">
               {issues
+                .filter((iss) => iss.type !== "correction")
                 .filter((iss) =>
                   hasAccessToLokal(
                     users.find((u) => u.id === iss.user_id)?.default_lokal || ""

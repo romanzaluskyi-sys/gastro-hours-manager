@@ -14,7 +14,7 @@ import {
   Check,
 } from "lucide-react";
 import { api } from "../api/supabase";
-import { sendToGoogleSheets } from "../api/googleSheets";
+import { sendToGoogleSheets, toLocalYMD } from "../api/googleSheets";
 import { findOverlappingShift, getTodaysShiftsForUser } from "../utils/shifts";
 import {
   getShort,
@@ -227,12 +227,22 @@ export const EmployeeSessionScreens = ({
 
   const [grafikToastShown, setGrafikToastShown] = useState(false);
 
+  const [zgType, setZgType] = useState("problem"); // "correction" | "problem"
   const [zgAnon, setZgAnon] = useState(false);
   const [zgShiftId, setZgShiftId] = useState("none");
   const [zgText, setZgText] = useState("");
   const [zgSaving, setZgSaving] = useState(false);
   const [zgSent, setZgSent] = useState(false);
   const [zgPrefillShiftId, setZgPrefillShiftId] = useState(null);
+
+  // ---- "Popraw zmianę" (type: correction) — osobny zestaw pól, patrz handleSendKorekta ----
+  const [zgCorrectionShiftId, setZgCorrectionShiftId] = useState("forgot"); // uuid zmiany albo "forgot"
+  const [zgPropDate, setZgPropDate] = useState("");
+  const [zgPropLokal, setZgPropLokal] = useState("");
+  const [zgPropStanowisko, setZgPropStanowisko] = useState("");
+  const [zgPropStart, setZgPropStart] = useState("");
+  const [zgPropEnd, setZgPropEnd] = useState("");
+  const [zgKorektaNote, setZgKorektaNote] = useState("");
 
   const dostepneStanowiska = stanowiskaOptions.filter(
     (s) => s.lokal_name === formLokal
@@ -263,6 +273,10 @@ export const EmployeeSessionScreens = ({
     .sort((a, b) => b.start_time - a.start_time)
     .slice(0, 8);
 
+  const korektaStanowiska = stanowiskaOptions.filter(
+    (s) => s.lokal_name === zgPropLokal
+  );
+
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
@@ -283,6 +297,15 @@ export const EmployeeSessionScreens = ({
       setFormStanowisko(dostepne.length > 0 ? dostepne[0].name : "");
     }
   }, [formLokal, stanowiskaOptions]);
+
+  // ---- to samo dla propozycji lokalu w formularzu "Popraw zmianę" ----
+  useEffect(() => {
+    if (screen !== "ZGLOS" || zgType !== "correction") return;
+    const dostepne = stanowiskaOptions.filter((s) => s.lokal_name === zgPropLokal);
+    if (!dostepne.find((s) => s.name === zgPropStanowisko)) {
+      setZgPropStanowisko(dostepne.length > 0 ? dostepne[0].name : "");
+    }
+  }, [zgPropLokal, stanowiskaOptions, screen, zgType]);
 
   // ---- oznaczanie powiadomień jako przeczytane ----
   useEffect(() => {
@@ -308,16 +331,43 @@ export const EmployeeSessionScreens = ({
   // ---- reset formularza Zgłoś przy wejściu na ekran ----
   useEffect(() => {
     if (screen === "ZGLOS") {
+      // wejście przez chorągiewkę przy konkretnej zmianie (Raport) ⇒ od razu
+      // "Popraw zmianę" z tą zmianą; wejście z "Więcej" (bez kontekstu) ⇒
+      // domyślnie "Zgłoś problem", jak dotychczasowe "Zgłoś"
+      setZgType(zgPrefillShiftId ? "correction" : "problem");
       setZgShiftId(zgPrefillShiftId || "none");
       setZgAnon(false);
       setZgSent(false);
       setZgText("");
+      setZgKorektaNote("");
+      applyKorektaShiftDefaults(zgPrefillShiftId || "forgot");
     }
   }, [screen]);
 
   const openZgloszenie = (shiftId) => {
     setZgPrefillShiftId(shiftId || null);
     setScreen("ZGLOS");
+  };
+
+  // ---- wypełnia proponowane pola danymi z wybranej zmiany (punkt odniesienia
+  // do poprawy) albo pustymi/domyślnymi wartościami dla "Zapomniałem odbić" ----
+  const applyKorektaShiftDefaults = (shiftId) => {
+    setZgCorrectionShiftId(shiftId);
+    if (shiftId === "forgot") {
+      setZgPropDate(toLocalYMD(new Date()));
+      setZgPropLokal(employee?.default_lokal || lokaleOptions[0]?.name || "");
+      setZgPropStanowisko(employee?.default_stanowisko || "");
+      setZgPropStart("");
+      setZgPropEnd("");
+      return;
+    }
+    const s = recentShiftsForZgloszenie.find((sh) => sh.id === shiftId);
+    if (!s) return;
+    setZgPropDate(toLocalYMD(s.start_time));
+    setZgPropLokal(s.lokal);
+    setZgPropStanowisko(s.stanowisko);
+    setZgPropStart(fmtHHMM(s.start_time));
+    setZgPropEnd(s.end_time ? fmtHHMM(s.end_time) : "");
   };
 
   // ---- zamknięcie trwającej zmiany (jak TimeEntryForm.handleCloseShift) ----
@@ -453,14 +503,48 @@ export const EmployeeSessionScreens = ({
         user_name: zgAnon ? null : employee.name,
         issue_text: zgText,
         status: "nowe",
+        type: "problem",
         is_anonymous: zgAnon,
-        // select value jest zawsze stringiem — shift_id w bazie to liczba.
-        shift_id: zgShiftId && zgShiftId !== "none" ? Number(zgShiftId) : null,
+        // shift_id to uuid (string) w bazie — nie rzutować na liczbę.
+        shift_id: zgShiftId && zgShiftId !== "none" ? zgShiftId : null,
       });
       setIssues([...issues, issue]);
       setZgText("");
       setZgSent(true);
       showMsg("Zgłoszenie wysłane pomyślnie!");
+    } catch (err) {
+      showMsg("Błąd połączenia.", "error");
+    }
+    setZgSaving(false);
+  };
+
+  const handleSendKorekta = async () => {
+    if (!zgPropDate || !zgPropLokal || !zgPropStanowisko || !zgPropStart) {
+      return showMsg(
+        "Uzupełnij datę, lokal, stanowisko i godzinę rozpoczęcia!",
+        "error"
+      );
+    }
+    setZgSaving(true);
+    try {
+      const issue = await api.post("issues", {
+        user_id: employee.id,
+        user_name: employee.name,
+        issue_text: zgKorektaNote,
+        status: "nowe",
+        type: "correction",
+        is_anonymous: false,
+        shift_id: zgCorrectionShiftId !== "forgot" ? zgCorrectionShiftId : null,
+        proposed_date: zgPropDate,
+        proposed_lokal: zgPropLokal,
+        proposed_stanowisko: zgPropStanowisko,
+        proposed_start_time: zgPropStart,
+        proposed_end_time: zgPropEnd || null,
+      });
+      setIssues([...issues, issue]);
+      setZgKorektaNote("");
+      setZgSent(true);
+      showMsg("Poprawka wysłana do kierownika!");
     } catch (err) {
       showMsg("Błąd połączenia.", "error");
     }
@@ -1057,85 +1141,253 @@ export const EmployeeSessionScreens = ({
   // EKRAN: ZGLOS
   // ==========================================
   if (screen === "ZGLOS") {
+    const korektaShift =
+      zgCorrectionShiftId !== "forgot"
+        ? recentShiftsForZgloszenie.find((s) => s.id === zgCorrectionShiftId)
+        : null;
     return (
       <Shell
         screen={screen}
         setScreen={setScreen}
         onBack={onBack}
         unreadCount={unreadCount}
-        title="Zgłoś poprawkę"
+        title={zgType === "correction" ? "Popraw zmianę" : "Zgłoś problem"}
       >
-        <div>
-          <span className={fieldLabelCls}>Kto zgłasza</span>
-          <div className={selectWrapCls}>
-            <select
-              value={zgAnon ? "anon" : "named"}
-              onChange={(e) => setZgAnon(e.target.value === "anon")}
-              className={selectElCls}
+        {!zgSent && (
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => setZgType("correction")}
+              className={checkboxRowCls(zgType === "correction")}
             >
-              <option value="named">
-                {employee.name} · {employee.default_stanowisko || ""}
-              </option>
-              <option value="anon">Zgłoś anonimowo</option>
-            </select>
-            <ChevronDown size={16} className={selectChevronCls} />
-          </div>
-          {zgAnon && (
-            <span className="text-xs text-[#8F8E86] mt-1.5 italic block">
-              Kierownik zobaczy zgłoszenie bez Twojego imienia.
-            </span>
-          )}
-        </div>
-        <div className="mt-5">
-          <span className={fieldLabelCls}>Która zmiana</span>
-          <div className={selectWrapCls}>
-            <select
-              value={zgShiftId || "none"}
-              onChange={(e) => setZgShiftId(e.target.value)}
-              className={selectElCls}
+              <span className="text-[15px] font-semibold text-[#171714]">
+                Popraw zmianę
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setZgType("problem")}
+              className={checkboxRowCls(zgType === "problem")}
             >
-              {recentShiftsForZgloszenie.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.start_time.toLocaleDateString("pl-PL", {
-                    day: "2-digit",
-                    month: "2-digit",
-                  })}{" "}
-                  · {fmtHHMM(s.start_time)}
-                  {s.end_time ? `–${fmtHHMM(s.end_time)}` : ""} · {s.lokal}
-                </option>
-              ))}
-              <option value="none">Bez konkretnej zmiany</option>
-            </select>
-            <ChevronDown size={16} className={selectChevronCls} />
-          </div>
-        </div>
-        <div className="mt-5">
-          <span className={fieldLabelCls}>Opis</span>
-          <textarea
-            value={zgText}
-            onChange={(e) => setZgText(e.target.value)}
-            className="border-2 border-[#B7B6AE] rounded bg-[#E7E7E2] p-3.5 text-[15px] text-[#171714] min-h-[120px] w-full"
-            placeholder="Np. wyszłam o 20:30, nie zdążyłam odbić."
-          />
-        </div>
-        <div className="bg-[#E7E7E2] rounded p-3.5 text-sm text-[#6E6E66] mt-5">
-          Kierownik odpowie w Wiadomościach. Do czasu odpowiedzi wiersz ma
-          czerwoną chorągiewkę.
-        </div>
-        {zgSent && (
-          <div className="mt-2.5 text-xs text-[#A83226] bg-[#FBEAE6] rounded p-2.5">
-            Zgłoszenie wysłane. Kierownik odpowie w Wiadomościach.
+              <span className="text-[15px] font-semibold text-[#171714]">
+                Zgłoś problem
+              </span>
+            </button>
           </div>
         )}
-        <div className="flex-1" />
-        {!zgSent && (
-          <button
-            onClick={handleSendZgloszenie}
-            disabled={zgSaving}
-            className={ctaPrimaryCls}
-          >
-            Wyślij do poprawy
-          </button>
+
+        {zgType === "correction" ? (
+          <>
+            <div className="mt-5">
+              <span className={fieldLabelCls}>Która zmiana</span>
+              <div className={selectWrapCls}>
+                <select
+                  value={zgCorrectionShiftId}
+                  onChange={(e) => applyKorektaShiftDefaults(e.target.value)}
+                  className={selectElCls}
+                >
+                  {recentShiftsForZgloszenie.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.start_time.toLocaleDateString("pl-PL", {
+                        day: "2-digit",
+                        month: "2-digit",
+                      })}{" "}
+                      · {fmtHHMM(s.start_time)}
+                      {s.end_time ? `–${fmtHHMM(s.end_time)}` : ""} · {s.lokal}
+                    </option>
+                  ))}
+                  <option value="forgot">Zapomniałem/łam odbić</option>
+                </select>
+                <ChevronDown size={16} className={selectChevronCls} />
+              </div>
+            </div>
+            {korektaShift && (
+              <div className="mt-5">
+                <span className={sectionLabelCls}>Obecnie zapisane</span>
+                <div className={`${staticBoxCls} mt-2`}>
+                  <span className="text-[15px] text-[#171714]">
+                    {korektaShift.lokal} · {korektaShift.stanowisko}
+                  </span>
+                  <span className="font-['Archivo'] font-bold text-[15px] text-[#171714]">
+                    {fmtHHMM(korektaShift.start_time)}
+                    {korektaShift.end_time
+                      ? `–${fmtHHMM(korektaShift.end_time)}`
+                      : " – trwa"}
+                  </span>
+                </div>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-3 mt-5">
+              <div>
+                <span className={fieldLabelCls}>Lokal</span>
+                <div className={selectWrapCls}>
+                  <select
+                    value={zgPropLokal}
+                    onChange={(e) => setZgPropLokal(e.target.value)}
+                    className={selectElCls}
+                  >
+                    {lokaleOptions.map((l) => (
+                      <option key={l.id} value={l.name}>
+                        {l.name}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown size={16} className={selectChevronCls} />
+                </div>
+              </div>
+              <div>
+                <span className={fieldLabelCls}>Stanowisko</span>
+                <div className={selectWrapCls}>
+                  <select
+                    value={zgPropStanowisko}
+                    onChange={(e) => setZgPropStanowisko(e.target.value)}
+                    className={selectElCls}
+                  >
+                    {korektaStanowiska.length === 0 && (
+                      <option value="">Brak stanowisk</option>
+                    )}
+                    {korektaStanowiska.map((s) => (
+                      <option key={s.id} value={s.name}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown size={16} className={selectChevronCls} />
+                </div>
+              </div>
+            </div>
+            <div className="mt-5">
+              <span className={fieldLabelCls}>Data</span>
+              <input
+                type="date"
+                value={zgPropDate}
+                onChange={(e) => setZgPropDate(e.target.value)}
+                className={selectElCls}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3 mt-5">
+              <div>
+                <span className={fieldLabelCls}>Rozpoczęcie</span>
+                <input
+                  type="time"
+                  value={zgPropStart}
+                  onChange={(e) => setZgPropStart(e.target.value)}
+                  className={selectElCls}
+                />
+              </div>
+              <div>
+                <span className={fieldLabelCls}>Zakończenie</span>
+                <input
+                  type="time"
+                  value={zgPropEnd}
+                  onChange={(e) => setZgPropEnd(e.target.value)}
+                  className={selectElCls}
+                />
+              </div>
+            </div>
+            <div className="mt-5">
+              <span className={fieldLabelCls}>Komentarz (opcjonalnie)</span>
+              <textarea
+                value={zgKorektaNote}
+                onChange={(e) => setZgKorektaNote(e.target.value)}
+                className="border-2 border-[#B7B6AE] rounded bg-[#E7E7E2] p-3.5 text-[15px] text-[#171714] min-h-[80px] w-full"
+                placeholder="Np. wyszłam o 20:30, nie zdążyłam odbić."
+              />
+            </div>
+            <div className="bg-[#E7E7E2] rounded p-3.5 text-sm text-[#6E6E66] mt-5">
+              Kierownik zatwierdzi albo poprawi te dane. Do czasu decyzji
+              wiersz ma czerwoną chorągiewkę.
+            </div>
+            {zgSent && (
+              <div className="mt-2.5 text-xs text-[#A83226] bg-[#FBEAE6] rounded p-2.5">
+                Poprawka wysłana. Kierownik odpowie w Wiadomościach.
+              </div>
+            )}
+            <div className="flex-1" />
+            {!zgSent && (
+              <button
+                onClick={handleSendKorekta}
+                disabled={zgSaving}
+                className={ctaPrimaryCls}
+              >
+                Wyślij poprawkę
+              </button>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="mt-5">
+              <span className={fieldLabelCls}>Kto zgłasza</span>
+              <div className={selectWrapCls}>
+                <select
+                  value={zgAnon ? "anon" : "named"}
+                  onChange={(e) => setZgAnon(e.target.value === "anon")}
+                  className={selectElCls}
+                >
+                  <option value="named">
+                    {employee.name} · {employee.default_stanowisko || ""}
+                  </option>
+                  <option value="anon">Zgłoś anonimowo</option>
+                </select>
+                <ChevronDown size={16} className={selectChevronCls} />
+              </div>
+              {zgAnon && (
+                <span className="text-xs text-[#8F8E86] mt-1.5 italic block">
+                  Kierownik zobaczy zgłoszenie bez Twojego imienia.
+                </span>
+              )}
+            </div>
+            <div className="mt-5">
+              <span className={fieldLabelCls}>Która zmiana (opcjonalnie)</span>
+              <div className={selectWrapCls}>
+                <select
+                  value={zgShiftId || "none"}
+                  onChange={(e) => setZgShiftId(e.target.value)}
+                  className={selectElCls}
+                >
+                  {recentShiftsForZgloszenie.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.start_time.toLocaleDateString("pl-PL", {
+                        day: "2-digit",
+                        month: "2-digit",
+                      })}{" "}
+                      · {fmtHHMM(s.start_time)}
+                      {s.end_time ? `–${fmtHHMM(s.end_time)}` : ""} · {s.lokal}
+                    </option>
+                  ))}
+                  <option value="none">Bez konkretnej zmiany</option>
+                </select>
+                <ChevronDown size={16} className={selectChevronCls} />
+              </div>
+            </div>
+            <div className="mt-5">
+              <span className={fieldLabelCls}>Opis</span>
+              <textarea
+                value={zgText}
+                onChange={(e) => setZgText(e.target.value)}
+                className="border-2 border-[#B7B6AE] rounded bg-[#E7E7E2] p-3.5 text-[15px] text-[#171714] min-h-[120px] w-full"
+                placeholder="Np. zepsuta zmywarka, brak rękawic..."
+              />
+            </div>
+            <div className="bg-[#E7E7E2] rounded p-3.5 text-sm text-[#6E6E66] mt-5">
+              Kierownik odpowie w Wiadomościach.
+            </div>
+            {zgSent && (
+              <div className="mt-2.5 text-xs text-[#A83226] bg-[#FBEAE6] rounded p-2.5">
+                Zgłoszenie wysłane. Kierownik odpowie w Wiadomościach.
+              </div>
+            )}
+            <div className="flex-1" />
+            {!zgSent && (
+              <button
+                onClick={handleSendZgloszenie}
+                disabled={zgSaving}
+                className={ctaPrimaryCls}
+              >
+                Wyślij zgłoszenie
+              </button>
+            )}
+          </>
         )}
       </Shell>
     );
