@@ -1263,6 +1263,7 @@ const ManagerDashboard = ({
             shifts={shifts}
             setShifts={setShifts}
             showMsg={showMsg}
+            onEditShift={openEditShift}
           />
         )}
 
