@@ -7,6 +7,7 @@ import LoginScreen from "./components/LoginScreen";
 import PersonalDashboard from "./components/PersonalDashboard";
 import KioskDashboard from "./components/KioskDashboard";
 import ManagerDashboard from "./components/ManagerDashboard";
+import UpdateBanner from "./components/UpdateBanner";
 
 // Trzyma zalogowanego użytkownika w localStorage, żeby odświeżenie strony
 // nie wylogowywało — bez tego sesja żyła tylko w pamięci Reacta. `pin`
@@ -182,6 +183,7 @@ export default function App() {
           {toast.message}
         </div>
       )}
+      <UpdateBanner />
       {currentView === "login" && (
         <LoginScreen
           users={users}

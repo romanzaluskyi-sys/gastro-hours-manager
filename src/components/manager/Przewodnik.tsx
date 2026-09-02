@@ -1,7 +1,13 @@
 // @ts-nocheck
 // Krótki przewodnik po panelu — statyczna treść, po jednej sekcji na
 // zakładkę. Aktualizować przy każdej większej zmianie w danej zakładce.
-import React from "react";
+//
+// Druga mini-zakładka "Historia wersji" — skrócone podsumowanie
+// CHANGELOG.md w repo (ten plik zostaje pełnym źródłem prawdy; tu tylko
+// ostatnie kilka wersji, żeby dało się zobaczyć "co nowego" bez wychodzenia
+// z apki). ⚠️ Aktualizować ręcznie razem z CHANGELOG.md przy każdym bumpie
+// APP_VERSION — patrz CLAUDE.md "Wersjonowanie i CHANGELOG".
+import React, { useState } from "react";
 import {
   Home,
   CheckCircle2,
@@ -12,7 +18,46 @@ import {
   BarChart3,
   User,
 } from "lucide-react";
+import { APP_VERSION } from "../../config";
 import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
+
+const CHANGELOG = [
+  {
+    version: "0.7.0",
+    date: "2026-08-31",
+    items: [
+      "Ten sam nowy wygląd co na kiosku, teraz też na osobistym telefonie pracownika.",
+      "Małe podkreślone „Wyloguj” w zakładce Więcej.",
+    ],
+  },
+  {
+    version: "0.6.0",
+    date: "2026-08-31",
+    items: [
+      "Nowy wygląd Tabletu Służbowego — wybór siebie z listy, potem własny pulpit.",
+      "Blokada profilu na kiosku 4-cyfrowym PIN-em.",
+      "„Zgłoś” można wysłać anonimowo i przypiąć do konkretnej zmiany.",
+      "Urządzenie samo wraca do ekranu logowania po aktualizacji aplikacji.",
+    ],
+  },
+  {
+    version: "0.5.0",
+    date: "2026-08-28",
+    items: [
+      "Nie da się już zapisać dwóch nakładających się zmian.",
+      "Przypomnienie o już zarejestrowanych dziś zmianach.",
+      "Naprawiono błąd zapisu nowego pracownika z pustymi terminami.",
+    ],
+  },
+  {
+    version: "0.4.0",
+    date: "2026-08-28",
+    items: [
+      "Zapisywanie zmiany jest teraz natychmiastowe (bez czekania na Google Sheets).",
+      "Zalogowanie przetrwa odświeżenie strony.",
+    ],
+  },
+];
 
 const SECTIONS = [
   {
@@ -58,25 +103,83 @@ const SECTIONS = [
 ];
 
 export default function Przewodnik() {
+  const [view, setView] = useState("instrukcja"); // "instrukcja" | "wersje"
+
   return (
     <div className="max-w-3xl mx-auto">
-      <h2 className={`${pageTitleCls} mb-2`}>Przewodnik</h2>
-      <p className="text-sm text-[#6E6E66] mb-6">
-        Krótko o tym, co robi każda zakładka Panelu Kierownika.
-      </p>
-      <div className="space-y-4">
-        {SECTIONS.map(({ Icon, title, body }) => (
-          <div key={title} className={sectionCardCls}>
-            <div className={sectionHeaderCls}>
-              <span className="flex items-center gap-2">
-                <Icon size={17} />
-                {title}
-              </span>
-            </div>
-            <p className="p-4 text-[14px] text-[#171714] leading-relaxed">{body}</p>
-          </div>
-        ))}
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+        <div>
+          <h2 className={pageTitleCls}>Przewodnik</h2>
+          <p className="text-sm text-[#6E6E66] mt-1">
+            {view === "instrukcja"
+              ? "Krótko o tym, co robi każda zakładka."
+              : "Skrót zmian — pełna historia w CHANGELOG.md."}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setView("instrukcja")}
+            className={`px-3 py-2 rounded text-sm font-bold border-[2px] ${
+              view === "instrukcja"
+                ? "bg-[#171714] text-white border-[#171714]"
+                : "bg-white text-[#171714] border-[#B7B6AE]"
+            }`}
+          >
+            Jak korzystać
+          </button>
+          <button
+            onClick={() => setView("wersje")}
+            className={`px-3 py-2 rounded text-sm font-bold border-[2px] ${
+              view === "wersje"
+                ? "bg-[#171714] text-white border-[#171714]"
+                : "bg-white text-[#171714] border-[#B7B6AE]"
+            }`}
+          >
+            Historia wersji
+          </button>
+        </div>
       </div>
+
+      {view === "instrukcja" && (
+        <div className="space-y-4">
+          {SECTIONS.map(({ Icon, title, body }) => (
+            <div key={title} className={sectionCardCls}>
+              <div className={sectionHeaderCls}>
+                <span className="flex items-center gap-2">
+                  <Icon size={17} />
+                  {title}
+                </span>
+              </div>
+              <p className="p-4 text-[14px] text-[#171714] leading-relaxed">{body}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {view === "wersje" && (
+        <div className="space-y-4">
+          {CHANGELOG.map((entry) => (
+            <div key={entry.version} className={sectionCardCls}>
+              <div className={sectionHeaderCls}>
+                <span className="flex items-center gap-2">
+                  v{entry.version}
+                  {entry.version === APP_VERSION && (
+                    <span className="bg-[#DE3A22] text-white text-[10px] font-extrabold px-1.5 py-0.5 rounded">
+                      bieżąca
+                    </span>
+                  )}
+                </span>
+                <span className="text-xs font-normal text-[#8F8E86]">{entry.date}</span>
+              </div>
+              <ul className="p-4 space-y-1.5 text-[14px] text-[#171714] list-disc list-inside">
+                {entry.items.map((item, i) => (
+                  <li key={i}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

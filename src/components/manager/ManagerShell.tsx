@@ -28,6 +28,7 @@ import {
   Cloud,
 } from "lucide-react";
 import { shellSidebarCls, shellNavBtnCls, shellBadgeCls, lokalTabCls } from "./designTokens";
+import { APP_VERSION } from "../../config";
 
 export const NAV_ITEMS = [
   { key: "pulpit", label: "Pulpit", shortLabel: "Pulpit", Icon: Home },
@@ -131,6 +132,9 @@ export default function ManagerShell({
         >
           <LogOut size={17} /> Wyloguj
         </button>
+        <p className="text-[10.5px] text-white/30 text-center pb-2.5">
+          Wersja {APP_VERSION}
+        </p>
       </aside>
 
       <div className="flex-1 min-w-0 min-h-0 flex flex-col">
@@ -256,6 +260,7 @@ export default function ManagerShell({
             >
               Wyloguj
             </button>
+            <p className="text-[11px] text-[#B7B6AE] mt-1.5">Wersja {APP_VERSION}</p>
           </div>
         </div>
       )}

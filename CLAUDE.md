@@ -505,6 +505,21 @@ otwartej karty przeglądarki (np. na kiosku) — dopiero po ręcznym
 odświeżeniu/restarcie urządzenie dostanie i nowy bundle JS, i czysty ekran
 logowania zamiast wznowienia starej sesji.
 
+⚠️ Od 2026-09-02 (redesign Panelu Kierownika) doszły dwa kolejne miejsca,
+które trzeba aktualizować razem z `APP_VERSION`, inaczej cicho wyjdą z
+synchronizacji:
+- **`public/version.json`** (`{ "version": "X.Y.Z" }`) — `UpdateBanner.tsx`
+  (zamontowany w `App.tsx`, widoczny dla wszystkich ról) odpytuje ten plik
+  co 5 minut i porównuje z `APP_VERSION` wbudowanym w już załadowany
+  bundle; różnica pokazuje pasek "Dostępna nowa wersja — odśwież stronę".
+  Zapomniany bump tego pliku = pasek nigdy się nie pokaże (albo pokaże się
+  od razu po kolejnym deployu, jeśli zapomniano przy poprzednim).
+- **`CHANGELOG` (tablica) w `src/components/manager/Przewodnik.tsx`** —
+  skrócona wersja `CHANGELOG.md` pokazywana w apce (zakładka Przewodnik →
+  "Historia wersji"). `CHANGELOG.md` w repo zostaje pełnym źródłem prawdy;
+  ta tablica to tylko ostatnie kilka wpisów, ręcznie duplikowane w
+  skróconej formie (bez pogrubień/formatowania markdown).
+
 **Rób to samodzielnie, bez pytania właściciela** — za każdym razem, gdy
 kończysz zmianę widoczną dla użytkownika (nowa funkcja, poprawka
 zachowania, zauważalna poprawa UX/wydajności):
@@ -518,6 +533,9 @@ zachowania, zauważalna poprawa UX/wydajności):
    formacie RRRR-MM-DD) — krótko, po polsku, z perspektywy użytkownika
    ("co się zmieniło dla mnie", nie szczegóły implementacji techniczne;
    te są w komunikacie commita/PR).
+3. Zaktualizuj `public/version.json` na tę samą wartość.
+4. Dodaj skrócony odpowiednik wpisu do tablicy `CHANGELOG` w
+   `Przewodnik.tsx` (kilka punktów, nie całość).
 
 **Czego NIE wpisywać**: refaktoryzacja bez zmiany zachowania, zmiany
 tylko w dokumentacji (CLAUDE.md, komentarze), poprawki, które nigdy nie

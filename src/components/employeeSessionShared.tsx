@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { api } from "../api/supabase";
 import { sendToGoogleSheets, toLocalYMD } from "../api/googleSheets";
+import { APP_VERSION } from "../config";
 import { findOverlappingShift, getTodaysShiftsForUser } from "../utils/shifts";
 import {
   getShort,
@@ -1097,6 +1098,9 @@ export const EmployeeSessionScreens = ({
         >
           Wyloguj
         </button>
+        <p className="text-[11px] text-[#B7B6AE] self-center mt-1.5">
+          Wersja {APP_VERSION}
+        </p>
       </Shell>
     );
   }
