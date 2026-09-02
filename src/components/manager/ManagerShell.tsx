@@ -28,11 +28,22 @@ import {
 import { shellSidebarCls, shellNavBtnCls, shellBadgeCls, lokalTabCls } from "./designTokens";
 
 export const NAV_ITEMS = [
-  { key: "pulpit", label: "Pulpit", Icon: Home },
-  { key: "zatwierdzanie", label: "Zatwierdzanie zmian", Icon: CheckCircle2, badgeKey: "zatwierdzanie" },
-  { key: "godziny", label: "Rejestr Godzin", Icon: FileText },
-  { key: "aktywni", label: "Aktywni", Icon: Clock },
-  { key: "zadania", label: "Zadania i sprzątanie", Icon: ClipboardCheck },
+  { key: "pulpit", label: "Pulpit", shortLabel: "Pulpit", Icon: Home },
+  {
+    key: "zatwierdzanie",
+    label: "Zatwierdzanie zmian",
+    shortLabel: "Decyzje",
+    Icon: CheckCircle2,
+    badgeKey: "zatwierdzanie",
+  },
+  { key: "godziny", label: "Rejestr Godzin", shortLabel: "Rejestr", Icon: FileText },
+  { key: "aktywni", label: "Aktywni", shortLabel: "Aktywni", Icon: Clock },
+  {
+    key: "zadania",
+    label: "Zadania i sprzątanie",
+    shortLabel: "Zadania",
+    Icon: ClipboardCheck,
+  },
   { key: "grafik", label: "Grafik", Icon: Calendar },
   { key: "zgloszenia", label: "Zgłoszenia", Icon: Flag, badgeKey: "zgloszenia" },
   { key: "powiadomienia", label: "Powiadomienia", Icon: Bell, badgeKey: "powiadomienia" },
@@ -41,9 +52,13 @@ export const NAV_ITEMS = [
   { key: "przewodnik", label: "Przewodnik", Icon: HelpCircle },
 ];
 
-// Te 4 zostają zawsze widoczne w dolnym pasku na mobile, reszta chowa się
-// pod "Więcej" — dobór na podstawie tego, czego kierownik używa codziennie.
-const MOBILE_PRIMARY_KEYS = ["pulpit", "zatwierdzanie", "godziny", "aktywni"];
+// Te 4 zostają zawsze widoczne w dolnym pasku na mobile (ten sam rytm co
+// Pulpit/Zmiana/Raport/Zadania/Więcej u pracownika), reszta chowa się pod
+// "Więcej" — Rejestr Godzin świadomie NIE jest tu, bo pełny rejestr z
+// filtrami to bardziej biurkowe zadanie niż coś sprawdzane w biegu z
+// telefonu; Aktywni (kto teraz pracuje, zakończ zmianę) jest bardziej
+// "mobilne". Do ustalenia ponownie, jeśli w praktyce okaże się inaczej.
+const MOBILE_PRIMARY_KEYS = ["pulpit", "zatwierdzanie", "aktywni", "zadania"];
 
 export default function ManagerShell({
   currentUser,
@@ -153,7 +168,7 @@ export default function ManagerShell({
 
       {/* --- Dolny pasek: tylko mobile, jak Shell w employeeSessionShared.tsx --- */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white border-t-[1.5px] border-[#B7B6AE] flex z-30">
-        {primaryItems.map(({ key, label, Icon, badgeKey }) => {
+        {primaryItems.map(({ key, label, shortLabel, Icon, badgeKey }) => {
           const active = activeTab === key && !mobileMoreOpen;
           return (
             <button
@@ -164,7 +179,7 @@ export default function ManagerShell({
               }`}
             >
               <Icon size={19} />
-              <span className="text-[10.5px] font-semibold">{label.split(" ")[0]}</span>
+              <span className="text-[10.5px] font-semibold">{shortLabel || label}</span>
               {badgeKey && badges[badgeKey] > 0 && (
                 <span className="absolute top-1 right-[20%] bg-[#DE3A22] text-white font-['Archivo'] font-extrabold text-[9.5px] min-w-[15px] h-[15px] rounded-[3px] flex items-center justify-center px-0.5">
                   {badges[badgeKey]}
