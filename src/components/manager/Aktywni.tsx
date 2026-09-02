@@ -19,7 +19,7 @@ const fmtElapsed = (ms) => {
   return `${h}:${String(m).padStart(2, "0")}`;
 };
 
-export default function Aktywni({ shifts, matchesFilter, onEndShift }) {
+export default function Aktywni({ shifts, matchesFilter, onEndShift, onNameClick }) {
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
@@ -57,14 +57,18 @@ export default function Aktywni({ shifts, matchesFilter, onEndShift }) {
                 <div className="w-8 h-8 rounded-full bg-[#EAF4EC] text-[#2E6B44] flex items-center justify-center flex-shrink-0">
                   <Clock size={15} />
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-['Archivo'] font-bold text-[13px] md:text-base truncate">
+                <button
+                  type="button"
+                  onClick={() => s.user_id && onNameClick(s.user_id)}
+                  className="flex-1 min-w-0 text-left"
+                >
+                  <p className="font-['Archivo'] font-bold text-[13px] md:text-base truncate hover:underline hover:text-[#DE3A22]">
                     {s.user_name}
                   </p>
                   <p className="text-[11px] md:text-xs text-[#6E6E66] truncate">
                     {s.lokal} · {s.stanowisko}
                   </p>
-                </div>
+                </button>
                 <span className="hidden md:inline text-sm text-[#6E6E66] w-16 flex-shrink-0">
                   od {fmtHM(s.start_time)}
                 </span>

@@ -30,6 +30,7 @@ import RejestrGodzin from "./manager/RejestrGodzin";
 import Aktywni from "./manager/Aktywni";
 import Zgloszenia from "./manager/Zgloszenia";
 import Pracownicy from "./manager/Pracownicy";
+import RaportyIKoszty from "./manager/RaportyIKoszty";
 
 // ==========================================
 // KIEROWNIK DASHBOARD
@@ -56,6 +57,13 @@ const ManagerDashboard = ({
   const [tab, setTab] = useState("pulpit");
   const [przewodnikTab, setPrzewodnikTab] = useState("pracownicy");
   const [selectedLokal, setSelectedLokal] = useState("ALL");
+  const [reportUserId, setReportUserId] = useState(null);
+  // Imię pracownika w Rejestr Godzin/Aktywni prowadzi tu — patrz onNameClick
+  // przekazywane do tych komponentów.
+  const goToEmployeeReport = (userId) => {
+    setReportUserId(userId);
+    setTab("raporty");
+  };
 
   // --- POWIADOMIENIA DLA PRACOWNIKA O ZMIANIE/USUNIĘCIU ZMIANY ---
   const fmtTime = (d) =>
@@ -875,13 +883,25 @@ const ManagerDashboard = ({
             setActiveTab={setTab}
           />
         )}
+        {tab === "raporty" && (
+          <RaportyIKoszty
+            users={users}
+            shifts={shifts}
+            matchesFilter={matchesLokalFilter}
+            onEditShift={openEditShift}
+            selectedUserId={reportUserId}
+            setSelectedUserId={setReportUserId}
+          />
+        )}
+
         {tab !== "pulpit" &&
           tab !== "moja_praca" &&
           tab !== "godziny" &&
           tab !== "zatwierdzanie" &&
           tab !== "aktywni" &&
           tab !== "zgloszenia" &&
-          tab !== "pracownicy" && (
+          tab !== "pracownicy" &&
+          tab !== "raporty" && (
           <WBudowie
             label={wBudowieLabel}
             hasOldContent={tabsWithOldContent.includes(tab)}
@@ -1125,6 +1145,7 @@ const ManagerDashboard = ({
             matchesFilter={matchesLokalFilter}
             onEditShift={openEditShift}
             onNewShift={openNewShift}
+            onNameClick={goToEmployeeReport}
           />
         )}
 
@@ -1323,7 +1344,12 @@ const ManagerDashboard = ({
         )}
 
         {tab === "aktywni" && (
-          <Aktywni shifts={shifts} matchesFilter={matchesLokalFilter} onEndShift={openEditShift} />
+          <Aktywni
+            shifts={shifts}
+            matchesFilter={matchesLokalFilter}
+            onEndShift={openEditShift}
+            onNameClick={goToEmployeeReport}
+          />
         )}
 
         {false && tab === "aktywni" && (

@@ -41,6 +41,7 @@ export default function RejestrGodzin({
   matchesFilter,
   onEditShift,
   onNewShift,
+  onNameClick,
 }) {
   const [month, setMonth] = useState(new Date().getMonth());
   const [year, setYear] = useState(new Date().getFullYear());
@@ -271,9 +272,13 @@ export default function RejestrGodzin({
                           {getDayOfWeek(s.start_time)}
                         </span>
                       </span>
-                      <span className="flex-1 min-w-0 md:w-32 md:flex-none font-bold text-[12px] md:text-sm truncate">
+                      <button
+                        type="button"
+                        onClick={() => s.user_id && onNameClick(s.user_id)}
+                        className="flex-1 min-w-0 md:w-32 md:flex-none text-left font-bold text-[12px] md:text-sm truncate hover:underline hover:text-[#DE3A22]"
+                      >
                         {s.user_name}
-                      </span>
+                      </button>
                       <span className="hidden md:inline w-24 flex-shrink-0 text-xs text-[#6E6E66]">
                         {getShort(s.lokal)}
                       </span>
