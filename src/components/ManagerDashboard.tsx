@@ -29,6 +29,7 @@ import MojaPraca from "./manager/MojaPraca";
 import RejestrGodzin from "./manager/RejestrGodzin";
 import Aktywni from "./manager/Aktywni";
 import Zgloszenia from "./manager/Zgloszenia";
+import Pracownicy from "./manager/Pracownicy";
 
 // ==========================================
 // KIEROWNIK DASHBOARD
@@ -169,6 +170,10 @@ const ManagerDashboard = ({
       allowed_lokale: [],
       sanepid_expiry: "",
       umowa_expiry: "",
+      kiosk_pin: "",
+      stawka: "",
+      etat: "",
+      notatki: "",
     });
 
   const activeLokale = lokale.filter((l) => !l.archived);
@@ -356,6 +361,20 @@ const ManagerDashboard = ({
       // datę (kolumna date, nullable) — trzeba jawnie zamienić na null.
       if (!dataToSave.sanepid_expiry) dataToSave.sanepid_expiry = null;
       if (!dataToSave.umowa_expiry) dataToSave.umowa_expiry = null;
+      // To samo dla stawka (numeric) — pusty string zamiast liczby.
+      dataToSave.stawka =
+        dataToSave.stawka === "" || dataToSave.stawka == null
+          ? null
+          : Number(dataToSave.stawka);
+      // Ślad "kto i kiedy ostatnio zmienił notatkę" — tylko gdy notatka
+      // faktycznie się zmieniła względem tego, co jest w bazie teraz.
+      const existingUser = editingUser.id
+        ? users.find((u) => u.id === editingUser.id)
+        : null;
+      if (!existingUser || (existingUser.notatki || "") !== (dataToSave.notatki || "")) {
+        dataToSave.notatki_updated_by = currentUser.name;
+        dataToSave.notatki_updated_at = new Date().toISOString();
+      }
       if (
         (dataToSave.role === "kiosk" || dataToSave.role === "manager_lokalu") &&
         Array.isArray(dataToSave.allowed_lokale)
@@ -674,7 +693,7 @@ const ManagerDashboard = ({
   const showTermWarnings = editingUser && !!editingUser.id;
 
   const wBudowieLabel = NAV_ITEMS.find((n) => n.key === tab)?.label || tab;
-  const tabsWithOldContent = ["powiadomienia", "pracownicy"];
+  const tabsWithOldContent = ["powiadomienia"];
   // "moja_praca" jest już aktywna (nie w kolejności makiet, ale kierownik
   // sam odbija godziny i nie mógł ich zapisać podczas przebudowy reszty).
 
@@ -861,7 +880,8 @@ const ManagerDashboard = ({
           tab !== "godziny" &&
           tab !== "zatwierdzanie" &&
           tab !== "aktywni" &&
-          tab !== "zgloszenia" && (
+          tab !== "zgloszenia" &&
+          tab !== "pracownicy" && (
           <WBudowie
             label={wBudowieLabel}
             hasOldContent={tabsWithOldContent.includes(tab)}
@@ -1442,6 +1462,27 @@ const ManagerDashboard = ({
               showEmployeeName={false}
             />
           </div>
+        )}
+
+        {tab === "pracownicy" && (
+          <Pracownicy
+            visibleUsers={visibleUsers}
+            archivedUsers={archivedUsers}
+            editingUser={editingUser}
+            setEditingUser={setEditingUser}
+            onNewUser={handleNewUserClick}
+            onSave={handleSaveUser}
+            onArchive={handleArchiveEntity}
+            onPermanentDelete={handlePermanentDelete}
+            isLocalManager={isLocalManager}
+            availableLokaleForManager={availableLokaleForManager}
+            activeLokale={activeLokale}
+            activeStanowiska={activeStanowiska}
+            shifts={shifts}
+            editingDict={editingDict}
+            setEditingDict={setEditingDict}
+            onSaveDict={handleSaveDict}
+          />
         )}
 
         {false && tab === "pracownicy" && (
