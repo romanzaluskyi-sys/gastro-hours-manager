@@ -99,7 +99,7 @@ export default function ManagerShell({
   };
 
   return (
-    <div className="min-h-screen bg-[#F1F1EE] flex flex-col md:flex-row">
+    <div className="h-screen bg-[#F1F1EE] flex flex-col md:flex-row overflow-hidden">
       {/* --- Sidebar: tylko desktop --- */}
       <aside className={`${shellSidebarCls} hidden md:flex md:w-72`}>
         <div className="p-5 border-b border-white/10">

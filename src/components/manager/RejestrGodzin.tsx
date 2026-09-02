@@ -23,14 +23,15 @@ const fmtHM = (d) =>
     : "";
 
 const rowStatus = (shift, hasPendingCorrection) => {
-  if (hasPendingCorrection) return { label: "Do decyzji", cls: "bg-[#FAEAE6] text-[#8A3A2B]" };
+  if (hasPendingCorrection)
+    return { label: "Do decyzji", cls: "bg-[#FAEAE6] text-[#8A3A2B]", border: "border-[#DE3A22]", dot: "bg-[#DE3A22]" };
   if (!shift.end_time) {
     const isToday = shift.start_time.toDateString() === new Date().toDateString();
     return isToday
-      ? { label: "Na zmianie", cls: "bg-[#FFF4D6] text-[#8A6B1E]" }
-      : { label: "Wpis otwarty", cls: "bg-[#FAEAE6] text-[#8A3A2B]" };
+      ? { label: "Na zmianie", cls: "bg-[#FFF4D6] text-[#8A6B1E]", border: "border-[#C99A1E]", dot: "bg-[#C99A1E]" }
+      : { label: "Wpis otwarty", cls: "bg-[#FAEAE6] text-[#8A3A2B]", border: "border-[#DE3A22]", dot: "bg-[#DE3A22]" };
   }
-  return { label: "Zatwierdzone", cls: "bg-[#EAF4EC] text-[#2E6B44]" };
+  return { label: "Zatwierdzone", cls: "bg-[#EAF4EC] text-[#2E6B44]", border: "border-[#3E8E5C]", dot: "bg-[#3E8E5C]" };
 };
 
 export default function RejestrGodzin({
@@ -259,54 +260,58 @@ export default function RejestrGodzin({
                   return (
                     <div
                       key={s.id}
-                      className="px-4 py-3 flex items-center gap-3 flex-wrap hover:bg-[#F1F1EE]"
+                      className={`pl-2.5 pr-3 md:px-4 py-2.5 md:py-3 flex items-center flex-nowrap gap-1.5 md:gap-3 border-l-4 ${status.border} hover:bg-[#F1F1EE]`}
                     >
-                      <span className="w-[74px] flex-shrink-0 font-['Archivo'] font-bold text-sm">
+                      <span className="w-10 md:w-[74px] flex-shrink-0 font-['Archivo'] font-bold text-[11px] md:text-sm">
                         {s.start_time.toLocaleDateString("pl-PL", {
                           day: "2-digit",
                           month: "2-digit",
                         })}
-                        <span className="text-[#8F8E86] font-semibold ml-1">
+                        <span className="hidden md:inline text-[#8F8E86] font-semibold ml-1">
                           {getDayOfWeek(s.start_time)}
                         </span>
                       </span>
-                      <span className="w-32 flex-shrink-0 font-bold text-sm truncate">
+                      <span className="flex-1 min-w-0 md:w-32 md:flex-none font-bold text-[12px] md:text-sm truncate">
                         {s.user_name}
                       </span>
-                      <span className="w-24 flex-shrink-0 text-xs text-[#6E6E66]">
+                      <span className="hidden md:inline w-24 flex-shrink-0 text-xs text-[#6E6E66]">
                         {getShort(s.lokal)}
                       </span>
-                      <span className="w-28 flex-shrink-0 text-sm tabular-nums">
+                      <span className="md:w-28 flex-shrink-0 text-[10.5px] md:text-sm tabular-nums whitespace-nowrap">
                         {fmtHM(s.start_time)}–
                         {s.end_time ? fmtHM(s.end_time) : (
                           <span className="text-[#DE3A22] font-bold">trwa</span>
                         )}
                       </span>
-                      <span className="w-16 flex-shrink-0 text-right font-['Archivo'] font-extrabold text-sm tabular-nums">
+                      <span className="w-9 md:w-16 flex-shrink-0 text-right font-['Archivo'] font-extrabold text-[12px] md:text-sm tabular-nums">
                         {hours != null ? hours.toFixed(1).replace(".", ",") : "-"}
                       </span>
                       <span
-                        className={`text-xs font-bold px-2 py-1 rounded flex-shrink-0 ${status.cls}`}
+                        className={`hidden md:inline text-xs font-bold px-2 py-1 rounded flex-shrink-0 ${status.cls}`}
                       >
                         {status.label}
                       </span>
-                      <span className="flex-1" />
-                      <div className="flex gap-1.5 flex-shrink-0">
+                      <span
+                        className={`md:hidden w-2 h-2 rounded-full flex-shrink-0 ${status.dot}`}
+                        title={status.label}
+                      />
+                      <span className="hidden md:block flex-1" />
+                      <div className="flex gap-1 md:gap-1.5 flex-shrink-0">
                         {editsByShiftId[s.id] && (
                           <button
                             onClick={() => setHistoryFor(s.id)}
-                            className="w-8 h-8 border-[2px] border-[#B7B6AE] rounded flex items-center justify-center text-[#6E6E66] hover:border-[#171714] hover:text-[#171714]"
+                            className="w-7 h-7 md:w-8 md:h-8 border-[2px] border-[#B7B6AE] rounded flex items-center justify-center text-[#6E6E66] hover:border-[#171714] hover:text-[#171714]"
                             title="Historia zmian"
                           >
-                            <History size={14} />
+                            <History size={13} />
                           </button>
                         )}
                         <button
                           onClick={() => onEditShift(s)}
-                          className="w-8 h-8 border-[2px] border-[#171714] rounded flex items-center justify-center text-[#171714]"
+                          className="w-7 h-7 md:w-8 md:h-8 border-[2px] border-[#171714] rounded flex items-center justify-center text-[#171714]"
                           title="Edytuj"
                         >
-                          <Edit2 size={14} />
+                          <Edit2 size={13} />
                         </button>
                       </div>
                     </div>
