@@ -5,6 +5,28 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.8.0 — 2026-09-02
+
+- **Nowy Panel Kierownika.** Cały wygląd przebudowany pod ten sam, czytelny
+  styl co reszta aplikacji — Pulpit ("Dziś w liczbach"), Zatwierdzanie
+  zmian, Rejestr Godzin, Aktywni, Zgłoszenia, Pracownicy i Raporty i
+  koszty. Na telefonie dolny pasek z najczęstszymi zakładkami zamiast
+  przewijania w bok.
+- **Poprawka godzin od pracownika trafia teraz do prawdziwej kolejki
+  decyzji kierownika.** W zakładce "Zgłoś" pracownik wybiera "Popraw
+  zmianę" (albo "Zapomniałem/łam odbić"), wpisuje poprawne dane — kierownik
+  w nowej zakładce Zatwierdzanie zmian zatwierdza, poprawia (z podaniem
+  powodu, który widzi pracownik) albo dopytuje.
+- Karta pracownika: nowe pola — stawka godzinowa, etat, notatki
+  kierownika, oraz formularz do ustawienia PIN-u blokady na kiosku
+  (wcześniej trzeba było wpisywać go ręcznie w bazie).
+- Raport godzin i kosztów per pracownik, z podglądem historii poprawek
+  danej zmiany (kto, kiedy, dlaczego).
+- Nowy ekran logowania, w tym samym stylu.
+- Pasek "dostępna nowa wersja — odśwież stronę" pokazuje się teraz
+  automatycznie wszystkim, gdy wdrożymy aktualizację, zamiast czekać na
+  przypadkowe odświeżenie.
+
 ## 0.7.0 — 2026-08-31
 
 - **Ten sam nowy wygląd, teraz też na osobistym telefonie.** Jeśli
