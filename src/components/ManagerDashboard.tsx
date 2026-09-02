@@ -677,7 +677,6 @@ const ManagerDashboard = ({
     "zgloszenia",
     "powiadomienia",
     "pracownicy",
-    "zatwierdzanie",
   ];
   // "moja_praca" jest już aktywna (nie w kolejności makiet, ale kierownik
   // sam odbija godziny i nie mógł ich zapisać podczas przebudowy reszty).
@@ -860,7 +859,10 @@ const ManagerDashboard = ({
             setActiveTab={setTab}
           />
         )}
-        {tab !== "pulpit" && tab !== "moja_praca" && tab !== "godziny" && (
+        {tab !== "pulpit" &&
+          tab !== "moja_praca" &&
+          tab !== "godziny" &&
+          tab !== "zatwierdzanie" && (
           <WBudowie
             label={wBudowieLabel}
             hasOldContent={tabsWithOldContent.includes(tab)}
@@ -1352,7 +1354,7 @@ const ManagerDashboard = ({
           />
         )}
 
-        {false && tab === "zatwierdzanie" && (
+        {tab === "zatwierdzanie" && (
           <ZatwierdzanieZmian
             currentUser={currentUser}
             shifts={shifts}

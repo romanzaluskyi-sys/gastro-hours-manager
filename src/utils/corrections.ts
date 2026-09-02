@@ -108,10 +108,10 @@ export const resolveCorrection = async ({
     finalValues.end ? "–" + finalValues.end : ""
   }`;
   const msg = reason
-    ? `Kierownik poprawił zgłoszoną przez Ciebie zmianę z dnia ${fmtPL(
+    ? `${editorName} poprawił(a) zgłoszoną przez Ciebie zmianę z dnia ${fmtPL(
         finalValues.date
       )} (${zakres}). Powód: ${reason}`
-    : `Kierownik zatwierdził Twoją poprawkę zmiany z dnia ${fmtPL(
+    : `${editorName} zatwierdził(a) Twoją poprawkę zmiany z dnia ${fmtPL(
         finalValues.date
       )} (${zakres}).`;
   if (issue.user_name) {
@@ -129,11 +129,11 @@ export const resolveCorrection = async ({
 };
 
 // "Zapytaj" — kierownik prosi pracownika o doprecyzowanie, bez rozwiązywania zgłoszenia.
-export const askAboutCorrection = async (issue) => {
+export const askAboutCorrection = async (issue, editorName) => {
   if (!issue.user_name) return;
   await createEmployeeNotification(
     issue.user_name,
-    `Kierownik pyta o szczegóły Twojego zgłoszenia korekty zmiany${
+    `${editorName} pyta o szczegóły Twojego zgłoszenia korekty zmiany${
       issue.proposed_date ? ` z dnia ${fmtPL(issue.proposed_date)}` : ""
     }. Odpowiedz w Wiadomościach albo popraw zgłoszenie.`,
     "correction_query"

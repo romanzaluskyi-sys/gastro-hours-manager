@@ -5,6 +5,7 @@
 import React, { useState } from "react";
 import { Check, Edit2, HelpCircle, AlertCircle } from "lucide-react";
 import { resolveCorrection, askAboutCorrection } from "../../utils/corrections";
+import { pageTitleCls, statLabelCls, btnPrimaryCls, btnSecondaryCls } from "./designTokens";
 
 const fmtHHMM = (d) =>
   d
@@ -162,7 +163,7 @@ export default function ZatwierdzanieZmian({
   const handleZapytaj = async (row) => {
     setBusy(true);
     try {
-      await askAboutCorrection(row.issue);
+      await askAboutCorrection(row.issue, currentUser.name);
       showMsg("Wysłano pytanie do pracownika.");
     } catch (err) {
       showMsg("Błąd wysyłki pytania.", "error");
@@ -174,24 +175,20 @@ export default function ZatwierdzanieZmian({
 
   return (
     <div className="max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold">
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+        <h2 className={pageTitleCls}>
           {rows.length} {rows.length === 1 ? "zmiana czeka" : "zmiany czekają"}{" "}
           na decyzję
         </h2>
         {selectedCount > 0 && (
-          <button
-            onClick={handleZatwierdzWybrane}
-            disabled={busy}
-            className="bg-[#DE3A22] text-white px-4 py-2 rounded font-bold hover:opacity-90"
-          >
+          <button onClick={handleZatwierdzWybrane} disabled={busy} className={btnPrimaryCls}>
             Zatwierdź wybrane · {selectedCount}
           </button>
         )}
       </div>
 
       {rows.length === 0 && (
-        <div className="bg-white p-8 rounded-xl shadow border text-center text-gray-400">
+        <div className="bg-white p-8 rounded-xl border-[2px] border-[#171714] text-center text-[#8F8E86]">
           Brak zmian oczekujących na decyzję.
         </div>
       )}
@@ -221,7 +218,7 @@ export default function ZatwierdzanieZmian({
           return (
             <div
               key={iss.id}
-              className="bg-white rounded-xl shadow border-2 border-[#171714] p-4"
+              className="bg-white rounded-xl border-[2px] border-[#171714] p-4"
             >
               <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div className="flex items-start gap-3">
@@ -234,10 +231,10 @@ export default function ZatwierdzanieZmian({
                     }
                   />
                   <div>
-                    <p className="font-bold text-lg">
+                    <p className="font-['Archivo'] font-bold text-lg">
                       {iss.user_name || "Anonim"}
                     </p>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-[#6E6E66]">
                       {row.lokal} · {fmtPL(iss.proposed_date)}
                     </p>
                   </div>
@@ -245,9 +242,7 @@ export default function ZatwierdzanieZmian({
 
                 <div className="flex gap-8 text-sm">
                   <div>
-                    <p className="text-xs font-bold text-gray-400 uppercase">
-                      Grafik
-                    </p>
+                    <p className={statLabelCls}>Grafik</p>
                     {existingShift ? (
                       <p className="font-['Archivo'] font-bold">
                         {fmtHHMM(existingShift.start_time)}–
@@ -256,13 +251,11 @@ export default function ZatwierdzanieZmian({
                           : "trwa"}
                       </p>
                     ) : (
-                      <p className="text-gray-400">Brak — nowy wpis</p>
+                      <p className="text-[#8F8E86]">Brak — nowy wpis</p>
                     )}
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-gray-400 uppercase">
-                      Zgłoszone
-                    </p>
+                    <p className={statLabelCls}>Zgłoszone</p>
                     <p>
                       <span
                         className={diffCls(
@@ -299,7 +292,7 @@ export default function ZatwierdzanieZmian({
                       <button
                         onClick={() => handleZatwierdz(row)}
                         disabled={busy}
-                        className="bg-[#DE3A22] text-white px-4 py-2 rounded font-bold flex items-center gap-1.5"
+                        className={`${btnPrimaryCls} flex items-center gap-1.5`}
                       >
                         <Check size={16} /> Zatwierdź
                       </button>
@@ -307,7 +300,7 @@ export default function ZatwierdzanieZmian({
                       <button
                         onClick={() => handleZapytaj(row)}
                         disabled={busy}
-                        className="border-2 border-[#171714] px-4 py-2 rounded font-bold flex items-center gap-1.5"
+                        className={`${btnSecondaryCls} flex items-center gap-1.5`}
                       >
                         <HelpCircle size={16} /> Zapytaj
                       </button>
@@ -315,7 +308,7 @@ export default function ZatwierdzanieZmian({
                     <button
                       onClick={() => openPopraw(row)}
                       disabled={busy}
-                      className="border-2 border-[#171714] px-4 py-2 rounded font-bold flex items-center gap-1.5"
+                      className={`${btnSecondaryCls} flex items-center gap-1.5`}
                     >
                       <Edit2 size={16} /> Popraw
                     </button>
@@ -324,7 +317,7 @@ export default function ZatwierdzanieZmian({
               </div>
 
               {iss.issue_text && (
-                <p className="text-sm text-gray-500 mt-3 italic">
+                <p className="text-sm text-[#6E6E66] mt-3 italic">
                   „{iss.issue_text}”
                 </p>
               )}
@@ -332,24 +325,24 @@ export default function ZatwierdzanieZmian({
               {isEditing && (
                 <div className="mt-4 pt-4 border-t-2 border-[#171714] grid grid-cols-2 md:grid-cols-6 gap-3 items-end">
                   <div>
-                    <label className="text-xs font-bold text-gray-500">Data</label>
+                    <label className="text-xs font-bold text-[#6E6E66]">Data</label>
                     <input
                       type="date"
                       value={editForm.date}
                       onChange={(e) =>
                         setEditForm({ ...editForm, date: e.target.value })
                       }
-                      className="w-full border-2 rounded p-2 text-sm"
+                      className="w-full border-[2px] border-[#171714] rounded p-2 text-sm"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-gray-500">Lokal</label>
+                    <label className="text-xs font-bold text-[#6E6E66]">Lokal</label>
                     <select
                       value={editForm.lokal}
                       onChange={(e) =>
                         setEditForm({ ...editForm, lokal: e.target.value })
                       }
-                      className="w-full border-2 rounded p-2 text-sm"
+                      className="w-full border-[2px] border-[#171714] rounded p-2 text-sm"
                     >
                       {availableLokale.map((l) => (
                         <option key={l.id} value={l.name}>
@@ -359,7 +352,7 @@ export default function ZatwierdzanieZmian({
                     </select>
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-gray-500">
+                    <label className="text-xs font-bold text-[#6E6E66]">
                       Stanowisko
                     </label>
                     <select
@@ -367,7 +360,7 @@ export default function ZatwierdzanieZmian({
                       onChange={(e) =>
                         setEditForm({ ...editForm, stanowisko: e.target.value })
                       }
-                      className="w-full border-2 rounded p-2 text-sm"
+                      className="w-full border-[2px] border-[#171714] rounded p-2 text-sm"
                     >
                       {activeStanowiska
                         .filter((s) => s.lokal_name === editForm.lokal)
@@ -379,7 +372,7 @@ export default function ZatwierdzanieZmian({
                     </select>
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-gray-500">
+                    <label className="text-xs font-bold text-[#6E6E66]">
                       Wejście
                     </label>
                     <input
@@ -388,11 +381,11 @@ export default function ZatwierdzanieZmian({
                       onChange={(e) =>
                         setEditForm({ ...editForm, start: e.target.value })
                       }
-                      className="w-full border-2 rounded p-2 text-sm"
+                      className="w-full border-[2px] border-[#171714] rounded p-2 text-sm"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-gray-500">
+                    <label className="text-xs font-bold text-[#6E6E66]">
                       Wyjście
                     </label>
                     <input
@@ -401,11 +394,11 @@ export default function ZatwierdzanieZmian({
                       onChange={(e) =>
                         setEditForm({ ...editForm, end: e.target.value })
                       }
-                      className="w-full border-2 rounded p-2 text-sm"
+                      className="w-full border-[2px] border-[#171714] rounded p-2 text-sm"
                     />
                   </div>
                   <div className="col-span-2 md:col-span-6">
-                    <label className="text-xs font-bold text-gray-500">
+                    <label className="text-xs font-bold text-[#6E6E66]">
                       Powód korekty (widoczny dla pracownika)
                     </label>
                     <input
@@ -415,14 +408,14 @@ export default function ZatwierdzanieZmian({
                         setEditForm({ ...editForm, reason: e.target.value })
                       }
                       placeholder="Np. potwierdzone z kierownikiem zmiany"
-                      className="w-full border-2 rounded p-2 text-sm"
+                      className="w-full border-[2px] border-[#171714] rounded p-2 text-sm"
                     />
                   </div>
                   <div className="col-span-2 md:col-span-6 flex gap-2">
                     <button
                       onClick={() => handleZapiszIZatwierdz(row)}
                       disabled={busy}
-                      className="bg-[#DE3A22] text-white px-4 py-2 rounded font-bold"
+                      className={btnPrimaryCls}
                     >
                       Zapisz i zatwierdź
                     </button>
@@ -431,7 +424,7 @@ export default function ZatwierdzanieZmian({
                         setEditingId(null);
                         setEditForm(null);
                       }}
-                      className="border-2 border-[#171714] px-4 py-2 rounded font-bold"
+                      className={btnSecondaryCls}
                     >
                       Anuluj
                     </button>
@@ -443,7 +436,7 @@ export default function ZatwierdzanieZmian({
         })}
       </div>
 
-      <div className="mt-6 flex items-start gap-2 text-sm text-gray-500">
+      <div className="mt-6 flex items-start gap-2 text-sm text-[#6E6E66]">
         <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
         <p>
           Zatwierdzone zmiany trafiają do Rejestru godzin i do arkusza
