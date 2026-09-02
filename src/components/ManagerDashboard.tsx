@@ -2,38 +2,30 @@
 import React, { useState, useEffect } from "react";
 import {
   Clock,
-  User,
-  LogOut,
-  AlertCircle,
   Users,
-  Settings,
   Plus,
   X,
   Edit2,
   Save,
-  Filter,
   MapPin,
   Briefcase,
   Trash2,
   Archive,
   Info,
-  Bell,
   Calendar,
   ChevronLeft,
   ChevronRight,
-  CheckCircle2,
 } from "lucide-react";
 import { api } from "../api/supabase";
 import { sendToGoogleSheets } from "../api/googleSheets";
 import { getShort, getDayOfWeek, getMonthName, getAvailableYears } from "../utils/format";
 import { findOverlappingShift } from "../utils/shifts";
-import TimeEntryForm from "./TimeEntryForm";
-import HoursReport from "./HoursReport";
 import NotificationsPanel from "./NotificationsPanel";
 import ZatwierdzanieZmian from "./manager/ZatwierdzanieZmian";
 import ManagerShell, { NAV_ITEMS } from "./manager/ManagerShell";
 import PulpitHome from "./manager/PulpitHome";
 import WBudowie from "./manager/WBudowie";
+import MojaPraca from "./manager/MojaPraca";
 
 // ==========================================
 // KIEROWNIK DASHBOARD
@@ -1264,26 +1256,14 @@ const ManagerDashboard = ({
         )}
 
         {tab === "moja_praca" && (
-          <div className="max-w-4xl mx-auto space-y-6">
-            <h2 className="font-['Archivo'] font-extrabold text-2xl text-[#171714] mb-4">
-              Moje Godziny Pracy
-            </h2>
-            <TimeEntryForm
-              userObj={currentUser}
-              activeUsers={[]}
-              lokale={availableLokaleForManager}
-              stanowiska={activeStanowiska}
-              shifts={shifts}
-              setShifts={setShifts}
-              showMsg={showMsg}
-            />
-            <HoursReport
-              shiftsData={shifts}
-              usersData={[currentUser]}
-              defaultUserId={currentUser.id}
-              isManager={false}
-            />
-          </div>
+          <MojaPraca
+            currentUser={currentUser}
+            lokale={availableLokaleForManager}
+            stanowiska={activeStanowiska}
+            shifts={shifts}
+            setShifts={setShifts}
+            showMsg={showMsg}
+          />
         )}
 
         {false && tab === "zatwierdzanie" && (
