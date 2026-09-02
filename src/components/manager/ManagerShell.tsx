@@ -132,7 +132,7 @@ export default function ManagerShell({
         </button>
       </aside>
 
-      <div className="flex-1 min-w-0 flex flex-col">
+      <div className="flex-1 min-w-0 min-h-0 flex flex-col">
         <header className="bg-white border-b-[2px] border-[#171714] px-4 md:px-6 py-3 md:py-3.5 flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2 flex-wrap">
             {lokaleForTabs.map((l) => (
@@ -174,7 +174,7 @@ export default function ManagerShell({
           </div>
         </header>
 
-        <main className="flex-1 p-4 md:p-6 pb-24 md:pb-6 overflow-y-auto">
+        <main className="flex-1 min-h-0 p-4 md:p-6 pb-24 md:pb-6 overflow-y-auto">
           {children}
         </main>
       </div>
