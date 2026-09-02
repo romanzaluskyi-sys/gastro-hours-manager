@@ -2,9 +2,18 @@
 import React, { useState } from "react";
 import { LogIn, RefreshCw, WifiOff } from "lucide-react";
 import { APP_VERSION } from "../config";
+import {
+  fieldLabelCls,
+  selectElCls,
+  ctaPrimaryCls,
+  helperTextCls,
+} from "./employeeSessionShared";
 
 // ==========================================
-// EKRAN LOGOWANIA
+// EKRAN LOGOWANIA — ten sam język wizualny co reszta apki (patrz
+// employeeSessionShared.tsx): akcent #DE3A22, font Archivo, grube ramki.
+// Używany przez wszystkie role, więc żyje na poziomie App.tsx, nie w
+// żadnym konkretnym dashboardzie.
 // ==========================================
 const LoginScreen = ({
   users,
@@ -47,70 +56,66 @@ const LoginScreen = ({
 
   if (isLoading)
     return (
-      <div className="min-h-screen flex items-center justify-center font-bold text-xl bg-gray-50">
-        <RefreshCw className="animate-spin mr-2 text-blue-600" /> Łączenie z
+      <div className="min-h-screen flex items-center justify-center font-['Archivo'] font-bold text-xl bg-[#F1F1EE] text-[#171714]">
+        <RefreshCw className="animate-spin mr-2 text-[#DE3A22]" /> Łączenie z
         bazą...
       </div>
     );
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
-      <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-md border-t-4 border-blue-600">
-        <h1 className="text-2xl font-bold text-center mb-6 text-gray-800">
-          Godziny Gastro Emka v{APP_VERSION}
+    <div className="flex flex-col items-center justify-center min-h-screen bg-[#F1F1EE] p-4">
+      <div className="bg-white p-8 rounded-xl border-[2.5px] border-[#171714] w-full max-w-md">
+        <h1 className="font-['Archivo'] font-extrabold text-2xl text-center mb-1 text-[#171714]">
+          Godziny Gastro
         </h1>
+        <p className="text-center text-[13px] text-[#8F8E86] mb-6">
+          Wersja {APP_VERSION}
+        </p>
         {dbError && (
-          <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6 rounded shadow-sm">
-            <p className="font-bold text-red-700 flex items-center gap-2">
+          <div className="bg-[#FAEAE6] border-l-4 border-[#DE3A22] p-4 mb-6 rounded">
+            <p className="font-bold text-[#8A3A2B] flex items-center gap-2">
               <WifiOff size={18} /> Błąd sieci:
             </p>
-            <p className="text-sm font-mono mt-1 text-red-600">{dbError}</p>
+            <p className="text-sm font-mono mt-1 text-[#8A3A2B]">{dbError}</p>
           </div>
         )}
         <form
           onSubmit={handleLogin}
-          className={`space-y-4 ${
-            dbError ? "opacity-50 pointer-events-none" : ""
-          }`}
+          className={`space-y-4 ${dbError ? "opacity-50 pointer-events-none" : ""}`}
         >
           <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Email konta
-            </label>
+            <span className={fieldLabelCls}>Email konta</span>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 block w-full p-3 border border-gray-300 rounded-md bg-gray-50"
+              className={selectElCls}
               placeholder="lokal@gmail.com"
               required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">
-              PIN
-            </label>
+            <span className={fieldLabelCls}>PIN</span>
             <input
               type="password"
               value={pin}
               onChange={(e) => setPin(e.target.value)}
-              className="mt-1 block w-full p-3 border border-gray-300 rounded-md text-center tracking-widest text-lg bg-gray-50"
+              className={`${selectElCls} text-center tracking-[0.4em]`}
               placeholder="••••••"
               required
             />
           </div>
           {error && (
-            <p className="text-red-500 text-sm text-center font-bold">
-              {error}
-            </p>
+            <p className="text-[#DE3A22] text-sm text-center font-bold">{error}</p>
           )}
-          <button
-            type="submit"
-            className="w-full bg-blue-600 text-white p-3 rounded-md font-bold hover:bg-blue-700 transition shadow flex justify-center items-center gap-2"
-          >
+          <button type="submit" className={`${ctaPrimaryCls} flex items-center justify-center gap-2`}>
             <LogIn size={20} /> Zaloguj się
           </button>
         </form>
+        <p className={`${helperTextCls} text-center mt-5`}>
+          Kiosk / Tablet Służbowy loguje się tymi samymi danymi zapisanymi w
+          przeglądarce urządzenia.
+        </p>
       </div>
     </div>
   );

@@ -2,22 +2,16 @@
 import React, { useState, useEffect } from "react";
 import {
   Clock,
-  User,
-  LogOut,
-  AlertCircle,
   Users,
-  Settings,
   Plus,
   X,
   Edit2,
   Save,
-  Filter,
   MapPin,
   Briefcase,
   Trash2,
   Archive,
   Info,
-  Bell,
   Calendar,
   ChevronLeft,
   ChevronRight,
@@ -26,9 +20,18 @@ import { api } from "../api/supabase";
 import { sendToGoogleSheets } from "../api/googleSheets";
 import { getShort, getDayOfWeek, getMonthName, getAvailableYears } from "../utils/format";
 import { findOverlappingShift } from "../utils/shifts";
-import TimeEntryForm from "./TimeEntryForm";
-import HoursReport from "./HoursReport";
 import NotificationsPanel from "./NotificationsPanel";
+import ZatwierdzanieZmian from "./manager/ZatwierdzanieZmian";
+import ManagerShell, { NAV_ITEMS } from "./manager/ManagerShell";
+import PulpitHome from "./manager/PulpitHome";
+import WBudowie from "./manager/WBudowie";
+import MojaPraca from "./manager/MojaPraca";
+import RejestrGodzin from "./manager/RejestrGodzin";
+import Aktywni from "./manager/Aktywni";
+import Zgloszenia from "./manager/Zgloszenia";
+import Pracownicy from "./manager/Pracownicy";
+import RaportyIKoszty from "./manager/RaportyIKoszty";
+import Przewodnik from "./manager/Przewodnik";
 
 // ==========================================
 // KIEROWNIK DASHBOARD
@@ -48,10 +51,20 @@ const ManagerDashboard = ({
   setIssues,
   notifications,
   setNotifications,
+  shiftEdits,
+  setShiftEdits,
   showMsg,
 }) => {
-  const [tab, setTab] = useState("godziny");
+  const [tab, setTab] = useState("pulpit");
   const [przewodnikTab, setPrzewodnikTab] = useState("pracownicy");
+  const [selectedLokal, setSelectedLokal] = useState("ALL");
+  const [reportUserId, setReportUserId] = useState(null);
+  // Imię pracownika w Rejestr Godzin/Aktywni prowadzi tu — patrz onNameClick
+  // przekazywane do tych komponentów.
+  const goToEmployeeReport = (userId) => {
+    setReportUserId(userId);
+    setTab("raporty");
+  };
 
   // --- POWIADOMIENIA DLA PRACOWNIKA O ZMIANIE/USUNIĘCIU ZMIANY ---
   const fmtTime = (d) =>
@@ -103,6 +116,16 @@ const ManagerDashboard = ({
     (n) => !n.is_read
   ).length;
 
+  // --- KOREKTY GODZIN OCZEKUJĄCE NA DECYZJĘ (issues.type === "correction") ---
+  const pendingCorrections = issues.filter((iss) => {
+    if (iss.type !== "correction" || iss.status !== "nowe") return false;
+    const existingShift = iss.shift_id
+      ? shifts.find((s) => s.id === iss.shift_id)
+      : null;
+    const lokal = existingShift ? existingShift.lokal : iss.proposed_lokal;
+    return hasAccessToLokal(lokal);
+  });
+
   useEffect(() => {
     if (tab !== "powiadomienia") return;
     const unreadIds = managerNotifications
@@ -135,6 +158,7 @@ const ManagerDashboard = ({
   const [editingDict, setEditingDict] = useState(null);
   const [editingShift, setEditingShift] = useState(null);
   const [shiftForm, setShiftForm] = useState({
+    userId: "",
     date: "",
     start: "",
     end: "",
@@ -155,6 +179,10 @@ const ManagerDashboard = ({
       allowed_lokale: [],
       sanepid_expiry: "",
       umowa_expiry: "",
+      kiosk_pin: "",
+      stawka: "",
+      etat: "",
+      notatki: "",
     });
 
   const activeLokale = lokale.filter((l) => !l.archived);
@@ -172,6 +200,43 @@ const ManagerDashboard = ({
 
   const archivedLokale = lokale.filter((l) => l.archived);
   const archivedStanowiska = stanowiska.filter((s) => s.archived);
+
+  // --- NOWA RAMKA (ManagerShell): pasek lokali u góry + filtr na Pulpicie ---
+  const lokaleForTabs =
+    !isLocalManager || managerLokaleList.length > 1
+      ? [
+          { key: "ALL", label: isLocalManager ? "Wszystkie moje" : "Cała sieć" },
+          ...availableLokaleForManager.map((l) => ({ key: l.name, label: l.name })),
+        ]
+      : availableLokaleForManager.map((l) => ({ key: l.name, label: l.name }));
+  useEffect(() => {
+    if (lokaleForTabs.length > 0 && !lokaleForTabs.find((l) => l.key === selectedLokal)) {
+      setSelectedLokal(lokaleForTabs[0].key);
+    }
+  }, [isLocalManager, managerLokaleList.join(",")]);
+  const matchesLokalFilter = (lokalName) =>
+    hasAccessToLokal(lokalName) &&
+    (selectedLokal === "ALL" || lokalName === selectedLokal);
+
+  const today0ForTerminy = new Date();
+  today0ForTerminy.setHours(0, 0, 0, 0);
+  const pracownicyTerminyCount = users.filter((u) => {
+    if (!u.active || u.archived || u.role === "kiosk") return false;
+    if (!hasAccessToLokal(u.default_lokal)) return false;
+    const overdue = (field) => {
+      if (!u[field]) return true;
+      return new Date(u[field] + "T00:00:00") < today0ForTerminy;
+    };
+    return overdue("sanepid_expiry") || overdue("umowa_expiry");
+  }).length;
+
+  const shellBadges = {
+    zatwierdzanie: pendingCorrections.length,
+    zgloszenia: issues.filter((i) => i.status === "nowe" && i.type !== "correction")
+      .length,
+    powiadomienia: unreadManagerCount,
+    pracownicy: pracownicyTerminyCount,
+  };
 
   // --- PULPIT (Dashboard godzin) ---
   const ALLOWED_PULPIT_ROLES = ["closed", "open", "manager_lokalu"];
@@ -305,6 +370,20 @@ const ManagerDashboard = ({
       // datę (kolumna date, nullable) — trzeba jawnie zamienić na null.
       if (!dataToSave.sanepid_expiry) dataToSave.sanepid_expiry = null;
       if (!dataToSave.umowa_expiry) dataToSave.umowa_expiry = null;
+      // To samo dla stawka (numeric) — pusty string zamiast liczby.
+      dataToSave.stawka =
+        dataToSave.stawka === "" || dataToSave.stawka == null
+          ? null
+          : Number(dataToSave.stawka);
+      // Ślad "kto i kiedy ostatnio zmienił notatkę" — tylko gdy notatka
+      // faktycznie się zmieniła względem tego, co jest w bazie teraz.
+      const existingUser = editingUser.id
+        ? users.find((u) => u.id === editingUser.id)
+        : null;
+      if (!existingUser || (existingUser.notatki || "") !== (dataToSave.notatki || "")) {
+        dataToSave.notatki_updated_by = currentUser.name;
+        dataToSave.notatki_updated_at = new Date().toISOString();
+      }
       if (
         (dataToSave.role === "kiosk" || dataToSave.role === "manager_lokalu") &&
         Array.isArray(dataToSave.allowed_lokale)
@@ -414,6 +493,7 @@ const ManagerDashboard = ({
   const openEditShift = (shift) => {
     setEditingShift(shift);
     setShiftForm({
+      userId: shift.user_id || "",
       date: shift.start_time.toISOString().split("T")[0],
       start: shift.start_time.toLocaleTimeString([], {
         hour: "2-digit",
@@ -430,10 +510,31 @@ const ManagerDashboard = ({
     });
   };
 
-  // --- OTO MAGIA GOOGLE SHEETS DLA EDYCJI ---
+  // "+ Dodaj wpis" w Rejestr Godzin — ten sam modal co edycja, tylko
+  // editingShift.id === null włącza w JSX pole wyboru pracownika i w
+  // handleSaveShiftEdit gałąź api.post zamiast api.patch.
+  const openNewShift = () => {
+    const now = new Date();
+    setEditingShift({ id: null, user_id: "", user_name: "", start_time: now, end_time: null });
+    setShiftForm({
+      userId: "",
+      date: now.toISOString().split("T")[0],
+      start: now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      end: "",
+      lokal: availableLokaleForManager[0]?.name || "",
+      stanowisko: "",
+    });
+  };
+
+  const isNewShift = editingShift && editingShift.id === null;
+
+  // --- OTO MAGIA GOOGLE SHEETS DLA EDYCJI (i tworzenia — "+ Dodaj wpis") ---
   const handleSaveShiftEdit = async (e) => {
     e.preventDefault();
     try {
+      if (isNewShift && !shiftForm.userId) {
+        return showMsg("Wybierz pracownika!", "error");
+      }
       const [year, month, day] = shiftForm.date.split("-").map(Number);
       const [startH, startM] = shiftForm.start.split(":").map(Number);
       const startD = new Date(year, month - 1, day, startH, startM);
@@ -450,7 +551,7 @@ const ManagerDashboard = ({
       // (w przeciwieństwie do twardej blokady u pracownika w TimeEntryForm).
       const overlapping = findOverlappingShift(
         shifts,
-        editingShift.user_id,
+        shiftForm.userId || editingShift.user_id,
         startD,
         endD,
         editingShift.id
@@ -466,38 +567,61 @@ const ManagerDashboard = ({
         if (!confirmed) return;
       }
 
-      const updated = await api.patch("shifts", editingShift.id, {
-        start_time: startD.toISOString(),
-        end_time: endD ? endD.toISOString() : null,
-        lokal: shiftForm.lokal,
-        stanowisko: shiftForm.stanowisko,
-        godzin: hrs,
-      });
+      let updated;
+      if (isNewShift) {
+        const user = users.find((u) => u.id === shiftForm.userId);
+        updated = await api.post("shifts", {
+          user_id: shiftForm.userId,
+          user_name: user?.name || "",
+          start_time: startD.toISOString(),
+          end_time: endD ? endD.toISOString() : null,
+          lokal: shiftForm.lokal,
+          stanowisko: shiftForm.stanowisko,
+          godzin: hrs,
+        });
+      } else {
+        updated = await api.patch("shifts", editingShift.id, {
+          start_time: startD.toISOString(),
+          end_time: endD ? endD.toISOString() : null,
+          lokal: shiftForm.lokal,
+          stanowisko: shiftForm.stanowisko,
+          godzin: hrs,
+        });
+      }
       const parsed = {
         ...updated,
         start_time: new Date(updated.start_time),
         end_time: updated.end_time ? new Date(updated.end_time) : null,
       };
-      setShifts(shifts.map((s) => (s.id === parsed.id ? parsed : s)));
+      setShifts(
+        isNewShift
+          ? [...shifts, parsed]
+          : shifts.map((s) => (s.id === parsed.id ? parsed : s))
+      );
 
-      // Powiadomienie dla pracownika o edycji zmiany
-      const oldStart = editingShift.start_time;
-      const oldEnd = editingShift.end_time;
-      const changed =
-        oldStart.getTime() !== startD.getTime() ||
-        (oldEnd ? oldEnd.getTime() : null) !== (endD ? endD.getTime() : null);
-      if (changed) {
-        notifyEmployee(parsed, "edit", oldStart, oldEnd, startD, endD);
+      // Powiadomienie dla pracownika o edycji zmiany (nie dotyczy nowego wpisu)
+      if (!isNewShift) {
+        const oldStart = editingShift.start_time;
+        const oldEnd = editingShift.end_time;
+        const changed =
+          oldStart.getTime() !== startD.getTime() ||
+          (oldEnd ? oldEnd.getTime() : null) !== (endD ? endD.getTime() : null);
+        if (changed) {
+          notifyEmployee(parsed, "edit", oldStart, oldEnd, startD, endD);
+        }
       }
 
       // Automatyczna poprawka w Google Sheets — w tle, nie czekamy (Supabase
       // to źródło prawdy, Apps Script bywa wolny).
-      sendToGoogleSheets(parsed, "EDIT_SHIFT");
+      sendToGoogleSheets(parsed, isNewShift ? "ADD_SHIFT" : "EDIT_SHIFT");
 
       setEditingShift(null);
-      showMsg("Zmiana zaktualizowana!");
+      showMsg(isNewShift ? "Wpis dodany!" : "Zmiana zaktualizowana!");
     } catch (err) {
-      showMsg("Błąd aktualizacji!", "error");
+      showMsg(
+        `Błąd zapisu: ${err.message || "nieznany błąd"}`,
+        "error"
+      );
     }
   };
 
@@ -577,106 +701,30 @@ const ManagerDashboard = ({
   // jest). Pokazujemy je dopiero przy edycji istniejącego pracownika.
   const showTermWarnings = editingUser && !!editingUser.id;
 
-  return (
-    <div className="min-h-screen bg-gray-100 flex flex-col md:flex-row">
-      <div className="w-full md:w-64 bg-gray-900 text-white flex flex-col flex-shrink-0">
-        <div className="p-4 bg-gray-950 font-bold text-xl flex flex-col">
-          Gastro Manager{" "}
-          <span className="text-xs font-normal text-gray-400">
-            {isLocalManager ? `Kierownik lokalu` : "Szef (Admin)"}
-          </span>
-        </div>
-        <nav className="flex-grow flex md:flex-col overflow-x-auto">
-          <button
-            onClick={() => setTab("godziny")}
-            className={`p-4 text-left border-b border-gray-800 flex items-center gap-2 whitespace-nowrap ${
-              tab === "godziny" ? "bg-blue-600" : "hover:bg-gray-800"
-            }`}
-          >
-            <Filter size={18} /> Rejestr Godzin
-          </button>
-          <button
-            onClick={() => setTab("pulpit")}
-            className={`p-4 text-left border-b border-gray-800 flex items-center gap-2 whitespace-nowrap ${
-              tab === "pulpit" ? "bg-blue-600" : "hover:bg-gray-800"
-            }`}
-          >
-            <Users size={18} /> Pulpit godzin
-          </button>
-          <button
-            onClick={() => setTab("grafik")}
-            className={`p-4 text-left border-b border-gray-800 flex items-center gap-2 whitespace-nowrap ${
-              tab === "grafik" ? "bg-blue-600" : "hover:bg-gray-800"
-            }`}
-          >
-            <Calendar size={18} /> Grafik
-          </button>
-          <button
-            onClick={() => setTab("aktywni")}
-            className={`p-4 text-left border-b border-gray-800 flex items-center gap-2 whitespace-nowrap ${
-              tab === "aktywni" ? "bg-blue-600" : "hover:bg-gray-800"
-            }`}
-          >
-            <Clock size={18} /> Aktywne Zmiany
-          </button>
-          <button
-            onClick={() => setTab("moja_praca")}
-            className={`p-4 text-left border-b border-gray-800 flex items-center gap-2 whitespace-nowrap ${
-              tab === "moja_praca" ? "bg-blue-600" : "hover:bg-gray-800"
-            }`}
-          >
-            <User size={18} /> Moja Praca
-          </button>
-          <button
-            onClick={() => setTab("zgloszenia")}
-            className={`p-4 text-left border-b border-gray-800 flex items-center gap-2 whitespace-nowrap ${
-              tab === "zgloszenia" ? "bg-blue-600" : "hover:bg-gray-800"
-            }`}
-          >
-            <AlertCircle size={18} /> Zgłoszenia{" "}
-            {issues.filter((i) => i.status === "nowe").length > 0 && (
-              <span className="bg-red-500 text-xs px-2 py-1 rounded-full ml-1">
-                {issues.filter((i) => i.status === "nowe").length}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setTab("powiadomienia")}
-            className={`p-4 text-left border-b border-gray-800 flex items-center gap-2 whitespace-nowrap ${
-              tab === "powiadomienia" ? "bg-blue-600" : "hover:bg-gray-800"
-            }`}
-          >
-            <Bell size={18} /> Powiadomienia{" "}
-            {unreadManagerCount > 0 && (
-              <span className="bg-red-500 text-xs px-2 py-1 rounded-full ml-1">
-                {unreadManagerCount}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setTab("pracownicy")}
-            className={`p-4 text-left border-b border-gray-800 flex items-center gap-2 whitespace-nowrap ${
-              tab === "pracownicy" ? "bg-blue-600" : "hover:bg-gray-800"
-            }`}
-          >
-            <Settings size={18} /> Przewodnik
-          </button>
-        </nav>
-        <button
-          onClick={() => setCurrentView("login")}
-          className="p-4 hover:bg-gray-800 border-t border-gray-800 flex items-center gap-2 text-gray-400"
-        >
-          <LogOut size={18} /> Wyloguj
-        </button>
-      </div>
+  const wBudowieLabel = NAV_ITEMS.find((n) => n.key === tab)?.label || tab;
+  const tabsWithOldContent = ["powiadomienia"];
+  // "moja_praca" jest już aktywna (nie w kolejności makiet, ale kierownik
+  // sam odbija godziny i nie mógł ich zapisać podczas przebudowy reszty).
 
-      <div className="flex-grow p-4 md:p-8 overflow-y-auto w-full relative">
+  return (
+    <ManagerShell
+      currentUser={currentUser}
+      isLocalManager={isLocalManager}
+      lokaleForTabs={lokaleForTabs}
+      selectedLokal={selectedLokal}
+      setSelectedLokal={setSelectedLokal}
+      activeTab={tab}
+      setActiveTab={setTab}
+      badges={shellBadges}
+      onLogout={() => setCurrentView("login")}
+    >
+      <div className="relative">
         {editingShift && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
             <div className="bg-white p-6 rounded-xl w-full max-w-md shadow-2xl">
               <div className="flex justify-between items-center mb-4 border-b pb-2">
                 <h3 className="text-xl font-bold">
-                  Edycja: {editingShift.user_name}
+                  {isNewShift ? "Nowy wpis" : `Edycja: ${editingShift.user_name}`}
                 </h3>
                 <button
                   onClick={() => setEditingShift(null)}
@@ -686,6 +734,30 @@ const ManagerDashboard = ({
                 </button>
               </div>
               <form onSubmit={handleSaveShiftEdit} className="space-y-4">
+                {isNewShift && (
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600">
+                      Pracownik
+                    </label>
+                    <select
+                      value={shiftForm.userId}
+                      onChange={(e) =>
+                        setShiftForm({ ...shiftForm, userId: e.target.value })
+                      }
+                      className="w-full p-2 border rounded bg-gray-50"
+                      required
+                    >
+                      <option value="">-- Wybierz --</option>
+                      {visibleUsers
+                        .filter((u) => u.role !== "kiosk")
+                        .map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-bold text-gray-600">
@@ -773,14 +845,16 @@ const ManagerDashboard = ({
                   </div>
                 </div>
                 <div className="flex gap-2 mt-6 pt-4 border-t">
-                  <button
-                    type="button"
-                    onClick={handleDeleteShift}
-                    className="flex-none p-2 bg-red-100 text-red-700 font-bold rounded flex hover:bg-red-200"
-                    title="Usuń zmianę z bazy"
-                  >
-                    <Trash2 size={20} />
-                  </button>
+                  {!isNewShift && (
+                    <button
+                      type="button"
+                      onClick={handleDeleteShift}
+                      className="flex-none p-2 bg-red-100 text-red-700 font-bold rounded flex hover:bg-red-200"
+                      title="Usuń zmianę z bazy"
+                    >
+                      <Trash2 size={20} />
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setEditingShift(null)}
@@ -802,7 +876,48 @@ const ManagerDashboard = ({
         )}
 
         {tab === "pulpit" && (
-          <div className="max-w-full mx-auto">
+          <PulpitHome
+            users={users}
+            shifts={shifts}
+            issues={issues}
+            matchesFilter={matchesLokalFilter}
+            setActiveTab={setTab}
+          />
+        )}
+        {tab === "raporty" && (
+          <RaportyIKoszty
+            users={users}
+            shifts={shifts}
+            matchesFilter={matchesLokalFilter}
+            onEditShift={openEditShift}
+            selectedUserId={reportUserId}
+            setSelectedUserId={setReportUserId}
+          />
+        )}
+
+        {tab === "przewodnik" && <Przewodnik />}
+
+        {tab !== "pulpit" &&
+          tab !== "moja_praca" &&
+          tab !== "godziny" &&
+          tab !== "zatwierdzanie" &&
+          tab !== "aktywni" &&
+          tab !== "zgloszenia" &&
+          tab !== "pracownicy" &&
+          tab !== "raporty" &&
+          tab !== "przewodnik" && (
+          <WBudowie
+            label={wBudowieLabel}
+            hasOldContent={tabsWithOldContent.includes(tab)}
+          />
+        )}
+
+        {/* Poniżej stara zawartość zakładek — celowo martwa (false &&),
+            budujemy nowy wygląd po kolei zgodnie z makietami; żeby
+            "przywrócić" zakładkę, wystarczy wyjąć jej blok spod tego
+            wrappera i podpiąć pod nowy tab === "..." dispatch wyżej. */}
+        {false && (
+        <div className="max-w-full mx-auto">
             <div className="flex flex-wrap items-center gap-3 mb-4">
               <h2 className="text-2xl font-bold mr-auto">Pulpit godzin</h2>
 
@@ -1014,7 +1129,7 @@ const ManagerDashboard = ({
           </div>
         )}
 
-        {tab === "grafik" && (
+        {false && tab === "grafik" && (
           <div className="max-w-3xl mx-auto text-center py-20">
             <Calendar size={64} className="mx-auto mb-4 text-gray-300" />
             <h2 className="text-2xl font-bold text-gray-400 mb-2">
@@ -1027,6 +1142,18 @@ const ManagerDashboard = ({
         )}
 
         {tab === "godziny" && (
+          <RejestrGodzin
+            shifts={shifts}
+            issues={issues}
+            shiftEdits={shiftEdits}
+            matchesFilter={matchesLokalFilter}
+            onEditShift={openEditShift}
+            onNewShift={openNewShift}
+            onNameClick={goToEmployeeReport}
+          />
+        )}
+
+        {false && tab === "godziny" && (
           <div className="max-w-6xl mx-auto">
             <h2 className="text-2xl font-bold mb-4">Rejestr i Edycja Godzin</h2>
             <div className="bg-white p-4 rounded-xl shadow mb-6 border">
@@ -1137,11 +1264,16 @@ const ManagerDashboard = ({
                     <th className="p-3">Lokal/Stan.</th>
                     <th className="p-3">Godziny</th>
                     <th className="p-3 text-right">Suma</th>
+                    <th className="p-3 text-center">Status</th>
                     <th className="p-3 text-center">Akcja</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {filteredShifts.map((shift) => (
+                  {filteredShifts.map((shift) => {
+                    const pendingCorrection = pendingCorrections.find(
+                      (iss) => iss.shift_id === shift.id
+                    );
+                    return (
                     <tr key={shift.id} className="hover:bg-gray-50">
                       <td className="p-3 whitespace-nowrap">
                         {shift.start_time.toLocaleDateString()}
@@ -1180,6 +1312,25 @@ const ManagerDashboard = ({
                           : "-"}
                       </td>
                       <td className="p-3 text-center">
+                        {pendingCorrection ? (
+                          <button
+                            onClick={() => setTab("zatwierdzanie")}
+                            className="text-xs px-2 py-1 rounded font-bold bg-red-100 text-red-700 hover:bg-red-200"
+                            title="Pracownik zgłosił poprawkę tej zmiany"
+                          >
+                            Do decyzji
+                          </button>
+                        ) : !shift.end_time ? (
+                          <span className="text-xs px-2 py-1 rounded font-bold bg-amber-100 text-amber-700">
+                            Na zmianie
+                          </span>
+                        ) : (
+                          <span className="text-xs px-2 py-1 rounded font-bold bg-green-100 text-green-700">
+                            Zatwierdzone
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-3 text-center">
                         <button
                           onClick={() => openEditShift(shift)}
                           className="p-2 text-blue-600 bg-blue-50 rounded hover:bg-blue-100 mx-auto block"
@@ -1188,7 +1339,8 @@ const ManagerDashboard = ({
                         </button>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1196,6 +1348,15 @@ const ManagerDashboard = ({
         )}
 
         {tab === "aktywni" && (
+          <Aktywni
+            shifts={shifts}
+            matchesFilter={matchesLokalFilter}
+            onEndShift={openEditShift}
+            onNameClick={goToEmployeeReport}
+          />
+        )}
+
+        {false && tab === "aktywni" && (
           <div className="max-w-6xl mx-auto">
             <h2 className="text-2xl font-bold mb-6">Trwające zmiany</h2>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -1209,13 +1370,19 @@ const ManagerDashboard = ({
                     <div className="bg-green-100 p-3 rounded-full text-green-600">
                       <Clock size={24} />
                     </div>
-                    <div>
+                    <div className="flex-1">
                       <p className="font-bold text-lg">{active.user_name}</p>
                       <p className="text-sm text-gray-600">
                         Od: {active.start_time.toLocaleTimeString()} |{" "}
                         {active.lokal}
                       </p>
                     </div>
+                    <button
+                      onClick={() => openEditShift(active)}
+                      className="bg-blue-600 text-white text-xs font-bold px-3 py-2 rounded hover:bg-blue-700 flex-shrink-0"
+                    >
+                      Zakończ zmianę
+                    </button>
                     <button
                       onClick={() => openEditShift(active)}
                       className="absolute top-2 right-2 text-gray-400 hover:text-blue-600 p-1"
@@ -1229,31 +1396,48 @@ const ManagerDashboard = ({
         )}
 
         {tab === "moja_praca" && (
-          <div className="max-w-4xl mx-auto space-y-6">
-            <h2 className="text-2xl font-bold mb-4">Moje Godziny Pracy</h2>
-            <TimeEntryForm
-              userObj={currentUser}
-              activeUsers={[]}
-              lokale={availableLokaleForManager}
-              stanowiska={activeStanowiska}
-              shifts={shifts}
-              setShifts={setShifts}
-              showMsg={showMsg}
-            />
-            <HoursReport
-              shiftsData={shifts}
-              usersData={[currentUser]}
-              defaultUserId={currentUser.id}
-              isManager={false}
-            />
-          </div>
+          <MojaPraca
+            currentUser={currentUser}
+            lokale={availableLokaleForManager}
+            stanowiska={activeStanowiska}
+            shifts={shifts}
+            setShifts={setShifts}
+            showMsg={showMsg}
+            onEditShift={openEditShift}
+          />
+        )}
+
+        {tab === "zatwierdzanie" && (
+          <ZatwierdzanieZmian
+            currentUser={currentUser}
+            shifts={shifts}
+            setShifts={setShifts}
+            issues={issues}
+            setIssues={setIssues}
+            shiftEdits={shiftEdits}
+            setShiftEdits={setShiftEdits}
+            hasAccessToLokal={hasAccessToLokal}
+            availableLokale={availableLokaleForManager}
+            activeStanowiska={activeStanowiska}
+            showMsg={showMsg}
+          />
         )}
 
         {tab === "zgloszenia" && (
+          <Zgloszenia
+            issues={issues}
+            users={users}
+            hasAccessToLokal={hasAccessToLokal}
+            onResolve={resolveIssue}
+          />
+        )}
+
+        {false && tab === "zgloszenia" && (
           <div className="max-w-4xl mx-auto">
             <h2 className="text-2xl font-bold mb-6">Zgłoszenia do poprawy</h2>
             <div className="space-y-4">
               {issues
+                .filter((iss) => iss.type !== "correction")
                 .filter((iss) =>
                   hasAccessToLokal(
                     users.find((u) => u.id === iss.user_id)?.default_lokal || ""
@@ -1300,7 +1484,7 @@ const ManagerDashboard = ({
           </div>
         )}
 
-        {tab === "powiadomienia" && (
+        {false && tab === "powiadomienia" && (
           <div className="max-w-4xl mx-auto">
             <h2 className="text-2xl font-bold mb-6">Powiadomienia</h2>
             <NotificationsPanel
@@ -1311,6 +1495,27 @@ const ManagerDashboard = ({
         )}
 
         {tab === "pracownicy" && (
+          <Pracownicy
+            visibleUsers={visibleUsers}
+            archivedUsers={archivedUsers}
+            editingUser={editingUser}
+            setEditingUser={setEditingUser}
+            onNewUser={handleNewUserClick}
+            onSave={handleSaveUser}
+            onArchive={handleArchiveEntity}
+            onPermanentDelete={handlePermanentDelete}
+            isLocalManager={isLocalManager}
+            availableLokaleForManager={availableLokaleForManager}
+            activeLokale={activeLokale}
+            activeStanowiska={activeStanowiska}
+            shifts={shifts}
+            editingDict={editingDict}
+            setEditingDict={setEditingDict}
+            onSaveDict={handleSaveDict}
+          />
+        )}
+
+        {false && tab === "pracownicy" && (
           <div className="max-w-5xl mx-auto">
             <h2 className="text-2xl font-bold mb-4">Przewodnik</h2>
             <div className="flex border-b mb-6 overflow-x-auto">
@@ -1995,7 +2200,7 @@ const ManagerDashboard = ({
           </div>
         )}
       </div>
-    </div>
+    </ManagerShell>
   );
 };
 

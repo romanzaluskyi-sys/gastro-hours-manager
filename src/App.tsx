@@ -7,6 +7,7 @@ import LoginScreen from "./components/LoginScreen";
 import PersonalDashboard from "./components/PersonalDashboard";
 import KioskDashboard from "./components/KioskDashboard";
 import ManagerDashboard from "./components/ManagerDashboard";
+import UpdateBanner from "./components/UpdateBanner";
 
 // Trzyma zalogowanego użytkownika w localStorage, żeby odświeżenie strony
 // nie wylogowywało — bez tego sesja żyła tylko w pamięci Reacta. `pin`
@@ -47,6 +48,7 @@ export default function App() {
   const [shifts, setShifts] = useState([]);
   const [issues, setIssues] = useState([]);
   const [notifications, setNotifications] = useState([]);
+  const [shiftEdits, setShiftEdits] = useState([]);
 
   const [currentView, setCurrentView] = useState(() => loadSession().currentView);
   const [currentUser, setCurrentUser] = useState(() => loadSession().currentUser);
@@ -129,12 +131,38 @@ export default function App() {
           setNotifications([]);
         });
     };
+    // Zgłoszenia (issues) odświeżamy tym samym rytmem, żeby otwarty Panel
+    // Kierownika zobaczył nową korektę godzin od pracownika bez ręcznego
+    // odświeżenia strony (patrz "Zatwierdzanie zmian").
+    const loadIssues = () => {
+      api
+        .get("issues")
+        .then((i) => setIssues(Array.isArray(i) ? i : []))
+        .catch((err) => {
+          console.error("Błąd pobierania zgłoszeń:", err.message || err);
+        });
+    };
     loadNotifications();
 
-    // Odświeżamy powiadomienia co 45s, żeby już otwarta sesja też je widziała
-    // bez konieczności przeładowania strony.
-    const notifInterval = setInterval(loadNotifications, 45000);
-    return () => clearInterval(notifInterval);
+    // shift_edits (audit trail korekt) — ładujemy raz, bez pollingu: rośnie
+    // tylko przez akcję samego kierownika w tej samej sesji (Zatwierdzanie
+    // zmian), więc lokalny dopisek po zatwierdzeniu wystarczy. Osobno od
+    // głównego Promise.all z tego samego powodu co notifications — błąd
+    // tu nie może zablokować reszty apki.
+    api
+      .get("shift_edits")
+      .then((se) => setShiftEdits(Array.isArray(se) ? se : []))
+      .catch((err) => {
+        console.error("Błąd pobierania historii korekt:", err.message || err);
+      });
+
+    // Odświeżamy co 45s, żeby już otwarta sesja też widziała zmiany bez
+    // konieczności przeładowania strony.
+    const pollInterval = setInterval(() => {
+      loadNotifications();
+      loadIssues();
+    }, 45000);
+    return () => clearInterval(pollInterval);
   }, []);
 
   return (
@@ -155,6 +183,7 @@ export default function App() {
           {toast.message}
         </div>
       )}
+      <UpdateBanner />
       {currentView === "login" && (
         <LoginScreen
           users={users}
@@ -211,6 +240,8 @@ export default function App() {
           setIssues={setIssues}
           notifications={notifications}
           setNotifications={setNotifications}
+          shiftEdits={shiftEdits}
+          setShiftEdits={setShiftEdits}
           showMsg={showMsg}
         />
       )}
