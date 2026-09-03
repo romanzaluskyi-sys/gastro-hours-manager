@@ -5,6 +5,20 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.15.0 — 2026-09-03
+
+- **Grafik — konfiguracja.** Nowa zakładka Grafik z sekcją Konfiguracja:
+  godziny otwarcia lokalu (osobno na każdy dzień tygodnia), wymagania
+  obsady na stanowisko (w które dni, od której do której i ile osób) oraz
+  wyjątki na konkretne daty — święta i niedziele handlowe z własnymi
+  godzinami i własnymi wymaganiami. Wymagania obowiązują od wybranego
+  miesiąca i można je skopiować na kolejny.
+- W karcie pracownika doszło pole **"Inne stanowiska, na których umie
+  pracować"** — grafik ostrzeże, gdy zmiana trafi na stanowisko spoza tej
+  listy, ale nadal pozwoli ją wpisać.
+- Sama siatka grafiku (tydzień, miesiąc, wpisywanie zmian) jest w budowie —
+  konfiguracja jest pierwszym krokiem, bez niej nie ma jak sprawdzać obsady.
+
 ## 0.14.0 — 2026-09-03
 
 - **Wnioski o urlop i niedostępność.** W zakładce Zgłoś można teraz

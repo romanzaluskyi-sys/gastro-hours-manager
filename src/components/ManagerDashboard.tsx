@@ -35,6 +35,7 @@ import Zgloszenia from "./manager/Zgloszenia";
 import Pracownicy from "./manager/Pracownicy";
 import RaportyIKoszty from "./manager/RaportyIKoszty";
 import Przewodnik from "./manager/Przewodnik";
+import Grafik from "./manager/Grafik";
 
 // ==========================================
 // KIEROWNIK DASHBOARD
@@ -62,6 +63,14 @@ const ManagerDashboard = ({
   setTaskCompletions,
   absences,
   setAbsences,
+  staffingRules,
+  setStaffingRules,
+  staffingRuleSets,
+  setStaffingRuleSets,
+  lokaleGodziny,
+  setLokaleGodziny,
+  grafikWyjatki,
+  setGrafikWyjatki,
   showMsg,
 }) => {
   const [tab, setTab] = useState("pulpit");
@@ -461,6 +470,14 @@ const ManagerDashboard = ({
         Array.isArray(dataToSave.allowed_lokale)
       ) {
         dataToSave.allowed_lokale = dataToSave.allowed_lokale.join(",");
+      }
+      // allowed_stanowiska (Grafik) — ta sama konwersja tablica → tekst po
+      // przecinku co allowed_lokale wyżej, ale dla każdej roli poza kiosk.
+      if (Array.isArray(dataToSave.allowed_stanowiska)) {
+        dataToSave.allowed_stanowiska =
+          dataToSave.allowed_stanowiska.length > 0
+            ? dataToSave.allowed_stanowiska.join(",")
+            : null;
       }
 
       if (editingUser.id) {
@@ -1016,7 +1033,26 @@ const ManagerDashboard = ({
           />
         )}
 
+        {tab === "grafik" && (
+          <Grafik
+            currentUser={currentUser}
+            selectedLokal={selectedLokal}
+            availableLokaleForManager={availableLokaleForManager}
+            activeStanowiska={activeStanowiska}
+            staffingRules={staffingRules}
+            setStaffingRules={setStaffingRules}
+            staffingRuleSets={staffingRuleSets}
+            setStaffingRuleSets={setStaffingRuleSets}
+            lokaleGodziny={lokaleGodziny}
+            setLokaleGodziny={setLokaleGodziny}
+            grafikWyjatki={grafikWyjatki}
+            setGrafikWyjatki={setGrafikWyjatki}
+            showMsg={showMsg}
+          />
+        )}
+
         {tab !== "pulpit" &&
+          tab !== "grafik" &&
           tab !== "moja_praca" &&
           tab !== "godziny" &&
           tab !== "zatwierdzanie" &&

@@ -23,6 +23,15 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.15.0",
+    date: "2026-09-03",
+    items: [
+      "Nowa zakładka Grafik — na razie sekcja Konfiguracja: godziny otwarcia lokalu, wymagania obsady na stanowisko (dni, godziny, ile osób) i wyjątki na konkretne daty.",
+      "Wymagania obsady obowiązują od wybranego miesiąca — można je skopiować na kolejny zamiast wpisywać od nowa.",
+      "W karcie pracownika: lista innych stanowisk, na których umie pracować.",
+    ],
+  },
+  {
     version: "0.14.0",
     date: "2026-09-03",
     items: [
