@@ -17,6 +17,7 @@ import { api } from "../api/supabase";
 import { sendToGoogleSheets, toLocalYMD } from "../api/googleSheets";
 import { APP_VERSION } from "../config";
 import { findOverlappingShift, getTodaysShiftsForUser } from "../utils/shifts";
+import WeatherBadge from "./WeatherBadge";
 import {
   getShort,
   getDayOfWeek,
@@ -1000,8 +1001,16 @@ export const EmployeeSessionScreens = ({
           renderShiftInProgress()
         ) : (
           <>
-            <div className="font-['Archivo'] font-extrabold text-[30px] text-[#171714]">
-              Cześć, {employee.name}
+            <div className="flex items-start justify-between gap-3">
+              <div className="font-['Archivo'] font-extrabold text-[30px] text-[#171714]">
+                Cześć, {employee.name}
+              </div>
+              <WeatherBadge
+                city={
+                  lokaleOptions.find((l) => l.name === effectiveAssignment.lokal)?.miasto
+                }
+                className="text-[#8F8E86] text-sm mt-1.5 flex-shrink-0"
+              />
             </div>
             <div className="text-sm text-[#6E6E66] mt-0.5 mb-7">
               {employee.default_lokal} · {employee.default_stanowisko}

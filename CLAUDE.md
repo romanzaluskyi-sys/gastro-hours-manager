@@ -402,6 +402,35 @@ dokleja z przodu `user_name` (`"Wojtek: Twój termin: ..."`) — bez tego,
 przy kilku pracownikach `open` na jednym urządzeniu nie było wiadomo, do
 kogo należy powiadomienie.
 
+## Pogoda — zaimplementowane 2026-09-03
+
+Mały wskaźnik pogody (ikona + temperatura) w pasku górnym Panelu
+Kierownika (`ManagerShell.tsx`, obok zegara) i na ekranie Pulpit
+pracownika (`employeeSessionShared.tsx`) — patrz
+[`components/WeatherBadge.tsx`](src/components/WeatherBadge.tsx) i
+[`utils/weather.ts`](src/utils/weather.ts). Bez klucza API — źródło to
+**Open-Meteo** (darmowe, publiczne, nie wymaga rejestracji): najpierw
+geokodowanie nazwy miasta (`geocoding-api.open-meteo.com`) na
+szerokość/długość, potem aktualna pogoda dla tych współrzędnych
+(`api.open-meteo.com`). Oba wyniki cache'owane w pamięci modułu (per
+miasto, 20 min TTL dla pogody) — nie odpytujemy API przy każdym
+re-renderze.
+
+Miasto NIE jest wpisane na sztywno w kodzie — kierownik wpisuje je ręcznie
+per lokal w Pracownicy → Lokale (`lokale.miasto`, patrz Schemat Supabase
+niżej), bo lokale sieci są w różnych miastach (stan na 2026-09-03: Bułka i
+Jacek/Marynata i Chińczyk/Ceglana → Koszalin, Sunset → Sarbinowo,
+woj. zachodniopomorskie). W pasku kierownika pogoda dotyczy wybranego w
+górnym pasku lokalu (`selectedLokal`) — przy "Cała sieć"/"Wszystkie moje"
+spada na pierwszy dostępny lokal (`weatherLokalName` w
+`ManagerDashboard.tsx`), bo nie ma miejsca na kilka miast naraz. Na
+Pulpicie pracownika pogoda dotyczy jego `effectiveAssignment.lokal`
+(patrz `getEffectiveAssignmentForDate` w sekcji "Zadania i sprzątanie"
+niżej — ten sam mechanizm "otwarta/najnowsza zmiana dziś nad statycznym
+default_lokal"). Brak `miasto` dla lokalu albo błąd sieci = cichy fallback
+na "--°C" (`WeatherBadge`) — to dekoracja paska, nie coś krytycznego, więc
+nigdy nie pokazujemy błędu użytkownikowi.
+
 ## Zadania i sprzątanie (Roadmap p.2) — zaimplementowane 2026-09-02..04
 
 Zbudowane w trzech rundach: pierwsza wersja (schemat + panel kierownika +
@@ -628,7 +657,14 @@ zakresem — wymaga Grafiku, którego nie ma.
   (text/timestamptz, nullable — ustawiane w `handleSaveUser` TYLKO gdy
   `notatki` faktycznie się zmieniło względem tego, co jest w bazie, nie
   przy każdym zapisie karty).
-- **lokale** — `id, name, archived`
+- **lokale** — `id, name, archived, miasto`. `miasto` (text, nullable,
+  ustawiane ręcznie w Pracownicy → Lokale) — miasto używane do pogody w
+  pasku górnym Panelu Kierownika i na Pulpicie pracownika, patrz sekcja
+  "Pogoda" niżej. Dodane 2026-09-03, wymaga ręcznej migracji w Supabase
+  SQL Editor (zweryfikuj przez `information_schema.columns` po zapisaniu):
+  ```sql
+  alter table lokale add column miasto text;
+  ```
 - **stanowiska** — `id, name, lokal_name, archived`
 - **shifts** — `id, user_name, user_id?, lokal, stanowisko, start_time
   (timestamptz), end_time (timestamptz | null), godzin`. `id` to **uuid**

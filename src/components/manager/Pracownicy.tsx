@@ -209,6 +209,22 @@ export default function Pracownicy({
                       </select>
                     </div>
                   )}
+                  {view === "lokale" && (
+                    <div>
+                      <label className="text-xs font-bold text-[#6E6E66]">
+                        Miasto (do pogody)
+                      </label>
+                      <input
+                        type="text"
+                        value={editingDict.miasto || ""}
+                        onChange={(e) =>
+                          setEditingDict({ ...editingDict, miasto: e.target.value })
+                        }
+                        placeholder="np. Koszalin"
+                        className="w-full p-2 border-[2px] border-[#171714] rounded"
+                      />
+                    </div>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   <button
@@ -235,6 +251,11 @@ export default function Pracownicy({
                   <p className="font-['Archivo'] font-bold">{item.name}</p>
                   {view === "stanowiska" && (
                     <p className="text-xs text-[#6E6E66]">Lokal: {item.lokal_name}</p>
+                  )}
+                  {view === "lokale" && (
+                    <p className="text-xs text-[#6E6E66]">
+                      Miasto: {item.miasto || "— nie ustawiono"}
+                    </p>
                   )}
                 </div>
                 <div className="flex gap-1.5">
