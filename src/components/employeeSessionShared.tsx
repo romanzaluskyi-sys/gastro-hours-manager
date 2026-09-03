@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { api } from "../api/supabase";
 import { sendToGoogleSheets, toLocalYMD } from "../api/googleSheets";
+import { createManagerNotification } from "../api/notifications";
 import { APP_VERSION } from "../config";
 import { findOverlappingShift, getTodaysShiftsForUser } from "../utils/shifts";
 import {
@@ -231,6 +232,8 @@ export const EmployeeSessionScreens = ({
   tasks,
   taskCompletions,
   setTaskCompletions,
+  absences,
+  setAbsences,
   onBack,
   onLogout,
   deviceNote = null,
@@ -271,6 +274,12 @@ export const EmployeeSessionScreens = ({
   const [zgPropStart, setZgPropStart] = useState("");
   const [zgPropEnd, setZgPropEnd] = useState("");
   const [zgKorektaNote, setZgKorektaNote] = useState("");
+
+  // ---- "Wniosek o wolne" (type: absence) — patrz handleSendAbsence ----
+  const [zgAbsType, setZgAbsType] = useState("urlop"); // "urlop" | "niedostepnosc"
+  const [zgAbsStart, setZgAbsStart] = useState("");
+  const [zgAbsEnd, setZgAbsEnd] = useState("");
+  const [zgAbsNote, setZgAbsNote] = useState("");
 
   // "own" = tylko wszyscy + moje stanowisko; "all" = wszystko dla lokalu
   // (przełącznik przydatny głównie na kiosku, gdzie kilka ról dzieli jedno
@@ -416,6 +425,10 @@ export const EmployeeSessionScreens = ({
       setZgSent(false);
       setZgText("");
       setZgKorektaNote("");
+      setZgAbsType("urlop");
+      setZgAbsStart("");
+      setZgAbsEnd("");
+      setZgAbsNote("");
       applyKorektaShiftDefaults(zgPrefillShiftId || "forgot");
     }
   }, [screen]);
@@ -621,6 +634,45 @@ export const EmployeeSessionScreens = ({
       setZgKorektaNote("");
       setZgSent(true);
       showMsg("Poprawka wysłana do kierownika!");
+    } catch (err) {
+      showMsg(`Błąd połączenia: ${err.message || "nieznany błąd"}`, "error");
+    }
+    setZgSaving(false);
+  };
+
+  const handleSendAbsence = async () => {
+    if (!zgAbsStart || !zgAbsEnd) {
+      return showMsg("Podaj daty od-do!", "error");
+    }
+    if (zgAbsEnd < zgAbsStart) {
+      return showMsg("Data „do” nie może być wcześniejsza niż „od”.", "error");
+    }
+    setZgSaving(true);
+    try {
+      const lokal = employee.default_lokal || lokaleOptions[0]?.name || null;
+      const absence = await api.post("absences", {
+        user_id: employee.id,
+        user_name: employee.name,
+        lokal,
+        start_date: zgAbsStart,
+        end_date: zgAbsEnd,
+        type: zgAbsType,
+        status: "pending",
+        note: zgAbsNote || null,
+        requested_by: "employee",
+      });
+      setAbsences([...absences, absence]);
+      if (lokal) {
+        await createManagerNotification(
+          lokal,
+          `${employee.name} prosi o ${
+            zgAbsType === "urlop" ? "urlop" : "dni niedostępności"
+          } (${zgAbsStart}–${zgAbsEnd}).`,
+          "absence_request"
+        );
+      }
+      setZgSent(true);
+      showMsg("Wniosek wysłany do kierownika!");
     } catch (err) {
       showMsg(`Błąd połączenia: ${err.message || "nieznany błąd"}`, "error");
     }
@@ -1159,14 +1211,20 @@ export const EmployeeSessionScreens = ({
               </span>
             </span>
             <span className="w-11 flex-shrink-0 text-[13px] font-semibold text-[#6E6E66]">
-              {getShort(s.stanowisko)}
+              {s.is_urlop ? "URL" : getShort(s.stanowisko)}
             </span>
             <span className="flex-1 text-[13.5px] text-[#171714] tabular-nums">
-              {fmtHHMM(s.start_time)} –{" "}
-              {s.end_time ? (
-                fmtHHMM(s.end_time)
+              {s.is_urlop ? (
+                <span className="text-[#6E6E66] italic">Urlop</span>
               ) : (
-                <span className="text-[#DE3A22] font-bold">Trwa</span>
+                <>
+                  {fmtHHMM(s.start_time)} –{" "}
+                  {s.end_time ? (
+                    fmtHHMM(s.end_time)
+                  ) : (
+                    <span className="text-[#DE3A22] font-bold">Trwa</span>
+                  )}
+                </>
               )}
             </span>
             <span className="w-[74px] flex-shrink-0 text-right font-['Archivo'] font-extrabold text-[15px] text-[#171714] tabular-nums">
@@ -1174,12 +1232,16 @@ export const EmployeeSessionScreens = ({
                 ? ((s.end_time - s.start_time) / 3600000).toFixed(1).replace(".", ",")
                 : "-"}
             </span>
-            <button
-              onClick={() => openZgloszenie(s.id)}
-              className="w-9 h-[30px] flex-shrink-0 border-2 border-[#B7B6AE] rounded flex items-center justify-center text-[#6E6E66]"
-            >
-              <Flag size={14} />
-            </button>
+            {s.is_urlop ? (
+              <span className="w-9 h-[30px] flex-shrink-0" />
+            ) : (
+              <button
+                onClick={() => openZgloszenie(s.id)}
+                className="w-9 h-[30px] flex-shrink-0 border-2 border-[#B7B6AE] rounded flex items-center justify-center text-[#6E6E66]"
+              >
+                <Flag size={14} />
+              </button>
+            )}
           </div>
         ))}
       </Shell>
@@ -1399,17 +1461,32 @@ export const EmployeeSessionScreens = ({
         onBack={onBack}
         unreadCount={unreadCount}
         taskBadgeCount={taskBadgeCount}
-        title={zgType === "correction" ? "Popraw zmianę" : "Zgłoś problem"}
+        title={
+          zgType === "correction"
+            ? "Popraw zmianę"
+            : zgType === "absence"
+            ? "Wniosek o wolne"
+            : "Zgłoś problem"
+        }
       >
         {!zgSent && (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-2">
             <button
               type="button"
               onClick={() => setZgType("correction")}
               className={checkboxRowCls(zgType === "correction")}
             >
-              <span className="text-[15px] font-semibold text-[#171714]">
+              <span className="text-[13.5px] font-semibold text-[#171714]">
                 Popraw zmianę
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setZgType("absence")}
+              className={checkboxRowCls(zgType === "absence")}
+            >
+              <span className="text-[13.5px] font-semibold text-[#171714]">
+                Wolne / urlop
               </span>
             </button>
             <button
@@ -1417,7 +1494,7 @@ export const EmployeeSessionScreens = ({
               onClick={() => setZgType("problem")}
               className={checkboxRowCls(zgType === "problem")}
             >
-              <span className="text-[15px] font-semibold text-[#171714]">
+              <span className="text-[13.5px] font-semibold text-[#171714]">
                 Zgłoś problem
               </span>
             </button>
@@ -1559,6 +1636,76 @@ export const EmployeeSessionScreens = ({
                 className={ctaPrimaryCls}
               >
                 Wyślij poprawkę
+              </button>
+            )}
+          </>
+        ) : zgType === "absence" ? (
+          <>
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setZgAbsType("urlop")}
+                className={checkboxRowCls(zgAbsType === "urlop")}
+              >
+                <span className="text-[15px] font-semibold text-[#171714]">Urlop</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setZgAbsType("niedostepnosc")}
+                className={checkboxRowCls(zgAbsType === "niedostepnosc")}
+              >
+                <span className="text-[15px] font-semibold text-[#171714]">
+                  Niedostępność
+                </span>
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-3 mt-5">
+              <div>
+                <span className={fieldLabelCls}>Od</span>
+                <input
+                  type="date"
+                  value={zgAbsStart}
+                  onChange={(e) => setZgAbsStart(e.target.value)}
+                  className={selectElCls}
+                />
+              </div>
+              <div>
+                <span className={fieldLabelCls}>Do</span>
+                <input
+                  type="date"
+                  value={zgAbsEnd}
+                  onChange={(e) => setZgAbsEnd(e.target.value)}
+                  className={selectElCls}
+                />
+              </div>
+            </div>
+            <div className="mt-5">
+              <span className={fieldLabelCls}>Komentarz (opcjonalnie)</span>
+              <textarea
+                value={zgAbsNote}
+                onChange={(e) => setZgAbsNote(e.target.value)}
+                className="border-2 border-[#B7B6AE] rounded bg-[#E7E7E2] p-3.5 text-[15px] text-[#171714] min-h-[80px] w-full"
+                placeholder="Np. wyjazd rodzinny"
+              />
+            </div>
+            <div className="bg-[#E7E7E2] rounded p-3.5 text-sm text-[#6E6E66] mt-5">
+              {zgAbsType === "urlop"
+                ? "Kierownik zatwierdzi albo odrzuci wniosek. Po zatwierdzeniu urlop zostanie wpisany jako godziny (8h za każdy dzień roboczy, bez sobót i niedziel)."
+                : "Kierownik zatwierdzi albo odrzuci wniosek. Niedostępność nie generuje godzin — to tylko informacja, że nie możesz wtedy pracować."}
+            </div>
+            {zgSent && (
+              <div className="mt-2.5 text-xs text-[#A83226] bg-[#FBEAE6] rounded p-2.5">
+                Wniosek wysłany. Kierownik odpowie w Wiadomościach.
+              </div>
+            )}
+            <div className="flex-1" />
+            {!zgSent && (
+              <button
+                onClick={handleSendAbsence}
+                disabled={zgSaving}
+                className={ctaPrimaryCls}
+              >
+                Wyślij wniosek
               </button>
             )}
           </>

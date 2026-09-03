@@ -3,9 +3,18 @@
 // godzin / "zapomniałem odbić" zgłoszone przez pracownika w Zgłoś). Biржа
 // zmian z Grafiku — świadomie poza zakresem, patrz plan realizacji.
 import React, { useState } from "react";
-import { Check, Edit2, HelpCircle, AlertCircle } from "lucide-react";
+import { Check, Edit2, HelpCircle, AlertCircle, X, Palmtree } from "lucide-react";
 import { resolveCorrection, askAboutCorrection } from "../../utils/corrections";
 import { pageTitleCls, statLabelCls, btnPrimaryCls, btnSecondaryCls } from "./designTokens";
+
+const fmtPLAbs = (dateStr) =>
+  dateStr
+    ? new Date(dateStr + "T00:00:00").toLocaleDateString("pl-PL", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      })
+    : "";
 
 const fmtHHMM = (d) =>
   d
@@ -35,12 +44,15 @@ export default function ZatwierdzanieZmian({
   hasAccessToLokal,
   availableLokale,
   activeStanowiska,
+  pendingAbsences = [],
+  onResolveAbsence,
   showMsg,
 }) {
   const [selected, setSelected] = useState({});
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [absenceBusyId, setAbsenceBusyId] = useState(null);
 
   const rows = issues
     .filter((iss) => iss.type === "correction" && iss.status === "nowe")
@@ -173,8 +185,64 @@ export default function ZatwierdzanieZmian({
 
   const selectedCount = Object.values(selected).filter(Boolean).length;
 
+  const handleAbsenceDecision = async (absence, decision) => {
+    setAbsenceBusyId(absence.id);
+    try {
+      await onResolveAbsence(absence, decision);
+      showMsg(decision === "approved" ? "Wniosek zatwierdzony!" : "Wniosek odrzucony.");
+    } catch (err) {
+      showMsg(`Błąd zapisu: ${err.message || "nieznany błąd"}`, "error");
+    }
+    setAbsenceBusyId(null);
+  };
+
   return (
     <div className="max-w-5xl mx-auto">
+      {pendingAbsences.length > 0 && (
+        <div className="mb-8">
+          <h3 className="font-['Archivo'] font-extrabold text-lg mb-3 flex items-center gap-2">
+            <Palmtree size={18} /> Wnioski o wolne · {pendingAbsences.length}
+          </h3>
+          <div className="space-y-3">
+            {pendingAbsences.map((a) => (
+              <div
+                key={a.id}
+                className="bg-white rounded-xl border-[2px] border-[#171714] p-4 flex items-start justify-between gap-4 flex-wrap"
+              >
+                <div>
+                  <p className="font-['Archivo'] font-bold text-lg">
+                    {a.user_name || "Pracownik"}
+                  </p>
+                  <p className="text-sm text-[#6E6E66]">
+                    {a.lokal} · {a.type === "urlop" ? "Urlop" : "Niedostępność"} ·{" "}
+                    {fmtPLAbs(a.start_date)}–{fmtPLAbs(a.end_date)}
+                  </p>
+                  {a.note && (
+                    <p className="text-sm text-[#6E6E66] mt-1.5 italic">„{a.note}”</p>
+                  )}
+                </div>
+                <div className="flex gap-2 flex-shrink-0">
+                  <button
+                    onClick={() => handleAbsenceDecision(a, "approved")}
+                    disabled={absenceBusyId === a.id}
+                    className={`${btnPrimaryCls} flex items-center gap-1.5`}
+                  >
+                    <Check size={16} /> Zatwierdź
+                  </button>
+                  <button
+                    onClick={() => handleAbsenceDecision(a, "rejected")}
+                    disabled={absenceBusyId === a.id}
+                    className={`${btnSecondaryCls} flex items-center gap-1.5`}
+                  >
+                    <X size={16} /> Odrzuć
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <h2 className={pageTitleCls}>
           {rows.length} {rows.length === 1 ? "zmiana czeka" : "zmiany czekają"}{" "}

@@ -397,14 +397,20 @@ export default function MojaPraca({
                   </span>
                 </span>
                 <span className="w-11 flex-shrink-0 text-[13px] font-semibold text-[#6E6E66]">
-                  {getShort(s.stanowisko)}
+                  {s.is_urlop ? "URL" : getShort(s.stanowisko)}
                 </span>
                 <span className="flex-1 text-[13.5px] text-[#171714] tabular-nums">
-                  {fmtHHMM(s.start_time)} –{" "}
-                  {s.end_time ? (
-                    fmtHHMM(s.end_time)
+                  {s.is_urlop ? (
+                    <span className="text-[#6E6E66] italic">Urlop</span>
                   ) : (
-                    <span className="text-[#DE3A22] font-bold">Trwa</span>
+                    <>
+                      {fmtHHMM(s.start_time)} –{" "}
+                      {s.end_time ? (
+                        fmtHHMM(s.end_time)
+                      ) : (
+                        <span className="text-[#DE3A22] font-bold">Trwa</span>
+                      )}
+                    </>
                   )}
                 </span>
                 <span className="w-[74px] flex-shrink-0 text-right font-['Archivo'] font-extrabold text-[15px] text-[#171714] tabular-nums">

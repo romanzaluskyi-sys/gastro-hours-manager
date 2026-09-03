@@ -5,6 +5,14 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.14.0 — 2026-09-03
+
+- **Wnioski o urlop i niedostępność.** W zakładce Zgłoś można teraz
+  wysłać wniosek o urlop albo dni niedostępności — kierownik zatwierdza
+  albo odrzuca w Zatwierdzanie zmian. Zatwierdzony urlop od razu wpisuje
+  się jako godziny (8h za dzień roboczy) we wszystkich raportach. Kierownik
+  może też wpisać urlop bezpośrednio w karcie pracownika.
+
 ## 0.11.1 — 2026-09-04
 
 - Poprawka nawigacji dat w Zadaniach i sprzątaniu: strzałki dnia

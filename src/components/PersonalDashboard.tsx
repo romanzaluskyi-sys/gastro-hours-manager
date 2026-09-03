@@ -37,6 +37,8 @@ const PersonalDashboard = ({
   tasks,
   taskCompletions,
   setTaskCompletions,
+  absences,
+  setAbsences,
   showMsg,
 }) => {
   const myNotifications = notifications.filter(
@@ -61,6 +63,8 @@ const PersonalDashboard = ({
       tasks={tasks}
       taskCompletions={taskCompletions}
       setTaskCompletions={setTaskCompletions}
+      absences={absences}
+      setAbsences={setAbsences}
       onLogout={() => setCurrentView("login")}
     />
   );

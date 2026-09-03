@@ -631,11 +631,18 @@ zakresem — wymaga Grafiku, którego nie ma.
 - **lokale** — `id, name, archived`
 - **stanowiska** — `id, name, lokal_name, archived`
 - **shifts** — `id, user_name, user_id?, lokal, stanowisko, start_time
-  (timestamptz), end_time (timestamptz | null), godzin`. `id` to **uuid**
-  (zweryfikowane bezpośrednio w Supabase 2026-09-02 — wcześniejsze wzmianki
-  o `bigint` w tym pliku były błędne; nie ufaj typom kolumn opisanym tu bez
-  świeżej weryfikacji przez `information_schema.columns`, jeśli coś na tym
-  zależy).
+  (timestamptz), end_time (timestamptz | null), godzin, is_urlop, absence_id`.
+  `id` to **uuid** (zweryfikowane bezpośrednio w Supabase 2026-09-02 —
+  wcześniejsze wzmianki o `bigint` w tym pliku były błędne; nie ufaj typom
+  kolumn opisanym tu bez świeżej weryfikacji przez
+  `information_schema.columns`, jeśli coś na tym zależy). `is_urlop`
+  (boolean, default `false`) i `absence_id` (text, nullable, luźne
+  odwołanie do `absences.id`, bez FK — ten sam wzorzec co
+  `shift_edits.shift_id`) dodane 2026-09-03, patrz "Urlopy i
+  niedostępność" niżej — wpisy urlopu to zwykłe wiersze `shifts` (8h,
+  `stanowisko = "Urlop"`) oznaczone tą flagą, żeby liczyły się automatycznie
+  we wszystkich istniejących sumach godzin/kosztów bez duplikowania logiki
+  agregującej w każdym raporcie z osobna.
 - **issues** — zgłoszenia od pracowników, dwa typy w jednej tabeli (patrz
   "Zgłoszenia i powiadomienia" wyżej). Podstawowe:
   `id, user_id, user_name, issue_text, status, is_anonymous, shift_id`
@@ -720,6 +727,96 @@ zakresem — wymaga Grafiku, którego nie ma.
   SQL (świadomie, jak reszta tego projektu — ochrona przed podwójnym
   zapisem jest tylko po stronie aplikacji w `utils/tasks.ts`). RLS:
   otwarta polityka.
+- **absences** — wnioski o wolne/urlop, patrz "Urlopy i niedostępność"
+  niżej. `id (uuid), user_id, user_name, lokal, start_date (date),
+  end_date (date), type (text: 'urlop'|'niedostepnosc'), status (text:
+  'pending'|'approved'|'rejected', default 'pending'), note (text, null),
+  requested_by (text: 'employee'|'manager'), decided_by (text, null),
+  decided_at (timestamptz, null), created_at (timestamptz)`. Dodane
+  2026-09-03. RLS: otwarta polityka, jak reszta. Wymaga ręcznej migracji w
+  Supabase SQL Editor (zweryfikuj przez `information_schema.columns` po
+  zapisaniu, patrz błędy #12/#13 niżej):
+  ```sql
+  create table absences (
+    id uuid primary key default gen_random_uuid(),
+    user_id uuid,
+    user_name text,
+    lokal text,
+    start_date date not null,
+    end_date date not null,
+    type text not null default 'urlop',
+    status text not null default 'pending',
+    note text,
+    requested_by text,
+    decided_by text,
+    decided_at timestamptz,
+    created_at timestamptz not null default now()
+  );
+  alter table shifts add column is_urlop boolean not null default false;
+  alter table shifts add column absence_id text;
+  ```
+
+## Urlopy i niedostępność — zaimplementowane 2026-09-03
+
+Pracownik może wysłać wniosek o wolne z zakładki **Zgłoś** (trzeci typ,
+obok "Popraw zmianę"/"Zgłoś problem" — świadomie tu, nie osobny ekran, bo
+to ten sam wzorzec "wyślij prośbę, kierownik decyduje" co reszta tej
+zakładki; docelowo, po zbudowaniu Grafiku, ten wniosek powinien przenieść
+się tam, gdzie zablokuje termin bezpośrednio na siatce planowania —
+świadomie odłożone, właściciel o tym wie). Dwa typy: **`urlop`** (płatny,
+generuje godziny — patrz niżej) i **`niedostepnosc`** (tylko informacja
+"nie mogę wtedy pracować", bez żadnych godzin/kosztów — myślana jako
+przyszła blokada terminu w module Grafik, patrz Roadmap punkt 5). Wniosek
+trafia do `absences` ze `status='pending'` i budzi kierownika przez
+`createManagerNotification`.
+
+Kierownik decyduje w **Zatwierdzanie zmian** (`ZatwierdzanieZmian.tsx`,
+sekcja "Wnioski o wolne" nad kolejką korekt godzin — jedna zakładka na
+wszystkie decyzje kierownika, ten sam powód co połączenie korekt i
+urlopów w jednym miejscu) — Zatwierdź/Odrzuć, `resolveAbsenceRequest()` w
+[`utils/absences.ts`](src/utils/absences.ts). **JEDYNE** miejsce, które
+zmienia `absences.status` i materializuje godziny — nie duplikuj tej
+logiki. Kierownik może też wpisać urlop bezpośrednio w karcie pracownika
+(**Pracownicy**, sekcja "Urlop" pod terminami sanepid/umowy) — od razu
+zatwierdzony (`requested_by='manager'`), przez `addUrlopDirectly()` w tym
+samym pliku, ten sam mechanizm materializacji co przy zatwierdzaniu
+wniosku. Usunięcie wpisu (przycisk kosza przy liście urlopów w karcie
+pracownika) kasuje `absences` i wszystkie powiązane `shifts` na raz
+(`deleteAbsence()`, dopasowanie po `absence_id`).
+
+**Materializacja godzin (tylko `type='urlop'`, zatwierdzony)** —
+`buildUrlopShiftDrafts()`: jeden wiersz `shifts` na każdy dzień roboczy
+(pon–pt, standardowa formuła "8 godzin za dzień roboczy" ustalona z
+właścicielem — sobota/niedziela pomijane, bez wyjątków na święta) w
+zakresie `[start_date, end_date]`, `stanowisko="Urlop"`,
+`start_time`/`end_time` ustawione na stałe 09:00–17:00 lokalnie (dowolna
+stała godzina — liczy się tylko różnica 8h), `is_urlop=true`,
+`absence_id` wskazujący wniosek. Świadoma decyzja: te wiersze to zwykłe
+`shifts`, więc **automatycznie** wliczają się we wszystkie istniejące sumy
+godzin i kosztów (Rejestr Godzin, Raporty i koszty, Pulpit kierownika,
+Moja Praca, Raport pracownika) bez dopisywania osobnej logiki agregującej
+w każdym z tych miejsc — dokładnie to, o co prosił właściciel ("dodają się
+do wszystkich list i podliczeń"). Miejsca renderujące pojedynczy wiersz
+zmiany rozpoznają `s.is_urlop` i pokazują słowo "Urlop" zamiast zakresu
+godzin (`RejestrGodzin.tsx`, `MojaPraca.tsx`,
+`employeeSessionShared.tsx` Raport) — ⚠️ **Pulpit kierownika
+("Wymaga Twojej decyzji") świadomie NIE pokazuje jeszcze oczekujących
+wniosków o wolne** — liczą się tylko w liczniku przy zakładce
+"Zatwierdzanie zmian" w sidebarze (`shellBadges.zatwierdzanie`), nie w
+kafelku na Pulpicie; dodaj to później, jeśli okaże się potrzebne, nie
+zakładaj że już działa.
+
+`type='niedostepnosc'` NIE tworzy żadnych `shifts` — zostaje tylko
+zatwierdzonym/odrzuconym wierszem w `absences`, czekającym na przyszły
+Grafik (który go odczyta, żeby zablokować przypisanie pracownika w te
+dni). Skutek uboczny materializacji urlopu: `findOverlappingShift`
+(patrz `utils/shifts.ts`) traktuje dzień urlopu jak zwykłą zmianę, więc
+próba odbicia prawdziwej zmiany w ten dzień zostanie odrzucona jako
+nakładająca się — to zamierzone (chroni przed przypadkowym
+zarejestrowaniem godzin w trakcie urlopu), nie naprawiaj tego jako "bug".
+
+`App.tsx` ładuje `absences` jako osobny, nieblokujący fetch (ten sam
+wzorzec co `shift_edits`/`tasks`) — błąd tu nie blokuje reszty apki.
 
 ## Znane błędy — JUŻ NAPRAWIONE, nie wprowadzaj ponownie
 
@@ -979,13 +1076,22 @@ Kierownik tworzy zdarzenie (zebranie, grupa o określonej godzinie itp.)
 widoczne dla pracowników. Najprostszy moduł z całej listy — dobry "quick
 win" do budowania zaufania do systemu.
 
-### 4. Wnioski o urlop/wolne
-Pracownik składa wniosek (nawet z dużym wyprzedzeniem, np. na 2030 rok).
-Kierownik zatwierdza; osobny widok/"tablo" ostrzega go o wnioskach na
-nadchodzący miesiąc. Można zbudować w pełni NIEZALEŻNIE od Grafiku (sam
-flow wniosek → zatwierdzenie). Dopiero gdy powstanie Grafik, dodać
-twardą walidację: zatwierdzonego urlopu nie da się nadpisać zmianą, chyba
-że pracownik najpierw sam zdejmie wniosek.
+### 4. Wnioski o urlop/wolne — CZĘŚCIOWO ZROBIONE (2026-09-03)
+⚠️ Podstawowy flow wniosek → zatwierdzenie DZIAŁA — patrz "Urlopy i
+niedostępność" wyżej po pełny, aktualny opis. Zrobione: pracownik wysyła
+wniosek (urlop albo niedostępność) z zakładki Zgłoś, kierownik
+zatwierdza/odrzuca w Zatwierdzanie zmian albo wpisuje urlop bezpośrednio
+w karcie pracownika, zatwierdzony urlop materializuje się jako godziny
+(8h/dzień roboczy) widoczne we wszystkich raportach. NIE zrobione jeszcze
+z tego punktu: wysyłanie wniosku z dużym wyprzedzeniem na przyszłe lata
+działa (to zwykłe pola `date`, bez ograniczenia), ale nie ma osobnego
+widoku/"tablo" z wnioskami na nadchodzący miesiąc — dziś widać je tylko w
+kolejce "Zatwierdzanie zmian" (tylko oczekujące) i w karcie pracownika
+(historia per osoba). Twarda walidacja "zatwierdzonego urlopu nie da się
+nadpisać zmianą" wciąż czeka na Grafik, jak opisano niżej — dziś
+`findOverlappingShift` i tak odrzuca nakładającą się zmianę jako efekt
+uboczny materializacji (patrz wyżej), ale to nie jest świadoma,
+dedykowana walidacja.
 
 ### 5. Grafik
 Ostatni etap. Nie opisany szczegółowo celowo — wracamy do tego, gdy reszta

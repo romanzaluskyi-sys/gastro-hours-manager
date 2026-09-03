@@ -37,6 +37,8 @@ const KioskDashboard = ({
   tasks,
   taskCompletions,
   setTaskCompletions,
+  absences,
+  setAbsences,
   showMsg,
 }) => {
   const [screen, setScreen] = useState("LIST");
@@ -304,6 +306,8 @@ const KioskDashboard = ({
         tasks={tasks}
         taskCompletions={taskCompletions}
         setTaskCompletions={setTaskCompletions}
+        absences={absences}
+        setAbsences={setAbsences}
         onBack={goList}
         onLogout={() => setCurrentView("login")}
         deviceNote="To urządzenie zostaje zalogowane na stałe — nie wylogowuj go bez potrzeby, bo trzeba będzie zalogować się ponownie danymi kiosku."

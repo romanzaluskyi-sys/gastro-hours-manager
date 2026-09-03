@@ -23,6 +23,13 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.14.0",
+    date: "2026-09-03",
+    items: [
+      "Wnioski o urlop i niedostępność — pracownik wysyła w Zgłoś, kierownik zatwierdza w Zatwierdzanie zmian. Zatwierdzony urlop wpisuje się jako godziny automatycznie.",
+    ],
+  },
+  {
     version: "0.11.1",
     date: "2026-09-04",
     items: [
@@ -113,7 +120,7 @@ const SECTIONS = [
   {
     Icon: CheckCircle2,
     title: "Zatwierdzanie zmian",
-    body: "Tu trafiają poprawki godzin zgłoszone przez pracowników przez „Zgłoś → Popraw zmianę”. Dla każdej: Zatwierdź (przyjmujesz dane tak, jak podał pracownik), Popraw (wpisujesz własne godziny + podajesz powód — pracownik go zobaczy), albo Zapytaj (gdy zgłoszenie jest niekompletne, np. brak godziny zakończenia). Zatwierdzone zmiany od razu trafiają do Rejestru Godzin.",
+    body: "Tu trafiają poprawki godzin zgłoszone przez pracowników przez „Zgłoś → Popraw zmianę”. Dla każdej: Zatwierdź (przyjmujesz dane tak, jak podał pracownik), Popraw (wpisujesz własne godziny + podajesz powód — pracownik go zobaczy), albo Zapytaj (gdy zgłoszenie jest niekompletne, np. brak godziny zakończenia). Zatwierdzone zmiany od razu trafiają do Rejestru Godzin. Nad tą kolejką: osobna sekcja „Wnioski o wolne” — urlop albo dni niedostępności zgłoszone przez pracowników przez „Zgłoś → Wolne / urlop”. Zatwierdzony urlop od razu wpisuje się jako godziny (8h za dzień roboczy) we wszystkich raportach.",
   },
   {
     Icon: FileText,
@@ -133,7 +140,7 @@ const SECTIONS = [
   {
     Icon: Users,
     title: "Pracownicy",
-    body: "Lista + karta szczegółów. Klikasz osobę z listy po lewej, edytujesz po prawej. Lokal i stanowisko są wymagane (poza kontem typu „Tablet lokalu”); przy koncie logującym się samodzielnie — też email i PIN. Stawka/etat/notatki są opcjonalne. „PIN blokady na kiosku” dotyczy tylko kont typu „Otwarte Konto” używanych na wspólnym tablecie. Usunięcie na zawsze jest możliwe tylko z zakładki Archiwum — najpierw zarchiwizuj, potem usuń. Lokale i Stanowiska (przyciski przy Aktywni/Archiwum, tylko dla Szefa) to osobny, rzadko używany słownik nazw.",
+    body: "Lista + karta szczegółów. Klikasz osobę z listy po lewej, edytujesz po prawej. Lokal i stanowisko są wymagane (poza kontem typu „Tablet lokalu”); przy koncie logującym się samodzielnie — też email i PIN. Stawka/etat/notatki są opcjonalne. „PIN blokady na kiosku” dotyczy tylko kont typu „Otwarte Konto” używanych na wspólnym tablecie. Sekcja „Urlop” pozwala od razu wpisać urlop pracownikowi (od-do), bez czekania na wniosek — zatwierdzony automatycznie. Usunięcie na zawsze jest możliwe tylko z zakładki Archiwum — najpierw zarchiwizuj, potem usuń. Lokale i Stanowiska (przyciski przy Aktywni/Archiwum, tylko dla Szefa) to osobny, rzadko używany słownik nazw.",
   },
   {
     Icon: BarChart3,

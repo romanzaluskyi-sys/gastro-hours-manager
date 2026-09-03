@@ -11,7 +11,7 @@
 // rolą "kiosk", która ich nie ma), typ konta; przy roli innej niż "open"
 // dodatkowo email+PIN. Reszta — stawka/etat/notatki/kiosk_pin/terminy —
 // opcjonalna.
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Plus,
   Archive,
@@ -20,6 +20,7 @@ import {
   ChevronLeft,
   AlertTriangle,
   Edit2,
+  Palmtree,
 } from "lucide-react";
 import { pageTitleCls, cardCls, btnPrimaryCls, btnSecondaryCls, statLabelCls } from "./designTokens";
 
@@ -58,8 +59,47 @@ export default function Pracownicy({
   editingDict,
   setEditingDict,
   onSaveDict,
+  absences = [],
+  onAddUrlop,
+  onDeleteAbsence,
+  showMsg,
 }) {
   const [view, setView] = useState("aktywni"); // "aktywni" | "archiwum" | "lokale" | "stanowiska"
+  const [urlopFrom, setUrlopFrom] = useState("");
+  const [urlopTo, setUrlopTo] = useState("");
+  const [urlopSaving, setUrlopSaving] = useState(false);
+
+  useEffect(() => {
+    setUrlopFrom("");
+    setUrlopTo("");
+  }, [editingUser?.id]);
+
+  const handleAddUrlopClick = async () => {
+    if (!urlopFrom || !urlopTo) return showMsg?.("Podaj daty od-do!", "error");
+    if (urlopTo < urlopFrom)
+      return showMsg?.("Data „do” nie może być wcześniejsza niż „od”.", "error");
+    setUrlopSaving(true);
+    try {
+      await onAddUrlop(editingUser, urlopFrom, urlopTo);
+      setUrlopFrom("");
+      setUrlopTo("");
+      showMsg?.("Urlop zapisany!");
+    } catch (err) {
+      showMsg?.(`Błąd zapisu urlopu: ${err.message || "nieznany błąd"}`, "error");
+    }
+    setUrlopSaving(false);
+  };
+
+  const handleDeleteAbsenceClick = async (absence) => {
+    if (!window.confirm("Usunąć ten wpis? Powiązane godziny urlopu też zostaną skasowane."))
+      return;
+    try {
+      await onDeleteAbsence(absence);
+      showMsg?.("Wpis usunięty.");
+    } catch (err) {
+      showMsg?.(`Błąd usuwania: ${err.message || "nieznany błąd"}`, "error");
+    }
+  };
 
   const isNew = editingUser && editingUser.id === null;
   const isEmailPinRequired = editingUser && editingUser.role !== "open";
@@ -559,6 +599,74 @@ export default function Pracownicy({
                       )}
                     </div>
                   </div>
+                </>
+              )}
+
+              {!isNew && editingUser.role !== "kiosk" && (
+                <>
+                  <p className={`${statLabelCls} mb-2 flex items-center gap-1.5`}>
+                    <Palmtree size={13} /> Urlop
+                  </p>
+                  <div className="grid grid-cols-2 gap-3 mb-2">
+                    <div>
+                      <label className="text-xs font-bold text-[#6E6E66]">Od</label>
+                      <input
+                        type="date"
+                        value={urlopFrom}
+                        onChange={(e) => setUrlopFrom(e.target.value)}
+                        className="w-full p-2 border-[2px] border-[#171714] rounded"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-[#6E6E66]">Do</label>
+                      <input
+                        type="date"
+                        value={urlopTo}
+                        onChange={(e) => setUrlopTo(e.target.value)}
+                        className="w-full p-2 border-[2px] border-[#171714] rounded"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAddUrlopClick}
+                    disabled={urlopSaving}
+                    className={`${btnSecondaryCls} mb-3`}
+                  >
+                    Dodaj urlop (8h/dzień roboczy)
+                  </button>
+                  {absences.filter((a) => a.user_id === editingUser.id).length > 0 && (
+                    <div className="space-y-1.5 mb-5">
+                      {absences
+                        .filter((a) => a.user_id === editingUser.id)
+                        .sort((a, b) => (a.start_date < b.start_date ? 1 : -1))
+                        .map((a) => (
+                          <div
+                            key={a.id}
+                            className="flex items-center justify-between text-sm bg-[#F1F1EE] rounded p-2"
+                          >
+                            <span>
+                              {new Date(a.start_date + "T00:00:00").toLocaleDateString("pl-PL")}–
+                              {new Date(a.end_date + "T00:00:00").toLocaleDateString("pl-PL")} ·{" "}
+                              {a.type === "urlop" ? "Urlop" : "Niedostępność"} ·{" "}
+                              {a.status === "pending"
+                                ? "Oczekuje"
+                                : a.status === "approved"
+                                ? "Zatwierdzony"
+                                : "Odrzucony"}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteAbsenceClick(a)}
+                              className="text-[#8F8E86] hover:text-[#DE3A22]"
+                              title="Usuń"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        ))}
+                    </div>
+                  )}
                 </>
               )}
 
