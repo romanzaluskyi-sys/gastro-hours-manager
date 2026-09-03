@@ -23,6 +23,13 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.13.0",
+    date: "2026-09-03",
+    items: [
+      "Pogoda w pasku kierownika i na Pulpicie pracownika — aktualna temperatura dla miasta lokalu (Pracownicy → Lokale).",
+    ],
+  },
+  {
     version: "0.12.0",
     date: "2026-09-03",
     items: [

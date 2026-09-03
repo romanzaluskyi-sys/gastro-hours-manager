@@ -5,6 +5,11 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.13.0 — 2026-09-03
+
+- Pogoda w pasku kierownika i na Pulpicie pracownika — aktualna temperatura
+  dla miasta lokalu (ustawianego w Pracownicy → Lokale).
+
 ## 0.12.0 — 2026-09-03
 
 - Stanowiska mają teraz własny skrót (ustawiany ręcznie w Pracownicy →

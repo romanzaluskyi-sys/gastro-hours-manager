@@ -25,10 +25,10 @@ import {
   LogOut,
   MoreHorizontal,
   User,
-  Cloud,
 } from "lucide-react";
 import { shellSidebarCls, shellNavBtnCls, shellBadgeCls, lokalTabCls } from "./designTokens";
 import { APP_VERSION } from "../../config";
+import WeatherBadge from "../WeatherBadge";
 
 export const NAV_ITEMS = [
   { key: "pulpit", label: "Pulpit", shortLabel: "Pulpit", Icon: Home },
@@ -71,6 +71,7 @@ export default function ManagerShell({
   lokaleForTabs,
   selectedLokal,
   setSelectedLokal,
+  weatherCity,
   activeTab,
   setActiveTab,
   badges = {},
@@ -152,12 +153,7 @@ export default function ManagerShell({
             ))}
           </div>
           <div className="flex items-center gap-3 text-sm text-[#6E6E66] flex-shrink-0">
-            <span
-              className="hidden lg:flex items-center gap-1 text-[#B7B6AE]"
-              title="Pogoda — wkrótce"
-            >
-              <Cloud size={16} /> --°C
-            </span>
+            <WeatherBadge city={weatherCity} className="hidden lg:flex text-[#B7B6AE]" />
             <span className="capitalize hidden sm:inline">
               {dateLabel} · {timeLabel}
             </span>
