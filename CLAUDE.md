@@ -752,6 +752,8 @@ zakresem — wymaga Grafiku, którego nie ma.
     decided_at timestamptz,
     created_at timestamptz not null default now()
   );
+  alter table absences enable row level security;
+  create policy "open" on absences for all using (true) with check (true);
   alter table shifts add column is_urlop boolean not null default false;
   alter table shifts add column absence_id text;
   ```
