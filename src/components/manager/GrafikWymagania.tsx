@@ -32,6 +32,17 @@ const DNI = [
   { idx: 0, label: "Nd" },
 ];
 
+// Safari i Firefox NIE obsługują <input type="month"> — degradują je do
+// zwykłego pola tekstowego, więc kierownik wpisywał tam "Wrzesień" i do
+// bazy szło "Wrzesień-01" (invalid input syntax for type date). Dlatego
+// miesiąc i rok wybiera się dwoma zwykłymi <select>. Ta sama ostrożność
+// dotyczy każdego przyszłego pola daty w tym module — type="date" i
+// type="time" są bezpieczne, type="month" nie.
+const MIESIACE = [
+  "Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec",
+  "Lipiec", "Sierpień", "Wrzesień", "Październik", "Listopad", "Grudzień",
+];
+
 const monthLabel = (ymd) => {
   if (!ymd) return "";
   const d = new Date(ymd + "T00:00:00");
@@ -70,7 +81,11 @@ export default function GrafikWymagania({
 }) {
   const [view, setView] = useState("wymagania"); // wymagania | godziny | wyjatki
   const [selectedSetId, setSelectedSetId] = useState(null);
-  const [newSetMonth, setNewSetMonth] = useState("");
+  const nextMonth = new Date();
+  nextMonth.setDate(1);
+  nextMonth.setMonth(nextMonth.getMonth() + 1);
+  const [newSetYear, setNewSetYear] = useState(nextMonth.getFullYear());
+  const [newSetMonthNum, setNewSetMonthNum] = useState(nextMonth.getMonth());
   const [ruleForm, setRuleForm] = useState(emptyRuleForm());
   const [saving, setSaving] = useState(false);
   const [godzinyDraft, setGodzinyDraft] = useState(null);
@@ -110,11 +125,11 @@ export default function GrafikWymagania({
 
   // --- ZESTAWY ---------------------------------------------------------
   const handleCreateSet = async (copyFrom) => {
-    if (!newSetMonth) {
+    const obowiazuje_od = `${newSetYear}-${String(newSetMonthNum + 1).padStart(2, "0")}-01`;
+    if (!/^\d{4}-\d{2}-01$/.test(obowiazuje_od)) {
       showMsg("Wybierz miesiąc, od którego zestaw ma obowiązywać.", "error");
       return;
     }
-    const obowiazuje_od = `${newSetMonth}-01`;
     if (setsForLokal.some((s) => s.obowiazuje_od === obowiazuje_od)) {
       showMsg("Zestaw na ten miesiąc już istnieje.", "error");
       return;
@@ -144,7 +159,6 @@ export default function GrafikWymagania({
       setStaffingRuleSets([...(staffingRuleSets || []), created]);
       if (newRules.length > 0) setStaffingRules([...(staffingRules || []), ...newRules]);
       setSelectedSetId(created.id);
-      setNewSetMonth("");
       showMsg(
         copyFrom
           ? `Utworzono zestaw i skopiowano ${newRules.length} wymagań.`
@@ -495,12 +509,33 @@ export default function GrafikWymagania({
               </div>
               <div>
                 <label className={statLabelCls}>Nowy zestaw od miesiąca</label>
-                <input
-                  type="month"
-                  value={newSetMonth}
-                  onChange={(e) => setNewSetMonth(e.target.value)}
-                  className="p-2 border-[2px] border-[#171714] rounded"
-                />
+                <div className="flex gap-2">
+                  <select
+                    value={newSetMonthNum}
+                    onChange={(e) => setNewSetMonthNum(Number(e.target.value))}
+                    className="p-2 border-[2px] border-[#171714] rounded bg-white"
+                  >
+                    {MIESIACE.map((m, i) => (
+                      <option key={m} value={i}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={newSetYear}
+                    onChange={(e) => setNewSetYear(Number(e.target.value))}
+                    className="p-2 border-[2px] border-[#171714] rounded bg-white"
+                  >
+                    {[0, 1, 2].map((offset) => {
+                      const y = new Date().getFullYear() + offset;
+                      return (
+                        <option key={y} value={y}>
+                          {y}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
               </div>
               <button
                 onClick={() => handleCreateSet(null)}
