@@ -46,6 +46,7 @@ export const NAV_ITEMS = [
     label: "Zadania i sprzątanie",
     shortLabel: "Zadania",
     Icon: ClipboardCheck,
+    badgeKey: "zadania",
   },
   { key: "moja_praca", label: "Moja Praca", Icon: User },
   { key: "grafik", label: "Grafik", Icon: Calendar },

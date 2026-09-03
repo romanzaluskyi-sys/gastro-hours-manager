@@ -16,6 +16,37 @@ import {
   sectionHeaderCls,
   pageTitleCls,
 } from "./designTokens";
+import { isTaskDueOn, findSharedCompletion, toLocalYMD } from "../../utils/tasks";
+
+const ProgressRing = ({ pct, size = 36, stroke = 5 }) => {
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const offset = c - (c * (pct || 0)) / 100;
+  return (
+    <svg width={size} height={size} className="flex-shrink-0">
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={r}
+        fill="none"
+        stroke="#E7E7E2"
+        strokeWidth={stroke}
+      />
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={r}
+        fill="none"
+        stroke="#DE3A22"
+        strokeWidth={stroke}
+        strokeDasharray={c}
+        strokeDashoffset={offset}
+        strokeLinecap="round"
+        transform={`rotate(-90 ${size / 2} ${size / 2})`}
+      />
+    </svg>
+  );
+};
 
 const fmtH = (n) => (n || 0).toFixed(1).replace(".", ",");
 const fmtHHMM = (d) =>
@@ -38,6 +69,8 @@ export default function PulpitHome({
   users,
   shifts,
   issues,
+  tasks,
+  taskCompletions,
   matchesFilter, // (lokalName) => bool — hasAccessToLokal + wybrany lokal z paska
   setActiveTab,
 }) {
@@ -155,6 +188,32 @@ export default function PulpitHome({
     })
     .sort((a, b) => (a.overdue === b.overdue ? 0 : a.overdue ? -1 : 1));
 
+  // Zadania dziś, zagregowane per lokal — NIEZALEŻNIE od tego, czy ktoś
+  // dziś odbił zmianę (świadoma zmiana 2026-09-04: zespół jeszcze nie ma
+  // nawyku od razu odbijać zmiany po przyjściu, więc licznik oparty o
+  // shifts pokazywał 0 zadań na starcie dnia mimo realnie wiszących
+  // zadań). Liczymy wprost z `tasks`/`task_completions` — lokale to te,
+  // które mają choć jedno nieaktywne-nie-archiwalne zadanie zdefiniowane.
+  const todayStrForTasks = toLocalYMD(now);
+  const tasksInScopeForPulpit = tasks.filter(
+    (t) => matchesFilter(t.lokal) && !t.for_manager && !t.archived
+  );
+  const lokaleWithTasks = [...new Set(tasksInScopeForPulpit.map((t) => t.lokal))];
+  const lokalTaskStats = lokaleWithTasks.map((lokalName) => {
+    const dueTasks = tasksInScopeForPulpit.filter(
+      (t) => t.lokal === lokalName && isTaskDueOn(t, taskCompletions, todayStrForTasks)
+    );
+    const done = dueTasks.filter((t) =>
+      findSharedCompletion(taskCompletions, t.id, todayStrForTasks)
+    ).length;
+    return {
+      lokal: lokalName,
+      done,
+      total: dueTasks.length,
+      pct: dueTasks.length > 0 ? Math.round((done / dueTasks.length) * 100) : null,
+    };
+  });
+
   return (
     <div className="max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
@@ -218,7 +277,7 @@ export default function PulpitHome({
         )}
       </div>
 
-      <div className="grid md:grid-cols-3 gap-4">
+      <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
         <div className={sectionCardCls}>
           <div className={sectionHeaderCls}>
             <span>Wymaga Twojej decyzji</span>
@@ -309,6 +368,36 @@ export default function PulpitHome({
             className="w-full p-3 text-sm font-bold text-[#171714] flex items-center justify-center gap-1.5 border-t-[2px] border-[#171714]"
           >
             Wszystkie terminy <ArrowRight size={14} />
+          </button>
+        </div>
+
+        <div className={sectionCardCls}>
+          <div className={sectionHeaderCls}>
+            <span>Zadania dziś</span>
+          </div>
+          <div className="divide-y divide-[#B7B6AE]">
+            {lokalTaskStats.length === 0 && (
+              <p className="p-4 text-sm text-[#8F8E86]">
+                Brak zadań zdefiniowanych w tym lokalu.
+              </p>
+            )}
+            {lokalTaskStats.map((row) => (
+              <div key={row.lokal} className="p-3.5 flex items-center gap-3">
+                <ProgressRing pct={row.pct ?? 0} />
+                <div className="min-w-0 flex-1">
+                  <p className="font-bold text-sm truncate">{row.lokal}</p>
+                  <p className="text-xs text-[#6E6E66]">
+                    {row.total > 0 ? `${row.done} z ${row.total}` : "brak zadań"}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={() => setActiveTab("zadania")}
+            className="w-full p-3 text-sm font-bold text-[#171714] flex items-center justify-center gap-1.5 border-t-[2px] border-[#171714]"
+          >
+            Zadania i sprzątanie <ArrowRight size={14} />
           </button>
         </div>
       </div>

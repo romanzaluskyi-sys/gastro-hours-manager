@@ -34,6 +34,9 @@ const PersonalDashboard = ({
   setIssues,
   notifications,
   setNotifications,
+  tasks,
+  taskCompletions,
+  setTaskCompletions,
   showMsg,
 }) => {
   const myNotifications = notifications.filter(
@@ -55,6 +58,9 @@ const PersonalDashboard = ({
       showEmployeeNameInMessages={false}
       issues={issues}
       setIssues={setIssues}
+      tasks={tasks}
+      taskCompletions={taskCompletions}
+      setTaskCompletions={setTaskCompletions}
       onLogout={() => setCurrentView("login")}
     />
   );

@@ -23,6 +23,40 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.11.1",
+    date: "2026-09-04",
+    items: [
+      "Poprawka: strzałki nawigacji dat w Zadaniach i sprzątaniu nie przesuwają się już pod przycisk „Dziś” — kliknięcie daty pozwala też wybrać konkretny dzień.",
+    ],
+  },
+  {
+    version: "0.11.0",
+    date: "2026-09-04",
+    items: [
+      "Zadania przypisane do stanowiska są teraz wspólne — odhaczenie przez jedną osobę liczy się dla wszystkich z tym stanowiskiem.",
+      "Nowy formularz zadania: lokal i odbiorca razem, cała konfiguracja terminu w jednym miejscu, typ „Ogólne” domyślny.",
+      "Kafelek „Zadania dziś” na Pulpicie kierownika już nie zależy od tego, czy ktoś odbił zmianę.",
+    ],
+  },
+  {
+    version: "0.10.0",
+    date: "2026-09-03",
+    items: [
+      "Zadania: priorytet (niski/średni/wysoki) i dowolny wybór dni tygodnia zamiast jednego dnia, plus typ „Ogólne” na dowolną porę dnia.",
+      "Panel kierownika: sekcja „Niewykonane dzisiaj”, pełna lista zadań z filtrem po lokalu/stanowisku, kafelek „Zadania dziś” na Pulpicie.",
+      "Zgłoszenie można od razu zamienić w zadanie dla kierownika.",
+    ],
+  },
+  {
+    version: "0.9.0",
+    date: "2026-09-02",
+    items: [
+      "Nowa zakładka Zadania i sprzątanie — checklisty na zmianę (poranne/obiadowe/wieczorne) i zadania cykliczne, wspólne dla lokalu albo osobne dla każdego pracownika.",
+      "Panel „Kontrola wykonania po osobach” — kierownik widzi na bieżąco postęp każdego pracownika i zadania wspólne dla lokalu.",
+      "Pracownik widzi swoje zadania na dziś, z paskiem postępu w trakcie zmiany i podsumowaniem po jej zakończeniu.",
+    ],
+  },
+  {
     version: "0.8.0",
     date: "2026-09-02",
     items: [

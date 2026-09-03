@@ -24,6 +24,13 @@ import {
   getAvailableYears,
   formatNotificationText,
 } from "../utils/format";
+import {
+  buildEmployeeChecklist,
+  getEffectiveAssignmentForDate,
+  toggleTaskCompletion,
+  cyclicalProgress,
+  weeklyChecklistStats,
+} from "../utils/tasks";
 
 // ==========================================
 // Współdzielone między KioskDashboard.tsx (Tablet Służbowy, wspólne
@@ -53,6 +60,17 @@ export const sumHours = (arr) =>
     (acc, s) => acc + (s.end_time ? (s.end_time - s.start_time) / 3600000 : 0),
     0
   );
+
+// Odznaka na wierszu zadania: dla cyklicznych częstotliwość/postęp, dla
+// reszty przypisane stanowisko ("wszyscy", gdy brak — zadanie dla całego
+// lokalu).
+const taskBadgeLabel = (task, completions, dateStr) => {
+  if (task.schedule_type === "cykliczne") {
+    const prog = cyclicalProgress(task, completions, dateStr);
+    return prog ? `${prog.daysSince}/${prog.cycleDays} dni` : `co ${task.cycle_days || 1} dni`;
+  }
+  return task.stanowisko || "wszyscy";
+};
 
 // --- klasy Tailwind wspólne dla wielu ekranów (język designu z prototypu:
 // grube 2/2.5px obramowania, pogrubione nagłówki Archivo, czerwony akcent) ---
@@ -100,6 +118,7 @@ export const Shell = ({
   setScreen,
   onBack,
   unreadCount,
+  taskBadgeCount = 0,
   title,
   showPill = false,
   showBell = true,
@@ -168,6 +187,11 @@ export const Shell = ({
                     {unreadCount}
                   </span>
                 )}
+                {key === "ZADANIA" && taskBadgeCount > 0 && (
+                  <span className="absolute top-1 right-[18%] bg-[#DE3A22] text-white font-['Archivo'] font-extrabold text-[9.5px] min-w-[15px] h-[15px] rounded-[3px] flex items-center justify-center px-0.5">
+                    {taskBadgeCount}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -204,6 +228,9 @@ export const EmployeeSessionScreens = ({
   showEmployeeNameInMessages,
   issues,
   setIssues,
+  tasks,
+  taskCompletions,
+  setTaskCompletions,
   onBack,
   onLogout,
   deviceNote = null,
@@ -245,6 +272,11 @@ export const EmployeeSessionScreens = ({
   const [zgPropEnd, setZgPropEnd] = useState("");
   const [zgKorektaNote, setZgKorektaNote] = useState("");
 
+  // "own" = tylko wszyscy + moje stanowisko; "all" = wszystko dla lokalu
+  // (przełącznik przydatny głównie na kiosku, gdzie kilka ról dzieli jedno
+  // urządzenie) — patrz utils/tasks.ts buildEmployeeChecklist.
+  const [taskViewMode, setTaskViewMode] = useState("own");
+
   const dostepneStanowiska = stanowiskaOptions.filter(
     (s) => s.lokal_name === formLokal
   );
@@ -254,6 +286,38 @@ export const EmployeeSessionScreens = ({
   );
   const todaysClosedShifts = getTodaysShiftsForUser(shifts, employee.id).filter(
     (s) => s.end_time
+  );
+
+  // Checklisty zadań na dziś — "own" (własne stanowisko + wszyscy) do A7/A8
+  // i domyślnego widoku Zadania, "all" tylko dla przełącznika na ekranie
+  // Zadania. Wolno preferujemy otwartą zmianę nad statycznym default_lokal,
+  // patrz getEffectiveAssignmentForDate w utils/tasks.ts.
+  const todayStr = toLocalYMD(now);
+  const effectiveAssignment = getEffectiveAssignmentForDate(
+    employee,
+    openShift ? [openShift] : todaysClosedShifts
+  );
+  const myChecklistOwn = buildEmployeeChecklist(
+    tasks,
+    taskCompletions,
+    effectiveAssignment,
+    todayStr,
+    "own"
+  );
+  const myChecklistAll = buildEmployeeChecklist(
+    tasks,
+    taskCompletions,
+    effectiveAssignment,
+    todayStr,
+    "all"
+  );
+  const taskBadgeCount = myChecklistOwn.filter((i) => !i.done).length;
+  const myWeeklyStats = weeklyChecklistStats(
+    tasks,
+    taskCompletions,
+    employee,
+    shifts.filter((s) => s.user_id === employee.id),
+    todayStr
   );
 
   const raportShifts = shifts
@@ -563,6 +627,77 @@ export const EmployeeSessionScreens = ({
     setZgSaving(false);
   };
 
+  // ---- odhaczenie/odznaczenie zadania — jedyny konsument toggleTaskCompletion tutaj ----
+  const handleToggleTask = async (item) => {
+    try {
+      const result = await toggleTaskCompletion({
+        task: item.task,
+        dateStr: todayStr,
+        existingCompletion: item.completion,
+        actorId: employee.id,
+        actorName: employee.name,
+        shiftId: openShift ? openShift.id : null,
+      });
+      if (result.removedId) {
+        setTaskCompletions((prev) =>
+          prev.filter((c) => c.id !== result.removedId)
+        );
+      } else if (result.created) {
+        setTaskCompletions((prev) => [...prev, result.created]);
+      }
+    } catch (err) {
+      showMsg("Błąd zapisu zadania!", "error");
+    }
+  };
+
+  // ---- checklista zadań — wspólny renderer dla Pulpit (przed i w trakcie
+  // zmiany) oraz zakładki Zadania, żeby nie duplikować JSX w trzech miejscach ----
+  const renderTaskChecklist = (list) => (
+    <div className="space-y-2">
+      {list.map((item) => (
+        <button
+          key={item.task.id}
+          onClick={() => handleToggleTask(item)}
+          className={`${checkboxRowCls(item.done)} ${item.done ? "opacity-60" : ""}`}
+        >
+          <span className="w-5 h-5 border-2 border-[#B7B6AE] rounded-[3px] flex-shrink-0 flex items-center justify-center">
+            {item.done && (
+              <span className="w-[9px] h-[9px] bg-[#DE3A22] rounded-[1px]" />
+            )}
+          </span>
+          <span className="flex-1 text-left">
+            <span
+              className={`block text-[15px] font-semibold ${
+                item.done ? "line-through text-[#6E6E66]" : "text-[#171714]"
+              }`}
+            >
+              {item.task.title}
+              {!item.done && item.task.priority === "wysoki" && (
+                <span className="ml-2 text-[11px] font-bold text-[#DE3A22] no-underline">
+                  Ważne
+                </span>
+              )}
+            </span>
+            <span className="block text-[12px] text-[#8F8E86] mt-0.5">
+              {item.done
+                ? `${item.completion?.user_name || "?"}${
+                    item.completion?.completed_at
+                      ? " · " + fmtHHMM(new Date(item.completion.completed_at))
+                      : ""
+                  }`
+                : item.task.deadline_time
+                ? `do ${item.task.deadline_time.slice(0, 5)}`
+                : " "}
+            </span>
+          </span>
+          <span className="flex-shrink-0 text-[11px] font-semibold px-2 py-1 rounded bg-[#E7E7E2] text-[#6E6E66]">
+            {taskBadgeLabel(item.task, taskCompletions, todayStr)}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+
   // ---- fragmenty UI wspólne dla kilku ekranów ----
   const renderShiftInProgress = () => {
     const startDate = openShift.start_time;
@@ -579,7 +714,39 @@ export const EmployeeSessionScreens = ({
         <div className="text-sm text-[#6E6E66] mt-1">
           {openShift.lokal} · {openShift.stanowisko}
         </div>
-        <div className={`${ruleSoftCls} mb-4`} />
+        <div className={ruleSoftCls} />
+        {myChecklistOwn.length > 0 && (
+          <>
+            <div className="flex items-baseline justify-between mt-4">
+              <span className={sectionLabelCls}>Zadania na zmianę</span>
+              <span className="font-['Archivo'] font-extrabold text-sm text-[#171714] tabular-nums">
+                {myChecklistOwn.filter((i) => i.done).length} z{" "}
+                {myChecklistOwn.length}
+              </span>
+            </div>
+            <div className="flex gap-1 mt-2.5">
+              {myChecklistOwn.map((item) => (
+                <span
+                  key={item.task.id}
+                  className={`h-1.5 flex-1 rounded-full ${
+                    item.done ? "bg-[#171714]" : "bg-[#E7E7E2]"
+                  }`}
+                />
+              ))}
+            </div>
+            <div className="mt-3">{renderTaskChecklist(myChecklistOwn)}</div>
+            {myChecklistOwn.some((i) => !i.done) && (
+              <div className="bg-[#FBEAE6] border-l-4 border-[#DE3A22] text-[#8A3A2B] text-sm p-3.5 rounded-sm mt-3.5">
+                Zostały {myChecklistOwn.filter((i) => !i.done).length}{" "}
+                {myChecklistOwn.filter((i) => !i.done).length === 1
+                  ? "zadanie"
+                  : "zadania"}
+                . Możesz zakończyć zmianę, kierownik zobaczy status w panelu.
+              </div>
+            )}
+          </>
+        )}
+        <div className="mb-4" />
         <div className="flex-1" />
         <button
           onClick={() => handleCloseShift(null)}
@@ -782,6 +949,15 @@ export const EmployeeSessionScreens = ({
             {total.toFixed(1).replace(".", ",")} godz.
           </span>
         </div>
+        {myChecklistOwn.length > 0 && (
+          <div className="flex items-baseline justify-between mt-1.5">
+            <span className={sectionLabelCls}>Zadania</span>
+            <span className="text-[15px] text-[#171714]">
+              {myChecklistOwn.filter((i) => i.done).length} z{" "}
+              {myChecklistOwn.length} wykonanych
+            </span>
+          </div>
+        )}
         <div className={ruleSoftCls} />
         <div className="flex-1" />
         <div className={`${sectionLabelCls} mb-2.5`}>Wracasz jeszcze dziś?</div>
@@ -816,6 +992,7 @@ export const EmployeeSessionScreens = ({
         setScreen={setScreen}
         onBack={onBack}
         unreadCount={unreadCount}
+        taskBadgeCount={taskBadgeCount}
         title={employee.name}
         showPill={!!openShift}
       >
@@ -834,6 +1011,19 @@ export const EmployeeSessionScreens = ({
             <div className="text-[15px] text-[#8F8E86] italic mt-4">
               Brak zaplanowanego grafiku — moduł Grafik jeszcze nie istnieje.
             </div>
+            {myChecklistOwn.length > 0 && (
+              <>
+                <div className="flex items-baseline justify-between mt-6">
+                  <span className={sectionLabelCls}>Zadania dziś</span>
+                  <span className="font-['Archivo'] font-extrabold text-sm text-[#171714] tabular-nums">
+                    {myChecklistOwn.filter((i) => i.done).length} z{" "}
+                    {myChecklistOwn.length}
+                  </span>
+                </div>
+                <div className={ruleSoftCls} />
+                <div className="mt-3">{renderTaskChecklist(myChecklistOwn)}</div>
+              </>
+            )}
             <div className="flex-1" />
             <button
               onClick={() => {
@@ -864,6 +1054,7 @@ export const EmployeeSessionScreens = ({
         setScreen={setScreen}
         onBack={onBack}
         unreadCount={unreadCount}
+        taskBadgeCount={taskBadgeCount}
         title={employee.name}
         showPill={!!openShift}
       >
@@ -886,6 +1077,7 @@ export const EmployeeSessionScreens = ({
         setScreen={setScreen}
         onBack={onBack}
         unreadCount={unreadCount}
+        taskBadgeCount={taskBadgeCount}
         title="Raport"
         footer={
           <div className="flex-shrink-0 border-t-[2.5px] border-[#171714] bg-white px-5 pt-[18px] pb-[22px] flex items-baseline justify-between">
@@ -995,27 +1187,65 @@ export const EmployeeSessionScreens = ({
   }
 
   // ==========================================
-  // EKRAN: ZADANIA — moduł jeszcze nie istnieje (Roadmap p.2)
+  // EKRAN: ZADANIA (Roadmap p.2)
   // ==========================================
   if (screen === "ZADANIA") {
+    const taskList = taskViewMode === "all" ? myChecklistAll : myChecklistOwn;
     return (
       <Shell
         screen={screen}
         setScreen={setScreen}
         onBack={onBack}
         unreadCount={unreadCount}
+        taskBadgeCount={taskBadgeCount}
         title="Zadania"
       >
-        <div className="border-2 border-dashed border-[#B7B6AE] rounded p-6 text-center mt-6">
-          <div className="text-2xl mb-2">🚧</div>
-          <div className="font-['Archivo'] font-extrabold text-lg text-[#171714] mb-1.5">
-            Zadania — moduł w przygotowaniu
+        {myChecklistOwn.some((i) => !i.done) && (
+          <div className="bg-[#FBEAE6] border-l-4 border-[#DE3A22] text-[#8A3A2B] text-sm p-3.5 rounded-sm mb-4">
+            Masz {myChecklistOwn.filter((i) => !i.done).length}{" "}
+            {myChecklistOwn.filter((i) => !i.done).length === 1
+              ? "niewykonane zadanie"
+              : "niewykonanych zadań"}{" "}
+            na dziś.
           </div>
-          <div className="text-sm text-[#6E6E66]">
-            Checklisty otwarcia/zamknięcia i sprzątanie cykliczne pojawią się
-            tutaj w kolejnym etapie (Roadmap p.2).
-          </div>
+        )}
+        <div className={`${razemRowCls} mb-4`}>
+          <span className="text-sm text-[#6E6E66]">Ostatnie 7 dni</span>
+          <span className="font-['Archivo'] font-extrabold text-[17px] text-[#171714] tabular-nums">
+            {myWeeklyStats.total > 0
+              ? `${myWeeklyStats.done} z ${myWeeklyStats.total} zadań`
+              : "brak danych"}
+          </span>
         </div>
+        <div className="flex gap-2 mb-4">
+          <button
+            onClick={() => setTaskViewMode("own")}
+            className={`flex-1 border-2 rounded py-2.5 font-['Archivo'] font-bold text-sm ${
+              taskViewMode === "own"
+                ? "bg-[#171714] text-white border-[#171714]"
+                : "bg-white text-[#171714] border-[#B7B6AE]"
+            }`}
+          >
+            Twoje stanowisko
+          </button>
+          <button
+            onClick={() => setTaskViewMode("all")}
+            className={`flex-1 border-2 rounded py-2.5 font-['Archivo'] font-bold text-sm ${
+              taskViewMode === "all"
+                ? "bg-[#171714] text-white border-[#171714]"
+                : "bg-white text-[#171714] border-[#B7B6AE]"
+            }`}
+          >
+            Wszystkie
+          </button>
+        </div>
+        {taskList.length === 0 && (
+          <div className="text-center py-10 text-[#8F8E86]">
+            <ClipboardCheck className="mx-auto mb-2 opacity-40" size={40} />
+            Brak zadań na dziś.
+          </div>
+        )}
+        {renderTaskChecklist(taskList)}
       </Shell>
     );
   }
@@ -1030,6 +1260,7 @@ export const EmployeeSessionScreens = ({
         setScreen={setScreen}
         onBack={onBack}
         unreadCount={unreadCount}
+        taskBadgeCount={taskBadgeCount}
         title="Więcej"
       >
         <button
@@ -1118,6 +1349,7 @@ export const EmployeeSessionScreens = ({
         setScreen={setScreen}
         onBack={onBack}
         unreadCount={unreadCount}
+        taskBadgeCount={taskBadgeCount}
         title="Wiadomości"
         showBell={false}
       >
@@ -1166,6 +1398,7 @@ export const EmployeeSessionScreens = ({
         setScreen={setScreen}
         onBack={onBack}
         unreadCount={unreadCount}
+        taskBadgeCount={taskBadgeCount}
         title={zgType === "correction" ? "Popraw zmianę" : "Zgłoś problem"}
       >
         {!zgSent && (

@@ -5,6 +5,64 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.11.1 — 2026-09-04
+
+- Poprawka nawigacji dat w Zadaniach i sprzątaniu: strzałki dnia
+  poprzedniego/następnego zostają teraz zawsze w tym samym miejscu —
+  środkowa pigułka z datą zajmuje na "dziś" szerokość dwóch przycisków, a
+  po zmianie dnia dzieli się na datę i osobny przycisk „Dziś”, oba w tym
+  samym miejscu co wcześniej. Kliknięcie samej daty otwiera też wybór
+  konkretnego dnia.
+
+## 0.11.0 — 2026-09-04
+
+- **Zadania przypisane do stanowiska są teraz naprawdę wspólne.** Jeśli
+  dwie osoby mają to samo stanowisko, odhaczenie zadania przez jedną
+  liczy się dla obu — koniec z osobnym, mylącym stanem tego samego
+  zadania dla każdej osoby.
+- **Nowy formularz zadania**: Lokal i "Dla kogo" (wszyscy albo konkretne
+  stanowisko) razem, cała konfiguracja terminu w jednym miejscu
+  ("Powtarzalność": Cały tydzień / wybrane dni + godzina). Typ "Ogólne"
+  jest teraz domyślny.
+- **Panel kierownika**: jedna spójna lista "Zadania na dziś" z filtrem po
+  stanowisku (zamiast dwóch osobnych paneli).
+- **Kafelek "Zadania dziś" na Pulpicie kierownika już nie zależy od tego,
+  czy ktoś odbił zmianę** — liczy się wprost z zadań na dany dzień.
+- Wykonane zadanie jest teraz wyraźnie przekreślone i przygaszone, z
+  podpisem kto i kiedy je wykonał.
+
+## 0.10.0 — 2026-09-03
+
+- **Zadania: priorytet i dowolne dni tygodnia.** Zadanie ma teraz priorytet
+  (niski/średni/wysoki — ważne widocznie oznaczone) i można wybrać dowolny
+  zestaw dni tygodnia zamiast jednego (np. "codziennie oprócz niedzieli"
+  bez tworzenia sześciu osobnych zadań). Doszedł też typ "Ogólne" —
+  zadanie na dowolną porę dnia, nie tylko poranne/obiadowe/wieczorne.
+  Wynikowe zadanie z checkboxami widać teraz też na Pulpicie przed
+  rozpoczęciem zmiany, nie tylko w trakcie.
+- **Panel kierownika: pełny przegląd.** Nowa sekcja "Niewykonane dzisiaj"
+  (kto ma zaległości i w jakich godzinach dziś pracował), pełna lista
+  wszystkich zadań lokalu z filtrem po lokalu/stanowisku i możliwością
+  archiwizacji, oraz kafelek "Zadania dziś" na Pulpicie kierownika z
+  wskaźnikiem wykonania per lokal.
+- **Zgłoszenie → zadanie.** W zakładce Zgłoszenia można od razu utworzyć z
+  niego zadanie dla kierownika.
+
+## 0.9.0 — 2026-09-02
+
+- **Nowa zakładka "Zadania i sprzątanie".** Kierownik tworzy zadania na
+  zmianę (poranne/obiadowe/wieczorne) i zadania cykliczne ("co N dni"),
+  wspólne dla lokalu albo osobne dla każdego pracownika (dla wszystkich
+  albo tylko wybranego stanowiska), i widzi na bieżąco kto co odhaczył —
+  panel "Kontrola wykonania po osobach".
+- Pracownik widzi swoje zadania na dziś w zakładce "Zadania" (z
+  przełącznikiem "Twoje stanowisko"/"Wszystkie" — przydatne na wspólnym
+  tablecie), a w trakcie zmiany pasek postępu "Zadania na zmianę" z
+  delikatnym przypomnieniem, jeśli coś zostało — zakończenie zmiany dalej
+  działa bez ograniczeń.
+- Podsumowanie dnia po zamknięciu zmiany pokazuje też "Zadania: X z Y
+  wykonanych".
+
 ## 0.8.0 — 2026-09-02
 
 - **Nowy Panel Kierownika.** Cały wygląd przebudowany pod ten sam, czytelny

@@ -49,6 +49,8 @@ export default function App() {
   const [issues, setIssues] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [shiftEdits, setShiftEdits] = useState([]);
+  const [tasks, setTasks] = useState([]);
+  const [taskCompletions, setTaskCompletions] = useState([]);
 
   const [currentView, setCurrentView] = useState(() => loadSession().currentView);
   const [currentUser, setCurrentUser] = useState(() => loadSession().currentUser);
@@ -156,6 +158,22 @@ export default function App() {
         console.error("Błąd pobierania historii korekt:", err.message || err);
       });
 
+    // tasks/task_completions (Zadania i sprzątanie) — ten sam wzorzec co
+    // shift_edits wyżej: osobno, poza głównym Promise.all, żeby błąd tu nie
+    // blokował reszty apki.
+    api
+      .get("tasks")
+      .then((t) => setTasks(Array.isArray(t) ? t : []))
+      .catch((err) => {
+        console.error("Błąd pobierania zadań:", err.message || err);
+      });
+    api
+      .get("task_completions")
+      .then((tc) => setTaskCompletions(Array.isArray(tc) ? tc : []))
+      .catch((err) => {
+        console.error("Błąd pobierania wykonań zadań:", err.message || err);
+      });
+
     // Odświeżamy co 45s, żeby już otwarta sesja też widziała zmiany bez
     // konieczności przeładowania strony.
     const pollInterval = setInterval(() => {
@@ -205,6 +223,9 @@ export default function App() {
           setIssues={setIssues}
           notifications={notifications}
           setNotifications={setNotifications}
+          tasks={tasks}
+          taskCompletions={taskCompletions}
+          setTaskCompletions={setTaskCompletions}
           showMsg={showMsg}
         />
       )}
@@ -221,6 +242,9 @@ export default function App() {
           setIssues={setIssues}
           notifications={notifications}
           setNotifications={setNotifications}
+          tasks={tasks}
+          taskCompletions={taskCompletions}
+          setTaskCompletions={setTaskCompletions}
           showMsg={showMsg}
         />
       )}
@@ -242,6 +266,10 @@ export default function App() {
           setNotifications={setNotifications}
           shiftEdits={shiftEdits}
           setShiftEdits={setShiftEdits}
+          tasks={tasks}
+          setTasks={setTasks}
+          taskCompletions={taskCompletions}
+          setTaskCompletions={setTaskCompletions}
           showMsg={showMsg}
         />
       )}
