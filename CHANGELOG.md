@@ -8,10 +8,11 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 ## 0.11.1 — 2026-09-04
 
 - Poprawka nawigacji dat w Zadaniach i sprzątaniu: strzałki dnia
-  poprzedniego/następnego zostają teraz zawsze w tym samym miejscu — nie
-  przeskakiwały już pod przycisk „Dziś”, który mógł się nieoczekiwanie
-  podstawić pod kolejne kliknięcie. Kliknięcie samej daty otwiera teraz
-  też wybór konkretnego dnia.
+  poprzedniego/następnego zostają teraz zawsze w tym samym miejscu —
+  środkowa pigułka z datą zajmuje na "dziś" szerokość dwóch przycisków, a
+  po zmianie dnia dzieli się na datę i osobny przycisk „Dziś”, oba w tym
+  samym miejscu co wcześniej. Kliknięcie samej daty otwiera też wybór
+  konkretnego dnia.
 
 ## 0.11.0 — 2026-09-04
 

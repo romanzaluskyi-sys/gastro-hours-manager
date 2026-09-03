@@ -297,33 +297,35 @@ export default function ZadaniaISprzatanie({
           <h2 className={pageTitleCls}>Kontrola wykonania po osobach</h2>
         </div>
         <div className="flex items-center gap-2">
-          {/* Strzałki i data mają ZAWSZE tę samą pozycję/szerokość — "Dziś"
-              żyje wewnątrz pigułki daty na zarezerwowanym miejscu
-              (invisible, nie usunięte z layoutu), żeby jego pojawienie się
-              po kliknięciu strzałki nie przesuwało jej samej i nie
-              podstawiało się pod kolejny klik w to samo miejsce. */}
+          {/* Strzałki mają ZAWSZE tę samą pozycję — środkowy slot ma stałą
+              szerokość (w-56): gdy dziś, jedna szeroka pigułka daty
+              (flex-1 bez rywala do miejsca); gdy inny dzień, dzieli się na
+              dwie — datę i osobny przycisk "Dziś", oba w tym samym stylu
+              co strzałki. Strzałki same w sobie nigdy nie przesuwają się,
+              niezależnie od tego, ile pigułek jest w środku. */}
           <button onClick={() => shiftSelectedDate(-1)} className={btnSecondaryCls}>
             <ChevronLeft size={16} />
           </button>
-          <div className={`${btnSecondaryCls} flex items-center gap-2`}>
-            <span className="relative cursor-pointer">
-              {fmtDatePL(selectedDate)}
+          <div className="flex gap-2 w-56">
+            <div
+              className={`${btnSecondaryCls} relative flex-1 text-center cursor-pointer`}
+            >
+              {isToday ? `Dziś · ${fmtDatePL(selectedDate)}` : fmtDatePL(selectedDate)}
               <input
                 type="date"
                 value={selectedDate}
                 onChange={(e) => e.target.value && setSelectedDate(e.target.value)}
                 className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
               />
-            </span>
-            <button
-              type="button"
-              onClick={() => setSelectedDate(toLocalYMD(new Date()))}
-              className={`text-xs font-bold underline underline-offset-2 text-[#DE3A22] ${
-                isToday ? "invisible" : ""
-              }`}
-            >
-              Dziś
-            </button>
+            </div>
+            {!isToday && (
+              <button
+                onClick={() => setSelectedDate(toLocalYMD(new Date()))}
+                className={`${btnSecondaryCls} flex-1`}
+              >
+                Dziś
+              </button>
+            )}
           </div>
           <button onClick={() => shiftSelectedDate(1)} className={btnSecondaryCls}>
             <ChevronRight size={16} />
