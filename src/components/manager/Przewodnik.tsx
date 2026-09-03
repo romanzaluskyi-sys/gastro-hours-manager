@@ -23,6 +23,15 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.10.0",
+    date: "2026-09-03",
+    items: [
+      "Zadania: priorytet (niski/średni/wysoki) i dowolny wybór dni tygodnia zamiast jednego dnia, plus typ „Ogólne” na dowolną porę dnia.",
+      "Panel kierownika: sekcja „Niewykonane dzisiaj”, pełna lista zadań z filtrem po lokalu/stanowisku, kafelek „Zadania dziś” na Pulpicie.",
+      "Zgłoszenie można od razu zamienić w zadanie dla kierownika.",
+    ],
+  },
+  {
     version: "0.9.0",
     date: "2026-09-02",
     items: [

@@ -8,7 +8,15 @@
 // zmian). Cała logika "co jest dziś do zrobienia" i zapis/kasowanie
 // wykonań żyje w utils/tasks.ts — nie duplikuj jej tutaj.
 import React, { useState } from "react";
-import { Plus, ChevronLeft, ChevronRight, ClipboardList, Archive, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  Plus,
+  ChevronLeft,
+  ChevronRight,
+  ClipboardList,
+  Archive,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
 import { api } from "../../api/supabase";
 import {
   isTaskDueOn,
@@ -17,6 +25,7 @@ import {
   getEffectiveAssignmentForDate,
   buildEmployeeChecklist,
   toLocalYMD,
+  PRIORITY_META,
 } from "../../utils/tasks";
 import {
   pageTitleCls,
@@ -36,6 +45,7 @@ const BUCKETS = [
   { key: "poranne", label: "Poranne" },
   { key: "obiadowe", label: "Obiadowe" },
   { key: "wieczorne", label: "Wieczorne" },
+  { key: "ogolne", label: "Ogólne" },
   { key: "cykliczne", label: "Cykliczne" },
 ];
 
@@ -45,6 +55,7 @@ const SCHEDULE_LABELS = {
   poranne: "Poranne",
   obiadowe: "Obiadowe",
   wieczorne: "Wieczorne",
+  ogolne: "Ogólne (dowolna pora)",
   cykliczne: "Cykliczne",
 };
 
@@ -61,19 +72,44 @@ const fmtDatePL = (dateStr) =>
     month: "2-digit",
   });
 
+const daysOfWeekLabel = (task) => {
+  if (task.days_of_week) {
+    const idxs = task.days_of_week
+      .split(",")
+      .map((s) => Number(s.trim()))
+      .filter((n) => !Number.isNaN(n));
+    if (idxs.length > 0 && idxs.length < 7) {
+      return idxs.map((i) => DAYS_PL[i]).join(", ");
+    }
+    return null;
+  }
+  if (task.day_of_week != null) return DAYS_PL[task.day_of_week];
+  return null;
+};
+
 const blankForm = (defaultLokal) => ({
   title: "",
   description: "",
   schedule_type: "poranne",
   cycle_days: "3",
-  day_of_week: "",
+  days_of_week: [],
   lokal: defaultLokal,
   scope: "lokal",
   stanowisko: "",
   owner_label: "",
   deadline_time: "",
+  priority: "sredni",
   for_manager: false,
 });
+
+const PriorityBadge = ({ priority }) => {
+  const meta = PRIORITY_META[priority] || PRIORITY_META.sredni;
+  return (
+    <span className={`text-[10.5px] font-bold px-1.5 py-0.5 rounded ${meta.badgeCls}`}>
+      {meta.label}
+    </span>
+  );
+};
 
 export default function ZadaniaISprzatanie({
   currentUser,
@@ -94,6 +130,9 @@ export default function ZadaniaISprzatanie({
   const [managerOnly, setManagerOnly] = useState(false);
   const [showNewTaskForm, setShowNewTaskForm] = useState(false);
   const [showAllTasks, setShowAllTasks] = useState(false);
+  const [showIncomplete, setShowIncomplete] = useState(false);
+  const [allTasksLokalFilter, setAllTasksLokalFilter] = useState("ALL");
+  const [allTasksStanowiskoFilter, setAllTasksStanowiskoFilter] = useState("ALL");
   const defaultLokal =
     selectedLokal && selectedLokal !== "ALL"
       ? selectedLokal
@@ -102,6 +141,7 @@ export default function ZadaniaISprzatanie({
   const [busy, setBusy] = useState(false);
 
   const isToday = selectedDate === toLocalYMD(new Date());
+  const isAllLokale = !selectedLokal || selectedLokal === "ALL";
 
   const shiftSelectedDate = (deltaDays) => {
     const d = new Date(selectedDate + "T00:00:00");
@@ -121,6 +161,7 @@ export default function ZadaniaISprzatanie({
     poranne: nonManagerDue.filter((t) => t.schedule_type === "poranne").length,
     obiadowe: nonManagerDue.filter((t) => t.schedule_type === "obiadowe").length,
     wieczorne: nonManagerDue.filter((t) => t.schedule_type === "wieczorne").length,
+    ogolne: nonManagerDue.filter((t) => t.schedule_type === "ogolne").length,
     cykliczne: nonManagerDue.filter((t) => t.schedule_type === "cykliczne").length,
   };
 
@@ -165,13 +206,33 @@ export default function ZadaniaISprzatanie({
       selectedDate,
       "own"
     );
-    return { id: uid, name, stanowisko: assignment.stanowisko, checklist };
+    return {
+      id: uid,
+      name,
+      lokal: assignment.lokal,
+      stanowisko: assignment.stanowisko,
+      shifts: userShifts,
+      checklist,
+    };
   });
   const totalDone = employeeRows.reduce(
     (acc, r) => acc + r.checklist.filter((i) => i.done).length,
     0
   );
   const totalAll = employeeRows.reduce((acc, r) => acc + r.checklist.length, 0);
+
+  const incompleteShared = dueToday.filter(
+    (t) =>
+      t.scope === "lokal" &&
+      !t.for_manager &&
+      !findSharedCompletion(taskCompletions, t.id, selectedDate)
+  );
+  const employeesWithIncomplete = employeeRows
+    .map((r) => ({ ...r, incomplete: r.checklist.filter((i) => !i.done) }))
+    .filter((r) => r.incomplete.length > 0);
+  const totalIncompleteCount =
+    incompleteShared.length +
+    employeesWithIncomplete.reduce((acc, r) => acc + r.incomplete.length, 0);
 
   const handleToggleShared = async (task) => {
     const existing = findSharedCompletion(taskCompletions, task.id, selectedDate);
@@ -211,8 +272,10 @@ export default function ZadaniaISprzatanie({
           newTaskForm.schedule_type === "cykliczne"
             ? Number(newTaskForm.cycle_days) || 1
             : null,
-        day_of_week:
-          newTaskForm.day_of_week === "" ? null : Number(newTaskForm.day_of_week),
+        days_of_week:
+          newTaskForm.days_of_week.length > 0
+            ? newTaskForm.days_of_week.join(",")
+            : null,
         scope: newTaskForm.scope,
         stanowisko:
           newTaskForm.scope === "pracownik" && newTaskForm.stanowisko
@@ -223,6 +286,7 @@ export default function ZadaniaISprzatanie({
             ? newTaskForm.owner_label.trim()
             : null,
         deadline_time: newTaskForm.deadline_time || null,
+        priority: newTaskForm.priority,
         for_manager: newTaskForm.for_manager,
       });
       setTasks((prev) => [...prev, created]);
@@ -236,7 +300,11 @@ export default function ZadaniaISprzatanie({
   };
 
   const handleArchiveTask = async (task) => {
-    if (!window.confirm(`Zarchiwizować zadanie „${task.title}”? Zniknie z listy, historia wykonań zostaje.`)) {
+    if (
+      !window.confirm(
+        `Zarchiwizować zadanie „${task.title}”? Zniknie z listy, historia wykonań zostaje.`
+      )
+    ) {
       return;
     }
     setBusy(true);
@@ -249,9 +317,28 @@ export default function ZadaniaISprzatanie({
     setBusy(false);
   };
 
+  const toggleFormDay = (i) => {
+    setNewTaskForm((f) => ({
+      ...f,
+      days_of_week: f.days_of_week.includes(i)
+        ? f.days_of_week.filter((d) => d !== i)
+        : [...f.days_of_week, i].sort(),
+    }));
+  };
+
   const stanowiskaForForm = activeStanowiska.filter(
     (s) => s.lokal_name === newTaskForm.lokal
   );
+
+  const allTasksFiltered = inScope
+    .filter(
+      (t) => allTasksLokalFilter === "ALL" || t.lokal === allTasksLokalFilter
+    )
+    .filter(
+      (t) =>
+        allTasksStanowiskoFilter === "ALL" ||
+        t.stanowisko === allTasksStanowiskoFilter
+    );
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -366,6 +453,7 @@ export default function ZadaniaISprzatanie({
                 <option value="poranne">Poranne</option>
                 <option value="obiadowe">Obiadowe</option>
                 <option value="wieczorne">Wieczorne</option>
+                <option value="ogolne">Ogólne (dowolna pora dnia)</option>
                 <option value="cykliczne">Cykliczne</option>
               </select>
             </div>
@@ -384,23 +472,39 @@ export default function ZadaniaISprzatanie({
               </div>
             )}
             <div>
-              <label className="text-xs font-bold text-[#6E6E66]">
-                Dzień tygodnia (opcjonalnie)
-              </label>
+              <label className="text-xs font-bold text-[#6E6E66]">Priorytet</label>
               <select
-                value={newTaskForm.day_of_week}
+                value={newTaskForm.priority}
                 onChange={(e) =>
-                  setNewTaskForm({ ...newTaskForm, day_of_week: e.target.value })
+                  setNewTaskForm({ ...newTaskForm, priority: e.target.value })
                 }
                 className="w-full border-[2px] border-[#171714] rounded p-2 text-sm"
               >
-                <option value="">Każdy dzień</option>
-                {DAYS_PL.map((d, i) => (
-                  <option key={i} value={i}>
-                    {d}
-                  </option>
-                ))}
+                <option value="niski">Niski — lekkie przypomnienie</option>
+                <option value="sredni">Średni</option>
+                <option value="wysoki">Wysoki — ważne</option>
               </select>
+            </div>
+            <div className="col-span-2 md:col-span-4">
+              <label className="text-xs font-bold text-[#6E6E66]">
+                Dni tygodnia (puste = codziennie)
+              </label>
+              <div className="flex gap-1.5 flex-wrap mt-1">
+                {DAYS_PL.map((d, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => toggleFormDay(i)}
+                    className={`px-3 py-1.5 rounded border-2 text-sm font-bold ${
+                      newTaskForm.days_of_week.includes(i)
+                        ? "bg-[#171714] text-white border-[#171714]"
+                        : "bg-white text-[#171714] border-[#B7B6AE]"
+                    }`}
+                  >
+                    {d}
+                  </button>
+                ))}
+              </div>
             </div>
             <div>
               <label className="text-xs font-bold text-[#6E6E66]">Termin (godzina)</label>
@@ -519,10 +623,18 @@ export default function ZadaniaISprzatanie({
                     <span className="w-[9px] h-[9px] bg-[#DE3A22] rounded-[1px]" />
                   )}
                 </button>
-                <div className="min-w-0">
-                  <p className="font-['Archivo'] font-bold text-[15px] text-[#171714]">
-                    {task.title}
-                  </p>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-['Archivo'] font-bold text-[15px] text-[#171714]">
+                      {task.title}
+                    </p>
+                    <PriorityBadge priority={task.priority} />
+                    {isAllLokale && (
+                      <span className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-[#F1F1EE] text-[#6E6E66]">
+                        {task.lokal}
+                      </span>
+                    )}
+                  </div>
                   <p className="text-[13px] text-[#8F8E86]">
                     {completion
                       ? `${completion.user_name || "?"} · ${
@@ -570,6 +682,7 @@ export default function ZadaniaISprzatanie({
                 </div>
                 <p className="text-[12px] text-[#8F8E86] mb-2">
                   {row.stanowisko || ""}
+                  {isAllLokale && row.lokal ? ` · ${row.lokal}` : ""}
                 </p>
                 <div className={progressTrackCls}>
                   <div className="h-full rounded-full" style={progressFillStyle(pct)} />
@@ -586,29 +699,117 @@ export default function ZadaniaISprzatanie({
 
       <div className={`${sectionCardCls} mt-5`}>
         <button
+          onClick={() => setShowIncomplete((v) => !v)}
+          className={`${sectionHeaderCls} w-full text-left`}
+        >
+          <span>Niewykonane dzisiaj · {totalIncompleteCount}</span>
+          {showIncomplete ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+        </button>
+        {showIncomplete && (
+          <>
+            {totalIncompleteCount === 0 && (
+              <div className="p-4 text-sm text-[#8F8E86]">
+                Wszystko wykonane jak dotąd — świetnie.
+              </div>
+            )}
+            {incompleteShared.length > 0 && (
+              <div className="px-4 py-3 border-b-[2px] border-[#171714]">
+                <p className={`${statLabelCls} mb-2`}>Wspólne, niewykonane</p>
+                <div className="flex flex-col gap-1.5">
+                  {incompleteShared.map((t) => (
+                    <div key={t.id} className="flex items-center gap-2 flex-wrap text-sm">
+                      <span className="font-semibold text-[#171714]">{t.title}</span>
+                      <PriorityBadge priority={t.priority} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {employeesWithIncomplete.map((row) => (
+              <div key={row.id} className="px-4 py-3 border-b-[2px] border-[#171714] last:border-b-0">
+                <div className="flex items-baseline justify-between flex-wrap gap-1">
+                  <p className="font-['Archivo'] font-bold text-[14px] text-[#171714]">
+                    {row.name}
+                  </p>
+                  <span className="text-[12px] text-[#8F8E86]">
+                    {row.shifts
+                      .map(
+                        (s) =>
+                          `${fmtHHMM(s.start_time)}–${
+                            s.end_time ? fmtHHMM(s.end_time) : "trwa"
+                          }`
+                      )
+                      .join(", ")}
+                  </span>
+                </div>
+                <div className="flex flex-col gap-1 mt-1.5">
+                  {row.incomplete.map((i) => (
+                    <div key={i.task.id} className="flex items-center gap-2 flex-wrap text-sm">
+                      <span className="text-[#171714]">{i.task.title}</span>
+                      <PriorityBadge priority={i.task.priority} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </>
+        )}
+      </div>
+
+      <div className={`${sectionCardCls} mt-5`}>
+        <button
           onClick={() => setShowAllTasks((v) => !v)}
           className={`${sectionHeaderCls} w-full text-left`}
         >
-          <span>Wszystkie zadania w tym lokalu · {inScope.length}</span>
+          <span>Wszystkie zadania w tym lokalu · {allTasksFiltered.length}</span>
           {showAllTasks ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
         </button>
         {showAllTasks && (
           <>
-            {inScope.length === 0 && (
+            <div className="flex items-center gap-2 flex-wrap p-4 border-b-[2px] border-[#171714]">
+              <select
+                value={allTasksLokalFilter}
+                onChange={(e) => setAllTasksLokalFilter(e.target.value)}
+                className="border-[2px] border-[#171714] rounded p-2 text-sm"
+              >
+                <option value="ALL">Wszystkie lokale</option>
+                {availableLokale.map((l) => (
+                  <option key={l.id} value={l.name}>
+                    {l.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={allTasksStanowiskoFilter}
+                onChange={(e) => setAllTasksStanowiskoFilter(e.target.value)}
+                className="border-[2px] border-[#171714] rounded p-2 text-sm"
+              >
+                <option value="ALL">Wszystkie stanowiska</option>
+                {activeStanowiska.map((s) => (
+                  <option key={s.id} value={s.name}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {allTasksFiltered.length === 0 && (
               <div className="p-4 text-sm text-[#8F8E86]">
-                Brak zadań — dodaj pierwsze przyciskiem „+ Nowe zadanie” wyżej.
+                Brak zadań w tym filtrze.
               </div>
             )}
-            {inScope.map((task) => (
+            {allTasksFiltered.map((task) => (
               <div key={task.id} className={taskRowCls}>
                 <div className="min-w-0 flex-1">
-                  <p className="font-['Archivo'] font-bold text-[14px] text-[#171714]">
-                    {task.title}
-                  </p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-['Archivo'] font-bold text-[14px] text-[#171714]">
+                      {task.title}
+                    </p>
+                    <PriorityBadge priority={task.priority} />
+                  </div>
                   <p className="text-[12.5px] text-[#8F8E86]">
                     {task.lokal} · {SCHEDULE_LABELS[task.schedule_type] || task.schedule_type}
                     {task.schedule_type === "cykliczne" ? ` (co ${task.cycle_days || 1} dni)` : ""}
-                    {task.day_of_week != null ? ` · tylko ${DAYS_PL[task.day_of_week]}` : ""}
+                    {daysOfWeekLabel(task) ? ` · tylko ${daysOfWeekLabel(task)}` : ""}
                     {" · "}
                     {task.scope === "lokal" ? "wspólne" : task.stanowisko || "wszyscy"}
                     {task.for_manager ? " · kierownik" : ""}

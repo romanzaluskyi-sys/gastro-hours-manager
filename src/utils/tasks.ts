@@ -33,15 +33,39 @@ export const isCyclicalDueOn = (task, completions, dateStr) => {
   return daysBetweenYMD(last, dateStr) >= (task.cycle_days || 1);
 };
 
+// "6,0,1,2,3,4" — dowolny podzbiór dni zamiast jednego, żeby "wszystkie
+// dni oprócz niedzieli" nie wymagało 6 osobnych zadań. `days_of_week`
+// (nowe, text, lista indeksów po przecinku) ma pierwszeństwo nad starym,
+// jednodniowym `day_of_week` — ten drugi zostaje tylko dla wstecznej
+// zgodności z zadaniami utworzonymi przed tą zmianą.
+export const parseDaysOfWeek = (task) => {
+  if (!task.days_of_week) return null;
+  const days = task.days_of_week
+    .split(",")
+    .map((s) => Number(s.trim()))
+    .filter((n) => !Number.isNaN(n));
+  return days.length > 0 ? days : null;
+};
+
 export const isTaskDueOn = (task, completions, dateStr) => {
   if (!task.active || task.archived) return false;
-  if (task.day_of_week != null && getDayOfWeekIndex(dateStr) !== task.day_of_week) {
+  const days = parseDaysOfWeek(task);
+  const todayDow = getDayOfWeekIndex(dateStr);
+  if (days) {
+    if (!days.includes(todayDow)) return false;
+  } else if (task.day_of_week != null && todayDow !== task.day_of_week) {
     return false;
   }
   if (task.schedule_type === "cykliczne") {
     return isCyclicalDueOn(task, completions, dateStr);
   }
   return true;
+};
+
+export const PRIORITY_META = {
+  niski: { label: "Niski", order: 0, badgeCls: "bg-[#E7E7E2] text-[#6E6E66]" },
+  sredni: { label: "Średni", order: 1, badgeCls: "bg-[#F1F1EE] text-[#171714]" },
+  wysoki: { label: "Wysoki", order: 2, badgeCls: "bg-[#FAEAE6] text-[#8A3A2B]" },
 };
 
 // Ile dni z cyklu już minęło od ostatniego wykonania — do pokazania "2/3
@@ -144,6 +168,9 @@ export const buildEmployeeChecklist = (
       return { task: t, completion, done: !!completion };
     })
     .sort((a, b) => {
+      const pa = PRIORITY_META[a.task.priority]?.order ?? 1;
+      const pb = PRIORITY_META[b.task.priority]?.order ?? 1;
+      if (pa !== pb) return pb - pa;
       const da = a.task.deadline_time || "99:99";
       const db = b.task.deadline_time || "99:99";
       if (da !== db) return da < db ? -1 : 1;

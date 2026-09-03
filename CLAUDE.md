@@ -94,6 +94,15 @@ src/
                                   wspólna logika zatwierdzania korekt godzin
                                   (Zatwierdzanie zmian + inline w Rejestr
                                   Godzin), patrz "Panel kierownika" niżej
+    tasks.ts                    isTaskDueOn/toggleTaskCompletion/
+                                  buildEmployeeChecklist/
+                                  getEffectiveAssignmentForDate/
+                                  weeklyChecklistStats/PRIORITY_META —
+                                  cała logika modułu Zadania i sprzątanie,
+                                  patrz sekcja "Zadania i sprzątanie" niżej.
+                                  NIE duplikuj tej logiki w
+                                  ZadaniaISprzatanie.tsx ani w
+                                  employeeSessionShared.tsx.
   components/
     LoginScreen.tsx             redesign 2026-09-02, ten sam język wizualny
                                   co reszta apki (patrz niżej)
@@ -154,7 +163,10 @@ src/
                                     "Więcej" (mobile) — patrz "Panel
                                     kierownika" niżej po szczegóły nawigacji
       WBudowie.tsx                  wspólny placeholder dla zakładek bez
-                                    jeszcze własnej treści (Grafik, Zadania)
+                                    jeszcze własnej treści (obecnie: Grafik)
+      ZadaniaISprzatanie.tsx        zakładka "Zadania i sprzątanie" —
+                                    "Kontrola wykonania po osobach", patrz
+                                    sekcja "Zadania i sprzątanie" niżej
       PulpitHome.tsx, RejestrGodzin.tsx, ZatwierdzanieZmian.tsx,
       Aktywni.tsx, Zgloszenia.tsx, Pracownicy.tsx, RaportyIKoszty.tsx,
       Przewodnik.tsx, MojaPraca.tsx
@@ -390,6 +402,126 @@ dokleja z przodu `user_name` (`"Wojtek: Twój termin: ..."`) — bez tego,
 przy kilku pracownikach `open` na jednym urządzeniu nie było wiadomo, do
 kogo należy powiadomienie.
 
+## Zadania i sprzątanie (Roadmap p.2) — zaimplementowane 2026-09-02/03
+
+Zbudowane w dwóch etapach: pierwsza wersja (schemat + panel kierownika +
+checklisty pracownika) 2026-09-02, druga (priorytet, dowolne dni tygodnia,
+typ "Ogólne", drill-down "Niewykonane dzisiaj", pełna lista z filtrami,
+kafelek na Pulpicie, "Zgłoszenie → zadanie") 2026-09-03 po rundzie
+testowania przez właściciela. **Moduł Sprzątanie jako osobny, rozbudowany
+proces (HACCP: obladnannia/sprzęt, logi temperatur, oceny jakości) jest
+świadomie odłożony** — to, co jest zbudowane teraz, obsługuje tylko
+"zwykłe" zadania (w tym cykliczne), nie elektroniczny dziennik HACCP.
+Właściciel zdecyduje o zakresie tego drugiego etapu osobno; do tego czasu
+NIE projektuj tabeli `equipment`/`cleaning_logs` z własnej inicjatywy.
+
+Cała logika "czy zadanie jest dziś do zrobienia" i zapis/kasowanie
+wykonań żyje w [`utils/tasks.ts`](src/utils/tasks.ts) — jedyne miejsce,
+wywoływane i z [`ZadaniaISprzatanie.tsx`](src/components/manager/ZadaniaISprzatanie.tsx)
+(panel kierownika), i z
+[`employeeSessionShared.tsx`](src/components/employeeSessionShared.tsx)
+(Pulpit/Zmiana/Zadania pracownika, kiosk i konto osobiste). Nie duplikuj
+tej logiki w żadnym z tych dwóch miejsc.
+
+**Model danych** — dwie tabele (schemat pełny w sekcji "Schemat Supabase"
+niżej): `tasks` (definicje, tworzone przez kierownika) i
+`task_completions` (log wykonań — brak wiersza = niezrobione, jeden
+checkbox = jeden insert/delete, bez wstępnego materializowania "przypisane
+ale niezrobione"). `scope='lokal'` = zadanie wspólne dla całego lokalu,
+jedno wykonanie dziennie przez dowolną osobę (widoczne w panelu
+kierownika jako "Wspólne dla całego lokalu"); `scope='pracownik'` = każdy
+pasujący pracownik dostaje własną, osobną instancję (`stanowisko=null` =
+"wszyscy", inaczej tylko dany stanowisko) — to jest odpowiedź na pytanie
+"komu przypisać zadanie bez Grafiku": leci na całe stanowisko, każdy z
+danym stanowiskiem widzi je i odhacza osobno; na kiosku, jeśli dana osoba
+nie pracuje danego dnia, nikt i tak nie wchodzi na jej stronę, więc brak
+odznaczenia nie generuje fałszywego alarmu.
+
+**`schedule_type`**: `poranne`/`obiadowe`/`wieczorne`/`ogolne` (dowolna
+pora dnia — dodane 2026-09-03, bo pierwsza wersja nie miała kategorii
+"po prostu zrobić w ciągu dnia" innej niż cykliczne) / `cykliczne` (co N
+dni, `cycle_days`, liczone od **ostatniego faktycznego wykonania**, nie
+od stałej kotwicy w kalendarzu — pominięty cykl zostaje zaległy zamiast
+po cichu przeskoczyć dalej, patrz `isCyclicalDueOn` w `utils/tasks.ts`).
+
+**Dni tygodnia**: `days_of_week` (text, lista indeksów po przecinku, np.
+`"1,2,3,4,5"` — `0=niedziela..6=sobota`, zwykłe JS `Date.getDay()`,
+bez własnego mapowania) pozwala wybrać DOWOLNY podzbiór dni zamiast
+jednego — dodane 2026-09-03 na prośbę właściciela ("codziennie oprócz
+niedzieli" wymagało wcześniej 6 osobnych zadań z pojedynczym
+`day_of_week`). Stary `day_of_week` (int, pojedynczy dzień) zostaje w
+schemacie tylko dla wstecznej zgodności z zadaniami utworzonymi przed tą
+zmianą — `isTaskDueOn` honoruje `days_of_week`, jeśli jest ustawione,
+inaczej spada na `day_of_week`; nowy formularz kierownika pisze już
+wyłącznie `days_of_week`.
+
+**Priorytet** (`priority`: `niski`/`sredni`/`wysoki`, default `sredni`,
+dodane 2026-09-03) — czysto informacyjny, nie zmienia logiki "co jest do
+zrobienia". `wysoki` dostaje czerwony tag "Ważne" przy niedokończonym
+zadaniu (Pulpit, Zmiana, zakładka Zadania) i sortuje się na górę
+checklisty pracownika (`buildEmployeeChecklist`).
+
+**Panel kierownika** (`ZadaniaISprzatanie.tsx`) — pigułki filtrów
+Poranne/Obiadowe/Wieczorne/Ogólne/Cykliczne + osobny przełącznik "Zadania
+kierownika" (`for_manager=true`, orthogonalna flaga — zadanie może być
+jednocześnie np. wieczorne I dla kierownika). Nawigacja dat z przyciskiem
+"Dziś" (szybki skok). Lewy panel: zadania wspólne. Prawy panel: "Postęp po
+osobach" — **tylko wśród pracowników, którzy danego dnia faktycznie
+odbili zmianę** (świadoma decyzja, bo bez Grafiku nie ma innego źródła
+prawdy o tym kto pracuje — pokazywanie wszystkich aktywnych pracowników
+domyślnie dawałoby mylącą, spuchniętą listę przed pierwszym odbiciem dnia).
+Sekcja "Niewykonane dzisiaj" (zwijana, dodana 2026-09-03) pokazuje
+zaległe zadania wspólne i per-pracownik razem z godzinami zmian danej
+osoby tego dnia (`shifts` przypisane do `employeeRows[].shifts`). Sekcja
+"Wszystkie zadania w tym lokalu" (zwijana) to pełny katalog zadań
+(niezależnie od tego, czy są dziś "due"), z filtrem po lokalu i
+stanowisku oraz przyciskiem "Archiwizuj" (`tasks.archived=true` —
+**jedyna** dostępna dziś operacja edycji istniejącego zadania; nie ma UI
+do zmiany tytułu/harmonogramu już utworzonego zadania — trzeba
+zarchiwizować i stworzyć nowe). Kafelek "Zadania dziś" na
+[`PulpitHome.tsx`](src/components/manager/PulpitHome.tsx) (4. kolumna,
+dodany 2026-09-03) pokazuje pierścień postępu (`ProgressRing`, SVG) per
+lokal, licząc dokładnie tą samą logiką co panel Zadania (nie duplikuj —
+`buildEmployeeChecklist`/`isTaskDueOn`/`findSharedCompletion` z
+`utils/tasks.ts`).
+
+**Zgłoszenie → zadanie** (`Zgloszenia.tsx`, dodane 2026-09-03) — przycisk
+"Utwórz zadanie" przy zgłoszeniu typu `problem` tworzy `tasks` wiersz z
+`for_manager=true`, `scope='lokal'`, `source_issue_id=issue.id` (text,
+luźne odwołanie bez FK — ten sam wzorzec co `shift_edits.shift_id`/
+`issue_id`, patrz błędy #12/#13 niżej). Tytuł jest edytowalny inline przed
+zapisem (podpowiedź = pierwsze 80 znaków treści zgłoszenia). Po utworzeniu
+przycisk zamienia się w odznakę "Zadanie utworzone" (sprawdzane przez
+`tasks.some(t => t.source_issue_id === iss.id)`, przeżywa odświeżenie
+strony).
+
+**Pracownik** (`employeeSessionShared.tsx`) — `buildEmployeeChecklist`
+liczy checklistę per pracownik na dany dzień, preferując lokal/stanowisko
+z otwartej albo najnowszej zmiany danego dnia nad statycznym
+`default_lokal`/`default_stanowisko` (`getEffectiveAssignmentForDate`).
+Wspólny renderer `renderTaskChecklist()` (jedna funkcja, trzy miejsca
+użycia — nie duplikuj) rysuje checklistę z klikalnym checkboxem: (1) na
+Pulpit **przed** rozpoczęciem zmiany (dodane 2026-09-03 — pierwsza wersja
+pokazywała tylko link "Zobacz zadania", za mało zgodnie z feedbackiem
+testowym), (2) na Pulpit/Zmiana **w trakcie** zmiany (sekcja "Zadania na
+zmianę" + niewymuszający banner "Zostały N zadań..." — zamknięcie zmiany
+działa bez ograniczeń niezależnie od stanu zadań), (3) w pełnej formie w
+zakładce Zadania (z przełącznikiem "Twoje stanowisko"/"Wszystkie" —
+"Wszystkie" przydatne głównie na kiosku, gdzie kilka ról dzieli jeden
+tablet; odhaczenie zadania spoza własnego stanowiska w tym trybie jest
+dozwolone i zapisuje się pod tożsamością klikającej osoby, świadoma
+decyzja). Zakładka Zadania ma też banner "Masz N niewykonanych zadań" i
+mini-raport `weeklyChecklistStats()` — "Ostatnie 7 dni: X z Y zadań",
+liczony TYLKO z dni, w które pracownik faktycznie miał jakąś zmianę
+(przybliżenie, nie audyt — patrz komentarz w `utils/tasks.ts`). Odznaka z
+liczbą niewykonanych zadań na ikonie zakładki "Zadania" w `Shell`
+(`taskBadgeCount`, ten sam wzorzec co `unreadCount` na "Więcej" —
+przekazywany przez WSZYSTKIE 7 wywołań `<Shell>` w tym pliku).
+
+`App.tsx` ładuje `tasks`/`task_completions` jako dwa osobne, nieblokujące
+fetche (ten sam wzorzec co `shift_edits`) — błąd tu nie blokuje reszty
+apki.
+
 ## Zgłoszenia i powiadomienia — pełna mapa (ustalone 2026-08-31)
 
 Zebrane w jednym miejscu, bo kanałów zrobiło się kilka i łatwo pomylić,
@@ -518,6 +650,31 @@ zakresem — wymaga Grafiku, którego nie ma.
     Postgresa. Potwierdzone działające — obie funkcje są już głównym,
     wielokrotnie używanym kanałem powiadomień (patrz "Zgłoszenia i
     powiadomienia" wyżej).
+- **tasks** — definicje zadań, patrz "Zadania i sprzątanie" wyżej.
+  `id (uuid), lokal (text), title (text), description (text, null),
+  schedule_type (text: 'poranne'|'obiadowe'|'wieczorne'|'ogolne'|
+  'cykliczne'), cycle_days (int, null — tylko cykliczne), day_of_week
+  (int, null, 0-6 — STARE, zastąpione przez days_of_week, zostaje tylko
+  dla wstecznej zgodności), days_of_week (text, null — lista indeksów po
+  przecinku np. "1,2,3,4,5", 0=niedziela..6=sobota, dodane 2026-09-03),
+  scope (text: 'lokal'|'pracownik'), stanowisko (text, null — tylko
+  scope='pracownik', null="wszyscy"), owner_label (text, null —
+  podpowiedź "kto ma zrobić" dla scope='lokal', czysto informacyjna),
+  deadline_time (time, null), priority (text: 'niski'|'sredni'|'wysoki',
+  default 'sredni', dodane 2026-09-03), for_manager (boolean, default
+  false), source_issue_id (text, null — luźne odwołanie do issues.id gdy
+  zadanie powstało z przycisku "Utwórz zadanie" w Zgłoszeniach, dodane
+  2026-09-03), active (boolean, default true), archived (boolean, default
+  false), created_at (timestamptz)`. RLS: otwarta polityka, jak reszta.
+- **task_completions** — log wykonań zadań, patrz "Zadania i sprzątanie"
+  wyżej. `id (bigint identity), task_id (text — luźne odwołanie do
+  tasks.id, bez FK, ten sam wzorzec co shift_edits), date (date), user_id
+  (text, null), user_name (text, null), completed_at (timestamptz),
+  shift_id (text, null)`. Brak wiersza dla danego (task_id, date[,
+  user_id]) = niezrobione; brak też jakiejkolwiek unikalności wymuszonej w
+  SQL (świadomie, jak reszta tego projektu — ochrona przed podwójnym
+  zapisem jest tylko po stronie aplikacji w `utils/tasks.ts`). RLS:
+  otwarta polityka.
 
 ## Znane błędy — JUŻ NAPRAWIONE, nie wprowadzaj ponownie
 
@@ -749,17 +906,28 @@ zmiany kodu (patrz "Panel kierownika" wyżej). Codzienna weryfikacja
 kierownika ORAZ pracownika: miesiąc przed, 2 tygodnie przed, codziennie w
 ostatnim tygodniu, i codziennie po przekroczeniu terminu aż do poprawy.
 
-### 2. Zadania + Sprzątanie
-Dwie osobne funkcje:
-- **Zadania** — obowiązkowe checklisty przy otwarciu/zamknięciu zmiany
-  (opcjonalnie zależne od dnia tygodnia).
-- **Sprzątanie** — zadania cykliczne (co N dni / konkretny dzień tygodnia),
-  z powiadomieniem właściciela jeśli nie zostały odznaczone jako zrobione,
-  wraz z informacją kto był na zmianie.
+### 2. Zadania + Sprzątanie — **ZADANIA ZROBIONE, Sprzątanie jako osobny proces ODŁOŻONE**
+⚠️ Zaimplementowana część NIE odpowiada już dokładnie opisowi niżej —
+patrz sekcja "Zadania i sprzątanie" wyżej po pełny, aktualny opis. Skrót:
+
+- **Zadania** — ZROBIONE (2026-09-02/03). Zadania tworzone przez
+  kierownika (poranne/obiadowe/wieczorne/ogólne/cykliczne, priorytet,
+  dowolny wybór dni tygodnia, wspólne dla lokalu albo osobne per
+  stanowisko), checklisty widoczne pracownikowi na Pulpit/Zmiana/Zadania,
+  panel kierownika z podglądem postępu, drill-down zaległości, pełną
+  listą i archiwizacją.
+- **Sprzątanie jako OSOBNY, rozbudowany proces** (elektroniczny dziennik
+  HACCP: obladnannia/sprzęt jako osobna encja, logi temperatur chłodni/
+  zamrażarek, ocena jakości, harmonogram per sprzęt z wyborem konkretnych
+  dni tygodnia) — **świadomie ODŁOŻONE** na prośbę właściciela
+  (2026-09-03). To, co dziś nazywa się "cykliczne" w module Zadania,
+  obsługuje tylko prosty przypadek "co N dni", NIE jest tym samym co ten
+  punkt. Nie projektuj `equipment`/`cleaning_logs` z własnej inicjatywy —
+  czekaj na osobną sesję planistyczną z właścicielem.
 
 Oba typy mają "beneficjenta" w postaci stanowiska (kto jest
-odpowiedzialny). Zależy od fundamentu z punktu 0 (powiadomienia
-kierownika).
+odpowiedzialny). Zależało od fundamentu z punktu 0 (powiadomienia
+kierownika) — już gotowe.
 
 ### 3. Wydarzenia
 Kierownik tworzy zdarzenie (zebranie, grupa o określonej godzinie itp.)

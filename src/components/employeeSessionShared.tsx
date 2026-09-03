@@ -654,6 +654,39 @@ export const EmployeeSessionScreens = ({
     }
   };
 
+  // ---- checklista zadań — wspólny renderer dla Pulpit (przed i w trakcie
+  // zmiany) oraz zakładki Zadania, żeby nie duplikować JSX w trzech miejscach ----
+  const renderTaskChecklist = (list) => (
+    <div className="space-y-2">
+      {list.map((item) => (
+        <button
+          key={item.task.id}
+          onClick={() => handleToggleTask(item)}
+          className={checkboxRowCls(item.done)}
+        >
+          <span className="w-5 h-5 border-2 border-[#B7B6AE] rounded-[3px] flex-shrink-0 flex items-center justify-center">
+            {item.done && (
+              <span className="w-[9px] h-[9px] bg-[#DE3A22] rounded-[1px]" />
+            )}
+          </span>
+          <span className="flex-1 text-left">
+            <span className="block text-[15px] font-semibold text-[#171714]">
+              {item.task.title}
+            </span>
+            {!item.done && item.task.priority === "wysoki" && (
+              <span className="block text-[11px] font-bold text-[#DE3A22] mt-0.5">
+                Ważne
+              </span>
+            )}
+          </span>
+          <span className="flex-shrink-0 text-[11px] font-semibold px-2 py-1 rounded bg-[#E7E7E2] text-[#6E6E66]">
+            {taskBadgeLabel(item.task, taskCompletions, todayStr)}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+
   // ---- fragmenty UI wspólne dla kilku ekranów ----
   const renderShiftInProgress = () => {
     const startDate = openShift.start_time;
@@ -690,27 +723,7 @@ export const EmployeeSessionScreens = ({
                 />
               ))}
             </div>
-            <div className="mt-3 space-y-2">
-              {myChecklistOwn.slice(0, 3).map((item) => (
-                <button
-                  key={item.task.id}
-                  onClick={() => handleToggleTask(item)}
-                  className={checkboxRowCls(item.done)}
-                >
-                  <span className="w-5 h-5 border-2 border-[#B7B6AE] rounded-[3px] flex-shrink-0 flex items-center justify-center">
-                    {item.done && (
-                      <span className="w-[9px] h-[9px] bg-[#DE3A22] rounded-[1px]" />
-                    )}
-                  </span>
-                  <span className="flex-1 text-[15px] font-semibold text-[#171714] text-left">
-                    {item.task.title}
-                  </span>
-                  <span className="flex-shrink-0 text-[11px] font-semibold px-2 py-1 rounded bg-[#E7E7E2] text-[#6E6E66]">
-                    {taskBadgeLabel(item.task, taskCompletions, todayStr)}
-                  </span>
-                </button>
-              ))}
-            </div>
+            <div className="mt-3">{renderTaskChecklist(myChecklistOwn)}</div>
             {myChecklistOwn.some((i) => !i.done) && (
               <div className="bg-[#FBEAE6] border-l-4 border-[#DE3A22] text-[#8A3A2B] text-sm p-3.5 rounded-sm mt-3.5">
                 Zostały {myChecklistOwn.filter((i) => !i.done).length}{" "}
@@ -997,12 +1010,7 @@ export const EmployeeSessionScreens = ({
                   </span>
                 </div>
                 <div className={ruleSoftCls} />
-                <button
-                  onClick={() => setScreen("ZADANIA")}
-                  className={`${ctaSecondaryCls} mt-4`}
-                >
-                  Zobacz zadania
-                </button>
+                <div className="mt-3">{renderTaskChecklist(myChecklistOwn)}</div>
               </>
             )}
             <div className="flex-1" />
@@ -1181,14 +1189,23 @@ export const EmployeeSessionScreens = ({
         taskBadgeCount={taskBadgeCount}
         title="Zadania"
       >
-        {myWeeklyStats.total > 0 && (
-          <div className={`${razemRowCls} mb-4`}>
-            <span className="text-sm text-[#6E6E66]">Ostatnie 7 dni</span>
-            <span className="font-['Archivo'] font-extrabold text-[17px] text-[#171714] tabular-nums">
-              {myWeeklyStats.done} z {myWeeklyStats.total} zadań
-            </span>
+        {myChecklistOwn.some((i) => !i.done) && (
+          <div className="bg-[#FBEAE6] border-l-4 border-[#DE3A22] text-[#8A3A2B] text-sm p-3.5 rounded-sm mb-4">
+            Masz {myChecklistOwn.filter((i) => !i.done).length}{" "}
+            {myChecklistOwn.filter((i) => !i.done).length === 1
+              ? "niewykonane zadanie"
+              : "niewykonanych zadań"}{" "}
+            na dziś.
           </div>
         )}
+        <div className={`${razemRowCls} mb-4`}>
+          <span className="text-sm text-[#6E6E66]">Ostatnie 7 dni</span>
+          <span className="font-['Archivo'] font-extrabold text-[17px] text-[#171714] tabular-nums">
+            {myWeeklyStats.total > 0
+              ? `${myWeeklyStats.done} z ${myWeeklyStats.total} zadań`
+              : "brak danych"}
+          </span>
+        </div>
         <div className="flex gap-2 mb-4">
           <button
             onClick={() => setTaskViewMode("own")}
@@ -1232,6 +1249,11 @@ export const EmployeeSessionScreens = ({
               <span className="flex-1 text-left">
                 <span className="block text-[15.5px] font-semibold text-[#171714]">
                   {item.task.title}
+                  {!item.done && item.task.priority === "wysoki" && (
+                    <span className="ml-2 text-[11px] font-bold text-[#DE3A22] align-middle">
+                      Ważne
+                    </span>
+                  )}
                 </span>
                 <span className="block text-[12.5px] text-[#8F8E86] mt-0.5">
                   {item.done && item.completion?.user_name

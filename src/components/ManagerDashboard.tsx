@@ -927,6 +927,8 @@ const ManagerDashboard = ({
             users={users}
             shifts={shifts}
             issues={issues}
+            tasks={tasks}
+            taskCompletions={taskCompletions}
             matchesFilter={matchesLokalFilter}
             setActiveTab={setTab}
           />

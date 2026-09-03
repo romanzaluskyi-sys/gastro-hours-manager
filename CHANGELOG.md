@@ -5,6 +5,23 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.10.0 — 2026-09-03
+
+- **Zadania: priorytet i dowolne dni tygodnia.** Zadanie ma teraz priorytet
+  (niski/średni/wysoki — ważne widocznie oznaczone) i można wybrać dowolny
+  zestaw dni tygodnia zamiast jednego (np. "codziennie oprócz niedzieli"
+  bez tworzenia sześciu osobnych zadań). Doszedł też typ "Ogólne" —
+  zadanie na dowolną porę dnia, nie tylko poranne/obiadowe/wieczorne.
+  Wynikowe zadanie z checkboxami widać teraz też na Pulpicie przed
+  rozpoczęciem zmiany, nie tylko w trakcie.
+- **Panel kierownika: pełny przegląd.** Nowa sekcja "Niewykonane dzisiaj"
+  (kto ma zaległości i w jakich godzinach dziś pracował), pełna lista
+  wszystkich zadań lokalu z filtrem po lokalu/stanowisku i możliwością
+  archiwizacji, oraz kafelek "Zadania dziś" na Pulpicie kierownika z
+  wskaźnikiem wykonania per lokal.
+- **Zgłoszenie → zadanie.** W zakładce Zgłoszenia można od razu utworzyć z
+  niego zadanie dla kierownika.
+
 ## 0.9.0 — 2026-09-02
 
 - **Nowa zakładka "Zadania i sprzątanie".** Kierownik tworzy zadania na
