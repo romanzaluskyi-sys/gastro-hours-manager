@@ -775,7 +775,12 @@ trafia do `absences` ze `status='pending'` i budzi kierownika przez
 Kierownik decyduje w **Zatwierdzanie zmian** (`ZatwierdzanieZmian.tsx`,
 sekcja "Wnioski o wolne" nad kolejką korekt godzin — jedna zakładka na
 wszystkie decyzje kierownika, ten sam powód co połączenie korekt i
-urlopów w jednym miejscu) — Zatwierdź/Odrzuć, `resolveAbsenceRequest()` w
+urlopów w jednym miejscu). Każda karta pokazuje liczbę dni kalendarzowych
+wniosku (`countCalendarDays()`) i, tylko dla `type='urlop'`, ile to
+będzie godzin (`countWorkdays() * URLOP_HOURS_PER_DAY` — te same dwie
+funkcje pomocnicze co `buildUrlopShiftDrafts()`, wszystkie w
+`utils/absences.ts`, nie licz tego ręcznie w komponencie) — Zatwierdź/
+Odrzuć, `resolveAbsenceRequest()` w
 [`utils/absences.ts`](src/utils/absences.ts). **JEDYNE** miejsce, które
 zmienia `absences.status` i materializuje godziny — nie duplikuj tej
 logiki. Kierownik może też wpisać urlop bezpośrednio w karcie pracownika
@@ -801,12 +806,13 @@ w każdym z tych miejsc — dokładnie to, o co prosił właściciel ("dodają s
 do wszystkich list i podliczeń"). Miejsca renderujące pojedynczy wiersz
 zmiany rozpoznają `s.is_urlop` i pokazują słowo "Urlop" zamiast zakresu
 godzin (`RejestrGodzin.tsx`, `MojaPraca.tsx`,
-`employeeSessionShared.tsx` Raport) — ⚠️ **Pulpit kierownika
-("Wymaga Twojej decyzji") świadomie NIE pokazuje jeszcze oczekujących
-wniosków o wolne** — liczą się tylko w liczniku przy zakładce
-"Zatwierdzanie zmian" w sidebarze (`shellBadges.zatwierdzanie`), nie w
-kafelku na Pulpicie; dodaj to później, jeśli okaże się potrzebne, nie
-zakładaj że już działa.
+`employeeSessionShared.tsx` Raport). **Pulpit kierownika** ("Wymaga
+Twojej decyzji", `PulpitHome.tsx`) od 2026-09-03 łączy korekty godzin i
+oczekujące wnioski o wolne w jedną, wspólną listę `decisionItems`
+(posortowaną po `created_at`, najstarsze pierwsze) — wnioski oznaczone
+ikoną `Palmtree`, treść podsumowania to typ (Urlop/Niedostępność) i
+liczba dni kalendarzowych (`countCalendarDays`). Kafelek "Do decyzji" i
+licznik na karcie liczą razem korekty + wnioski.
 
 `type='niedostepnosc'` NIE tworzy żadnych `shifts` — zostaje tylko
 zatwierdzonym/odrzuconym wierszem w `absences`, czekającym na przyszły

@@ -5,6 +5,7 @@
 import React, { useState } from "react";
 import { Check, Edit2, HelpCircle, AlertCircle, X, Palmtree } from "lucide-react";
 import { resolveCorrection, askAboutCorrection } from "../../utils/corrections";
+import { countCalendarDays, countWorkdays, URLOP_HOURS_PER_DAY } from "../../utils/absences";
 import { pageTitleCls, statLabelCls, btnPrimaryCls, btnSecondaryCls } from "./designTokens";
 
 const fmtPLAbs = (dateStr) =>
@@ -204,7 +205,13 @@ export default function ZatwierdzanieZmian({
             <Palmtree size={18} /> Wnioski o wolne · {pendingAbsences.length}
           </h3>
           <div className="space-y-3">
-            {pendingAbsences.map((a) => (
+            {pendingAbsences.map((a) => {
+              const dni = countCalendarDays(a.start_date, a.end_date);
+              const godziny =
+                a.type === "urlop"
+                  ? countWorkdays(a.start_date, a.end_date) * URLOP_HOURS_PER_DAY
+                  : null;
+              return (
               <div
                 key={a.id}
                 className="bg-white rounded-xl border-[2px] border-[#171714] p-4 flex items-start justify-between gap-4 flex-wrap"
@@ -215,7 +222,17 @@ export default function ZatwierdzanieZmian({
                   </p>
                   <p className="text-sm text-[#6E6E66]">
                     {a.lokal} · {a.type === "urlop" ? "Urlop" : "Niedostępność"} ·{" "}
-                    {fmtPLAbs(a.start_date)}–{fmtPLAbs(a.end_date)}
+                    {fmtPLAbs(a.start_date)}–{fmtPLAbs(a.end_date)} ·{" "}
+                    <span className="font-bold text-[#171714]">
+                      {dni} {dni === 1 ? "dzień" : "dni"}
+                    </span>
+                    {godziny != null && (
+                      <>
+                        {" "}
+                        ·{" "}
+                        <span className="font-bold text-[#171714]">{godziny}h</span>
+                      </>
+                    )}
                   </p>
                   {a.note && (
                     <p className="text-sm text-[#6E6E66] mt-1.5 italic">„{a.note}”</p>
@@ -238,7 +255,8 @@ export default function ZatwierdzanieZmian({
                   </button>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

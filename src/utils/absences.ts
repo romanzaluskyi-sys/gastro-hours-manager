@@ -11,6 +11,36 @@ export const URLOP_HOURS_PER_DAY = 8;
 // dla podsumowań; realny czas pracy urlopu i tak nie istnieje.
 const URLOP_START_HOUR = 9;
 
+// Liczba dni kalendarzowych wniosku (włącznie z sobotą/niedzielą) — to,
+// co pracownik naturalnie ma na myśli mówiąc "biorę 5 dni wolnego".
+// Osobne od countWorkdays() niżej, które liczy tylko dni robocze (do
+// godzin urlopu, patrz "8 godzin za dzień roboczy" w CLAUDE.md).
+export const countCalendarDays = (startDate, endDate) => {
+  const [sy, sm, sd] = startDate.split("-").map(Number);
+  const [ey, em, ed] = endDate.split("-").map(Number);
+  const start = new Date(sy, sm - 1, sd);
+  const end = new Date(ey, em - 1, ed);
+  return Math.round((end - start) / 86400000) + 1;
+};
+
+// Liczba dni roboczych (pon–pt) w zakresie — ten sam licznik co pętla w
+// buildUrlopShiftDrafts() niżej, wydzielony osobno do samego liczenia bez
+// budowania wpisów shifts (używane np. do podglądu godzin przed
+// zatwierdzeniem wniosku).
+export const countWorkdays = (startDate, endDate) => {
+  const [sy, sm, sd] = startDate.split("-").map(Number);
+  const [ey, em, ed] = endDate.split("-").map(Number);
+  const cursor = new Date(sy, sm - 1, sd);
+  const end = new Date(ey, em - 1, ed);
+  let count = 0;
+  while (cursor <= end) {
+    const dow = cursor.getDay();
+    if (dow !== 0 && dow !== 6) count++;
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return count;
+};
+
 const fmtPL = (dateStr) =>
   dateStr
     ? new Date(dateStr + "T00:00:00").toLocaleDateString("pl-PL", {

@@ -970,6 +970,7 @@ const ManagerDashboard = ({
             issues={issues}
             tasks={tasks}
             taskCompletions={taskCompletions}
+            absences={absences}
             matchesFilter={matchesLokalFilter}
             setActiveTab={setTab}
           />

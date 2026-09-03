@@ -6,7 +6,7 @@
 // pracowników w zestawieniu nie ma stawki ustawionej, pokazujemy to wprost
 // zamiast cichо zaniżać sumę.
 import React from "react";
-import { AlertTriangle, ArrowRight } from "lucide-react";
+import { AlertTriangle, ArrowRight, Palmtree } from "lucide-react";
 import {
   statTileCls,
   statLabelCls,
@@ -17,6 +17,7 @@ import {
   pageTitleCls,
 } from "./designTokens";
 import { isTaskDueOn, findSharedCompletion, toLocalYMD } from "../../utils/tasks";
+import { countCalendarDays } from "../../utils/absences";
 
 const ProgressRing = ({ pct, size = 36, stroke = 5 }) => {
   const r = (size - stroke) / 2;
@@ -71,6 +72,7 @@ export default function PulpitHome({
   issues,
   tasks,
   taskCompletions,
+  absences = [],
   matchesFilter, // (lokalName) => bool — hasAccessToLokal + wybrany lokal z paska
   setActiveTab,
 }) {
@@ -149,6 +151,32 @@ export default function PulpitHome({
   const openProblems = issues.filter(
     (iss) => (iss.type || "problem") === "problem" && iss.status === "nowe"
   ).length;
+
+  const pendingAbsences = absences.filter(
+    (a) => a.status === "pending" && matchesFilter(a.lokal)
+  );
+
+  // "Wymaga Twojej decyzji" łączy korekty godzin i wnioski o wolne w jedną
+  // listę, posortowaną po dacie zgłoszenia — najstarsze najpierw, tak jak
+  // dotychczas same korekty.
+  const decisionItems = [
+    ...pendingCorrections.map((r) => ({
+      kind: "correction",
+      key: `c-${r.iss.id}`,
+      createdAt: r.iss.created_at,
+      name: r.iss.user_name || "Anonim",
+      sub: `${r.iss.proposed_lokal} · ${fmtPL(r.iss.proposed_date)}`,
+    })),
+    ...pendingAbsences.map((a) => ({
+      kind: "absence",
+      key: `a-${a.id}`,
+      createdAt: a.created_at,
+      name: a.user_name || "Pracownik",
+      sub: `${a.type === "urlop" ? "Urlop" : "Niedostępność"} · ${
+        countCalendarDays(a.start_date, a.end_date)
+      } dni`,
+    })),
+  ].sort((x, y) => new Date(x.createdAt) - new Date(y.createdAt));
 
   const activeNow = visibleShifts.filter((s) => !s.end_time);
 
@@ -253,9 +281,10 @@ export default function PulpitHome({
         </div>
         <div className={statTileCls}>
           <p className={statLabelCls}>Do decyzji</p>
-          <p className={statValueCls}>{pendingCorrections.length}</p>
+          <p className={statValueCls}>{decisionItems.length}</p>
           <p className={statSubCls}>
-            {pendingCorrections.length} korekt, {openProblems} zgłoszeń
+            {pendingCorrections.length} korekt, {pendingAbsences.length} wniosków o
+            wolne, {openProblems} zgłoszeń
           </p>
         </div>
       </div>
@@ -281,26 +310,29 @@ export default function PulpitHome({
         <div className={sectionCardCls}>
           <div className={sectionHeaderCls}>
             <span>Wymaga Twojej decyzji</span>
-            {pendingCorrections.length > 0 && (
+            {decisionItems.length > 0 && (
               <span className="bg-[#DE3A22] text-white text-[11px] font-extrabold min-w-[20px] h-5 rounded flex items-center justify-center px-1.5">
-                {pendingCorrections.length}
+                {decisionItems.length}
               </span>
             )}
           </div>
           <div className="divide-y divide-[#B7B6AE]">
-            {pendingCorrections.length === 0 && (
+            {decisionItems.length === 0 && (
               <p className="p-4 text-sm text-[#8F8E86]">Brak oczekujących.</p>
             )}
-            {pendingCorrections.slice(0, 4).map(({ iss }) => (
-              <div key={iss.id} className="p-3.5">
-                <p className="font-bold text-sm">{iss.user_name || "Anonim"}</p>
-                <p className="text-xs text-[#6E6E66]">
-                  {iss.proposed_lokal} · {fmtPL(iss.proposed_date)}
-                </p>
+            {decisionItems.slice(0, 4).map((item) => (
+              <div key={item.key} className="p-3.5 flex items-center gap-2">
+                {item.kind === "absence" && (
+                  <Palmtree size={13} className="flex-shrink-0 text-[#6E6E66]" />
+                )}
+                <div>
+                  <p className="font-bold text-sm">{item.name}</p>
+                  <p className="text-xs text-[#6E6E66]">{item.sub}</p>
+                </div>
               </div>
             ))}
           </div>
-          {pendingCorrections.length > 0 && (
+          {decisionItems.length > 0 && (
             <button
               onClick={() => setActiveTab("zatwierdzanie")}
               className="w-full p-3 text-sm font-bold text-[#DE3A22] flex items-center justify-center gap-1.5 border-t-[2px] border-[#171714]"
