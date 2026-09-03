@@ -402,6 +402,39 @@ dokleja z przodu `user_name` (`"Wojtek: Twój termin: ..."`) — bez tego,
 przy kilku pracownikach `open` na jednym urządzeniu nie było wiadomo, do
 kogo należy powiadomienie.
 
+## Pogoda — zaimplementowane 2026-09-03
+
+Mały wskaźnik pogody (ikona + temperatura) w pasku górnym Panelu
+Kierownika (`ManagerShell.tsx`, obok zegara), na ekranie Pulpit
+pracownika (`employeeSessionShared.tsx`) i na ekranie wyboru pracownika na
+Tablecie Służbowym (`KioskDashboard.tsx`, ekran "LIST" — zastąpiło tam
+stary, hardkodowany placeholder "21°, słonecznie" z pierwszej wersji
+makiety, dla lokalu z `lokaleAllowed[0]`, czyli pierwszego przypisanego do
+danego kiosku) — patrz
+[`components/WeatherBadge.tsx`](src/components/WeatherBadge.tsx) i
+[`utils/weather.ts`](src/utils/weather.ts). Bez klucza API — źródło to
+**Open-Meteo** (darmowe, publiczne, nie wymaga rejestracji): najpierw
+geokodowanie nazwy miasta (`geocoding-api.open-meteo.com`) na
+szerokość/długość, potem aktualna pogoda dla tych współrzędnych
+(`api.open-meteo.com`). Oba wyniki cache'owane w pamięci modułu (per
+miasto, 20 min TTL dla pogody) — nie odpytujemy API przy każdym
+re-renderze.
+
+Miasto NIE jest wpisane na sztywno w kodzie — kierownik wpisuje je ręcznie
+per lokal w Pracownicy → Lokale (`lokale.miasto`, patrz Schemat Supabase
+niżej), bo lokale sieci są w różnych miastach (stan na 2026-09-03: Bułka i
+Jacek/Marynata i Chińczyk/Ceglana → Koszalin, Sunset → Sarbinowo,
+woj. zachodniopomorskie). W pasku kierownika pogoda dotyczy wybranego w
+górnym pasku lokalu (`selectedLokal`) — przy "Cała sieć"/"Wszystkie moje"
+spada na pierwszy dostępny lokal (`weatherLokalName` w
+`ManagerDashboard.tsx`), bo nie ma miejsca na kilka miast naraz. Na
+Pulpicie pracownika pogoda dotyczy jego `effectiveAssignment.lokal`
+(patrz `getEffectiveAssignmentForDate` w sekcji "Zadania i sprzątanie"
+niżej — ten sam mechanizm "otwarta/najnowsza zmiana dziś nad statycznym
+default_lokal"). Brak `miasto` dla lokalu albo błąd sieci = cichy fallback
+na "--°C" (`WeatherBadge`) — to dekoracja paska, nie coś krytycznego, więc
+nigdy nie pokazujemy błędu użytkownikowi.
+
 ## Zadania i sprzątanie (Roadmap p.2) — zaimplementowane 2026-09-02..04
 
 Zbudowane w trzech rundach: pierwsza wersja (schemat + panel kierownika +
@@ -628,8 +661,33 @@ zakresem — wymaga Grafiku, którego nie ma.
   (text/timestamptz, nullable — ustawiane w `handleSaveUser` TYLKO gdy
   `notatki` faktycznie się zmieniło względem tego, co jest w bazie, nie
   przy każdym zapisie karty).
-- **lokale** — `id, name, archived`
-- **stanowiska** — `id, name, lokal_name, archived`
+- **lokale** — `id, name, archived, miasto`. `miasto` (text, nullable,
+  ustawiane ręcznie w Pracownicy → Lokale) — miasto używane do pogody w
+  pasku górnym Panelu Kierownika i na Pulpicie pracownika, patrz sekcja
+  "Pogoda" niżej. Dodane 2026-09-03, wymaga ręcznej migracji w Supabase
+  SQL Editor (zweryfikuj przez `information_schema.columns` po zapisaniu):
+  ```sql
+  alter table lokale add column miasto text;
+  ```
+- **stanowiska** — `id, name, lokal_name, archived, skrot, kolor`. `skrot`
+  (text, nullable, ustawiany ręcznie w Pracownicy → Stanowiska) — zastępuje
+  auto-generowany `getShort(name)` tam, gdzie jest ustawiony
+  (`utils/stanowiska.ts` → `stanowiskoShort`); brak wartości = spada z
+  powrotem na `getShort`. `kolor` (text, nullable, hex np. `#DE3A22`,
+  wybierany `<input type="color">`) — dziś renderowany tylko jako jasny
+  odcień (`stanowiskoBadgeStyle` w `utils/stanowiska.ts`, tło 85% w stronę
+  bieli + tekst 35% w stronę czerni) na plakietkach w koncie pracownika
+  (Raport), Rejestrze Godzin (kropka przy nagłówku grupy) i Mojej Pracy
+  kierownika; pełny nasycony kolor zarezerwowany na przyszły Grafik
+  (`kolory ról/stanowisk` w sekcji "Konwencje designu" — ta sekcja opisuje
+  starą hash-ową koncepcję, która nigdy nie została zaimplementowana;
+  `kolor` na `stanowiska` ją zastępuje). Dodane 2026-09-03, wymaga ręcznej
+  migracji w Supabase SQL Editor (patrz błędy #12/#13 wyżej — zweryfikuj
+  przez `information_schema.columns` po zapisaniu):
+  ```sql
+  alter table stanowiska add column skrot text;
+  alter table stanowiska add column kolor text;
+  ```
 - **shifts** — `id, user_name, user_id?, lokal, stanowisko, start_time
   (timestamptz), end_time (timestamptz | null), godzin, is_urlop, absence_id`.
   `id` to **uuid** (zweryfikowane bezpośrednio w Supabase 2026-09-02 —

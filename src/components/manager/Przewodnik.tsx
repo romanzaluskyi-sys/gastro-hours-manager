@@ -30,6 +30,20 @@ const CHANGELOG = [
     ],
   },
   {
+    version: "0.13.0",
+    date: "2026-09-03",
+    items: [
+      "Pogoda w pasku kierownika i na Pulpicie pracownika — aktualna temperatura dla miasta lokalu (Pracownicy → Lokale).",
+    ],
+  },
+  {
+    version: "0.12.0",
+    date: "2026-09-03",
+    items: [
+      "Stanowiska mają teraz własny skrót i kolor (Pracownicy → Stanowiska) — widoczne jako plakietka przy godzinach w koncie pracownika, Rejestrze Godzin i Mojej Pracy.",
+    ],
+  },
+  {
     version: "0.11.1",
     date: "2026-09-04",
     items: [

@@ -1,12 +1,13 @@
 // @ts-nocheck
 import React, { useState, useEffect } from "react";
-import { Lock, AlertCircle, Sun, Delete, ChevronLeft } from "lucide-react";
+import { Lock, AlertCircle, Delete, ChevronLeft } from "lucide-react";
 import { getTodaysShiftsForUser } from "../utils/shifts";
 import {
   fmtHHMM,
   sumHours,
   EmployeeSessionScreens,
 } from "./employeeSessionShared";
+import WeatherBadge from "./WeatherBadge";
 
 // ==========================================
 // KIOSK SŁUŻBOWY — nowy design ("Tablet Służbowy")
@@ -147,8 +148,7 @@ const KioskDashboard = ({
             </span>
           </header>
           <div className="bg-[#E7E7E2] border-b border-[#B7B6AE] px-5 py-2.5 flex items-center gap-2 text-sm text-[#6E6E66] flex-shrink-0">
-            <Sun size={15} />
-            <span>Dziś · 21°, słonecznie</span>
+            <WeatherBadge city={lokaleAllowed[0]?.miasto} />
           </div>
           <main className="flex-1 overflow-y-auto px-5 pt-6 pb-5 flex flex-col">
             <div className="font-['Archivo'] font-extrabold text-[30px] text-[#171714]">

@@ -18,7 +18,8 @@ import { ChevronDown, Edit2 } from "lucide-react";
 import { api } from "../../api/supabase";
 import { sendToGoogleSheets } from "../../api/googleSheets";
 import { findOverlappingShift, getTodaysShiftsForUser } from "../../utils/shifts";
-import { getShort, getDayOfWeek, getMonthName, getAvailableYears } from "../../utils/format";
+import { getDayOfWeek, getMonthName, getAvailableYears } from "../../utils/format";
+import { stanowiskoShort, stanowiskoBadgeStyle } from "../../utils/stanowiska";
 import {
   fieldLabelCls,
   selectWrapCls,
@@ -396,8 +397,15 @@ export default function MojaPraca({
                     {getDayOfWeek(s.start_time)}
                   </span>
                 </span>
-                <span className="w-11 flex-shrink-0 text-[13px] font-semibold text-[#6E6E66]">
-                  {s.is_urlop ? "URL" : getShort(s.stanowisko)}
+                <span
+                  className="w-11 flex-shrink-0 text-[11px] font-bold text-center rounded px-1 py-0.5 text-[#6E6E66]"
+                  style={
+                    s.is_urlop
+                      ? {}
+                      : stanowiskoBadgeStyle(stanowiska, s.lokal, s.stanowisko) || {}
+                  }
+                >
+                  {s.is_urlop ? "URL" : stanowiskoShort(stanowiska, s.lokal, s.stanowisko)}
                 </span>
                 <span className="flex-1 text-[13.5px] text-[#171714] tabular-nums">
                   {s.is_urlop ? (

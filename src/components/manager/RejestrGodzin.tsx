@@ -7,6 +7,7 @@
 import React, { useState } from "react";
 import { Plus, Download, History, Edit2, X } from "lucide-react";
 import { getShort, getDayOfWeek, getMonthName } from "../../utils/format";
+import { findStanowisko } from "../../utils/stanowiska";
 import {
   pageTitleCls,
   sectionCardCls,
@@ -38,6 +39,7 @@ export default function RejestrGodzin({
   shifts,
   issues,
   shiftEdits,
+  stanowiska,
   matchesFilter,
   onEditShift,
   onNewShift,
@@ -248,9 +250,16 @@ export default function RejestrGodzin({
             (a, s) => a + (s.end_time ? (s.end_time - s.start_time) / 3600000 : 0),
             0
           );
+          const groupStanowisko = findStanowisko(stanowiska, rows[0]?.lokal, groupName);
           return (
             <div key={groupName} className={sectionCardCls}>
-              <div className="px-4 py-2.5 bg-[#F1F1EE] border-b-[2px] border-[#171714] font-['Archivo'] font-extrabold text-[13px] uppercase tracking-wide">
+              <div className="px-4 py-2.5 bg-[#F1F1EE] border-b-[2px] border-[#171714] font-['Archivo'] font-extrabold text-[13px] uppercase tracking-wide flex items-center gap-2">
+                {groupStanowisko?.kolor && (
+                  <span
+                    className="w-2.5 h-2.5 rounded-full border border-black/10 flex-shrink-0"
+                    style={{ backgroundColor: groupStanowisko.kolor }}
+                  />
+                )}
                 {groupName} · {rows.length} {rows.length === 1 ? "wpis" : "wpisy"} ·{" "}
                 {groupHours.toFixed(1).replace(".", ",")} h
               </div>

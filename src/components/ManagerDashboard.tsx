@@ -266,6 +266,13 @@ const ManagerDashboard = ({
     hasAccessToLokal(lokalName) &&
     (selectedLokal === "ALL" || lokalName === selectedLokal);
 
+  // Pogoda w pasku górnym: dla wybranego lokalu, albo (przy "Cała
+  // sieć"/"Wszystkie moje") dla pierwszego dostępnego — pokazywanie kilku
+  // miast naraz nie mieściłoby się w tym samym miejscu.
+  const weatherLokalName =
+    selectedLokal !== "ALL" ? selectedLokal : availableLokaleForManager[0]?.name;
+  const weatherCity = lokale.find((l) => l.name === weatherLokalName)?.miasto || null;
+
   const today0ForTerminy = new Date();
   today0ForTerminy.setHours(0, 0, 0, 0);
   const pracownicyTerminyCount = users.filter((u) => {
@@ -517,7 +524,10 @@ const ManagerDashboard = ({
     e.preventDefault();
     try {
       if (type === "lokale") {
-        const payload = { name: editingDict.name };
+        const payload = {
+          name: editingDict.name,
+          miasto: editingDict.miasto || null,
+        };
         if (editingDict.id) {
           const l = await api.patch("lokale", editingDict.id, payload);
           setLokale(lokale.map((lok) => (lok.id === l.id ? l : lok)));
@@ -529,6 +539,8 @@ const ManagerDashboard = ({
         const payload = {
           name: editingDict.name,
           lokal_name: editingDict.lokal_name,
+          skrot: editingDict.skrot || null,
+          kolor: editingDict.kolor || null,
         };
         if (editingDict.id) {
           const s = await api.patch("stanowiska", editingDict.id, payload);
@@ -801,6 +813,7 @@ const ManagerDashboard = ({
       lokaleForTabs={lokaleForTabs}
       selectedLokal={selectedLokal}
       setSelectedLokal={setSelectedLokal}
+      weatherCity={weatherCity}
       activeTab={tab}
       setActiveTab={setTab}
       badges={shellBadges}
@@ -1254,6 +1267,7 @@ const ManagerDashboard = ({
             shifts={shifts}
             issues={issues}
             shiftEdits={shiftEdits}
+            stanowiska={activeStanowiska}
             matchesFilter={matchesLokalFilter}
             onEditShift={openEditShift}
             onNewShift={openNewShift}

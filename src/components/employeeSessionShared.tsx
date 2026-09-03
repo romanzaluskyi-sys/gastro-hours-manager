@@ -18,13 +18,14 @@ import { sendToGoogleSheets, toLocalYMD } from "../api/googleSheets";
 import { createManagerNotification } from "../api/notifications";
 import { APP_VERSION } from "../config";
 import { findOverlappingShift, getTodaysShiftsForUser } from "../utils/shifts";
+import WeatherBadge from "./WeatherBadge";
 import {
-  getShort,
   getDayOfWeek,
   getMonthName,
   getAvailableYears,
   formatNotificationText,
 } from "../utils/format";
+import { stanowiskoShort, stanowiskoBadgeStyle } from "../utils/stanowiska";
 import {
   buildEmployeeChecklist,
   getEffectiveAssignmentForDate,
@@ -1052,8 +1053,16 @@ export const EmployeeSessionScreens = ({
           renderShiftInProgress()
         ) : (
           <>
-            <div className="font-['Archivo'] font-extrabold text-[30px] text-[#171714]">
-              Cześć, {employee.name}
+            <div className="flex items-start justify-between gap-3">
+              <div className="font-['Archivo'] font-extrabold text-[30px] text-[#171714]">
+                Cześć, {employee.name}
+              </div>
+              <WeatherBadge
+                city={
+                  lokaleOptions.find((l) => l.name === effectiveAssignment.lokal)?.miasto
+                }
+                className="text-[#8F8E86] text-sm mt-1.5 flex-shrink-0"
+              />
             </div>
             <div className="text-sm text-[#6E6E66] mt-0.5 mb-7">
               {employee.default_lokal} · {employee.default_stanowisko}
@@ -1210,8 +1219,17 @@ export const EmployeeSessionScreens = ({
                 {getDayOfWeek(s.start_time)}
               </span>
             </span>
-            <span className="w-11 flex-shrink-0 text-[13px] font-semibold text-[#6E6E66]">
-              {s.is_urlop ? "URL" : getShort(s.stanowisko)}
+            <span
+              className="w-11 flex-shrink-0 text-[11px] font-bold text-center rounded px-1 py-0.5 text-[#6E6E66]"
+              style={
+                s.is_urlop
+                  ? {}
+                  : stanowiskoBadgeStyle(stanowiskaOptions, s.lokal, s.stanowisko) || {}
+              }
+            >
+              {s.is_urlop
+                ? "URL"
+                : stanowiskoShort(stanowiskaOptions, s.lokal, s.stanowisko)}
             </span>
             <span className="flex-1 text-[13.5px] text-[#171714] tabular-nums">
               {s.is_urlop ? (
