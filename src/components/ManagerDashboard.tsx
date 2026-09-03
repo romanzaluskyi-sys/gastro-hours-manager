@@ -487,6 +487,8 @@ const ManagerDashboard = ({
         const payload = {
           name: editingDict.name,
           lokal_name: editingDict.lokal_name,
+          skrot: editingDict.skrot || null,
+          kolor: editingDict.kolor || null,
         };
         if (editingDict.id) {
           const s = await api.patch("stanowiska", editingDict.id, payload);
@@ -1211,6 +1213,7 @@ const ManagerDashboard = ({
             shifts={shifts}
             issues={issues}
             shiftEdits={shiftEdits}
+            stanowiska={activeStanowiska}
             matchesFilter={matchesLokalFilter}
             onEditShift={openEditShift}
             onNewShift={openNewShift}
