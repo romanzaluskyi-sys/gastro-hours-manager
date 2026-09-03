@@ -51,6 +51,7 @@ export default function App() {
   const [shiftEdits, setShiftEdits] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [taskCompletions, setTaskCompletions] = useState([]);
+  const [absences, setAbsences] = useState([]);
 
   const [currentView, setCurrentView] = useState(() => loadSession().currentView);
   const [currentUser, setCurrentUser] = useState(() => loadSession().currentUser);
@@ -174,6 +175,15 @@ export default function App() {
         console.error("Błąd pobierania wykonań zadań:", err.message || err);
       });
 
+    // absences (wnioski o wolne/urlop) — ten sam wzorzec co tasks wyżej:
+    // osobno, poza głównym Promise.all, żeby błąd tu nie blokował reszty.
+    api
+      .get("absences")
+      .then((a) => setAbsences(Array.isArray(a) ? a : []))
+      .catch((err) => {
+        console.error("Błąd pobierania wniosków o wolne:", err.message || err);
+      });
+
     // Odświeżamy co 45s, żeby już otwarta sesja też widziała zmiany bez
     // konieczności przeładowania strony.
     const pollInterval = setInterval(() => {
@@ -226,6 +236,8 @@ export default function App() {
           tasks={tasks}
           taskCompletions={taskCompletions}
           setTaskCompletions={setTaskCompletions}
+          absences={absences}
+          setAbsences={setAbsences}
           showMsg={showMsg}
         />
       )}
@@ -245,6 +257,8 @@ export default function App() {
           tasks={tasks}
           taskCompletions={taskCompletions}
           setTaskCompletions={setTaskCompletions}
+          absences={absences}
+          setAbsences={setAbsences}
           showMsg={showMsg}
         />
       )}
@@ -270,6 +284,8 @@ export default function App() {
           setTasks={setTasks}
           taskCompletions={taskCompletions}
           setTaskCompletions={setTaskCompletions}
+          absences={absences}
+          setAbsences={setAbsences}
           showMsg={showMsg}
         />
       )}

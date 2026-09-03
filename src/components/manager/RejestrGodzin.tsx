@@ -292,9 +292,15 @@ export default function RejestrGodzin({
                         {getShort(s.lokal)}
                       </span>
                       <span className="md:w-28 flex-shrink-0 text-[10.5px] md:text-sm tabular-nums whitespace-nowrap">
-                        {fmtHM(s.start_time)}–
-                        {s.end_time ? fmtHM(s.end_time) : (
-                          <span className="text-[#DE3A22] font-bold">trwa</span>
+                        {s.is_urlop ? (
+                          <span className="italic text-[#6E6E66]">Urlop</span>
+                        ) : (
+                          <>
+                            {fmtHM(s.start_time)}–
+                            {s.end_time ? fmtHM(s.end_time) : (
+                              <span className="text-[#DE3A22] font-bold">trwa</span>
+                            )}
+                          </>
                         )}
                       </span>
                       <span className="w-9 md:w-16 flex-shrink-0 text-right font-['Archivo'] font-extrabold text-[12px] md:text-sm tabular-nums">

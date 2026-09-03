@@ -18,7 +18,7 @@ import { ChevronDown, Edit2 } from "lucide-react";
 import { api } from "../../api/supabase";
 import { sendToGoogleSheets } from "../../api/googleSheets";
 import { findOverlappingShift, getTodaysShiftsForUser } from "../../utils/shifts";
-import { getShort, getDayOfWeek, getMonthName, getAvailableYears } from "../../utils/format";
+import { getDayOfWeek, getMonthName, getAvailableYears } from "../../utils/format";
 import { stanowiskoShort, stanowiskoBadgeStyle } from "../../utils/stanowiska";
 import {
   fieldLabelCls,
@@ -399,16 +399,26 @@ export default function MojaPraca({
                 </span>
                 <span
                   className="w-11 flex-shrink-0 text-[11px] font-bold text-center rounded px-1 py-0.5 text-[#6E6E66]"
-                  style={stanowiskoBadgeStyle(stanowiska, s.lokal, s.stanowisko) || {}}
+                  style={
+                    s.is_urlop
+                      ? {}
+                      : stanowiskoBadgeStyle(stanowiska, s.lokal, s.stanowisko) || {}
+                  }
                 >
-                  {stanowiskoShort(stanowiska, s.lokal, s.stanowisko)}
+                  {s.is_urlop ? "URL" : stanowiskoShort(stanowiska, s.lokal, s.stanowisko)}
                 </span>
                 <span className="flex-1 text-[13.5px] text-[#171714] tabular-nums">
-                  {fmtHHMM(s.start_time)} –{" "}
-                  {s.end_time ? (
-                    fmtHHMM(s.end_time)
+                  {s.is_urlop ? (
+                    <span className="text-[#6E6E66] italic">Urlop</span>
                   ) : (
-                    <span className="text-[#DE3A22] font-bold">Trwa</span>
+                    <>
+                      {fmtHHMM(s.start_time)} –{" "}
+                      {s.end_time ? (
+                        fmtHHMM(s.end_time)
+                      ) : (
+                        <span className="text-[#DE3A22] font-bold">Trwa</span>
+                      )}
+                    </>
                   )}
                 </span>
                 <span className="w-[74px] flex-shrink-0 text-right font-['Archivo'] font-extrabold text-[15px] text-[#171714] tabular-nums">

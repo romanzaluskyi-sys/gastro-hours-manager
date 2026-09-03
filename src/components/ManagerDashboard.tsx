@@ -21,6 +21,7 @@ import { sendToGoogleSheets } from "../api/googleSheets";
 import { getShort, getDayOfWeek, getMonthName, getAvailableYears } from "../utils/format";
 import { findOverlappingShift } from "../utils/shifts";
 import { isTaskDueOn, findSharedCompletion, toLocalYMD } from "../utils/tasks";
+import { resolveAbsenceRequest, addUrlopDirectly, deleteAbsence } from "../utils/absences";
 import NotificationsPanel from "./NotificationsPanel";
 import ZatwierdzanieZmian from "./manager/ZatwierdzanieZmian";
 import ZadaniaISprzatanie from "./manager/ZadaniaISprzatanie";
@@ -59,6 +60,8 @@ const ManagerDashboard = ({
   setTasks,
   taskCompletions,
   setTaskCompletions,
+  absences,
+  setAbsences,
   showMsg,
 }) => {
   const [tab, setTab] = useState("pulpit");
@@ -131,6 +134,45 @@ const ManagerDashboard = ({
     const lokal = existingShift ? existingShift.lokal : iss.proposed_lokal;
     return hasAccessToLokal(lokal);
   });
+
+  // --- WNIOSKI O WOLNE OCZEKUJĄCE NA DECYZJĘ (absences.status === "pending") ---
+  const pendingAbsences = absences.filter(
+    (a) => a.status === "pending" && hasAccessToLokal(a.lokal)
+  );
+
+  const handleResolveAbsence = async (absence, decision) => {
+    const user = users.find((u) => u.id === absence.user_id);
+    const { absence: updated, createdShifts } = await resolveAbsenceRequest({
+      absence,
+      user,
+      editorName: currentUser.name,
+      decision,
+    });
+    setAbsences(absences.map((a) => (a.id === updated.id ? updated : a)));
+    if (createdShifts.length > 0) {
+      setShifts([...shifts, ...createdShifts]);
+    }
+  };
+
+  const handleAddUrlop = async (user, startDate, endDate, note) => {
+    const { absence, createdShifts } = await addUrlopDirectly({
+      user,
+      startDate,
+      endDate,
+      editorName: currentUser.name,
+      note,
+    });
+    setAbsences([...absences, absence]);
+    setShifts([...shifts, ...createdShifts]);
+  };
+
+  const handleDeleteAbsence = async (absence) => {
+    const { deletedShiftIds } = await deleteAbsence(absence, shifts);
+    setAbsences(absences.filter((a) => a.id !== absence.id));
+    if (deletedShiftIds.length > 0) {
+      setShifts(shifts.filter((s) => !deletedShiftIds.includes(s.id)));
+    }
+  };
 
   useEffect(() => {
     if (tab !== "powiadomienia") return;
@@ -260,7 +302,7 @@ const ManagerDashboard = ({
   ).length;
 
   const shellBadges = {
-    zatwierdzanie: pendingCorrections.length,
+    zatwierdzanie: pendingCorrections.length + pendingAbsences.length,
     zgloszenia: issues.filter((i) => i.status === "nowe" && i.type !== "correction")
       .length,
     powiadomienia: unreadManagerCount,
@@ -941,6 +983,7 @@ const ManagerDashboard = ({
             issues={issues}
             tasks={tasks}
             taskCompletions={taskCompletions}
+            absences={absences}
             matchesFilter={matchesLokalFilter}
             setActiveTab={setTab}
           />
@@ -1498,6 +1541,8 @@ const ManagerDashboard = ({
             hasAccessToLokal={hasAccessToLokal}
             availableLokale={availableLokaleForManager}
             activeStanowiska={activeStanowiska}
+            pendingAbsences={pendingAbsences}
+            onResolveAbsence={handleResolveAbsence}
             showMsg={showMsg}
           />
         )}
@@ -1596,6 +1641,10 @@ const ManagerDashboard = ({
             editingDict={editingDict}
             setEditingDict={setEditingDict}
             onSaveDict={handleSaveDict}
+            absences={absences}
+            onAddUrlop={handleAddUrlop}
+            onDeleteAbsence={handleDeleteAbsence}
+            showMsg={showMsg}
           />
         )}
 
