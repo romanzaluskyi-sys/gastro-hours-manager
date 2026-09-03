@@ -513,6 +513,30 @@ const ManagerDashboard = ({
     }
   };
 
+  // "Utwórz zadanie" w Zgłoszeniach — tworzy zadanie kierownika (for_manager)
+  // powiązane luźno z issue przez source_issue_id (text, bez FK — ten sam
+  // wzorzec co shift_id/issue_id w shift_edits), żeby dało się je odróżnić
+  // po odświeżeniu strony (badge "Zadanie utworzone" w Zgloszenia.tsx).
+  const handleCreateTaskFromIssue = async (issue, title, lokalForTask) => {
+    if (!title.trim() || !lokalForTask) {
+      return showMsg("Brak tytułu albo lokalu dla zadania.", "error");
+    }
+    try {
+      const created = await api.post("tasks", {
+        lokal: lokalForTask,
+        title: title.trim(),
+        schedule_type: "poranne",
+        scope: "lokal",
+        for_manager: true,
+        source_issue_id: issue.id,
+      });
+      setTasks((prev) => [...prev, created]);
+      showMsg("Zadanie utworzone!");
+    } catch (err) {
+      showMsg(`Błąd tworzenia zadania: ${err.message || "nieznany błąd"}`, "error");
+    }
+  };
+
   const openEditShift = (shift) => {
     setEditingShift(shift);
     setShiftForm({
@@ -1471,6 +1495,9 @@ const ManagerDashboard = ({
             users={users}
             hasAccessToLokal={hasAccessToLokal}
             onResolve={resolveIssue}
+            tasks={tasks}
+            onCreateTaskFromIssue={handleCreateTaskFromIssue}
+            fallbackLokal={availableLokaleForManager[0]?.name}
           />
         )}
 

@@ -13,7 +13,7 @@ import { toLocalYMD } from "../api/googleSheets";
 export const getDayOfWeekIndex = (dateStr) =>
   new Date(dateStr + "T00:00:00").getDay();
 
-const daysBetweenYMD = (fromStr, toStr) => {
+export const daysBetweenYMD = (fromStr, toStr) => {
   const from = new Date(fromStr + "T00:00:00");
   const to = new Date(toStr + "T00:00:00");
   return Math.round((to - from) / 86400000);
@@ -42,6 +42,22 @@ export const isTaskDueOn = (task, completions, dateStr) => {
     return isCyclicalDueOn(task, completions, dateStr);
   }
   return true;
+};
+
+// Ile dni z cyklu już minęło od ostatniego wykonania — do pokazania "2/3
+// dni" zamiast suchego "co 3 dni" na odznace zadania. Zwraca null dla
+// zadań niecyklicznych.
+export const cyclicalProgress = (task, completions, dateStr) => {
+  if (task.schedule_type !== "cykliczne") return null;
+  const cycleDays = task.cycle_days || 1;
+  const done = completions
+    .filter((c) => c.task_id === task.id)
+    .map((c) => c.date)
+    .sort();
+  const last = done[done.length - 1];
+  if (!last) return { daysSince: cycleDays, cycleDays, pct: 100 };
+  const daysSince = Math.min(cycleDays, Math.max(0, daysBetweenYMD(last, dateStr)));
+  return { daysSince, cycleDays, pct: Math.round((daysSince / cycleDays) * 100) };
 };
 
 export const findSharedCompletion = (completions, taskId, dateStr) =>
@@ -133,5 +149,36 @@ export const buildEmployeeChecklist = (
       if (da !== db) return da < db ? -1 : 1;
       return a.task.title.localeCompare(b.task.title, "pl");
     });
+
+// Mini-raport "ostatnie N dni" — liczy się TYLKO dni, w które pracownik
+// faktycznie miał jakąś zmianę (brak zmiany = brak oczekiwanych zadań tego
+// dnia, nie liczymy tego jako "zaległość"). Przybliżenie: dla przeszłych
+// dni używa tego samego `employee` (default_lokal/stanowisko) co dziś,
+// nadpisanego zmianą z tamtego dnia jeśli była — wystarczające dla
+// orientacyjnego wskaźnika, nie audytu.
+export const weeklyChecklistStats = (
+  tasks,
+  completions,
+  employeeId,
+  employee,
+  shiftsForEmployee,
+  todayStr,
+  days = 7
+) => {
+  let done = 0;
+  let total = 0;
+  for (let i = 0; i < days; i++) {
+    const d = new Date(todayStr + "T00:00:00");
+    d.setDate(d.getDate() - i);
+    const ds = toLocalYMD(d);
+    const shiftsOnDay = shiftsForEmployee.filter((s) => toLocalYMD(s.start_time) === ds);
+    if (shiftsOnDay.length === 0) continue;
+    const assignment = getEffectiveAssignmentForDate(employee, shiftsOnDay);
+    const list = buildEmployeeChecklist(tasks, completions, employeeId, assignment, ds, "own");
+    done += list.filter((item) => item.done).length;
+    total += list.length;
+  }
+  return { done, total };
+};
 
 export { toLocalYMD };

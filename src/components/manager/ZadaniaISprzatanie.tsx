@@ -8,7 +8,7 @@
 // zmian). Cała logika "co jest dziś do zrobienia" i zapis/kasowanie
 // wykonań żyje w utils/tasks.ts — nie duplikuj jej tutaj.
 import React, { useState } from "react";
-import { Plus, ChevronLeft, ChevronRight, ClipboardList } from "lucide-react";
+import { Plus, ChevronLeft, ChevronRight, ClipboardList, Archive, ChevronDown, ChevronUp } from "lucide-react";
 import { api } from "../../api/supabase";
 import {
   isTaskDueOn,
@@ -40,6 +40,13 @@ const BUCKETS = [
 ];
 
 const DAYS_PL = ["Nd", "Pon", "Wt", "Śr", "Czw", "Pt", "Sob"];
+
+const SCHEDULE_LABELS = {
+  poranne: "Poranne",
+  obiadowe: "Obiadowe",
+  wieczorne: "Wieczorne",
+  cykliczne: "Cykliczne",
+};
 
 const fmtHHMM = (d) =>
   d
@@ -86,6 +93,7 @@ export default function ZadaniaISprzatanie({
   const [bucketFilter, setBucketFilter] = useState("wszystko");
   const [managerOnly, setManagerOnly] = useState(false);
   const [showNewTaskForm, setShowNewTaskForm] = useState(false);
+  const [showAllTasks, setShowAllTasks] = useState(false);
   const defaultLokal =
     selectedLokal && selectedLokal !== "ALL"
       ? selectedLokal
@@ -227,6 +235,20 @@ export default function ZadaniaISprzatanie({
     setBusy(false);
   };
 
+  const handleArchiveTask = async (task) => {
+    if (!window.confirm(`Zarchiwizować zadanie „${task.title}”? Zniknie z listy, historia wykonań zostaje.`)) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const updated = await api.patch("tasks", task.id, { archived: true });
+      setTasks((prev) => prev.map((t) => (t.id === task.id ? updated : t)));
+    } catch (err) {
+      showMsg(`Błąd archiwizacji zadania: ${err.message || "nieznany błąd"}`, "error");
+    }
+    setBusy(false);
+  };
+
   const stanowiskaForForm = activeStanowiska.filter(
     (s) => s.lokal_name === newTaskForm.lokal
   );
@@ -239,6 +261,14 @@ export default function ZadaniaISprzatanie({
           <h2 className={pageTitleCls}>Kontrola wykonania po osobach</h2>
         </div>
         <div className="flex items-center gap-2">
+          {!isToday && (
+            <button
+              onClick={() => setSelectedDate(toLocalYMD(new Date()))}
+              className={btnSecondaryCls}
+            >
+              Dziś
+            </button>
+          )}
           <button onClick={() => shiftSelectedDate(-1)} className={btnSecondaryCls}>
             <ChevronLeft size={16} />
           </button>
@@ -552,6 +582,50 @@ export default function ZadaniaISprzatanie({
             <span>Zadania niewykonane po 22:00 trafiają do raportu tygodniowego.</span>
           </div>
         </div>
+      </div>
+
+      <div className={`${sectionCardCls} mt-5`}>
+        <button
+          onClick={() => setShowAllTasks((v) => !v)}
+          className={`${sectionHeaderCls} w-full text-left`}
+        >
+          <span>Wszystkie zadania w tym lokalu · {inScope.length}</span>
+          {showAllTasks ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+        </button>
+        {showAllTasks && (
+          <>
+            {inScope.length === 0 && (
+              <div className="p-4 text-sm text-[#8F8E86]">
+                Brak zadań — dodaj pierwsze przyciskiem „+ Nowe zadanie” wyżej.
+              </div>
+            )}
+            {inScope.map((task) => (
+              <div key={task.id} className={taskRowCls}>
+                <div className="min-w-0 flex-1">
+                  <p className="font-['Archivo'] font-bold text-[14px] text-[#171714]">
+                    {task.title}
+                  </p>
+                  <p className="text-[12.5px] text-[#8F8E86]">
+                    {task.lokal} · {SCHEDULE_LABELS[task.schedule_type] || task.schedule_type}
+                    {task.schedule_type === "cykliczne" ? ` (co ${task.cycle_days || 1} dni)` : ""}
+                    {task.day_of_week != null ? ` · tylko ${DAYS_PL[task.day_of_week]}` : ""}
+                    {" · "}
+                    {task.scope === "lokal" ? "wspólne" : task.stanowisko || "wszyscy"}
+                    {task.for_manager ? " · kierownik" : ""}
+                    {task.deadline_time ? ` · do ${task.deadline_time.slice(0, 5)}` : ""}
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleArchiveTask(task)}
+                  disabled={busy}
+                  className="flex-shrink-0 flex items-center gap-1.5 text-xs font-bold text-[#8A3A2B]"
+                >
+                  <Archive size={14} /> Archiwizuj
+                </button>
+              </div>
+            ))}
+          </>
+        )}
       </div>
     </div>
   );

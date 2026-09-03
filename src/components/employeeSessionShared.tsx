@@ -28,6 +28,8 @@ import {
   buildEmployeeChecklist,
   getEffectiveAssignmentForDate,
   toggleTaskCompletion,
+  cyclicalProgress,
+  weeklyChecklistStats,
 } from "../utils/tasks";
 
 // ==========================================
@@ -62,9 +64,12 @@ export const sumHours = (arr) =>
 // Odznaka na wierszu zadania: dla zadań wspólnych (scope="lokal") pokazuje
 // podpowiedź kto ma je zrobić, dla cyklicznych częstotliwość, dla reszty
 // przypisane stanowisko ("wszyscy", gdy brak).
-const taskBadgeLabel = (task) => {
+const taskBadgeLabel = (task, completions, dateStr) => {
   if (task.scope === "lokal") return task.owner_label || "kto pierwszy";
-  if (task.schedule_type === "cykliczne") return `co ${task.cycle_days || 1} dni`;
+  if (task.schedule_type === "cykliczne") {
+    const prog = cyclicalProgress(task, completions, dateStr);
+    return prog ? `${prog.daysSince}/${prog.cycleDays} dni` : `co ${task.cycle_days || 1} dni`;
+  }
   return task.stanowisko || "wszyscy";
 };
 
@@ -310,6 +315,14 @@ export const EmployeeSessionScreens = ({
     "all"
   );
   const taskBadgeCount = myChecklistOwn.filter((i) => !i.done).length;
+  const myWeeklyStats = weeklyChecklistStats(
+    tasks,
+    taskCompletions,
+    employee.id,
+    employee,
+    shifts.filter((s) => s.user_id === employee.id),
+    todayStr
+  );
 
   const raportShifts = shifts
     .filter(
@@ -693,7 +706,7 @@ export const EmployeeSessionScreens = ({
                     {item.task.title}
                   </span>
                   <span className="flex-shrink-0 text-[11px] font-semibold px-2 py-1 rounded bg-[#E7E7E2] text-[#6E6E66]">
-                    {taskBadgeLabel(item.task)}
+                    {taskBadgeLabel(item.task, taskCompletions, todayStr)}
                   </span>
                 </button>
               ))}
@@ -974,6 +987,24 @@ export const EmployeeSessionScreens = ({
             <div className="text-[15px] text-[#8F8E86] italic mt-4">
               Brak zaplanowanego grafiku — moduł Grafik jeszcze nie istnieje.
             </div>
+            {myChecklistOwn.length > 0 && (
+              <>
+                <div className="flex items-baseline justify-between mt-6">
+                  <span className={sectionLabelCls}>Zadania dziś</span>
+                  <span className="font-['Archivo'] font-extrabold text-sm text-[#171714] tabular-nums">
+                    {myChecklistOwn.filter((i) => i.done).length} z{" "}
+                    {myChecklistOwn.length}
+                  </span>
+                </div>
+                <div className={ruleSoftCls} />
+                <button
+                  onClick={() => setScreen("ZADANIA")}
+                  className={`${ctaSecondaryCls} mt-4`}
+                >
+                  Zobacz zadania
+                </button>
+              </>
+            )}
             <div className="flex-1" />
             <button
               onClick={() => {
@@ -1150,6 +1181,14 @@ export const EmployeeSessionScreens = ({
         taskBadgeCount={taskBadgeCount}
         title="Zadania"
       >
+        {myWeeklyStats.total > 0 && (
+          <div className={`${razemRowCls} mb-4`}>
+            <span className="text-sm text-[#6E6E66]">Ostatnie 7 dni</span>
+            <span className="font-['Archivo'] font-extrabold text-[17px] text-[#171714] tabular-nums">
+              {myWeeklyStats.done} z {myWeeklyStats.total} zadań
+            </span>
+          </div>
+        )}
         <div className="flex gap-2 mb-4">
           <button
             onClick={() => setTaskViewMode("own")}
@@ -1207,7 +1246,7 @@ export const EmployeeSessionScreens = ({
                 </span>
               </span>
               <span className="flex-shrink-0 text-[11px] font-semibold px-2 py-1 rounded bg-[#E7E7E2] text-[#6E6E66]">
-                {taskBadgeLabel(item.task)}
+                {taskBadgeLabel(item.task, taskCompletions, todayStr)}
               </span>
             </button>
           ))}

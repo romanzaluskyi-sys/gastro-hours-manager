@@ -3,11 +3,21 @@
 // "correction" tu nie ma, te idą do Zatwierdzanie zmian. Świadomie bez
 // priorytetu/odpowiedzialnego/przypisania z makiety — ustalone w sesji:
 // zamknięty zakres, tylko "Oznacz jako rozwiązane", jak dotychczas.
-import React from "react";
-import { Flag, Check } from "lucide-react";
-import { pageTitleCls, cardCls, btnPrimaryCls } from "./designTokens";
+import React, { useState } from "react";
+import { Flag, Check, ClipboardPlus } from "lucide-react";
+import { pageTitleCls, cardCls, btnPrimaryCls, btnSecondaryCls } from "./designTokens";
 
-export default function Zgloszenia({ issues, users, hasAccessToLokal, onResolve }) {
+export default function Zgloszenia({
+  issues,
+  users,
+  hasAccessToLokal,
+  onResolve,
+  tasks,
+  onCreateTaskFromIssue,
+  fallbackLokal,
+}) {
+  const [taskFormIssueId, setTaskFormIssueId] = useState(null);
+  const [taskTitle, setTaskTitle] = useState("");
   const rows = issues
     .filter((iss) => (iss.type || "problem") !== "correction")
     .filter((iss) =>
@@ -70,6 +80,46 @@ export default function Zgloszenia({ issues, users, hasAccessToLokal, onResolve 
                 </div>
               </div>
               <p className="text-[#171714] mb-3">{iss.issue_text}</p>
+              {taskFormIssueId === iss.id ? (
+                <div className="flex items-center gap-2 mb-3 flex-wrap">
+                  <input
+                    type="text"
+                    value={taskTitle}
+                    onChange={(e) => setTaskTitle(e.target.value)}
+                    className="flex-1 min-w-[200px] border-[2px] border-[#171714] rounded p-2 text-sm"
+                  />
+                  <button
+                    onClick={() => {
+                      onCreateTaskFromIssue(iss, taskTitle, lokal || fallbackLokal);
+                      setTaskFormIssueId(null);
+                    }}
+                    disabled={!taskTitle.trim()}
+                    className={btnPrimaryCls}
+                  >
+                    Zapisz zadanie
+                  </button>
+                  <button
+                    onClick={() => setTaskFormIssueId(null)}
+                    className={btnSecondaryCls}
+                  >
+                    Anuluj
+                  </button>
+                </div>
+              ) : tasks.some((t) => t.source_issue_id === iss.id) ? (
+                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[#2E6B44] mb-1">
+                  <Check size={13} /> Zadanie utworzone
+                </span>
+              ) : (
+                <button
+                  onClick={() => {
+                    setTaskFormIssueId(iss.id);
+                    setTaskTitle(iss.issue_text.slice(0, 80));
+                  }}
+                  className={`${btnSecondaryCls} flex items-center gap-1.5 mr-2`}
+                >
+                  <ClipboardPlus size={15} /> Utwórz zadanie
+                </button>
+              )}
               {!resolved && (
                 <button
                   onClick={() => onResolve(iss.id)}
