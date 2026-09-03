@@ -23,6 +23,13 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.11.1",
+    date: "2026-09-04",
+    items: [
+      "Poprawka: strzałki nawigacji dat w Zadaniach i sprzątaniu nie przesuwają się już pod przycisk „Dziś” — kliknięcie daty pozwala też wybrać konkretny dzień.",
+    ],
+  },
+  {
     version: "0.11.0",
     date: "2026-09-04",
     items: [

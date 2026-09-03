@@ -297,20 +297,34 @@ export default function ZadaniaISprzatanie({
           <h2 className={pageTitleCls}>Kontrola wykonania po osobach</h2>
         </div>
         <div className="flex items-center gap-2">
-          {!isToday && (
-            <button
-              onClick={() => setSelectedDate(toLocalYMD(new Date()))}
-              className={btnSecondaryCls}
-            >
-              Dziś
-            </button>
-          )}
+          {/* Strzałki i data mają ZAWSZE tę samą pozycję/szerokość — "Dziś"
+              żyje wewnątrz pigułki daty na zarezerwowanym miejscu
+              (invisible, nie usunięte z layoutu), żeby jego pojawienie się
+              po kliknięciu strzałki nie przesuwało jej samej i nie
+              podstawiało się pod kolejny klik w to samo miejsce. */}
           <button onClick={() => shiftSelectedDate(-1)} className={btnSecondaryCls}>
             <ChevronLeft size={16} />
           </button>
-          <span className={`${btnSecondaryCls} cursor-default`}>
-            {isToday ? `Dziś · ${fmtDatePL(selectedDate)}` : fmtDatePL(selectedDate)}
-          </span>
+          <div className={`${btnSecondaryCls} flex items-center gap-2`}>
+            <span className="relative cursor-pointer">
+              {fmtDatePL(selectedDate)}
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => e.target.value && setSelectedDate(e.target.value)}
+                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+              />
+            </span>
+            <button
+              type="button"
+              onClick={() => setSelectedDate(toLocalYMD(new Date()))}
+              className={`text-xs font-bold underline underline-offset-2 text-[#DE3A22] ${
+                isToday ? "invisible" : ""
+              }`}
+            >
+              Dziś
+            </button>
+          </div>
           <button onClick={() => shiftSelectedDate(1)} className={btnSecondaryCls}>
             <ChevronRight size={16} />
           </button>

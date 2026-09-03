@@ -5,6 +5,14 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.11.1 — 2026-09-04
+
+- Poprawka nawigacji dat w Zadaniach i sprzątaniu: strzałki dnia
+  poprzedniego/następnego zostają teraz zawsze w tym samym miejscu — nie
+  przeskakiwały już pod przycisk „Dziś”, który mógł się nieoczekiwanie
+  podstawić pod kolejne kliknięcie. Kliknięcie samej daty otwiera teraz
+  też wybór konkretnego dnia.
+
 ## 0.11.0 — 2026-09-04
 
 - **Zadania przypisane do stanowiska są teraz naprawdę wspólne.** Jeśli
