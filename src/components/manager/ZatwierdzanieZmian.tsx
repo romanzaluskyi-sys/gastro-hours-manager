@@ -5,7 +5,7 @@
 import React, { useState } from "react";
 import { Check, Edit2, HelpCircle, AlertCircle, X, Palmtree } from "lucide-react";
 import { resolveCorrection, askAboutCorrection } from "../../utils/corrections";
-import { countCalendarDays, countWorkdays, URLOP_HOURS_PER_DAY } from "../../utils/absences";
+import { countWorkdays, URLOP_HOURS_PER_DAY } from "../../utils/absences";
 import { pageTitleCls, statLabelCls, btnPrimaryCls, btnSecondaryCls } from "./designTokens";
 
 const fmtPLAbs = (dateStr) =>
@@ -206,11 +206,9 @@ export default function ZatwierdzanieZmian({
           </h3>
           <div className="space-y-3">
             {pendingAbsences.map((a) => {
-              const dni = countCalendarDays(a.start_date, a.end_date);
+              const dniRobocze = countWorkdays(a.start_date, a.end_date);
               const godziny =
-                a.type === "urlop"
-                  ? countWorkdays(a.start_date, a.end_date) * URLOP_HOURS_PER_DAY
-                  : null;
+                a.type === "urlop" ? dniRobocze * URLOP_HOURS_PER_DAY : null;
               return (
               <div
                 key={a.id}
@@ -224,7 +222,7 @@ export default function ZatwierdzanieZmian({
                     {a.lokal} · {a.type === "urlop" ? "Urlop" : "Niedostępność"} ·{" "}
                     {fmtPLAbs(a.start_date)}–{fmtPLAbs(a.end_date)} ·{" "}
                     <span className="font-bold text-[#171714]">
-                      {dni} {dni === 1 ? "dzień" : "dni"}
+                      {dniRobocze} {dniRobocze === 1 ? "dzień roboczy" : "dni robocze"}
                     </span>
                     {godziny != null && (
                       <>

@@ -17,7 +17,7 @@ import {
   pageTitleCls,
 } from "./designTokens";
 import { isTaskDueOn, findSharedCompletion, toLocalYMD } from "../../utils/tasks";
-import { countCalendarDays } from "../../utils/absences";
+import { countWorkdays } from "../../utils/absences";
 
 const ProgressRing = ({ pct, size = 36, stroke = 5 }) => {
   const r = (size - stroke) / 2;
@@ -173,8 +173,8 @@ export default function PulpitHome({
       createdAt: a.created_at,
       name: a.user_name || "Pracownik",
       sub: `${a.type === "urlop" ? "Urlop" : "Niedostępność"} · ${
-        countCalendarDays(a.start_date, a.end_date)
-      } dni`,
+        countWorkdays(a.start_date, a.end_date)
+      } dni robocze`,
     })),
   ].sort((x, y) => new Date(x.createdAt) - new Date(y.createdAt));
 

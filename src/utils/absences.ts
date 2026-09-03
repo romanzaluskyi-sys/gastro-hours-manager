@@ -11,22 +11,15 @@ export const URLOP_HOURS_PER_DAY = 8;
 // dla podsumowań; realny czas pracy urlopu i tak nie istnieje.
 const URLOP_START_HOUR = 9;
 
-// Liczba dni kalendarzowych wniosku (włącznie z sobotą/niedzielą) — to,
-// co pracownik naturalnie ma na myśli mówiąc "biorę 5 dni wolnego".
-// Osobne od countWorkdays() niżej, które liczy tylko dni robocze (do
-// godzin urlopu, patrz "8 godzin za dzień roboczy" w CLAUDE.md).
-export const countCalendarDays = (startDate, endDate) => {
-  const [sy, sm, sd] = startDate.split("-").map(Number);
-  const [ey, em, ed] = endDate.split("-").map(Number);
-  const start = new Date(sy, sm - 1, sd);
-  const end = new Date(ey, em - 1, ed);
-  return Math.round((end - start) / 86400000) + 1;
-};
-
-// Liczba dni roboczych (pon–pt) w zakresie — ten sam licznik co pętla w
+// Liczba dni ROBOCZYCH (pon–pt) w zakresie — to jest liczba dni pokazywana
+// kierownikowi przy wniosku o wolne (patrz ZatwierdzanieZmian.tsx i
+// PulpitHome.tsx), NIE liczba dni kalendarzowych. Świadoma decyzja
+// (2026-09-03, feedback po testach): sobota/niedziela nigdy nie
+// "zjadają" urlopu, więc kierownik sprawdzający dostępny bilans dni
+// urlopowych musi widzieć tu dni robocze, inaczej liczyłby ręcznie ile z
+// zakresu to faktycznie weekend. Ten sam licznik co pętla w
 // buildUrlopShiftDrafts() niżej, wydzielony osobno do samego liczenia bez
-// budowania wpisów shifts (używane np. do podglądu godzin przed
-// zatwierdzeniem wniosku).
+// budowania wpisów shifts.
 export const countWorkdays = (startDate, endDate) => {
   const [sy, sm, sd] = startDate.split("-").map(Number);
   const [ey, em, ed] = endDate.split("-").map(Number);

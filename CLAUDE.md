@@ -775,12 +775,16 @@ trafia do `absences` ze `status='pending'` i budzi kierownika przez
 Kierownik decyduje w **Zatwierdzanie zmian** (`ZatwierdzanieZmian.tsx`,
 sekcja "Wnioski o wolne" nad kolejką korekt godzin — jedna zakładka na
 wszystkie decyzje kierownika, ten sam powód co połączenie korekt i
-urlopów w jednym miejscu). Każda karta pokazuje liczbę dni kalendarzowych
-wniosku (`countCalendarDays()`) i, tylko dla `type='urlop'`, ile to
-będzie godzin (`countWorkdays() * URLOP_HOURS_PER_DAY` — te same dwie
-funkcje pomocnicze co `buildUrlopShiftDrafts()`, wszystkie w
-`utils/absences.ts`, nie licz tego ręcznie w komponencie) — Zatwierdź/
-Odrzuć, `resolveAbsenceRequest()` w
+urlopów w jednym miejscu). Każda karta pokazuje liczbę dni ROBOCZYCH
+wniosku (`countWorkdays()` — NIE dni kalendarzowych; poprawione
+2026-09-03 po feedbacku testowym, pierwsza wersja liczyła kalendarzowo i
+mieszała weekend do bilansu urlopu, np. "05.09–09.09 · 5 dni" mimo że
+05.09/06.09 to sobota/niedziela i realnie to tylko 3 dni robocze/24h —
+kierownik sprawdzający dostępny bilans dni urlopowych musi widzieć tu
+wyłącznie dni robocze) i, tylko dla `type='urlop'`, ile to będzie godzin
+(`countWorkdays() * URLOP_HOURS_PER_DAY` — ta sama funkcja co
+`buildUrlopShiftDrafts()`, wszystkie w `utils/absences.ts`, nie licz tego
+ręcznie w komponencie) — Zatwierdź/Odrzuć, `resolveAbsenceRequest()` w
 [`utils/absences.ts`](src/utils/absences.ts). **JEDYNE** miejsce, które
 zmienia `absences.status` i materializuje godziny — nie duplikuj tej
 logiki. Kierownik może też wpisać urlop bezpośrednio w karcie pracownika
@@ -811,8 +815,9 @@ Twojej decyzji", `PulpitHome.tsx`) od 2026-09-03 łączy korekty godzin i
 oczekujące wnioski o wolne w jedną, wspólną listę `decisionItems`
 (posortowaną po `created_at`, najstarsze pierwsze) — wnioski oznaczone
 ikoną `Palmtree`, treść podsumowania to typ (Urlop/Niedostępność) i
-liczba dni kalendarzowych (`countCalendarDays`). Kafelek "Do decyzji" i
-licznik na karcie liczą razem korekty + wnioski.
+liczba dni roboczych (`countWorkdays`, ten sam licznik co w
+ZatwierdzanieZmian.tsx opisanym wyżej). Kafelek "Do decyzji" i licznik na
+karcie liczą razem korekty + wnioski.
 
 `type='niedostepnosc'` NIE tworzy żadnych `shifts` — zostaje tylko
 zatwierdzonym/odrzuconym wierszem w `absences`, czekającym na przyszły
