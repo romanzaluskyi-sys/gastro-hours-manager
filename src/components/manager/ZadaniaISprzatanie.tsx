@@ -1,11 +1,13 @@
 // @ts-nocheck
 // Panel kierownika "Zadania i sprzątanie" (Roadmap p.2) — "Kontrola
-// wykonania po osobach". Lewy panel: zadania wspólne dla całego lokalu
-// (scope="lokal", jedno wykonanie dziennie, dowolna osoba). Prawy panel:
-// postęp per pracownik (scope="pracownik" — "wszyscy" + dopasowane
-// stanowisko), tylko wśród osób, które dziś faktycznie odbiły zmianę (nie
-// ma jeszcze Grafiku, więc "kto dziś pracuje" da się wyczytać tylko ze
-// zmian). Cała logika "co jest dziś do zrobienia" i zapis/kasowanie
+// wykonania po osobach". Jedna, spójna lista zadań aktualnych na wybrany
+// dzień (filtrowana pigułkami pory dnia + opcjonalnie stanowiskiem) — BEZ
+// podziału na "wspólne"/"per pracownik": każde zadanie ma jedno wspólne
+// wykonanie dziennie, niezależnie od tego, czy dotyczy całego lokalu, czy
+// jednego stanowiska (patrz komentarz przy findSharedCompletion w
+// utils/tasks.ts — świadoma zmiana 2026-09-04, pierwsza wersja miała
+// osobne wykonanie per pracownik dla zadań przypisanych do stanowiska, co
+// było mylące). Cała logika "co jest dziś do zrobienia" i zapis/kasowanie
 // wykonań żyje w utils/tasks.ts — nie duplikuj jej tutaj.
 import React, { useState } from "react";
 import {
@@ -22,8 +24,6 @@ import {
   isTaskDueOn,
   findSharedCompletion,
   toggleTaskCompletion,
-  getEffectiveAssignmentForDate,
-  buildEmployeeChecklist,
   toLocalYMD,
   PRIORITY_META,
 } from "../../utils/tasks";
@@ -35,8 +35,6 @@ import {
   lokalTabCls,
   sectionCardCls,
   sectionHeaderCls,
-  progressTrackCls,
-  progressFillStyle,
   taskRowCls,
 } from "./designTokens";
 
@@ -50,6 +48,7 @@ const BUCKETS = [
 ];
 
 const DAYS_PL = ["Nd", "Pon", "Wt", "Śr", "Czw", "Pt", "Sob"];
+const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
 
 const SCHEDULE_LABELS = {
   poranne: "Poranne",
@@ -72,6 +71,9 @@ const fmtDatePL = (dateStr) =>
     month: "2-digit",
   });
 
+// Zwraca etykietę tylko gdy dni są faktycznie ograniczone (mniej niż 7) —
+// "wszystkie dni" (7/7 albo puste/stare day_of_week=null) nie potrzebuje
+// żadnej podpowiedzi.
 const daysOfWeekLabel = (task) => {
   if (task.days_of_week) {
     const idxs = task.days_of_week
@@ -90,15 +92,13 @@ const daysOfWeekLabel = (task) => {
 const blankForm = (defaultLokal) => ({
   title: "",
   description: "",
-  schedule_type: "poranne",
-  cycle_days: "3",
-  days_of_week: [],
   lokal: defaultLokal,
-  scope: "lokal",
   stanowisko: "",
-  owner_label: "",
-  deadline_time: "",
+  schedule_type: "ogolne",
+  cycle_days: "3",
   priority: "sredni",
+  days_of_week: [...ALL_DAYS],
+  deadline_time: "",
   for_manager: false,
 });
 
@@ -113,8 +113,6 @@ const PriorityBadge = ({ priority }) => {
 
 export default function ZadaniaISprzatanie({
   currentUser,
-  users,
-  shifts,
   tasks,
   setTasks,
   taskCompletions,
@@ -128,6 +126,7 @@ export default function ZadaniaISprzatanie({
   const [selectedDate, setSelectedDate] = useState(toLocalYMD(new Date()));
   const [bucketFilter, setBucketFilter] = useState("wszystko");
   const [managerOnly, setManagerOnly] = useState(false);
+  const [listStanowiskoFilter, setListStanowiskoFilter] = useState("ALL");
   const [showNewTaskForm, setShowNewTaskForm] = useState(false);
   const [showAllTasks, setShowAllTasks] = useState(false);
   const [showIncomplete, setShowIncomplete] = useState(false);
@@ -165,74 +164,22 @@ export default function ZadaniaISprzatanie({
     cykliczne: nonManagerDue.filter((t) => t.schedule_type === "cykliczne").length,
   };
 
-  const visibleTasks = (managerOnly ? managerDue : nonManagerDue).filter(
-    (t) => bucketFilter === "wszystko" || t.schedule_type === bucketFilter
-  );
-  const sharedTasks = visibleTasks.filter((t) => t.scope === "lokal");
+  const visibleTasks = (managerOnly ? managerDue : nonManagerDue)
+    .filter((t) => bucketFilter === "wszystko" || t.schedule_type === bucketFilter)
+    .filter((t) => {
+      if (listStanowiskoFilter === "ALL") return true;
+      if (listStanowiskoFilter === "WSZYSCY") return t.stanowisko == null;
+      return t.stanowisko === listStanowiskoFilter;
+    });
 
-  // Prawy panel liczy się zawsze z pełnego zestawu dziennych zadań
-  // per-pracownik (niezależnie od wybranych pigułek) — to osobny widok
-  // "ile kto ma dziś do zrobienia w sumie", nie filtr listy po lewej.
-  const allPerEmployeeToday = dueToday.filter(
-    (t) => t.scope === "pracownik" && !t.for_manager
-  );
+  const totalAllToday = nonManagerDue.length;
+  const totalDoneToday = nonManagerDue.filter((t) =>
+    findSharedCompletion(taskCompletions, t.id, selectedDate)
+  ).length;
 
-  const shiftsOnDate = shifts.filter(
-    (s) => toLocalYMD(s.start_time) === selectedDate && matchesFilter(s.lokal)
+  const incompleteToday = nonManagerDue.filter(
+    (t) => !findSharedCompletion(taskCompletions, t.id, selectedDate)
   );
-  const employeeIds = [];
-  const seen = new Set();
-  for (const s of shiftsOnDate) {
-    if (seen.has(s.user_id)) continue;
-    seen.add(s.user_id);
-    employeeIds.push(s.user_id);
-  }
-  const employeeRows = employeeIds.map((uid) => {
-    const userShifts = shiftsOnDate.filter((s) => s.user_id === uid);
-    const userRec = users.find((u) => u.id === uid);
-    const name = userRec?.name || userShifts[0]?.user_name || "?";
-    const assignment = getEffectiveAssignmentForDate(
-      userRec || {
-        default_lokal: userShifts[0]?.lokal,
-        default_stanowisko: userShifts[0]?.stanowisko,
-      },
-      userShifts
-    );
-    const checklist = buildEmployeeChecklist(
-      allPerEmployeeToday,
-      taskCompletions,
-      uid,
-      assignment,
-      selectedDate,
-      "own"
-    );
-    return {
-      id: uid,
-      name,
-      lokal: assignment.lokal,
-      stanowisko: assignment.stanowisko,
-      shifts: userShifts,
-      checklist,
-    };
-  });
-  const totalDone = employeeRows.reduce(
-    (acc, r) => acc + r.checklist.filter((i) => i.done).length,
-    0
-  );
-  const totalAll = employeeRows.reduce((acc, r) => acc + r.checklist.length, 0);
-
-  const incompleteShared = dueToday.filter(
-    (t) =>
-      t.scope === "lokal" &&
-      !t.for_manager &&
-      !findSharedCompletion(taskCompletions, t.id, selectedDate)
-  );
-  const employeesWithIncomplete = employeeRows
-    .map((r) => ({ ...r, incomplete: r.checklist.filter((i) => !i.done) }))
-    .filter((r) => r.incomplete.length > 0);
-  const totalIncompleteCount =
-    incompleteShared.length +
-    employeesWithIncomplete.reduce((acc, r) => acc + r.incomplete.length, 0);
 
   const handleToggleShared = async (task) => {
     const existing = findSharedCompletion(taskCompletions, task.id, selectedDate);
@@ -273,18 +220,10 @@ export default function ZadaniaISprzatanie({
             ? Number(newTaskForm.cycle_days) || 1
             : null,
         days_of_week:
-          newTaskForm.days_of_week.length > 0
+          newTaskForm.days_of_week.length > 0 && newTaskForm.days_of_week.length < 7
             ? newTaskForm.days_of_week.join(",")
             : null,
-        scope: newTaskForm.scope,
-        stanowisko:
-          newTaskForm.scope === "pracownik" && newTaskForm.stanowisko
-            ? newTaskForm.stanowisko
-            : null,
-        owner_label:
-          newTaskForm.scope === "lokal" && newTaskForm.owner_label.trim()
-            ? newTaskForm.owner_label.trim()
-            : null,
+        stanowisko: newTaskForm.stanowisko || null,
         deadline_time: newTaskForm.deadline_time || null,
         priority: newTaskForm.priority,
         for_manager: newTaskForm.for_manager,
@@ -326,8 +265,18 @@ export default function ZadaniaISprzatanie({
     }));
   };
 
+  const toggleAllFormDays = () => {
+    setNewTaskForm((f) => ({
+      ...f,
+      days_of_week: f.days_of_week.length === 7 ? [] : [...ALL_DAYS],
+    }));
+  };
+
   const stanowiskaForForm = activeStanowiska.filter(
     (s) => s.lokal_name === newTaskForm.lokal
+  );
+  const stanowiskaForListFilter = activeStanowiska.filter(
+    (s) => isAllLokale || s.lokal_name === selectedLokal
   );
 
   const allTasksFiltered = inScope
@@ -430,13 +379,30 @@ export default function ZadaniaISprzatanie({
               <select
                 value={newTaskForm.lokal}
                 onChange={(e) =>
-                  setNewTaskForm({ ...newTaskForm, lokal: e.target.value })
+                  setNewTaskForm({ ...newTaskForm, lokal: e.target.value, stanowisko: "" })
                 }
                 className="w-full border-[2px] border-[#171714] rounded p-2 text-sm"
               >
                 {availableLokale.map((l) => (
                   <option key={l.id} value={l.name}>
                     {l.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-bold text-[#6E6E66]">Dla kogo</label>
+              <select
+                value={newTaskForm.stanowisko}
+                onChange={(e) =>
+                  setNewTaskForm({ ...newTaskForm, stanowisko: e.target.value })
+                }
+                className="w-full border-[2px] border-[#171714] rounded p-2 text-sm"
+              >
+                <option value="">Wszyscy (cały lokal)</option>
+                {stanowiskaForForm.map((s) => (
+                  <option key={s.id} value={s.name}>
+                    {s.name}
                   </option>
                 ))}
               </select>
@@ -450,11 +416,25 @@ export default function ZadaniaISprzatanie({
                 }
                 className="w-full border-[2px] border-[#171714] rounded p-2 text-sm"
               >
+                <option value="ogolne">Ogólne (dowolna pora dnia)</option>
                 <option value="poranne">Poranne</option>
                 <option value="obiadowe">Obiadowe</option>
                 <option value="wieczorne">Wieczorne</option>
-                <option value="ogolne">Ogólne (dowolna pora dnia)</option>
-                <option value="cykliczne">Cykliczne</option>
+                <option value="cykliczne">Cykliczne (co N dni)</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-bold text-[#6E6E66]">Priorytet</label>
+              <select
+                value={newTaskForm.priority}
+                onChange={(e) =>
+                  setNewTaskForm({ ...newTaskForm, priority: e.target.value })
+                }
+                className="w-full border-[2px] border-[#171714] rounded p-2 text-sm"
+              >
+                <option value="niski">Niski — lekkie przypomnienie</option>
+                <option value="sredni">Średni</option>
+                <option value="wysoki">Wysoki — ważne</option>
               </select>
             </div>
             {newTaskForm.schedule_type === "cykliczne" && (
@@ -471,25 +451,24 @@ export default function ZadaniaISprzatanie({
                 />
               </div>
             )}
-            <div>
-              <label className="text-xs font-bold text-[#6E6E66]">Priorytet</label>
-              <select
-                value={newTaskForm.priority}
-                onChange={(e) =>
-                  setNewTaskForm({ ...newTaskForm, priority: e.target.value })
-                }
-                className="w-full border-[2px] border-[#171714] rounded p-2 text-sm"
-              >
-                <option value="niski">Niski — lekkie przypomnienie</option>
-                <option value="sredni">Średni</option>
-                <option value="wysoki">Wysoki — ważne</option>
-              </select>
-            </div>
-            <div className="col-span-2 md:col-span-4">
-              <label className="text-xs font-bold text-[#6E6E66]">
-                Dni tygodnia (puste = codziennie)
+
+            <div className="col-span-2 md:col-span-4 border-[2px] border-[#B7B6AE] rounded p-3">
+              <label className="text-xs font-bold text-[#6E6E66] block mb-2">
+                Powtarzalność — w które dni zadanie obowiązuje
               </label>
-              <div className="flex gap-1.5 flex-wrap mt-1">
+              <div className="flex gap-1.5 flex-wrap items-center">
+                <button
+                  type="button"
+                  onClick={toggleAllFormDays}
+                  className={`px-3 py-1.5 rounded border-2 text-sm font-bold ${
+                    newTaskForm.days_of_week.length === 7
+                      ? "bg-[#DE3A22] text-white border-[#DE3A22]"
+                      : "bg-white text-[#171714] border-[#B7B6AE]"
+                  }`}
+                >
+                  Cały tydzień
+                </button>
+                <span className="w-px self-stretch bg-[#B7B6AE] mx-1" />
                 {DAYS_PL.map((d, i) => (
                   <button
                     key={i}
@@ -505,71 +484,27 @@ export default function ZadaniaISprzatanie({
                   </button>
                 ))}
               </div>
-            </div>
-            <div>
-              <label className="text-xs font-bold text-[#6E6E66]">Termin (godzina)</label>
-              <input
-                type="time"
-                value={newTaskForm.deadline_time}
-                onChange={(e) =>
-                  setNewTaskForm({ ...newTaskForm, deadline_time: e.target.value })
-                }
-                className="w-full border-[2px] border-[#171714] rounded p-2 text-sm"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-bold text-[#6E6E66]">Dla kogo</label>
-              <select
-                value={newTaskForm.scope}
-                onChange={(e) =>
-                  setNewTaskForm({ ...newTaskForm, scope: e.target.value })
-                }
-                className="w-full border-[2px] border-[#171714] rounded p-2 text-sm"
-              >
-                <option value="lokal">Wspólne dla lokalu (raz dziennie)</option>
-                <option value="pracownik">Każdy pracownik osobno</option>
-              </select>
-            </div>
-            {newTaskForm.scope === "pracownik" ? (
-              <div>
-                <label className="text-xs font-bold text-[#6E6E66]">Stanowisko</label>
-                <select
-                  value={newTaskForm.stanowisko}
-                  onChange={(e) =>
-                    setNewTaskForm({ ...newTaskForm, stanowisko: e.target.value })
-                  }
-                  className="w-full border-[2px] border-[#171714] rounded p-2 text-sm"
-                >
-                  <option value="">Wszyscy</option>
-                  {stanowiskaForForm.map((s) => (
-                    <option key={s.id} value={s.name}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ) : (
-              <div>
+              <div className="mt-3">
                 <label className="text-xs font-bold text-[#6E6E66]">
-                  Kto ma zrobić (podpowiedź, opcjonalnie)
+                  Termin (godzina, opcjonalnie)
                 </label>
                 <input
-                  type="text"
-                  value={newTaskForm.owner_label}
+                  type="time"
+                  value={newTaskForm.deadline_time}
                   onChange={(e) =>
-                    setNewTaskForm({ ...newTaskForm, owner_label: e.target.value })
+                    setNewTaskForm({ ...newTaskForm, deadline_time: e.target.value })
                   }
-                  placeholder="Np. kierownik zmiany"
-                  className="w-full border-[2px] border-[#171714] rounded p-2 text-sm"
+                  className="w-full max-w-[160px] border-[2px] border-[#171714] rounded p-2 text-sm mt-1"
                 />
               </div>
-            )}
+            </div>
+
             <button
               type="button"
               onClick={() =>
                 setNewTaskForm({ ...newTaskForm, for_manager: !newTaskForm.for_manager })
               }
-              className="flex items-center gap-2 text-sm font-semibold text-[#171714] col-span-2"
+              className="flex items-center gap-2 text-sm font-semibold text-[#171714] col-span-2 md:col-span-4"
             >
               <span
                 className={`w-4 h-4 border-2 border-[#171714] rounded-[3px] flex-shrink-0 flex items-center justify-center ${
@@ -593,108 +528,85 @@ export default function ZadaniaISprzatanie({
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <div className={sectionCardCls}>
-          <div className={sectionHeaderCls}>
-            <span>Wspólne dla całego lokalu</span>
-            <span className="text-xs font-normal text-[#8F8E86] normal-case">
-              bez przypisania
-            </span>
-          </div>
-          {sharedTasks.length === 0 && (
-            <div className="p-4 text-sm text-[#8F8E86]">
-              Brak zadań wspólnych w tej kategorii na ten dzień.
-            </div>
-          )}
-          {sharedTasks.map((task) => {
-            const completion = findSharedCompletion(
-              taskCompletions,
-              task.id,
-              selectedDate
-            );
-            return (
-              <div key={task.id} className={taskRowCls}>
-                <button
-                  onClick={() => handleToggleShared(task)}
-                  disabled={busy}
-                  className="w-5 h-5 mt-0.5 border-2 border-[#171714] rounded-[3px] flex-shrink-0 flex items-center justify-center"
-                >
-                  {completion && (
-                    <span className="w-[9px] h-[9px] bg-[#DE3A22] rounded-[1px]" />
-                  )}
-                </button>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-['Archivo'] font-bold text-[15px] text-[#171714]">
-                      {task.title}
-                    </p>
-                    <PriorityBadge priority={task.priority} />
-                    {isAllLokale && (
-                      <span className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-[#F1F1EE] text-[#6E6E66]">
-                        {task.lokal}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-[13px] text-[#8F8E86]">
-                    {completion
-                      ? `${completion.user_name || "?"} · ${
-                          completion.completed_at
-                            ? fmtHHMM(new Date(completion.completed_at))
-                            : ""
-                        }`
-                      : `${
-                          task.deadline_time
-                            ? `do ${task.deadline_time.slice(0, 5)} · `
-                            : ""
-                        }${task.owner_label || "kto pierwszy"}`}
-                  </p>
-                </div>
-              </div>
-            );
-          })}
+      <div className={sectionCardCls}>
+        <div className={sectionHeaderCls}>
+          <span>Zadania na dziś</span>
+          <span className="text-xs font-normal text-[#8F8E86] normal-case">
+            {totalDoneToday} z {totalAllToday}
+          </span>
         </div>
-
-        <div className={sectionCardCls}>
-          <div className={sectionHeaderCls}>
-            <span>Postęp po osobach</span>
-            <span className="text-xs font-normal text-[#8F8E86] normal-case">
-              {totalDone} z {totalAll}
-            </span>
+        <div className="flex items-center gap-2 flex-wrap p-4 border-b-[2px] border-[#171714]">
+          <label className="text-xs font-bold text-[#6E6E66]">Stanowisko</label>
+          <select
+            value={listStanowiskoFilter}
+            onChange={(e) => setListStanowiskoFilter(e.target.value)}
+            className="border-[2px] border-[#171714] rounded p-2 text-sm"
+          >
+            <option value="ALL">Wszystkie</option>
+            <option value="WSZYSCY">Dla wszystkich (bez stanowiska)</option>
+            {stanowiskaForListFilter.map((s) => (
+              <option key={s.id} value={s.name}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        {visibleTasks.length === 0 && (
+          <div className="p-4 text-sm text-[#8F8E86]">
+            Brak zadań w tej kategorii na ten dzień.
           </div>
-          {employeeRows.length === 0 && (
-            <div className="p-4 text-sm text-[#8F8E86]">
-              Nikt jeszcze nie odbił dziś zmiany.
-            </div>
-          )}
-          {employeeRows.map((row) => {
-            const done = row.checklist.filter((i) => i.done).length;
-            const total = row.checklist.length;
-            const pct = total > 0 ? (done / total) * 100 : 0;
-            return (
-              <div key={row.id} className="px-4 py-3 border-b-[2px] border-[#171714] last:border-b-0">
-                <div className="flex items-baseline justify-between">
-                  <p className="font-['Archivo'] font-extrabold text-[15px] text-[#171714]">
-                    {row.name}
+        )}
+        {visibleTasks.map((task) => {
+          const completion = findSharedCompletion(
+            taskCompletions,
+            task.id,
+            selectedDate
+          );
+          return (
+            <div key={task.id} className={taskRowCls}>
+              <button
+                onClick={() => handleToggleShared(task)}
+                disabled={busy}
+                className="w-5 h-5 mt-0.5 border-2 border-[#171714] rounded-[3px] flex-shrink-0 flex items-center justify-center"
+              >
+                {completion && (
+                  <span className="w-[9px] h-[9px] bg-[#DE3A22] rounded-[1px]" />
+                )}
+              </button>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p
+                    className={`font-['Archivo'] font-bold text-[15px] ${
+                      completion ? "line-through text-[#8F8E86]" : "text-[#171714]"
+                    }`}
+                  >
+                    {task.title}
                   </p>
-                  <span className="font-['Archivo'] font-extrabold text-sm tabular-nums">
-                    {done}/{total}
+                  <PriorityBadge priority={task.priority} />
+                  <span className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-[#F1F1EE] text-[#6E6E66]">
+                    {task.stanowisko || "Wszyscy"}
                   </span>
+                  {isAllLokale && (
+                    <span className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-[#F1F1EE] text-[#6E6E66]">
+                      {task.lokal}
+                    </span>
+                  )}
                 </div>
-                <p className="text-[12px] text-[#8F8E86] mb-2">
-                  {row.stanowisko || ""}
-                  {isAllLokale && row.lokal ? ` · ${row.lokal}` : ""}
+                <p className="text-[13px] text-[#8F8E86]">
+                  {completion
+                    ? `${completion.user_name || "?"} · ${
+                        completion.completed_at
+                          ? fmtHHMM(new Date(completion.completed_at))
+                          : ""
+                      }`
+                    : task.deadline_time
+                    ? `do ${task.deadline_time.slice(0, 5)}`
+                    : " "}
                 </p>
-                <div className={progressTrackCls}>
-                  <div className="h-full rounded-full" style={progressFillStyle(pct)} />
-                </div>
               </div>
-            );
-          })}
-          <div className="px-4 py-3 flex items-start gap-2 text-[12.5px] text-[#8F8E86]">
-            <ClipboardList size={14} className="flex-shrink-0 mt-0.5" />
-            <span>Zadania niewykonane po 22:00 trafiają do raportu tygodniowego.</span>
-          </div>
-        </div>
+            </div>
+          );
+        })}
       </div>
 
       <div className={`${sectionCardCls} mt-5`}>
@@ -702,58 +614,43 @@ export default function ZadaniaISprzatanie({
           onClick={() => setShowIncomplete((v) => !v)}
           className={`${sectionHeaderCls} w-full text-left`}
         >
-          <span>Niewykonane dzisiaj · {totalIncompleteCount}</span>
+          <span>Niewykonane dzisiaj · {incompleteToday.length}</span>
           {showIncomplete ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
         </button>
         {showIncomplete && (
           <>
-            {totalIncompleteCount === 0 && (
+            {incompleteToday.length === 0 && (
               <div className="p-4 text-sm text-[#8F8E86]">
                 Wszystko wykonane jak dotąd — świetnie.
               </div>
             )}
-            {incompleteShared.length > 0 && (
-              <div className="px-4 py-3 border-b-[2px] border-[#171714]">
-                <p className={`${statLabelCls} mb-2`}>Wspólne, niewykonane</p>
-                <div className="flex flex-col gap-1.5">
-                  {incompleteShared.map((t) => (
-                    <div key={t.id} className="flex items-center gap-2 flex-wrap text-sm">
-                      <span className="font-semibold text-[#171714]">{t.title}</span>
-                      <PriorityBadge priority={t.priority} />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {employeesWithIncomplete.map((row) => (
-              <div key={row.id} className="px-4 py-3 border-b-[2px] border-[#171714] last:border-b-0">
-                <div className="flex items-baseline justify-between flex-wrap gap-1">
-                  <p className="font-['Archivo'] font-bold text-[14px] text-[#171714]">
-                    {row.name}
-                  </p>
-                  <span className="text-[12px] text-[#8F8E86]">
-                    {row.shifts
-                      .map(
-                        (s) =>
-                          `${fmtHHMM(s.start_time)}–${
-                            s.end_time ? fmtHHMM(s.end_time) : "trwa"
-                          }`
-                      )
-                      .join(", ")}
+            {incompleteToday.map((t) => (
+              <div key={t.id} className={taskRowCls}>
+                <div className="min-w-0 flex-1 flex items-center gap-2 flex-wrap">
+                  <span className="font-semibold text-[#171714]">{t.title}</span>
+                  <PriorityBadge priority={t.priority} />
+                  <span className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-[#F1F1EE] text-[#6E6E66]">
+                    {t.stanowisko || "Wszyscy"}
                   </span>
-                </div>
-                <div className="flex flex-col gap-1 mt-1.5">
-                  {row.incomplete.map((i) => (
-                    <div key={i.task.id} className="flex items-center gap-2 flex-wrap text-sm">
-                      <span className="text-[#171714]">{i.task.title}</span>
-                      <PriorityBadge priority={i.task.priority} />
-                    </div>
-                  ))}
+                  {isAllLokale && (
+                    <span className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-[#F1F1EE] text-[#6E6E66]">
+                      {t.lokal}
+                    </span>
+                  )}
+                  {t.deadline_time && (
+                    <span className="text-[12px] text-[#8F8E86]">
+                      do {t.deadline_time.slice(0, 5)}
+                    </span>
+                  )}
                 </div>
               </div>
             ))}
           </>
         )}
+        <div className="px-4 py-3 flex items-start gap-2 text-[12.5px] text-[#8F8E86] border-t-[2px] border-[#171714]">
+          <ClipboardList size={14} className="flex-shrink-0 mt-0.5" />
+          <span>Zadania niewykonane po 22:00 trafiają do raportu tygodniowego.</span>
+        </div>
       </div>
 
       <div className={`${sectionCardCls} mt-5`}>
@@ -811,7 +708,7 @@ export default function ZadaniaISprzatanie({
                     {task.schedule_type === "cykliczne" ? ` (co ${task.cycle_days || 1} dni)` : ""}
                     {daysOfWeekLabel(task) ? ` · tylko ${daysOfWeekLabel(task)}` : ""}
                     {" · "}
-                    {task.scope === "lokal" ? "wspólne" : task.stanowisko || "wszyscy"}
+                    {task.stanowisko || "wszyscy"}
                     {task.for_manager ? " · kierownik" : ""}
                     {task.deadline_time ? ` · do ${task.deadline_time.slice(0, 5)}` : ""}
                   </p>

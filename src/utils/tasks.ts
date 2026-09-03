@@ -84,13 +84,16 @@ export const cyclicalProgress = (task, completions, dateStr) => {
   return { daysSince, cycleDays, pct: Math.round((daysSince / cycleDays) * 100) };
 };
 
+// Zawsze JEDNO wykonanie na (task, dzień), niezależnie od tego, do ilu
+// osób zadanie jest kierowane (cały lokal albo jedno stanowisko) — jeśli
+// dwie osoby mają to samo stanowisko, kliknięcie jednej odhacza zadanie
+// dla obu. Świadoma zmiana (2026-09-04): pierwsza wersja miała osobne
+// wykonanie per pracownik dla zadań przypisanych do stanowiska, co było
+// mylące — dwie osoby na tym samym stanowisku widziały niezależne stany
+// tego samego zadania, mimo że w rzeczywistości to jedna czynność do
+// zrobienia przez kogokolwiek na zmianie.
 export const findSharedCompletion = (completions, taskId, dateStr) =>
   completions.find((c) => c.task_id === taskId && c.date === dateStr) || null;
-
-export const findUserCompletion = (completions, taskId, dateStr, userId) =>
-  completions.find(
-    (c) => c.task_id === taskId && c.date === dateStr && c.user_id === userId
-  ) || null;
 
 // Jedyne miejsce, które pisze do task_completions — odhaczenie tworzy
 // wiersz, odznaczenie go kasuje (brak wiersza = niezrobione).
@@ -133,19 +136,18 @@ export const getEffectiveAssignmentForDate = (employee, shiftsForUserOnDate) => 
   };
 };
 
-// Buduje checklistę JEDNEGO pracownika na dany dzień — używane przez ekran
-// Zadania pracownika (kiosk/konto osobiste) ORAZ przez panel "Postęp po
-// osobach" kierownika. Zadania `for_manager` są celowo pomijane — to zakres
-// panelu kierownika (przełącznik "Zadania kierownika" nad surowym `tasks`),
-// nie checklisty zwykłego pracownika. `viewMode: "own"` ogranicza zadania ze
-// scope="pracownik" do "wszyscy" (stanowisko=null) albo dopasowania do
-// stanowiska pracownika; `"all"` (przełącznik na kiosku) pokazuje wszystko
-// dla lokalu bez względu na stanowisko — odhaczenie w tym trybie i tak
-// zapisuje się pod tożsamością osoby, która kliknęła.
+// Buduje checklistę widoczną dla JEDNEGO pracownika na dany dzień —
+// używane przez ekran Zadania pracownika (kiosk/konto osobiste). Zadania
+// `for_manager` są celowo pomijane — to zakres panelu kierownika
+// (przełącznik "Zadania kierownika" nad surowym `tasks`), nie checklisty
+// zwykłego pracownika. `viewMode: "own"` ogranicza listę do zadań "dla
+// wszystkich" (stanowisko=null) i tych dopasowanych do stanowiska
+// pracownika; `"all"` (przełącznik na kiosku) pokazuje wszystko dla
+// lokalu bez względu na stanowisko. Wykonanie jest zawsze WSPÓLNE
+// (`findSharedCompletion`) — patrz komentarz przy tej funkcji.
 export const buildEmployeeChecklist = (
   tasks,
   completions,
-  employeeId,
   { lokal, stanowisko },
   dateStr,
   viewMode = "own"
@@ -154,17 +156,10 @@ export const buildEmployeeChecklist = (
     .filter((t) => t.lokal === lokal && !t.for_manager)
     .filter((t) => isTaskDueOn(t, completions, dateStr))
     .filter(
-      (t) =>
-        t.scope === "lokal" ||
-        viewMode === "all" ||
-        t.stanowisko == null ||
-        t.stanowisko === stanowisko
+      (t) => viewMode === "all" || t.stanowisko == null || t.stanowisko === stanowisko
     )
     .map((t) => {
-      const completion =
-        t.scope === "lokal"
-          ? findSharedCompletion(completions, t.id, dateStr)
-          : findUserCompletion(completions, t.id, dateStr, employeeId);
+      const completion = findSharedCompletion(completions, t.id, dateStr);
       return { task: t, completion, done: !!completion };
     })
     .sort((a, b) => {
@@ -186,7 +181,6 @@ export const buildEmployeeChecklist = (
 export const weeklyChecklistStats = (
   tasks,
   completions,
-  employeeId,
   employee,
   shiftsForEmployee,
   todayStr,
@@ -201,7 +195,7 @@ export const weeklyChecklistStats = (
     const shiftsOnDay = shiftsForEmployee.filter((s) => toLocalYMD(s.start_time) === ds);
     if (shiftsOnDay.length === 0) continue;
     const assignment = getEffectiveAssignmentForDate(employee, shiftsOnDay);
-    const list = buildEmployeeChecklist(tasks, completions, employeeId, assignment, ds, "own");
+    const list = buildEmployeeChecklist(tasks, completions, assignment, ds, "own");
     done += list.filter((item) => item.done).length;
     total += list.length;
   }

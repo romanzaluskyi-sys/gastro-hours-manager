@@ -23,6 +23,15 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.11.0",
+    date: "2026-09-04",
+    items: [
+      "Zadania przypisane do stanowiska są teraz wspólne — odhaczenie przez jedną osobę liczy się dla wszystkich z tym stanowiskiem.",
+      "Nowy formularz zadania: lokal i odbiorca razem, cała konfiguracja terminu w jednym miejscu, typ „Ogólne” domyślny.",
+      "Kafelek „Zadania dziś” na Pulpicie kierownika już nie zależy od tego, czy ktoś odbił zmianę.",
+    ],
+  },
+  {
     version: "0.10.0",
     date: "2026-09-03",
     items: [

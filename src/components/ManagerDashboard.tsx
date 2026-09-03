@@ -243,7 +243,7 @@ const ManagerDashboard = ({
   const nowTimeStr = new Date().toTimeString().slice(0, 5);
   const zadaniaOverdueCount = tasks.filter(
     (t) =>
-      t.scope === "lokal" &&
+      !t.for_manager &&
       !t.archived &&
       hasAccessToLokal(t.lokal) &&
       t.deadline_time &&
@@ -525,8 +525,7 @@ const ManagerDashboard = ({
       const created = await api.post("tasks", {
         lokal: lokalForTask,
         title: title.trim(),
-        schedule_type: "poranne",
-        scope: "lokal",
+        schedule_type: "ogolne",
         for_manager: true,
         source_issue_id: issue.id,
       });
@@ -949,8 +948,6 @@ const ManagerDashboard = ({
         {tab === "zadania" && (
           <ZadaniaISprzatanie
             currentUser={currentUser}
-            users={users}
-            shifts={shifts}
             tasks={tasks}
             setTasks={setTasks}
             taskCompletions={taskCompletions}

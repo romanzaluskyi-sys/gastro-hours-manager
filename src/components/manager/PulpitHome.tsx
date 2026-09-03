@@ -16,13 +16,7 @@ import {
   sectionHeaderCls,
   pageTitleCls,
 } from "./designTokens";
-import {
-  isTaskDueOn,
-  findSharedCompletion,
-  getEffectiveAssignmentForDate,
-  buildEmployeeChecklist,
-  toLocalYMD,
-} from "../../utils/tasks";
+import { isTaskDueOn, findSharedCompletion, toLocalYMD } from "../../utils/tasks";
 
 const ProgressRing = ({ pct, size = 36, stroke = 5 }) => {
   const r = (size - stroke) / 2;
@@ -194,63 +188,29 @@ export default function PulpitHome({
     })
     .sort((a, b) => (a.overdue === b.overdue ? 0 : a.overdue ? -1 : 1));
 
-  // Zadania dziś, zagregowane per lokal — te same funkcje co panel Zadania
-  // i sprzątanie (utils/tasks.ts), tylko zsumowane do jednej liczby na
-  // lokal zamiast rozbite po osobach/zadaniach.
+  // Zadania dziś, zagregowane per lokal — NIEZALEŻNIE od tego, czy ktoś
+  // dziś odbił zmianę (świadoma zmiana 2026-09-04: zespół jeszcze nie ma
+  // nawyku od razu odbijać zmiany po przyjściu, więc licznik oparty o
+  // shifts pokazywał 0 zadań na starcie dnia mimo realnie wiszących
+  // zadań). Liczymy wprost z `tasks`/`task_completions` — lokale to te,
+  // które mają choć jedno nieaktywne-nie-archiwalne zadanie zdefiniowane.
   const todayStrForTasks = toLocalYMD(now);
-  const shiftsTodayVisible = visibleShifts.filter(
-    (s) => toLocalYMD(s.start_time) === todayStrForTasks
+  const tasksInScopeForPulpit = tasks.filter(
+    (t) => matchesFilter(t.lokal) && !t.for_manager && !t.archived
   );
-  const lokaleWithShiftsToday = [...new Set(shiftsTodayVisible.map((s) => s.lokal))];
-  const lokalTaskStats = lokaleWithShiftsToday.map((lokalName) => {
-    let done = 0;
-    let total = 0;
-    const usersToday = [
-      ...new Set(
-        shiftsTodayVisible.filter((s) => s.lokal === lokalName).map((s) => s.user_id)
-      ),
-    ];
-    usersToday.forEach((uid) => {
-      const userShifts = shiftsTodayVisible.filter(
-        (s) => s.user_id === uid && s.lokal === lokalName
-      );
-      const userRec = users.find((u) => u.id === uid);
-      const assignment = getEffectiveAssignmentForDate(
-        userRec || {
-          default_lokal: lokalName,
-          default_stanowisko: userShifts[0]?.stanowisko,
-        },
-        userShifts
-      );
-      const list = buildEmployeeChecklist(
-        tasks,
-        taskCompletions,
-        uid,
-        assignment,
-        todayStrForTasks,
-        "own"
-      );
-      done += list.filter((i) => i.done).length;
-      total += list.length;
-    });
-    tasks
-      .filter(
-        (t) =>
-          t.lokal === lokalName &&
-          t.scope === "lokal" &&
-          !t.for_manager &&
-          !t.archived &&
-          isTaskDueOn(t, taskCompletions, todayStrForTasks)
-      )
-      .forEach((t) => {
-        total += 1;
-        if (findSharedCompletion(taskCompletions, t.id, todayStrForTasks)) done += 1;
-      });
+  const lokaleWithTasks = [...new Set(tasksInScopeForPulpit.map((t) => t.lokal))];
+  const lokalTaskStats = lokaleWithTasks.map((lokalName) => {
+    const dueTasks = tasksInScopeForPulpit.filter(
+      (t) => t.lokal === lokalName && isTaskDueOn(t, taskCompletions, todayStrForTasks)
+    );
+    const done = dueTasks.filter((t) =>
+      findSharedCompletion(taskCompletions, t.id, todayStrForTasks)
+    ).length;
     return {
       lokal: lokalName,
       done,
-      total,
-      pct: total > 0 ? Math.round((done / total) * 100) : null,
+      total: dueTasks.length,
+      pct: dueTasks.length > 0 ? Math.round((done / dueTasks.length) * 100) : null,
     };
   });
 
@@ -418,7 +378,7 @@ export default function PulpitHome({
           <div className="divide-y divide-[#B7B6AE]">
             {lokalTaskStats.length === 0 && (
               <p className="p-4 text-sm text-[#8F8E86]">
-                Nikt jeszcze nie odbił dziś zmiany.
+                Brak zadań zdefiniowanych w tym lokalu.
               </p>
             )}
             {lokalTaskStats.map((row) => (

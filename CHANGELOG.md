@@ -5,6 +5,23 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.11.0 — 2026-09-04
+
+- **Zadania przypisane do stanowiska są teraz naprawdę wspólne.** Jeśli
+  dwie osoby mają to samo stanowisko, odhaczenie zadania przez jedną
+  liczy się dla obu — koniec z osobnym, mylącym stanem tego samego
+  zadania dla każdej osoby.
+- **Nowy formularz zadania**: Lokal i "Dla kogo" (wszyscy albo konkretne
+  stanowisko) razem, cała konfiguracja terminu w jednym miejscu
+  ("Powtarzalność": Cały tydzień / wybrane dni + godzina). Typ "Ogólne"
+  jest teraz domyślny.
+- **Panel kierownika**: jedna spójna lista "Zadania na dziś" z filtrem po
+  stanowisku (zamiast dwóch osobnych paneli).
+- **Kafelek "Zadania dziś" na Pulpicie kierownika już nie zależy od tego,
+  czy ktoś odbił zmianę** — liczy się wprost z zadań na dany dzień.
+- Wykonane zadanie jest teraz wyraźnie przekreślone i przygaszone, z
+  podpisem kto i kiedy je wykonał.
+
 ## 0.10.0 — 2026-09-03
 
 - **Zadania: priorytet i dowolne dni tygodnia.** Zadanie ma teraz priorytet

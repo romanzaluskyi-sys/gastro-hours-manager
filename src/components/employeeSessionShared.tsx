@@ -61,11 +61,10 @@ export const sumHours = (arr) =>
     0
   );
 
-// Odznaka na wierszu zadania: dla zadań wspólnych (scope="lokal") pokazuje
-// podpowiedź kto ma je zrobić, dla cyklicznych częstotliwość, dla reszty
-// przypisane stanowisko ("wszyscy", gdy brak).
+// Odznaka na wierszu zadania: dla cyklicznych częstotliwość/postęp, dla
+// reszty przypisane stanowisko ("wszyscy", gdy brak — zadanie dla całego
+// lokalu).
 const taskBadgeLabel = (task, completions, dateStr) => {
-  if (task.scope === "lokal") return task.owner_label || "kto pierwszy";
   if (task.schedule_type === "cykliczne") {
     const prog = cyclicalProgress(task, completions, dateStr);
     return prog ? `${prog.daysSince}/${prog.cycleDays} dni` : `co ${task.cycle_days || 1} dni`;
@@ -301,7 +300,6 @@ export const EmployeeSessionScreens = ({
   const myChecklistOwn = buildEmployeeChecklist(
     tasks,
     taskCompletions,
-    employee.id,
     effectiveAssignment,
     todayStr,
     "own"
@@ -309,7 +307,6 @@ export const EmployeeSessionScreens = ({
   const myChecklistAll = buildEmployeeChecklist(
     tasks,
     taskCompletions,
-    employee.id,
     effectiveAssignment,
     todayStr,
     "all"
@@ -318,7 +315,6 @@ export const EmployeeSessionScreens = ({
   const myWeeklyStats = weeklyChecklistStats(
     tasks,
     taskCompletions,
-    employee.id,
     employee,
     shifts.filter((s) => s.user_id === employee.id),
     todayStr
@@ -662,7 +658,7 @@ export const EmployeeSessionScreens = ({
         <button
           key={item.task.id}
           onClick={() => handleToggleTask(item)}
-          className={checkboxRowCls(item.done)}
+          className={`${checkboxRowCls(item.done)} ${item.done ? "opacity-60" : ""}`}
         >
           <span className="w-5 h-5 border-2 border-[#B7B6AE] rounded-[3px] flex-shrink-0 flex items-center justify-center">
             {item.done && (
@@ -670,14 +666,29 @@ export const EmployeeSessionScreens = ({
             )}
           </span>
           <span className="flex-1 text-left">
-            <span className="block text-[15px] font-semibold text-[#171714]">
+            <span
+              className={`block text-[15px] font-semibold ${
+                item.done ? "line-through text-[#6E6E66]" : "text-[#171714]"
+              }`}
+            >
               {item.task.title}
+              {!item.done && item.task.priority === "wysoki" && (
+                <span className="ml-2 text-[11px] font-bold text-[#DE3A22] no-underline">
+                  Ważne
+                </span>
+              )}
             </span>
-            {!item.done && item.task.priority === "wysoki" && (
-              <span className="block text-[11px] font-bold text-[#DE3A22] mt-0.5">
-                Ważne
-              </span>
-            )}
+            <span className="block text-[12px] text-[#8F8E86] mt-0.5">
+              {item.done
+                ? `${item.completion?.user_name || "?"}${
+                    item.completion?.completed_at
+                      ? " · " + fmtHHMM(new Date(item.completion.completed_at))
+                      : ""
+                  }`
+                : item.task.deadline_time
+                ? `do ${item.task.deadline_time.slice(0, 5)}`
+                : " "}
+            </span>
           </span>
           <span className="flex-shrink-0 text-[11px] font-semibold px-2 py-1 rounded bg-[#E7E7E2] text-[#6E6E66]">
             {taskBadgeLabel(item.task, taskCompletions, todayStr)}
@@ -1234,45 +1245,7 @@ export const EmployeeSessionScreens = ({
             Brak zadań na dziś.
           </div>
         )}
-        <div className="space-y-2.5">
-          {taskList.map((item) => (
-            <button
-              key={item.task.id}
-              onClick={() => handleToggleTask(item)}
-              className={checkboxRowCls(item.done)}
-            >
-              <span className="w-5 h-5 border-2 border-[#B7B6AE] rounded-[3px] flex-shrink-0 flex items-center justify-center">
-                {item.done && (
-                  <span className="w-[9px] h-[9px] bg-[#DE3A22] rounded-[1px]" />
-                )}
-              </span>
-              <span className="flex-1 text-left">
-                <span className="block text-[15.5px] font-semibold text-[#171714]">
-                  {item.task.title}
-                  {!item.done && item.task.priority === "wysoki" && (
-                    <span className="ml-2 text-[11px] font-bold text-[#DE3A22] align-middle">
-                      Ważne
-                    </span>
-                  )}
-                </span>
-                <span className="block text-[12.5px] text-[#8F8E86] mt-0.5">
-                  {item.done && item.completion?.user_name
-                    ? `${item.completion.user_name}${
-                        item.completion.completed_at
-                          ? " · " + fmtHHMM(new Date(item.completion.completed_at))
-                          : ""
-                      }`
-                    : item.task.deadline_time
-                    ? `do ${item.task.deadline_time.slice(0, 5)}`
-                    : " "}
-                </span>
-              </span>
-              <span className="flex-shrink-0 text-[11px] font-semibold px-2 py-1 rounded bg-[#E7E7E2] text-[#6E6E66]">
-                {taskBadgeLabel(item.task, taskCompletions, todayStr)}
-              </span>
-            </button>
-          ))}
-        </div>
+        {renderTaskChecklist(taskList)}
       </Shell>
     );
   }

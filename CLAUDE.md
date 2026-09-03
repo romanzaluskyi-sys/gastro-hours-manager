@@ -402,18 +402,22 @@ dokleja z przodu `user_name` (`"Wojtek: Twój termin: ..."`) — bez tego,
 przy kilku pracownikach `open` na jednym urządzeniu nie było wiadomo, do
 kogo należy powiadomienie.
 
-## Zadania i sprzątanie (Roadmap p.2) — zaimplementowane 2026-09-02/03
+## Zadania i sprzątanie (Roadmap p.2) — zaimplementowane 2026-09-02..04
 
-Zbudowane w dwóch etapach: pierwsza wersja (schemat + panel kierownika +
+Zbudowane w trzech rundach: pierwsza wersja (schemat + panel kierownika +
 checklisty pracownika) 2026-09-02, druga (priorytet, dowolne dni tygodnia,
 typ "Ogólne", drill-down "Niewykonane dzisiaj", pełna lista z filtrami,
-kafelek na Pulpicie, "Zgłoszenie → zadanie") 2026-09-03 po rundzie
-testowania przez właściciela. **Moduł Sprzątanie jako osobny, rozbudowany
-proces (HACCP: obladnannia/sprzęt, logi temperatur, oceny jakości) jest
-świadomie odłożony** — to, co jest zbudowane teraz, obsługuje tylko
-"zwykłe" zadania (w tym cykliczne), nie elektroniczny dziennik HACCP.
-Właściciel zdecyduje o zakresie tego drugiego etapu osobno; do tego czasu
-NIE projektuj tabeli `equipment`/`cleaning_logs` z własnej inicjatywy.
+kafelek na Pulpicie, "Zgłoszenie → zadanie") 2026-09-03, trzecia
+(2026-09-04, po kolejnej rundzie testowania) — **uproszczenie modelu
+danych: usunięcie rozróżnienia `scope='lokal'` vs `scope='pracownik'`,
+patrz niżej**, plus reorganizacja formularza i odłączenie postępu na
+Pulpicie od tego, czy ktoś odbił zmianę. **Moduł Sprzątanie jako osobny,
+rozbudowany proces (HACCP: obladnannia/sprzęt, logi temperatur, oceny
+jakości) jest świadomie odłożony** — to, co jest zbudowane teraz,
+obsługuje tylko "zwykłe" zadania (w tym cykliczne), nie elektroniczny
+dziennik HACCP. Właściciel zdecyduje o zakresie tego drugiego etapu
+osobno; do tego czasu NIE projektuj tabeli `equipment`/`cleaning_logs` z
+własnej inicjatywy.
 
 Cała logika "czy zadanie jest dziś do zrobienia" i zapis/kasowanie
 wykonań żyje w [`utils/tasks.ts`](src/utils/tasks.ts) — jedyne miejsce,
@@ -427,93 +431,130 @@ tej logiki w żadnym z tych dwóch miejsc.
 niżej): `tasks` (definicje, tworzone przez kierownika) i
 `task_completions` (log wykonań — brak wiersza = niezrobione, jeden
 checkbox = jeden insert/delete, bez wstępnego materializowania "przypisane
-ale niezrobione"). `scope='lokal'` = zadanie wspólne dla całego lokalu,
-jedno wykonanie dziennie przez dowolną osobę (widoczne w panelu
-kierownika jako "Wspólne dla całego lokalu"); `scope='pracownik'` = każdy
-pasujący pracownik dostaje własną, osobną instancję (`stanowisko=null` =
-"wszyscy", inaczej tylko dany stanowisko) — to jest odpowiedź na pytanie
-"komu przypisać zadanie bez Grafiku": leci na całe stanowisko, każdy z
-danym stanowiskiem widzi je i odhacza osobno; na kiosku, jeśli dana osoba
-nie pracuje danego dnia, nikt i tak nie wchodzi na jej stronę, więc brak
-odznaczenia nie generuje fałszywego alarmu.
+ale niezrobione"). ⚠️ **Wykonanie jest ZAWSZE wspólne, jeden wiersz na
+(zadanie, dzień)** — `findSharedCompletion()`, bez wyjątków. `tasks.scope`
+(`'lokal'`/`'pracownik'`) to relikt pierwszej wersji: kolumna wciąż
+istnieje w bazie (default `'lokal'`, ustawiany automatycznie przez
+Postgres — kod aplikacji już go nigdzie nie czyta ani nie zapisuje), ale
+**nie ma żadnego znaczenia w logice** — nie odtwarzaj rozróżnienia
+"osobne wykonanie per pracownik". Pierwsza wersja (2026-09-02/03) miała
+dla zadań przypisanych do stanowiska (`scope='pracownik'`) osobne
+wykonanie na każdego pracownika — okazało się to mylące w praktyce: dwie
+osoby na tym samym stanowisku widziały niezależne stany tego samego
+zadania, mimo że w rzeczywistości to jedna czynność do zrobienia przez
+kogokolwiek na zmianie. Jedyna zmienna, która realnie różnicuje zadania,
+to `stanowisko` (`null` = cały lokal/"wszyscy", inaczej konkretne
+stanowisko) — decyduje WIDOCZNOŚĆ (kto widzi zadanie na swojej liście),
+nie liczbę wymaganych wykonań. Na kiosku, jeśli dana osoba nie pracuje
+danego dnia, nikt i tak nie wchodzi na jej stronę, więc brak odznaczenia
+nie generuje fałszywego alarmu.
 
-**`schedule_type`**: `poranne`/`obiadowe`/`wieczorne`/`ogolne` (dowolna
-pora dnia — dodane 2026-09-03, bo pierwsza wersja nie miała kategorii
-"po prostu zrobić w ciągu dnia" innej niż cykliczne) / `cykliczne` (co N
-dni, `cycle_days`, liczone od **ostatniego faktycznego wykonania**, nie
-od stałej kotwicy w kalendarzu — pominięty cykl zostaje zaległy zamiast
-po cichu przeskoczyć dalej, patrz `isCyclicalDueOn` w `utils/tasks.ts`).
+**`schedule_type`**: `ogolne` (dowolna pora dnia — **domyślny typ** w
+formularzu tworzenia, dodane 2026-09-03 bo pierwsza wersja nie miała
+kategorii "po prostu zrobić w ciągu dnia" innej niż cykliczne) /
+`poranne`/`obiadowe`/`wieczorne` / `cykliczne` (co N dni, `cycle_days`,
+liczone od **ostatniego faktycznego wykonania**, nie od stałej kotwicy w
+kalendarzu — pominięty cykl zostaje zaległy zamiast po cichu przeskoczyć
+dalej, patrz `isCyclicalDueOn` w `utils/tasks.ts`).
 
 **Dni tygodnia**: `days_of_week` (text, lista indeksów po przecinku, np.
-`"1,2,3,4,5"` — `0=niedziela..6=sobota`, zwykłe JS `Date.getDay()`,
-bez własnego mapowania) pozwala wybrać DOWOLNY podzbiór dni zamiast
-jednego — dodane 2026-09-03 na prośbę właściciela ("codziennie oprócz
-niedzieli" wymagało wcześniej 6 osobnych zadań z pojedynczym
-`day_of_week`). Stary `day_of_week` (int, pojedynczy dzień) zostaje w
-schemacie tylko dla wstecznej zgodności z zadaniami utworzonymi przed tą
-zmianą — `isTaskDueOn` honoruje `days_of_week`, jeśli jest ustawione,
-inaczej spada na `day_of_week`; nowy formularz kierownika pisze już
-wyłącznie `days_of_week`.
+`"1,2,3,4,5"` — `0=niedziela..6=sobota`, zwykłe JS `Date.getDay()`, bez
+własnego mapowania) pozwala wybrać DOWOLNY podzbiór dni zamiast jednego —
+dodane 2026-09-03 na prośbę właściciela ("codziennie oprócz niedzieli"
+wymagało wcześniej 6 osobnych zadań z pojedynczym `day_of_week`).
+Formularz (`ZadaniaISprzatanie.tsx`, sekcja "Powtarzalność") domyślnie
+zaznacza wszystkie 7 dni (przycisk "Cały tydzień" też ustawia/czyści
+wszystkie naraz) — kierownik odznacza tylko wyjątki, nie zaznacza od
+zera. 7/7 zaznaczonych dni jest równoważne "codziennie" (`daysOfWeekLabel`
+pokazuje podpowiedź "tylko ..." wyłącznie gdy zaznaczono 1-6 dni, nie 7).
+Stary `day_of_week` (int, pojedynczy dzień) zostaje w schemacie tylko dla
+wstecznej zgodności z zadaniami utworzonymi przed tą zmianą — `isTaskDueOn`
+honoruje `days_of_week`, jeśli jest ustawione, inaczej spada na
+`day_of_week`.
 
 **Priorytet** (`priority`: `niski`/`sredni`/`wysoki`, default `sredni`,
 dodane 2026-09-03) — czysto informacyjny, nie zmienia logiki "co jest do
 zrobienia". `wysoki` dostaje czerwony tag "Ważne" przy niedokończonym
 zadaniu (Pulpit, Zmiana, zakładka Zadania) i sortuje się na górę
-checklisty pracownika (`buildEmployeeChecklist`).
+checklisty (`buildEmployeeChecklist`).
+
+**Formularz "Nowe zadanie"** (`ZadaniaISprzatanie.tsx`, reorganizowany
+2026-09-04): Tytuł, Opis, potem **Lokal i "Dla kogo" (stanowisko albo
+"Wszyscy") obok siebie** — jedno pole wyboru odbiorcy zamiast dawnego
+`scope` + osobnego selecta stanowiska. Sekcja "Powtarzalność" grupuje
+WSZYSTKO co dotyczy częstotliwości w jednym bloku: przycisk "Cały
+tydzień" + 7 przełączników dni + pole "Termin" (godzina, opcjonalna) —
+świadomie przeniesione tu z osobnych miejsc formularza, żeby cała
+konfiguracja "kiedy" żyła w jednym miejscu. Pole `owner_label` ("Kto ma
+zrobić", wolny tekst) zostało **usunięte z formularza** (kolumna w bazie
+zostaje, nieużywana) — było zbędne po tym, jak odbiorcą zadania stało się
+wprost stanowisko zamiast luźnej podpowiedzi tekstowej.
 
 **Panel kierownika** (`ZadaniaISprzatanie.tsx`) — pigułki filtrów
 Poranne/Obiadowe/Wieczorne/Ogólne/Cykliczne + osobny przełącznik "Zadania
-kierownika" (`for_manager=true`, orthogonalna flaga — zadanie może być
+kierownika" (`for_manager=true`, ortogonalna flaga — zadanie może być
 jednocześnie np. wieczorne I dla kierownika). Nawigacja dat z przyciskiem
-"Dziś" (szybki skok). Lewy panel: zadania wspólne. Prawy panel: "Postęp po
-osobach" — **tylko wśród pracowników, którzy danego dnia faktycznie
-odbili zmianę** (świadoma decyzja, bo bez Grafiku nie ma innego źródła
-prawdy o tym kto pracuje — pokazywanie wszystkich aktywnych pracowników
-domyślnie dawałoby mylącą, spuchniętą listę przed pierwszym odbiciem dnia).
-Sekcja "Niewykonane dzisiaj" (zwijana, dodana 2026-09-03) pokazuje
-zaległe zadania wspólne i per-pracownik razem z godzinami zmian danej
-osoby tego dnia (`shifts` przypisane do `employeeRows[].shifts`). Sekcja
-"Wszystkie zadania w tym lokalu" (zwijana) to pełny katalog zadań
-(niezależnie od tego, czy są dziś "due"), z filtrem po lokalu i
-stanowisku oraz przyciskiem "Archiwizuj" (`tasks.archived=true` —
-**jedyna** dostępna dziś operacja edycji istniejącego zadania; nie ma UI
-do zmiany tytułu/harmonogramu już utworzonego zadania — trzeba
-zarchiwizować i stworzyć nowe). Kafelek "Zadania dziś" na
-[`PulpitHome.tsx`](src/components/manager/PulpitHome.tsx) (4. kolumna,
-dodany 2026-09-03) pokazuje pierścień postępu (`ProgressRing`, SVG) per
-lokal, licząc dokładnie tą samą logiką co panel Zadania (nie duplikuj —
-`buildEmployeeChecklist`/`isTaskDueOn`/`findSharedCompletion` z
-`utils/tasks.ts`).
+"Dziś" (szybki skok). ⚠️ Od 2026-09-04 **jedna, spójna lista** "Zadania na
+dziś" (filtrowana pigułkami + opcjonalnie stanowiskiem) zamiast
+poprzedniego podziału na dwa panele ("Wspólne dla całego lokalu" /
+"Postęp po osobach") — ten podział miał sens tylko przy modelu z osobnym
+wykonaniem per pracownik, którego już nie ma. Sekcja "Niewykonane
+dzisiaj" (zwijana) to płaska lista zaległych zadań (tytuł, priorytet,
+stanowisko/lokal) — **bez** rozbicia po pracownikach/godzinach zmian (to
+też było zależne od starego modelu). Sekcja "Wszystkie zadania w tym
+lokalu" (zwijana) to pełny katalog zadań (niezależnie od tego, czy są
+dziś "due"), z filtrem po lokalu i stanowisku oraz przyciskiem
+"Archiwizuj" (`tasks.archived=true` — **jedyna** dostępna dziś operacja
+edycji istniejącego zadania; nie ma UI do zmiany tytułu/harmonogramu już
+utworzonego zadania — trzeba zarchiwizować i stworzyć nowe).
+
+**Kafelek "Zadania dziś" na Pulpicie** ([`PulpitHome.tsx`](src/components/manager/PulpitHome.tsx),
+4. kolumna) — pierścień postępu (`ProgressRing`, SVG) per lokal. ⚠️ Od
+2026-09-04 liczony **wyłącznie z `tasks`/`task_completions`**, NIE z
+`shifts` — pierwsza wersja pokazywała postęp tylko dla pracowników, którzy
+danego dnia odbili zmianę, co dawało mylące "0 zadań" na starcie dnia,
+zanim ktokolwiek się zalogował (zespół jeszcze nie ma nawyku odbijania
+zmiany od razu po przyjściu). Lista lokali do pokazania = lokale mające
+choć jedno nieaktywne-nie-archiwalne zadanie zdefiniowane, niezależnie od
+obsady.
 
 **Zgłoszenie → zadanie** (`Zgloszenia.tsx`, dodane 2026-09-03) — przycisk
 "Utwórz zadanie" przy zgłoszeniu typu `problem` tworzy `tasks` wiersz z
-`for_manager=true`, `scope='lokal'`, `source_issue_id=issue.id` (text,
-luźne odwołanie bez FK — ten sam wzorzec co `shift_edits.shift_id`/
-`issue_id`, patrz błędy #12/#13 niżej). Tytuł jest edytowalny inline przed
-zapisem (podpowiedź = pierwsze 80 znaków treści zgłoszenia). Po utworzeniu
-przycisk zamienia się w odznakę "Zadanie utworzone" (sprawdzane przez
-`tasks.some(t => t.source_issue_id === iss.id)`, przeżywa odświeżenie
-strony).
+`for_manager=true`, `schedule_type='ogolne'`, `source_issue_id=issue.id`
+(text, luźne odwołanie bez FK — ten sam wzorzec co
+`shift_edits.shift_id`/`issue_id`, patrz błędy #12/#13 niżej). Tytuł jest
+edytowalny inline przed zapisem (podpowiedź = pierwsze 80 znaków treści
+zgłoszenia). Po utworzeniu przycisk zamienia się w odznakę "Zadanie
+utworzone" (sprawdzane przez `tasks.some(t => t.source_issue_id ===
+iss.id)`, przeżywa odświeżenie strony).
 
 **Pracownik** (`employeeSessionShared.tsx`) — `buildEmployeeChecklist`
-liczy checklistę per pracownik na dany dzień, preferując lokal/stanowisko
-z otwartej albo najnowszej zmiany danego dnia nad statycznym
-`default_lokal`/`default_stanowisko` (`getEffectiveAssignmentForDate`).
-Wspólny renderer `renderTaskChecklist()` (jedna funkcja, trzy miejsca
-użycia — nie duplikuj) rysuje checklistę z klikalnym checkboxem: (1) na
-Pulpit **przed** rozpoczęciem zmiany (dodane 2026-09-03 — pierwsza wersja
-pokazywała tylko link "Zobacz zadania", za mało zgodnie z feedbackiem
-testowym), (2) na Pulpit/Zmiana **w trakcie** zmiany (sekcja "Zadania na
-zmianę" + niewymuszający banner "Zostały N zadań..." — zamknięcie zmiany
-działa bez ograniczeń niezależnie od stanu zadań), (3) w pełnej formie w
-zakładce Zadania (z przełącznikiem "Twoje stanowisko"/"Wszystkie" —
-"Wszystkie" przydatne głównie na kiosku, gdzie kilka ról dzieli jeden
-tablet; odhaczenie zadania spoza własnego stanowiska w tym trybie jest
-dozwolone i zapisuje się pod tożsamością klikającej osoby, świadoma
-decyzja). Zakładka Zadania ma też banner "Masz N niewykonanych zadań" i
-mini-raport `weeklyChecklistStats()` — "Ostatnie 7 dni: X z Y zadań",
-liczony TYLKO z dni, w które pracownik faktycznie miał jakąś zmianę
-(przybliżenie, nie audyt — patrz komentarz w `utils/tasks.ts`). Odznaka z
+liczy checklistę widoczną dla pracownika na dany dzień (filtr: lokal +
+stanowisko dopasowane albo "wszyscy"), preferując lokal/stanowisko z
+otwartej albo najnowszej zmiany danego dnia nad statycznym
+`default_lokal`/`default_stanowisko` (`getEffectiveAssignmentForDate`) —
+to dotyczy tylko tego, co pracownik WIDZI, nie wykonania (które jest
+wspólne, patrz "Model danych" wyżej). Wspólny renderer
+`renderTaskChecklist()` (jedna funkcja, trzy miejsca użycia — nie
+duplikuj, od 2026-09-04 używana też przez zakładkę Zadania zamiast
+własnej kopii JSX) rysuje checklistę z klikalnym checkboxem: gdy zadanie
+wykonane, wiersz jest wizualnie "lżejszy" (`opacity-60`) z przekreślonym
+tytułem (`line-through`) i podpisem kto/kiedy wykonał — działa tak samo
+(1) na Pulpit **przed** rozpoczęciem zmiany (pełna klikalna lista, nie
+tylko link — dodane 2026-09-03/04 po feedbacku testowym), (2) na
+Pulpit/Zmiana **w trakcie** zmiany (sekcja "Zadania na zmianę" +
+niewymuszający banner "Zostały N zadań..." — zamknięcie zmiany działa
+bez ograniczeń niezależnie od stanu zadań), (3) w zakładce Zadania (z
+przełącznikiem "Twoje stanowisko"/"Wszystkie" — "Wszystkie" przydatne
+głównie na kiosku, gdzie kilka ról dzieli jeden tablet; odhaczenie
+zadania spoza własnego stanowiska w tym trybie jest dozwolone i zapisuje
+się pod tożsamością klikającej osoby, świadoma decyzja). Zakładka Zadania
+ma też banner "Masz N niewykonanych zadań" i mini-raport
+`weeklyChecklistStats()` — "Ostatnie 7 dni: X z Y zadań", liczony TYLKO z
+dni, w które pracownik faktycznie miał jakąś zmianę (przybliżenie, nie
+audyt — patrz komentarz w `utils/tasks.ts`; ten wskaźnik dotyczy widoku
+JEDNEGO pracownika, więc zależność od jego własnych zmian ma sens —
+inaczej niż kafelek kierownika na Pulpicie opisany wyżej). Odznaka z
 liczbą niewykonanych zadań na ikonie zakładki "Zadania" w `Shell`
 (`taskBadgeCount`, ten sam wzorzec co `unreadCount` na "Więcej" —
 przekazywany przez WSZYSTKIE 7 wywołań `<Shell>` w tym pliku).
@@ -657,10 +698,14 @@ zakresem — wymaga Grafiku, którego nie ma.
   (int, null, 0-6 — STARE, zastąpione przez days_of_week, zostaje tylko
   dla wstecznej zgodności), days_of_week (text, null — lista indeksów po
   przecinku np. "1,2,3,4,5", 0=niedziela..6=sobota, dodane 2026-09-03),
-  scope (text: 'lokal'|'pracownik'), stanowisko (text, null — tylko
-  scope='pracownik', null="wszyscy"), owner_label (text, null —
-  podpowiedź "kto ma zrobić" dla scope='lokal', czysto informacyjna),
-  deadline_time (time, null), priority (text: 'niski'|'sredni'|'wysoki',
+  scope (text: 'lokal'|'pracownik', default 'lokal' — NIEUŻYWANE w
+  logice od 2026-09-04, zostaje w bazie z automatycznym defaultem, nie
+  czytaj/nie pisz go, patrz "Zadania i sprzątanie" wyżej), stanowisko
+  (text, null — decyduje widoczność: null="wszyscy"/cały lokal, inaczej
+  konkretne stanowisko; wykonanie zawsze wspólne bez względu na tę
+  wartość), owner_label (text, null — pole z pierwszej wersji formularza,
+  USUNIĘTE z UI 2026-09-04, kolumna zostaje nieużywana), deadline_time
+  (time, null), priority (text: 'niski'|'sredni'|'wysoki',
   default 'sredni', dodane 2026-09-03), for_manager (boolean, default
   false), source_issue_id (text, null — luźne odwołanie do issues.id gdy
   zadanie powstało z przycisku "Utwórz zadanie" w Zgłoszeniach, dodane
