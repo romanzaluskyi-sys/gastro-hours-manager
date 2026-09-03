@@ -209,6 +209,50 @@ export default function Pracownicy({
                       </select>
                     </div>
                   )}
+                  {view === "stanowiska" && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs font-bold text-[#6E6E66]">
+                          Skrót (np. "KUCH")
+                        </label>
+                        <input
+                          type="text"
+                          value={editingDict.skrot || ""}
+                          onChange={(e) =>
+                            setEditingDict({
+                              ...editingDict,
+                              skrot: e.target.value.toUpperCase(),
+                            })
+                          }
+                          maxLength={4}
+                          placeholder="opcjonalnie"
+                          className="w-full p-2 border-[2px] border-[#171714] rounded uppercase"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-[#6E6E66]">Kolor</label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            value={editingDict.kolor || "#DE3A22"}
+                            onChange={(e) =>
+                              setEditingDict({ ...editingDict, kolor: e.target.value })
+                            }
+                            className="w-11 h-[38px] border-[2px] border-[#171714] rounded cursor-pointer"
+                          />
+                          {editingDict.kolor && (
+                            <button
+                              type="button"
+                              onClick={() => setEditingDict({ ...editingDict, kolor: "" })}
+                              className="text-xs font-bold text-[#8F8E86] underline"
+                            >
+                              Wyczyść
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   <button
@@ -232,7 +276,18 @@ export default function Pracownicy({
                 className="bg-white p-3.5 rounded-xl border-[2px] border-[#171714] flex justify-between items-center"
               >
                 <div>
-                  <p className="font-['Archivo'] font-bold">{item.name}</p>
+                  <div className="flex items-center gap-1.5">
+                    {view === "stanowiska" && item.kolor && (
+                      <span
+                        className="w-3 h-3 rounded-full border border-black/10 flex-shrink-0"
+                        style={{ backgroundColor: item.kolor }}
+                      />
+                    )}
+                    <p className="font-['Archivo'] font-bold">
+                      {item.name}
+                      {view === "stanowiska" && item.skrot ? ` (${item.skrot})` : ""}
+                    </p>
+                  </div>
                   {view === "stanowiska" && (
                     <p className="text-xs text-[#6E6E66]">Lokal: {item.lokal_name}</p>
                   )}

@@ -5,6 +5,13 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.12.0 — 2026-09-03
+
+- Stanowiska mają teraz własny skrót (ustawiany ręcznie w Pracownicy →
+  Stanowiska, zamiast automatycznie skracanej nazwy) i kolor — widoczny
+  jako plakietka przy godzinach w koncie pracownika, Rejestrze Godzin i
+  Mojej Pracy kierownika.
+
 ## 0.11.1 — 2026-09-04
 
 - Poprawka nawigacji dat w Zadaniach i sprzątaniu: strzałki dnia
