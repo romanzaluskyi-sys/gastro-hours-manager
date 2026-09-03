@@ -793,7 +793,18 @@ zatwierdzony (`requested_by='manager'`), przez `addUrlopDirectly()` w tym
 samym pliku, ten sam mechanizm materializacji co przy zatwierdzaniu
 wniosku. Usunięcie wpisu (przycisk kosza przy liście urlopów w karcie
 pracownika) kasuje `absences` i wszystkie powiązane `shifts` na raz
-(`deleteAbsence()`, dopasowanie po `absence_id`).
+(`deleteAbsence()`, dopasowanie po `absence_id` — ta funkcja NIE wysyła
+powiadomienia, bo to zwykle poprawka pomyłki, nie coś co pracownik musi
+wiedzieć od razu).
+
+**Powiadomienia pracownika** — `createEmployeeNotification` (patrz
+"Zgłoszenia i powiadomienia" wyżej) wywoływane w dwóch miejscach: (1)
+`resolveAbsenceRequest()` po Zatwierdź/Odrzuć w kolejce — treść mówi kto
+zatwierdził/odrzucił i jaki to był zakres dat, niezależnie od `type`; (2)
+`addUrlopDirectly()` po bezpośrednim wpisie urlopu przez kierownika w
+karcie pracownika — pracownik dostaje wiadomość, że kierownik zapisał mu
+urlop na dany zakres dat (inaczej godziny pojawiłyby się w jego Raporcie
+bez wyjaśnienia). Dodane 2026-09-03 po prośbie właściciela.
 
 **Materializacja godzin (tylko `type='urlop'`, zatwierdzony)** —
 `buildUrlopShiftDrafts()`: jeden wiersz `shifts` na każdy dzień roboczy

@@ -160,6 +160,13 @@ export const addUrlopDirectly = async ({ user, startDate, endDate, editorName, n
     absenceId: absence.id,
   });
   const createdShifts = await createUrlopShifts(drafts);
+
+  await createEmployeeNotification(
+    user.name,
+    `${editorName} zapisał(a) Ci urlop na ${fmtPL(startDate)}–${fmtPL(endDate)}.`,
+    "absence_resolved"
+  );
+
   return { absence, createdShifts };
 };
 
