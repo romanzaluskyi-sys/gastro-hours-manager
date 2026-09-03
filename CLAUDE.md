@@ -669,7 +669,25 @@ zakresem — wymaga Grafiku, którego nie ma.
   ```sql
   alter table lokale add column miasto text;
   ```
-- **stanowiska** — `id, name, lokal_name, archived`
+- **stanowiska** — `id, name, lokal_name, archived, skrot, kolor`. `skrot`
+  (text, nullable, ustawiany ręcznie w Pracownicy → Stanowiska) — zastępuje
+  auto-generowany `getShort(name)` tam, gdzie jest ustawiony
+  (`utils/stanowiska.ts` → `stanowiskoShort`); brak wartości = spada z
+  powrotem na `getShort`. `kolor` (text, nullable, hex np. `#DE3A22`,
+  wybierany `<input type="color">`) — dziś renderowany tylko jako jasny
+  odcień (`stanowiskoBadgeStyle` w `utils/stanowiska.ts`, tło 85% w stronę
+  bieli + tekst 35% w stronę czerni) na plakietkach w koncie pracownika
+  (Raport), Rejestrze Godzin (kropka przy nagłówku grupy) i Mojej Pracy
+  kierownika; pełny nasycony kolor zarezerwowany na przyszły Grafik
+  (`kolory ról/stanowisk` w sekcji "Konwencje designu" — ta sekcja opisuje
+  starą hash-ową koncepcję, która nigdy nie została zaimplementowana;
+  `kolor` na `stanowiska` ją zastępuje). Dodane 2026-09-03, wymaga ręcznej
+  migracji w Supabase SQL Editor (patrz błędy #12/#13 wyżej — zweryfikuj
+  przez `information_schema.columns` po zapisaniu):
+  ```sql
+  alter table stanowiska add column skrot text;
+  alter table stanowiska add column kolor text;
+  ```
 - **shifts** — `id, user_name, user_id?, lokal, stanowisko, start_time
   (timestamptz), end_time (timestamptz | null), godzin`. `id` to **uuid**
   (zweryfikowane bezpośrednio w Supabase 2026-09-02 — wcześniejsze wzmianki
