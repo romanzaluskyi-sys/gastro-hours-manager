@@ -405,8 +405,12 @@ kogo należy powiadomienie.
 ## Pogoda — zaimplementowane 2026-09-03
 
 Mały wskaźnik pogody (ikona + temperatura) w pasku górnym Panelu
-Kierownika (`ManagerShell.tsx`, obok zegara) i na ekranie Pulpit
-pracownika (`employeeSessionShared.tsx`) — patrz
+Kierownika (`ManagerShell.tsx`, obok zegara), na ekranie Pulpit
+pracownika (`employeeSessionShared.tsx`) i na ekranie wyboru pracownika na
+Tablecie Służbowym (`KioskDashboard.tsx`, ekran "LIST" — zastąpiło tam
+stary, hardkodowany placeholder "21°, słonecznie" z pierwszej wersji
+makiety, dla lokalu z `lokaleAllowed[0]`, czyli pierwszego przypisanego do
+danego kiosku) — patrz
 [`components/WeatherBadge.tsx`](src/components/WeatherBadge.tsx) i
 [`utils/weather.ts`](src/utils/weather.ts). Bez klucza API — źródło to
 **Open-Meteo** (darmowe, publiczne, nie wymaga rejestracji): najpierw
