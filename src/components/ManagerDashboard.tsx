@@ -35,6 +35,8 @@ import Zgloszenia from "./manager/Zgloszenia";
 import Pracownicy from "./manager/Pracownicy";
 import RaportyIKoszty from "./manager/RaportyIKoszty";
 import Przewodnik from "./manager/Przewodnik";
+import Grafik from "./manager/Grafik";
+import { resolveSwap } from "../utils/swaps";
 
 // ==========================================
 // KIEROWNIK DASHBOARD
@@ -62,6 +64,18 @@ const ManagerDashboard = ({
   setTaskCompletions,
   absences,
   setAbsences,
+  planShifts,
+  setPlanShifts,
+  shiftSwaps,
+  setShiftSwaps,
+  staffingRules,
+  setStaffingRules,
+  staffingRuleSets,
+  setStaffingRuleSets,
+  lokaleGodziny,
+  setLokaleGodziny,
+  grafikWyjatki,
+  setGrafikWyjatki,
   showMsg,
 }) => {
   const [tab, setTab] = useState("pulpit");
@@ -136,9 +150,47 @@ const ManagerDashboard = ({
   });
 
   // --- WNIOSKI O WOLNE OCZEKUJĄCE NA DECYZJĘ (absences.status === "pending") ---
+  // Giełda: kierownik decyduje dopiero wtedy, gdy ktoś już zgłosił się po
+  // zmianę ("przyjeta"). Sama oferta wisząca na giełdzie nie wymaga decyzji.
+  const pendingSwaps = (shiftSwaps || []).filter(
+    (s) => s.status === "przyjeta" && hasAccessToLokal(s.lokal)
+  );
+
   const pendingAbsences = absences.filter(
     (a) => a.status === "pending" && hasAccessToLokal(a.lokal)
   );
+
+  // Decyzja o zamianie z giełdy. Cała logika (przepisanie zmiany na nowego
+  // pracownika, powiadomienia obu stron) siedzi w resolveSwap w
+  // utils/swaps.ts — tutaj tylko odświeżamy stan.
+  const handleResolveSwap = async (swap, decision) => {
+    const planShift = (planShifts || []).find(
+      (p) => String(p.id) === String(swap.grafik_shift_id)
+    );
+    if (!planShift) {
+      showMsg("Nie znaleziono zmiany, której dotyczy zamiana.", "error");
+      return;
+    }
+    try {
+      const res = await resolveSwap({
+        swap,
+        planShift,
+        decision,
+        editorName: currentUser.name,
+      });
+      setShiftSwaps((shiftSwaps || []).map((s) => (s.id === res.swap.id ? res.swap : s)));
+      if (res.planShift) {
+        setPlanShifts(
+          (planShifts || []).map((p) => (p.id === res.planShift.id ? res.planShift : p))
+        );
+      }
+      showMsg(
+        decision === "approve" ? "Zamiana zatwierdzona." : "Zamiana odrzucona."
+      );
+    } catch (err) {
+      showMsg(`Błąd zapisu zamiany: ${err.message || "nieznany błąd"}`, "error");
+    }
+  };
 
   const handleResolveAbsence = async (absence, decision) => {
     const user = users.find((u) => u.id === absence.user_id);
@@ -302,7 +354,8 @@ const ManagerDashboard = ({
   ).length;
 
   const shellBadges = {
-    zatwierdzanie: pendingCorrections.length + pendingAbsences.length,
+    zatwierdzanie:
+      pendingCorrections.length + pendingAbsences.length + pendingSwaps.length,
     zgloszenia: issues.filter((i) => i.status === "nowe" && i.type !== "correction")
       .length,
     powiadomienia: unreadManagerCount,
@@ -461,6 +514,14 @@ const ManagerDashboard = ({
         Array.isArray(dataToSave.allowed_lokale)
       ) {
         dataToSave.allowed_lokale = dataToSave.allowed_lokale.join(",");
+      }
+      // allowed_stanowiska (Grafik) — ta sama konwersja tablica → tekst po
+      // przecinku co allowed_lokale wyżej, ale dla każdej roli poza kiosk.
+      if (Array.isArray(dataToSave.allowed_stanowiska)) {
+        dataToSave.allowed_stanowiska =
+          dataToSave.allowed_stanowiska.length > 0
+            ? dataToSave.allowed_stanowiska.join(",")
+            : null;
       }
 
       if (editingUser.id) {
@@ -986,6 +1047,8 @@ const ManagerDashboard = ({
             absences={absences}
             matchesFilter={matchesLokalFilter}
             setActiveTab={setTab}
+            shiftSwaps={shiftSwaps}
+            planShifts={planShifts}
           />
         )}
         {tab === "raporty" && (
@@ -1016,7 +1079,36 @@ const ManagerDashboard = ({
           />
         )}
 
+        {tab === "grafik" && (
+          <Grafik
+            currentUser={currentUser}
+            selectedLokal={selectedLokal}
+            availableLokaleForManager={availableLokaleForManager}
+            lokale={lokale}
+            users={users}
+            setUsers={setUsers}
+            activeStanowiska={activeStanowiska}
+            planShifts={planShifts}
+            setPlanShifts={setPlanShifts}
+            shiftSwaps={shiftSwaps}
+            onResolveSwap={handleResolveSwap}
+            absences={absences}
+            setAbsences={setAbsences}
+            setShifts={setShifts}
+            staffingRules={staffingRules}
+            setStaffingRules={setStaffingRules}
+            staffingRuleSets={staffingRuleSets}
+            setStaffingRuleSets={setStaffingRuleSets}
+            lokaleGodziny={lokaleGodziny}
+            setLokaleGodziny={setLokaleGodziny}
+            grafikWyjatki={grafikWyjatki}
+            setGrafikWyjatki={setGrafikWyjatki}
+            showMsg={showMsg}
+          />
+        )}
+
         {tab !== "pulpit" &&
+          tab !== "grafik" &&
           tab !== "moja_praca" &&
           tab !== "godziny" &&
           tab !== "zatwierdzanie" &&
@@ -1543,6 +1635,9 @@ const ManagerDashboard = ({
             activeStanowiska={activeStanowiska}
             pendingAbsences={pendingAbsences}
             onResolveAbsence={handleResolveAbsence}
+            pendingSwaps={pendingSwaps}
+            planShifts={planShifts}
+            onResolveSwap={handleResolveSwap}
             showMsg={showMsg}
           />
         )}

@@ -52,6 +52,14 @@ export default function App() {
   const [tasks, setTasks] = useState([]);
   const [taskCompletions, setTaskCompletions] = useState([]);
   const [absences, setAbsences] = useState([]);
+  // Grafik (patrz docs/GRAFIK.md) — plan zmian, wymagania obsady, godziny
+  // otwarcia, wyjątki i giełda zmian.
+  const [planShifts, setPlanShifts] = useState([]);
+  const [staffingRules, setStaffingRules] = useState([]);
+  const [staffingRuleSets, setStaffingRuleSets] = useState([]);
+  const [lokaleGodziny, setLokaleGodziny] = useState([]);
+  const [grafikWyjatki, setGrafikWyjatki] = useState([]);
+  const [shiftSwaps, setShiftSwaps] = useState([]);
 
   const [currentView, setCurrentView] = useState(() => loadSession().currentView);
   const [currentUser, setCurrentUser] = useState(() => loadSession().currentUser);
@@ -184,6 +192,29 @@ export default function App() {
         console.error("Błąd pobierania wniosków o wolne:", err.message || err);
       });
 
+    // Grafik — sześć tabel, ten sam wzorzec co absences/tasks wyżej: każda
+    // osobno i nieblokująco, żeby brak którejkolwiek (albo błąd RLS) nie
+    // zatrzymał logowania i reszty apki.
+    const loadGrafik = () => {
+      const pairs = [
+        ["grafik_shifts", setPlanShifts],
+        ["staffing_rules", setStaffingRules],
+        ["staffing_rule_sets", setStaffingRuleSets],
+        ["lokale_godziny", setLokaleGodziny],
+        ["grafik_wyjatki", setGrafikWyjatki],
+        ["shift_swaps", setShiftSwaps],
+      ];
+      pairs.forEach(([table, setter]) => {
+        api
+          .get(table)
+          .then((rows) => setter(Array.isArray(rows) ? rows : []))
+          .catch((err) => {
+            console.error(`Błąd pobierania ${table}:`, err.message || err);
+          });
+      });
+    };
+    loadGrafik();
+
     // Odświeżamy co 45s, żeby już otwarta sesja też widziała zmiany bez
     // konieczności przeładowania strony.
     const pollInterval = setInterval(() => {
@@ -238,6 +269,9 @@ export default function App() {
           setTaskCompletions={setTaskCompletions}
           absences={absences}
           setAbsences={setAbsences}
+          planShifts={planShifts}
+          shiftSwaps={shiftSwaps}
+          setShiftSwaps={setShiftSwaps}
           showMsg={showMsg}
         />
       )}
@@ -259,6 +293,9 @@ export default function App() {
           setTaskCompletions={setTaskCompletions}
           absences={absences}
           setAbsences={setAbsences}
+          planShifts={planShifts}
+          shiftSwaps={shiftSwaps}
+          setShiftSwaps={setShiftSwaps}
           showMsg={showMsg}
         />
       )}
@@ -286,6 +323,18 @@ export default function App() {
           setTaskCompletions={setTaskCompletions}
           absences={absences}
           setAbsences={setAbsences}
+          planShifts={planShifts}
+          setPlanShifts={setPlanShifts}
+          staffingRules={staffingRules}
+          setStaffingRules={setStaffingRules}
+          staffingRuleSets={staffingRuleSets}
+          setStaffingRuleSets={setStaffingRuleSets}
+          lokaleGodziny={lokaleGodziny}
+          setLokaleGodziny={setLokaleGodziny}
+          grafikWyjatki={grafikWyjatki}
+          setGrafikWyjatki={setGrafikWyjatki}
+          shiftSwaps={shiftSwaps}
+          setShiftSwaps={setShiftSwaps}
           showMsg={showMsg}
         />
       )}

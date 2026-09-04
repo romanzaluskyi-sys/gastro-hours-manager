@@ -134,6 +134,24 @@ export default function Pracownicy({
       ? u.allowed_lokale.split(",").map((s) => s.trim())
       : [];
 
+  // allowed_stanowiska — ten sam format co allowed_lokale (tekst po
+  // przecinku, NIE tablica Postgresa). Bez default_stanowisko, bo ono
+  // zawsze liczy się jako "umie" i jest doklejane dopiero przy odczycie
+  // (allowedStanowiskaArr w utils/grafik.ts).
+  const allowedStanArr = (u) =>
+    Array.isArray(u.allowed_stanowiska)
+      ? u.allowed_stanowiska
+      : u.allowed_stanowiska
+      ? u.allowed_stanowiska.split(",").map((s) => s.trim()).filter(Boolean)
+      : [];
+
+  // Nazwy stanowisk powtarzają się między lokalami (osobny wiersz na lokal),
+  // a pracownik bywa przypisany do kilku lokali — dla tej listy liczy się
+  // sama nazwa, więc deduplikujemy.
+  const wszystkieNazwyStanowisk = [
+    ...new Set(activeStanowiska.map((s) => s.name)),
+  ].sort((a, b) => a.localeCompare(b, "pl"));
+
   const list = view === "aktywni" ? visibleUsers : archivedUsers;
 
   return (
@@ -565,6 +583,47 @@ export default function Pracownicy({
                           </option>
                         ))}
                       </select>
+                    </div>
+                  </div>
+                )}
+
+                {editingUser.role !== "kiosk" && wszystkieNazwyStanowisk.length > 0 && (
+                  <div className="p-3 bg-[#F1F1EE] border-[2px] border-[#171714] rounded">
+                    <label className="text-xs font-bold text-[#171714] block">
+                      Inne stanowiska, na których umie pracować
+                    </label>
+                    <p className="text-[11px] text-[#6E6E66] mt-0.5 mb-2">
+                      Używane w Grafiku: wpisanie zmiany na stanowisko spoza tej
+                      listy pokaże ostrzeżenie, ale nadal będzie możliwe.
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {wszystkieNazwyStanowisk.map((name) => {
+                        const isDefault = name === editingUser.default_stanowisko;
+                        const checked = isDefault || allowedStanArr(editingUser).includes(name);
+                        return (
+                          <button
+                            key={name}
+                            type="button"
+                            disabled={isDefault}
+                            onClick={() => {
+                              const cur = allowedStanArr(editingUser);
+                              const next = cur.includes(name)
+                                ? cur.filter((x) => x !== name)
+                                : [...cur, name];
+                              setEditingUser({ ...editingUser, allowed_stanowiska: next });
+                            }}
+                            className={`px-2.5 py-1 rounded border-[2px] text-[13px] font-bold ${
+                              checked
+                                ? "bg-[#171714] text-white border-[#171714]"
+                                : "bg-white text-[#171714] border-[#B7B6AE] hover:border-[#171714]"
+                            } ${isDefault ? "opacity-70 cursor-default" : ""}`}
+                            title={isDefault ? "Stanowisko domyślne — zawsze zaznaczone" : ""}
+                          >
+                            {name}
+                            {isDefault ? " ★" : ""}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 )}

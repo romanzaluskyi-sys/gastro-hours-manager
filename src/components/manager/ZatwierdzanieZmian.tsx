@@ -3,9 +3,19 @@
 // godzin / "zapomniałem odbić" zgłoszone przez pracownika w Zgłoś). Biржа
 // zmian z Grafiku — świadomie poza zakresem, patrz plan realizacji.
 import React, { useState } from "react";
-import { Check, Edit2, HelpCircle, AlertCircle, X, Palmtree } from "lucide-react";
+import {
+  Check,
+  Edit2,
+  HelpCircle,
+  AlertCircle,
+  X,
+  Palmtree,
+  ArrowLeftRight,
+} from "lucide-react";
 import { resolveCorrection, askAboutCorrection } from "../../utils/corrections";
 import { countWorkdays, URLOP_HOURS_PER_DAY } from "../../utils/absences";
+import { trimTime, shiftHours } from "../../utils/grafik";
+import { monthPlanHours } from "../../utils/swaps";
 import { pageTitleCls, statLabelCls, btnPrimaryCls, btnSecondaryCls } from "./designTokens";
 
 const fmtPLAbs = (dateStr) =>
@@ -47,6 +57,9 @@ export default function ZatwierdzanieZmian({
   activeStanowiska,
   pendingAbsences = [],
   onResolveAbsence,
+  pendingSwaps = [],
+  planShifts = [],
+  onResolveSwap,
   showMsg,
 }) {
   const [selected, setSelected] = useState({});
@@ -54,6 +67,7 @@ export default function ZatwierdzanieZmian({
   const [editForm, setEditForm] = useState(null);
   const [busy, setBusy] = useState(false);
   const [absenceBusyId, setAbsenceBusyId] = useState(null);
+  const [swapBusyId, setSwapBusyId] = useState(null);
 
   const rows = issues
     .filter((iss) => iss.type === "correction" && iss.status === "nowe")
@@ -197,8 +211,115 @@ export default function ZatwierdzanieZmian({
     setAbsenceBusyId(null);
   };
 
+  const handleSwapDecision = async (swap, decision) => {
+    setSwapBusyId(swap.id);
+    await onResolveSwap(swap, decision);
+    setSwapBusyId(null);
+  };
+
   return (
     <div className="max-w-5xl mx-auto">
+      {pendingSwaps.length > 0 && (
+        <div className="mb-8">
+          <h3 className="font-['Archivo'] font-extrabold text-lg mb-3 flex items-center gap-2">
+            <ArrowLeftRight size={18} /> Giełda zmian · {pendingSwaps.length}
+          </h3>
+          <div className="space-y-3">
+            {pendingSwaps.map((sw) => {
+              const ps = planShifts.find(
+                (p) => String(p.id) === String(sw.grafik_shift_id)
+              );
+              return (
+                <div
+                  key={sw.id}
+                  className="bg-white rounded-xl border-[2px] border-[#171714] p-4 flex items-start justify-between gap-4 flex-wrap"
+                >
+                  <div>
+                    <div className="font-['Archivo'] font-extrabold text-[15px]">
+                      {sw.taker_user_name} przejmuje zmianę od: {sw.author_user_name}
+                    </div>
+                    <div className="text-[14px] text-[#6E6E66] mt-0.5">
+                      {ps
+                        ? `${fmtPLAbs(ps.date)} · ${trimTime(ps.start_time)}–${trimTime(
+                            ps.end_time
+                          )} · ${ps.stanowisko} · ${ps.lokal}`
+                        : `${fmtPLAbs(sw.date)} · ${sw.lokal} · zmiana już nie istnieje`}
+                    </div>
+                    {sw.note && (
+                      <div className="text-[13px] text-[#6E6E66] mt-1">{sw.note}</div>
+                    )}
+                    {ps &&
+                      (() => {
+                        // Różnica godzin w miesiącu dla obu stron — bez tego
+                        // nie da się odpowiedzialnie zdecydować, gdy ktoś
+                        // pracuje na etat. (Sam etat to osobny temat; tutaj
+                        // pokazujemy wyłącznie liczby.)
+                        const mies = ps.date.slice(0, 7);
+                        const h = shiftHours(ps);
+                        const strony = [
+                          {
+                            osoba: sw.taker_user_name,
+                            teraz: monthPlanHours(
+                              planShifts,
+                              { id: sw.taker_user_id, name: sw.taker_user_name },
+                              mies
+                            ),
+                            delta: h,
+                          },
+                          {
+                            osoba: sw.author_user_name,
+                            teraz: monthPlanHours(
+                              planShifts,
+                              { id: sw.author_user_id, name: sw.author_user_name },
+                              mies
+                            ),
+                            delta: -h,
+                          },
+                        ];
+                        return (
+                          <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-[13px]">
+                            {strony.map((r) => (
+                              <span key={r.osoba} className="tabular-nums">
+                                <span className="font-bold">{r.osoba}</span>{" "}
+                                {Math.round(r.teraz * 10) / 10} h →{" "}
+                                {Math.round((r.teraz + r.delta) * 10) / 10} h{" "}
+                                <span
+                                  className={`font-extrabold ${
+                                    r.delta > 0 ? "text-[#2F7A2A]" : "text-[#DE3A22]"
+                                  }`}
+                                >
+                                  ({r.delta > 0 ? "+" : "−"}
+                                  {Math.round(Math.abs(r.delta) * 10) / 10} h)
+                                </span>
+                              </span>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleSwapDecision(sw, "approve")}
+                      disabled={swapBusyId === sw.id || !ps}
+                      className={btnPrimaryCls}
+                    >
+                      Zatwierdź
+                    </button>
+                    <button
+                      onClick={() => handleSwapDecision(sw, "reject")}
+                      disabled={swapBusyId === sw.id}
+                      className={btnSecondaryCls}
+                    >
+                      Odrzuć
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {pendingAbsences.length > 0 && (
         <div className="mb-8">
           <h3 className="font-['Archivo'] font-extrabold text-lg mb-3 flex items-center gap-2">

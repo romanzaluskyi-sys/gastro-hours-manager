@@ -7,7 +7,7 @@ import {
   ClipboardCheck,
   MoreHorizontal,
   Bell,
-  Calendar,
+  CalendarDays,
   Flag,
   ChevronLeft,
   ChevronDown,
@@ -27,6 +27,26 @@ import {
 } from "../utils/format";
 import { stanowiskoShort, stanowiskoBadgeStyle } from "../utils/stanowiska";
 import {
+  offerSwap,
+  withdrawSwap,
+  acceptSwap,
+  activeSwapFor,
+  canOfferSwap,
+  offersForUser,
+  claimedByUser,
+  STATUS_LABEL,
+  SWAP_MIN_HOURS,
+} from "../utils/swaps";
+import {
+  trimTime,
+  mondayOf,
+  addDaysYMD,
+  shiftHours,
+  publishedShiftsFor,
+  publishedShiftsOnDay,
+  nextShiftFrom,
+} from "../utils/grafik";
+import {
   buildEmployeeChecklist,
   getEffectiveAssignmentForDate,
   toggleTaskCompletion,
@@ -43,9 +63,13 @@ import {
 // CLAUDE.md sekcja "Tablet Służbowy — KioskDashboard".
 // ==========================================
 
+// Grafik dostał własną, stałą zakładkę zamiast wiersza w "Więcej" — to
+// rzecz oglądana codziennie, a "Więcej" jest szufladą na rzeczy rzadkie
+// (decyzja właściciela, patrz docs/GRAFIK.md, Runda 5).
 export const TABS = [
   { key: "PULPIT", label: "Pulpit", Icon: Home },
   { key: "ZMIANA", label: "Zmiana", Icon: Clock },
+  { key: "GRAFIK", label: "Grafik", Icon: CalendarDays },
   { key: "RAPORT", label: "Raport", Icon: FileText },
   { key: "ZADANIA", label: "Zadania", Icon: ClipboardCheck },
   { key: "WIECEJ", label: "Więcej", Icon: MoreHorizontal },
@@ -56,6 +80,33 @@ export const fmtHHMM = (d) =>
     2,
     "0"
   )}`;
+
+// "dziś" / "jutro" / "PON 8 wrz" — pracownik myśli dniami, nie datami,
+// więc dwa najbliższe dni nazywamy po ludzku.
+const DZIEN_SKROT = ["ND", "PON", "WT", "ŚR", "CZW", "PT", "SOB"];
+export const opisDnia = (dateStr) => {
+  const dzis = toLocalYMD(new Date());
+  if (dateStr === dzis) return "dziś";
+  const jutro = new Date();
+  jutro.setDate(jutro.getDate() + 1);
+  if (dateStr === toLocalYMD(jutro)) return "jutro";
+  const d = new Date(dateStr + "T00:00:00");
+  return `${DZIEN_SKROT[d.getDay()]} ${d.toLocaleDateString("pl-PL", {
+    day: "numeric",
+    month: "short",
+  })}`;
+};
+
+// Kolory giełdy u pracownika. Żółty = MOJA zmiana czeka na chętnego,
+// zielony = CUDZA propozycja, którą mogę wziąć (jedyny stan, w którym jest
+// co kliknąć), niebieski = decyzja jest po stronie kierownika. Zielony
+// świadomie zarezerwowany dla "możesz działać" — wcześniej oznaczał też
+// "ktoś przejął", przez co propozycja zlewała się z własną zmianą.
+export const SWAP_TLO = {
+  na_gieldzie: "bg-[#FDF3D4]",
+  przyjeta: "bg-[#DDEAF6]",
+  propozycja: "bg-[#E4F3E0]",
+};
 
 export const sumHours = (arr) =>
   arr.reduce(
@@ -121,6 +172,8 @@ export const Shell = ({
   onBack,
   unreadCount,
   taskBadgeCount = 0,
+  grafikBadgeCount = 0,
+  personName = null,
   title,
   showPill = false,
   showBell = true,
@@ -142,6 +195,15 @@ export const Shell = ({
               >
                 <ChevronLeft size={16} strokeWidth={2.5} /> Zmień
               </button>
+            )}
+            {/* Na wspólnym tablecie tytuł ekranu ("Grafik", "Raport") nie
+                mówi, KTO jest wybrany — imię musi być stale widoczne obok
+                przycisku powrotu. Na Pulpicie tytułem jest już imię, więc
+                nie dublujemy. */}
+            {personName && personName !== title && (
+              <span className="font-['Archivo'] font-bold text-[15px] text-[#6E6E66] truncate flex-shrink-0">
+                {personName} ·
+              </span>
             )}
             <span className="font-['Archivo'] font-extrabold text-[19px] text-[#171714] truncate">
               {title}
@@ -187,6 +249,11 @@ export const Shell = ({
                 {key === "WIECEJ" && unreadCount > 0 && (
                   <span className="absolute top-1 right-[18%] bg-[#DE3A22] text-white font-['Archivo'] font-extrabold text-[9.5px] min-w-[15px] h-[15px] rounded-[3px] flex items-center justify-center px-0.5">
                     {unreadCount}
+                  </span>
+                )}
+                {key === "GRAFIK" && grafikBadgeCount > 0 && (
+                  <span className="absolute top-1 right-[18%] bg-[#DE3A22] text-white font-['Archivo'] font-extrabold text-[9.5px] min-w-[15px] h-[15px] rounded-[3px] flex items-center justify-center px-0.5">
+                    {grafikBadgeCount}
                   </span>
                 )}
                 {key === "ZADANIA" && taskBadgeCount > 0 && (
@@ -235,6 +302,9 @@ export const EmployeeSessionScreens = ({
   setTaskCompletions,
   absences,
   setAbsences,
+  planShifts,
+  shiftSwaps,
+  setShiftSwaps,
   onBack,
   onLogout,
   deviceNote = null,
@@ -257,7 +327,12 @@ export const EmployeeSessionScreens = ({
   const [raportMonth, setRaportMonth] = useState(new Date().getMonth());
   const [raportYear, setRaportYear] = useState(new Date().getFullYear());
 
-  const [grafikToastShown, setGrafikToastShown] = useState(false);
+  const [grafikZakres, setGrafikZakres] = useState("ten"); // ten | nast | miesiac
+  const [grafikWszyscy, setGrafikWszyscy] = useState(false);
+  // Który wpis czeka na potwierdzenie wystawienia na giełdę. Duży przycisk
+  // na całą szerokość pod każdą zmianą zjadał ekran, więc domyślnie jest
+  // mały link z boku, a pełny przycisk pojawia się dopiero po kliknięciu.
+  const [swapConfirmId, setSwapConfirmId] = useState(null);
 
   const [zgType, setZgType] = useState("problem"); // "correction" | "problem"
   const [zgAnon, setZgAnon] = useState(false);
@@ -278,6 +353,11 @@ export const EmployeeSessionScreens = ({
 
   // ---- "Wniosek o wolne" (type: absence) — patrz handleSendAbsence ----
   const [zgAbsType, setZgAbsType] = useState("urlop"); // "urlop" | "niedostepnosc"
+  // Niedostępność bywa zgłaszana na JEDEN dzień znacznie częściej niż na
+  // okres, a wpisywanie tej samej daty dwa razy było uciążliwe. Technicznie
+  // to nadal jedno pole start/end — dzień po prostu wypełnia oba naraz.
+  // Urlop zostaje bez zmian (tam okres to reguła, nie wyjątek).
+  const [zgAbsDay, setZgAbsDay] = useState("");
   const [zgAbsStart, setZgAbsStart] = useState("");
   const [zgAbsEnd, setZgAbsEnd] = useState("");
   const [zgAbsNote, setZgAbsNote] = useState("");
@@ -322,6 +402,88 @@ export const EmployeeSessionScreens = ({
     "all"
   );
   const taskBadgeCount = myChecklistOwn.filter((i) => !i.done).length;
+
+  // Pracownik widzi tylko OPUBLIKOWANY grafik — wersja robocza kierownika
+  // nie może tu przeciekać (filtruje publishedShiftsFor w utils/grafik.ts).
+  const dzisYMD = toLocalYMD(new Date());
+  const mojGrafik = publishedShiftsFor(planShifts, employee);
+  const mojeDzis = mojGrafik.filter((s) => s.date === dzisYMD);
+  const najblizszaZmiana = nextShiftFrom(planShifts, employee, dzisYMD);
+  // Propozycje, które mogę wziąć, i zmiany, które już przejąłem/przejęłam,
+  // a które czekają na zgodę kierownika (u mnie nie ma ich jeszcze w
+  // grafiku, bo właścicielem wiersza wciąż jest autor oferty).
+  const mojeOferty = offersForUser({
+    swaps: shiftSwaps,
+    planShifts,
+    absences,
+    user: employee,
+  });
+  const mojePrzejete = claimedByUser({ swaps: shiftSwaps, planShifts, user: employee });
+
+  // Odznaka na zakładce Grafik: propozycje z giełdy + zmiany z grafiku
+  // wysłanego po ostatnim wejściu na tę zakładkę. "Ostatnio widziane"
+  // trzymamy w localStorage per pracownik (na kiosku urządzenie jest
+  // wspólne, więc klucz musi być imienny) — to drobna wygoda widoku, nie
+  // dane do raportowania, więc świadomie nie idzie do bazy.
+  const grafikSeenKey = `grafik_seen_${employee?.id}`;
+  const [grafikSeen, setGrafikSeen] = useState(() => {
+    try {
+      return localStorage.getItem(grafikSeenKey) || "";
+    } catch {
+      return "";
+    }
+  });
+  const nowoWyslane = mojGrafik.filter(
+    (s) => s.published_at && s.published_at > grafikSeen && s.date >= dzisYMD
+  ).length;
+  const grafikBadgeCount = mojeOferty.length + nowoWyslane;
+
+  useEffect(() => {
+    if (screen !== "GRAFIK") return;
+    const najnowsze = mojGrafik
+      .map((s) => s.published_at)
+      .filter(Boolean)
+      .sort()
+      .slice(-1)[0];
+    if (najnowsze && najnowsze !== grafikSeen) {
+      try {
+        localStorage.setItem(grafikSeenKey, najnowsze);
+      } catch {
+        // prywatne okno / brak localStorage — odznaka po prostu nie znika
+      }
+      setGrafikSeen(najnowsze);
+    }
+  }, [screen, planShifts]);
+
+  // Wpis z grafiku odpowiadający TRWAJĄCEJ zmianie — po nim liczymy, ile
+  // zostało do końca. Szukamy po dniu odbicia (a nie po "dziś"), żeby
+  // zmiana rozpoczęta przed północą też trafiła na swój wiersz w planie.
+  const planTrwajacej = (() => {
+    if (!openShift) return null;
+    const dzien = toLocalYMD(openShift.start_time);
+    const tegoDnia = mojGrafik.filter((s) => s.date === dzien);
+    const wLokalu = tegoDnia.filter((s) => s.lokal === openShift.lokal);
+    return (
+      wLokalu.find((s) => s.stanowisko === openShift.stanowisko) ||
+      wLokalu[0] ||
+      tegoDnia[0] ||
+      null
+    );
+  })();
+
+  // Planowany koniec jako konkretny moment. end <= start oznacza zmianę
+  // przez północ, więc koniec wypada nazajutrz (ta sama konwencja co w
+  // utils/grafik.ts).
+  const planowanyKoniec = (() => {
+    if (!planTrwajacej) return null;
+    const [eh, em] = trimTime(planTrwajacej.end_time).split(":").map(Number);
+    const [sh, sm] = trimTime(planTrwajacej.start_time).split(":").map(Number);
+    if ([eh, em, sh, sm].some((n) => Number.isNaN(n))) return null;
+    const d = new Date(planTrwajacej.date + "T00:00:00");
+    if (eh * 60 + em <= sh * 60 + sm) d.setDate(d.getDate() + 1);
+    d.setHours(eh, em, 0, 0);
+    return d;
+  })();
   const myWeeklyStats = weeklyChecklistStats(
     tasks,
     taskCompletions,
@@ -342,6 +504,11 @@ export const EmployeeSessionScreens = ({
     (acc, s) => acc + (s.end_time ? (s.end_time - s.start_time) / 3600000 : 0),
     0
   );
+  // Urlop liczy się do sumy (8 h za dzień roboczy), ale pracownik ma prawo
+  // wiedzieć, ile z tego faktycznie przepracował.
+  const raportUrlop = raportShifts
+    .filter((s) => s.is_urlop)
+    .reduce((acc, s) => acc + (s.end_time ? (s.end_time - s.start_time) / 3600000 : 0), 0);
 
   const recentShiftsForZgloszenie = shifts
     .filter((s) => s.user_id === employee.id)
@@ -437,6 +604,55 @@ export const EmployeeSessionScreens = ({
   const openZgloszenie = (shiftId) => {
     setZgPrefillShiftId(shiftId || null);
     setScreen("ZGLOS");
+  };
+
+  // Skrót z zakładki Grafik — wniosek o wolne mieszka w "Zgłoś", ale
+  // najczęściej przychodzi do głowy przy oglądaniu grafiku, nie tam.
+  const openWniosekOWolne = () => {
+    setZgType("absence");
+    setZgSent(false);
+    setZgPrefillShiftId(null);
+    setScreen("ZGLOS");
+  };
+
+  const handleOfferSwap = async (planShift) => {
+    try {
+      const sw = await offerSwap({ planShift, author: employee });
+      setShiftSwaps([...(shiftSwaps || []), sw]);
+      showMsg("Zmiana wystawiona na giełdę.");
+    } catch (err) {
+      showMsg(err.message || "Nie udało się wystawić zmiany.", "error");
+    }
+  };
+
+  const handleWithdrawSwap = async (swap) => {
+    try {
+      const up = await withdrawSwap(swap);
+      setShiftSwaps((shiftSwaps || []).map((x) => (x.id === up.id ? up : x)));
+      showMsg("Oferta wycofana.");
+    } catch (err) {
+      showMsg(err.message || "Nie udało się wycofać.", "error");
+    }
+  };
+
+  const handleAcceptSwap = async (swap) => {
+    const planShift = (planShifts || []).find(
+      (s) => String(s.id) === String(swap.grafik_shift_id)
+    );
+    if (!planShift) return showMsg("Nie znaleziono tej zmiany.", "error");
+    try {
+      const up = await acceptSwap({
+        swap,
+        planShift,
+        taker: employee,
+        planShifts,
+        absences,
+      });
+      setShiftSwaps((shiftSwaps || []).map((x) => (x.id === up.id ? up : x)));
+      showMsg("Zgłoszenie wysłane — czeka na zgodę kierownika.");
+    } catch (err) {
+      showMsg(err.message || "Nie udało się przejąć zmiany.", "error");
+    }
   };
 
   // ---- wypełnia proponowane pola danymi z wybranej zmiany (punkt odniesienia
@@ -642,10 +858,18 @@ export const EmployeeSessionScreens = ({
   };
 
   const handleSendAbsence = async () => {
-    if (!zgAbsStart || !zgAbsEnd) {
-      return showMsg("Podaj daty od-do!", "error");
+    const jedenDzien = zgAbsType === "niedostepnosc" && zgAbsDay;
+    const odData = jedenDzien ? zgAbsDay : zgAbsStart;
+    const doData = jedenDzien ? zgAbsDay : zgAbsEnd;
+    if (!odData || !doData) {
+      return showMsg(
+        zgAbsType === "niedostepnosc"
+          ? "Podaj dzień albo zakres od-do!"
+          : "Podaj daty od-do!",
+        "error"
+      );
     }
-    if (zgAbsEnd < zgAbsStart) {
+    if (doData < odData) {
       return showMsg("Data „do” nie może być wcześniejsza niż „od”.", "error");
     }
     setZgSaving(true);
@@ -655,8 +879,8 @@ export const EmployeeSessionScreens = ({
         user_id: employee.id,
         user_name: employee.name,
         lokal,
-        start_date: zgAbsStart,
-        end_date: zgAbsEnd,
+        start_date: odData,
+        end_date: doData,
         type: zgAbsType,
         status: "pending",
         note: zgAbsNote || null,
@@ -668,7 +892,7 @@ export const EmployeeSessionScreens = ({
           lokal,
           `${employee.name} prosi o ${
             zgAbsType === "urlop" ? "urlop" : "dni niedostępności"
-          } (${zgAbsStart}–${zgAbsEnd}).`,
+          } (${odData === doData ? odData : `${odData}–${doData}`}).`,
           "absence_request"
         );
       }
@@ -767,6 +991,38 @@ export const EmployeeSessionScreens = ({
         <div className="text-sm text-[#6E6E66] mt-1">
           {openShift.lokal} · {openShift.stanowisko}
         </div>
+        {planowanyKoniec &&
+          (() => {
+            const zostaloMs = planowanyKoniec - now;
+            const po = zostaloMs < 0;
+            const absMs = Math.abs(zostaloMs);
+            const h = Math.floor(absMs / 3600000);
+            const m = Math.floor((absMs % 3600000) / 60000);
+            return (
+              <div
+                className={`mt-2.5 rounded p-3 border-2 ${
+                  po
+                    ? "border-[#DE3A22] bg-[#FBEAE6]"
+                    : "border-[#B7B6AE] bg-[#F1F1EE]"
+                }`}
+              >
+                <div className={sectionLabelCls}>
+                  {po ? "Po planowanym końcu" : "Do końca zmiany"}
+                </div>
+                <div
+                  className={`font-['Archivo'] font-extrabold text-[22px] tabular-nums ${
+                    po ? "text-[#8A3A2B]" : "text-[#171714]"
+                  }`}
+                >
+                  {h} godz. {m} min
+                </div>
+                <div className="text-[13px] text-[#6E6E66]">
+                  Wg grafiku {trimTime(planTrwajacej.start_time)} –{" "}
+                  {trimTime(planTrwajacej.end_time)}
+                </div>
+              </div>
+            );
+          })()}
         <div className={ruleSoftCls} />
         {myChecklistOwn.length > 0 && (
           <>
@@ -1046,6 +1302,8 @@ export const EmployeeSessionScreens = ({
         onBack={onBack}
         unreadCount={unreadCount}
         taskBadgeCount={taskBadgeCount}
+        grafikBadgeCount={grafikBadgeCount}
+        personName={onBack ? employee.name : null}
         title={employee.name}
         showPill={!!openShift}
       >
@@ -1069,9 +1327,41 @@ export const EmployeeSessionScreens = ({
             </div>
             <div className={sectionLabelCls}>Twoja zmiana dziś</div>
             <div className={ruleStrongCls} />
-            <div className="text-[15px] text-[#8F8E86] italic mt-4">
-              Brak zaplanowanego grafiku — moduł Grafik jeszcze nie istnieje.
-            </div>
+            {mojeDzis.length > 0 ? (
+              <div className="mt-3 space-y-2">
+                {mojeDzis.map((s) => (
+                  <div key={s.id} className={staticBoxCls}>
+                    <span className="font-['Archivo'] font-extrabold text-[19px]">
+                      {trimTime(s.start_time)} – {trimTime(s.end_time)}
+                    </span>
+                    <span className="text-[13px] text-[#6E6E66] text-right">
+                      {s.stanowisko}
+                      <br />
+                      {s.lokal}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : najblizszaZmiana ? (
+              <button
+                onClick={() => setScreen("GRAFIK")}
+                className="mt-3 w-full text-left border-2 border-[#B7B6AE] rounded bg-[#F1F1EE] p-3.5"
+              >
+                <div className={sectionLabelCls}>Następna zmiana</div>
+                <div className="font-['Archivo'] font-extrabold text-[19px] mt-0.5">
+                  {opisDnia(najblizszaZmiana.date)} ·{" "}
+                  {trimTime(najblizszaZmiana.start_time)} –{" "}
+                  {trimTime(najblizszaZmiana.end_time)}
+                </div>
+                <div className="text-[13px] text-[#6E6E66]">
+                  {najblizszaZmiana.stanowisko} · {najblizszaZmiana.lokal}
+                </div>
+              </button>
+            ) : (
+              <div className="text-[15px] text-[#8F8E86] italic mt-4">
+                Nie masz jeszcze wpisanych zmian w grafiku.
+              </div>
+            )}
             {myChecklistOwn.length > 0 && (
               <>
                 <div className="flex items-baseline justify-between mt-6">
@@ -1116,6 +1406,8 @@ export const EmployeeSessionScreens = ({
         onBack={onBack}
         unreadCount={unreadCount}
         taskBadgeCount={taskBadgeCount}
+        grafikBadgeCount={grafikBadgeCount}
+        personName={onBack ? employee.name : null}
         title={employee.name}
         showPill={!!openShift}
       >
@@ -1124,6 +1416,345 @@ export const EmployeeSessionScreens = ({
           : justClosed
           ? renderJustClosedSummary()
           : renderStartForm()}
+      </Shell>
+    );
+  }
+
+  // ==========================================
+  // EKRAN: GRAFIK
+  // ==========================================
+  // Pionowa lista dni, nie siatka — siatka kierownika (7 kolumn x N osób)
+  // na telefonie jest nieczytelna. Pracownika interesuje przede wszystkim
+  // "kiedy następnym razem pracuję", więc dzień jest tu jednostką.
+  if (screen === "GRAFIK") {
+    const startTygodnia = mondayOf(dzisYMD);
+    const bazowy = grafikZakres === "nast" ? addDaysYMD(startTygodnia, 7) : startTygodnia;
+    const dniTygodnia = [0, 1, 2, 3, 4, 5, 6].map((i) => addDaysYMD(bazowy, i));
+    const miesiacPrefix = dzisYMD.slice(0, 7);
+    const mojeWMiesiacu = mojGrafik
+      .filter((s) => s.date.startsWith(miesiacPrefix))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    const wolneNa = (dateStr) =>
+      (absences || []).find(
+        (a) =>
+          a.status === "approved" &&
+          a.start_date <= dateStr &&
+          dateStr <= a.end_date &&
+          (a.user_id
+            ? String(a.user_id) === String(employee.id)
+            : a.user_name === employee.name)
+      );
+
+    const renderDzien = (dateStr) => {
+      const moje = mojGrafik.filter((s) => s.date === dateStr);
+      const wolne = wolneNa(dateStr);
+      const lokalDnia = moje[0]?.lokal || effectiveAssignment.lokal;
+      const wszyscyDnia = publishedShiftsOnDay(planShifts, lokalDnia, dateStr);
+      const inni = wszyscyDnia.filter(
+        (s) => !moje.some((m) => String(m.id) === String(s.id))
+      );
+      const przejeteDnia = mojePrzejete.filter(({ ps }) => ps.date === dateStr);
+
+      return (
+        <div key={dateStr} className="mb-4">
+          <div className="flex items-baseline justify-between">
+            <span className="font-['Archivo'] font-extrabold text-[15px] text-[#171714]">
+              {opisDnia(dateStr)}
+            </span>
+            {dateStr === dzisYMD && (
+              <span className="text-[11px] font-extrabold px-2 py-0.5 rounded bg-[#DE3A22] text-white">
+                DZIŚ
+              </span>
+            )}
+          </div>
+          <div className={ruleSoftCls} />
+
+          {moje.length > 0 ? (
+            <div className="mt-2.5 space-y-2">
+              {moje.map((s) => {
+                const style = stanowiskoBadgeStyle(
+                  stanowiskaOptions,
+                  s.lokal,
+                  s.stanowisko
+                );
+                const oferta = activeSwapFor(shiftSwaps, s.id);
+                return (
+                  <div
+                    key={s.id}
+                    className={`border-[2.5px] border-[#171714] rounded p-3.5 ${
+                      oferta ? SWAP_TLO[oferta.status] || "" : ""
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="px-1.5 py-0.5 rounded text-[11px] font-extrabold"
+                        style={style || { backgroundColor: "#E7E7E2", color: "#171714" }}
+                      >
+                        {stanowiskoShort(stanowiskaOptions, s.lokal, s.stanowisko)}
+                      </span>
+                      <span className="font-['Archivo'] font-extrabold text-[18px]">
+                        {trimTime(s.start_time)} – {trimTime(s.end_time)}
+                      </span>
+                      {!oferta && canOfferSwap(s) && swapConfirmId !== s.id && (
+                        <button
+                          onClick={() => setSwapConfirmId(s.id)}
+                          className="ml-auto border-2 border-[#B7B6AE] rounded px-2.5 py-1 text-[12px] font-bold text-[#6E6E66]"
+                        >
+                          na giełdę
+                        </button>
+                      )}
+                    </div>
+                    <div className="text-[13px] text-[#6E6E66] mt-0.5">
+                      {s.stanowisko} · {s.lokal}
+                      {s.lokal !== employee.default_lokal && (
+                        <span className="ml-1.5 text-[11px] font-extrabold px-1.5 py-0.5 rounded bg-[#FAEAE6] text-[#8A3A2B]">
+                          INNY LOKAL
+                        </span>
+                      )}
+                    </div>
+                    {inni.length > 0 && (
+                      <div className="text-[13px] text-[#6E6E66] mt-2">
+                        <span className="font-semibold">Z tobą: </span>
+                        {inni
+                          .map(
+                            (o) =>
+                              `${o.user_name} (${stanowiskoShort(
+                                stanowiskaOptions,
+                                o.lokal,
+                                o.stanowisko
+                              )})`
+                          )
+                          .join(", ")}
+                      </div>
+                    )}
+                    {(() => {
+                      if (oferta) {
+                        return (
+                          <div className="mt-2.5 flex items-center gap-2 flex-wrap">
+                            <span className="text-[12px] font-extrabold px-2 py-1 rounded bg-[#E7E7E2] text-[#6E6E66]">
+                              {STATUS_LABEL[oferta.status]}
+                            </span>
+                            {oferta.taker_user_name && (
+                              <span className="text-[13px] text-[#6E6E66]">
+                                przejmuje: {oferta.taker_user_name}
+                              </span>
+                            )}
+                            {oferta.status === "na_gieldzie" && (
+                              <button
+                                onClick={() => handleWithdrawSwap(oferta)}
+                                className="text-[13px] font-bold underline text-[#6E6E66]"
+                              >
+                                Wycofaj
+                              </button>
+                            )}
+                          </div>
+                        );
+                      }
+                      if (!canOfferSwap(s) || swapConfirmId !== s.id) return null;
+                      return (
+                        <div className="mt-2.5">
+                          <button
+                            onClick={async () => {
+                              await handleOfferSwap(s);
+                              setSwapConfirmId(null);
+                            }}
+                            className="w-full border-[2.5px] border-[#171714] rounded py-2.5 text-[14px] font-extrabold"
+                          >
+                            Wystaw na giełdę
+                          </button>
+                          <button
+                            onClick={() => setSwapConfirmId(null)}
+                            className="mt-1.5 text-[13px] font-bold underline text-[#6E6E66]"
+                          >
+                            Anuluj
+                          </button>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                );
+              })}
+            </div>
+          ) : przejeteDnia.length > 0 ? null : wolne ? (
+            <div className="mt-2.5 flex items-center gap-2">
+              <span
+                className={`px-1.5 py-0.5 rounded text-[11px] font-extrabold ${
+                  wolne.type === "urlop"
+                    ? "bg-[#DE3A22] text-white"
+                    : "bg-[#E7E7E2] text-[#6E6E66]"
+                }`}
+              >
+                {wolne.type === "urlop" ? "URP" : "NIE"}
+              </span>
+              <span className="text-[15px] text-[#6E6E66]">
+                {wolne.type === "urlop" ? "Urlop" : "Zgłoszona niedostępność"}
+              </span>
+            </div>
+          ) : (
+            <div className="mt-2.5 text-[15px] text-[#8F8E86] italic">Wolne</div>
+          )}
+
+          {przejeteDnia.map(({ sw, ps }) => (
+            <div
+              key={`p-${sw.id}`}
+              className={`mt-2.5 border-[2.5px] border-[#171714] rounded p-3.5 ${SWAP_TLO.przyjeta}`}
+            >
+              <div className="font-['Archivo'] font-extrabold text-[18px]">
+                {trimTime(ps.start_time)} – {trimTime(ps.end_time)}
+              </div>
+              <div className="text-[13px] text-[#6E6E66] mt-0.5">
+                {ps.stanowisko} · {ps.lokal} · od: {sw.author_user_name}
+              </div>
+              <div className="text-[13px] font-bold mt-1.5">
+                Zgłosiłeś(-aś) się po tę zmianę — czeka na zgodę kierownika.
+              </div>
+            </div>
+          ))}
+
+          {grafikWszyscy && inni.length > 0 && moje.length === 0 && (
+            <div className="mt-2 text-[13px] text-[#6E6E66]">
+              <span className="font-semibold">W lokalu: </span>
+              {inni
+                .map(
+                  (o) =>
+                    `${o.user_name} ${trimTime(o.start_time)}–${trimTime(o.end_time)}`
+                )
+                .join(", ")}
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    return (
+      <Shell
+        screen={screen}
+        setScreen={setScreen}
+        onBack={onBack}
+        unreadCount={unreadCount}
+        taskBadgeCount={taskBadgeCount}
+        grafikBadgeCount={grafikBadgeCount}
+        personName={onBack ? employee.name : null}
+        title="Grafik"
+      >
+        <div className="flex gap-1.5 mb-3">
+          {[
+            { key: "ten", label: "Ten tydzień" },
+            { key: "nast", label: "Następny" },
+            { key: "miesiac", label: "Miesiąc" },
+          ].map((o) => (
+            <button
+              key={o.key}
+              onClick={() => setGrafikZakres(o.key)}
+              className={`flex-1 py-2 rounded border-2 text-[13px] font-bold ${
+                grafikZakres === o.key
+                  ? "bg-[#171714] text-white border-[#171714]"
+                  : "bg-white text-[#171714] border-[#B7B6AE]"
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+
+        {grafikZakres === "miesiac" ? (
+          <>
+            <div className="flex items-baseline justify-between">
+              <span className={sectionLabelCls}>
+                {getMonthName(new Date().getMonth())}
+              </span>
+              <span className="font-['Archivo'] font-extrabold text-sm tabular-nums">
+                {mojeWMiesiacu.length} zmian ·{" "}
+                {Math.round(mojeWMiesiacu.reduce((a, s) => a + shiftHours(s), 0))} h
+              </span>
+            </div>
+            <div className={ruleStrongCls} />
+            {mojeWMiesiacu.length === 0 ? (
+              <div className="text-[15px] text-[#8F8E86] italic mt-4">
+                Brak zmian w tym miesiącu.
+              </div>
+            ) : (
+              <div className="mt-3 space-y-2">
+                {mojeWMiesiacu.map((s) => (
+                  <div
+                    key={s.id}
+                    className="flex items-center justify-between border-2 border-[#B7B6AE] rounded p-3"
+                  >
+                    <span className="font-['Archivo'] font-bold text-[15px]">
+                      {opisDnia(s.date)}
+                    </span>
+                    <span className="text-[14px] tabular-nums">
+                      {trimTime(s.start_time)} – {trimTime(s.end_time)}
+                    </span>
+                    <span className="text-[12px] text-[#6E6E66]">{s.lokal}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <button
+              onClick={() => setGrafikWszyscy((v) => !v)}
+              className="mb-3 text-[13px] font-bold underline text-[#6E6E66] self-start"
+            >
+              {grafikWszyscy ? "Pokaż tylko moje" : "Pokaż wszystkich w lokalu"}
+            </button>
+            {dniTygodnia.map(renderDzien)}
+            {mojGrafik.length === 0 && (
+              <div className="text-[13.5px] text-[#6E6E66] leading-relaxed">
+                Kierownik nie wysłał jeszcze grafiku na ten okres. Gdy to zrobi,
+                dostaniesz powiadomienie.
+              </div>
+            )}
+
+            {mojeOferty.length > 0 && (
+              <>
+                <div className={sectionLabelCls}>Giełda — możesz wziąć</div>
+                <div className={ruleStrongCls} />
+                <div className="mt-3 space-y-2">
+                  {mojeOferty.map(({ sw, ps }) => (
+                    <div
+                      key={sw.id}
+                      className={`border-[2.5px] border-[#171714] rounded p-3.5 ${SWAP_TLO.propozycja}`}
+                    >
+                      <div className="font-['Archivo'] font-extrabold text-[16px]">
+                        {opisDnia(ps.date)} · {trimTime(ps.start_time)} –{" "}
+                        {trimTime(ps.end_time)}
+                      </div>
+                      <div className="text-[13px] text-[#6E6E66]">
+                        {ps.stanowisko} · {ps.lokal} · od: {sw.author_user_name}
+                      </div>
+                      {sw.note && (
+                        <div className="text-[13px] text-[#6E6E66] mt-1">{sw.note}</div>
+                      )}
+                      <button
+                        onClick={() => handleAcceptSwap(sw)}
+                        className="mt-2.5 w-full border-[2.5px] border-[#171714] rounded py-2 text-[14px] font-extrabold bg-white"
+                      >
+                        Wezmę tę zmianę
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            <div className="mt-6">
+              <button onClick={openWniosekOWolne} className={menuRowCls}>
+                <Flag size={21} className="text-[#171714] flex-shrink-0" />
+                <span className="flex-1 text-base font-semibold text-[#171714]">
+                  Wniosek o wolne
+                </span>
+              </button>
+              <p className={helperTextCls}>
+                Zmianę można wystawić na giełdę najpóźniej {SWAP_MIN_HOURS} godzin
+                przed jej rozpoczęciem. Zamianę musi zatwierdzić kierownik.
+              </p>
+            </div>
+          </>
+        )}
       </Shell>
     );
   }
@@ -1139,12 +1770,22 @@ export const EmployeeSessionScreens = ({
         onBack={onBack}
         unreadCount={unreadCount}
         taskBadgeCount={taskBadgeCount}
+        grafikBadgeCount={grafikBadgeCount}
+        personName={onBack ? employee.name : null}
         title="Raport"
         footer={
           <div className="flex-shrink-0 border-t-[2.5px] border-[#171714] bg-white px-5 pt-[18px] pb-[22px] flex items-baseline justify-between">
-            <span className={sectionLabelCls}>
-              {employee.name} · {getMonthName(raportMonth)}
-            </span>
+            <div>
+              <span className={sectionLabelCls}>
+                {employee.name} · {getMonthName(raportMonth)}
+              </span>
+              {raportUrlop > 0 && (
+                <div className="text-[12px] text-[#6E6E66]">
+                  urlop {raportUrlop.toFixed(1).replace(".", ",")} h · bez urlopu{" "}
+                  {(raportTotal - raportUrlop).toFixed(1).replace(".", ",")} h
+                </div>
+              )}
+            </div>
             <span className="font-['Archivo'] font-extrabold text-[28px] text-[#171714] tabular-nums">
               {raportTotal.toFixed(1).replace(".", ",")} godz.
             </span>
@@ -1233,7 +1874,7 @@ export const EmployeeSessionScreens = ({
             </span>
             <span className="flex-1 text-[13.5px] text-[#171714] tabular-nums">
               {s.is_urlop ? (
-                <span className="text-[#6E6E66] italic">Urlop</span>
+                <span className="font-bold text-[#8A3A2B]">Urlop</span>
               ) : (
                 <>
                   {fmtHHMM(s.start_time)} –{" "}
@@ -1278,6 +1919,8 @@ export const EmployeeSessionScreens = ({
         onBack={onBack}
         unreadCount={unreadCount}
         taskBadgeCount={taskBadgeCount}
+        grafikBadgeCount={grafikBadgeCount}
+        personName={onBack ? employee.name : null}
         title="Zadania"
       >
         {myChecklistOwn.some((i) => !i.done) && (
@@ -1341,26 +1984,10 @@ export const EmployeeSessionScreens = ({
         onBack={onBack}
         unreadCount={unreadCount}
         taskBadgeCount={taskBadgeCount}
+        grafikBadgeCount={grafikBadgeCount}
+        personName={onBack ? employee.name : null}
         title="Więcej"
       >
-        <button
-          onClick={() => setGrafikToastShown((v) => !v)}
-          className={menuRowCls}
-        >
-          <Calendar size={21} className="text-[#171714] flex-shrink-0" />
-          <span className="flex-1 text-base font-semibold text-[#171714]">
-            Grafik
-          </span>
-          <span className="flex-shrink-0 text-[13px] font-semibold px-3 py-1.5 rounded border-[1.5px] border-[#DE3A22] text-[#DE3A22]">
-            w budowie
-          </span>
-        </button>
-        {grafikToastShown && (
-          <div className="text-xs text-[#A83226] bg-[#FBEAE6] rounded p-2.5 -mt-2 mb-3.5">
-            Grafik — ostatni etap Roadmapy (p.5), świadomie jeszcze nie
-            zaczęty.
-          </div>
-        )}
         <button onClick={() => openZgloszenie(null)} className={menuRowCls}>
           <Flag size={21} className="text-[#171714] flex-shrink-0" />
           <span className="flex-1 text-base font-semibold text-[#171714]">
@@ -1430,6 +2057,8 @@ export const EmployeeSessionScreens = ({
         onBack={onBack}
         unreadCount={unreadCount}
         taskBadgeCount={taskBadgeCount}
+        grafikBadgeCount={grafikBadgeCount}
+        personName={onBack ? employee.name : null}
         title="Wiadomości"
         showBell={false}
       >
@@ -1479,6 +2108,8 @@ export const EmployeeSessionScreens = ({
         onBack={onBack}
         unreadCount={unreadCount}
         taskBadgeCount={taskBadgeCount}
+        grafikBadgeCount={grafikBadgeCount}
+        personName={onBack ? employee.name : null}
         title={
           zgType === "correction"
             ? "Popraw zmianę"
@@ -1662,7 +2293,10 @@ export const EmployeeSessionScreens = ({
             <div className="mt-5 grid grid-cols-2 gap-3">
               <button
                 type="button"
-                onClick={() => setZgAbsType("urlop")}
+                onClick={() => {
+                  setZgAbsType("urlop");
+                  setZgAbsDay("");
+                }}
                 className={checkboxRowCls(zgAbsType === "urlop")}
               >
                 <span className="text-[15px] font-semibold text-[#171714]">Urlop</span>
@@ -1677,14 +2311,36 @@ export const EmployeeSessionScreens = ({
                 </span>
               </button>
             </div>
+            {zgAbsType === "niedostepnosc" && (
+              <>
+                <div className="mt-5">
+                  <span className={fieldLabelCls}>Jeden dzień</span>
+                  <input
+                    type="date"
+                    value={zgAbsDay}
+                    disabled={!!(zgAbsStart || zgAbsEnd)}
+                    onChange={(e) => setZgAbsDay(e.target.value)}
+                    className={`${selectElCls} disabled:opacity-40`}
+                  />
+                </div>
+                <div className="flex items-center gap-3 mt-4">
+                  <span className="h-px bg-[#B7B6AE] flex-1" />
+                  <span className="text-[12px] font-bold uppercase tracking-wider text-[#8F8E86]">
+                    albo
+                  </span>
+                  <span className="h-px bg-[#B7B6AE] flex-1" />
+                </div>
+              </>
+            )}
             <div className="grid grid-cols-2 gap-3 mt-5">
               <div>
                 <span className={fieldLabelCls}>Od</span>
                 <input
                   type="date"
                   value={zgAbsStart}
+                  disabled={!!zgAbsDay}
                   onChange={(e) => setZgAbsStart(e.target.value)}
-                  className={selectElCls}
+                  className={`${selectElCls} disabled:opacity-40`}
                 />
               </div>
               <div>
@@ -1692,11 +2348,25 @@ export const EmployeeSessionScreens = ({
                 <input
                   type="date"
                   value={zgAbsEnd}
+                  disabled={!!zgAbsDay}
                   onChange={(e) => setZgAbsEnd(e.target.value)}
-                  className={selectElCls}
+                  className={`${selectElCls} disabled:opacity-40`}
                 />
               </div>
             </div>
+            {zgAbsType === "niedostepnosc" && (zgAbsDay || zgAbsStart || zgAbsEnd) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setZgAbsDay("");
+                  setZgAbsStart("");
+                  setZgAbsEnd("");
+                }}
+                className="mt-2 text-[13px] font-bold underline text-[#6E6E66] self-start"
+              >
+                Wyczyść daty
+              </button>
+            )}
             <div className="mt-5">
               <span className={fieldLabelCls}>Komentarz (opcjonalnie)</span>
               <textarea

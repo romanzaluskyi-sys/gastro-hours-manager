@@ -1,10 +1,13 @@
 // @ts-nocheck
 import React, { useState, useEffect } from "react";
-import { Lock, AlertCircle, Delete, ChevronLeft } from "lucide-react";
+import { Lock, AlertCircle, Delete, ChevronLeft, Mail } from "lucide-react";
 import { getTodaysShiftsForUser } from "../utils/shifts";
+import { offersForUser, STATUS_LABEL } from "../utils/swaps";
+import { trimTime } from "../utils/grafik";
 import {
   fmtHHMM,
   sumHours,
+  opisDnia,
   EmployeeSessionScreens,
 } from "./employeeSessionShared";
 import WeatherBadge from "./WeatherBadge";
@@ -39,6 +42,9 @@ const KioskDashboard = ({
   taskCompletions,
   setTaskCompletions,
   absences,
+  planShifts,
+  shiftSwaps,
+  setShiftSwaps,
   setAbsences,
   showMsg,
 }) => {
@@ -59,12 +65,18 @@ const KioskDashboard = ({
       u.role === "open" &&
       allowed.includes(u.default_lokal)
   );
-  // Kiosk to wspólne urządzenie — powiadomienia dla WSZYSTKICH pracowników
-  // przypisanych do lokalu, nie tylko wybranego (patrz CLAUDE.md).
-  const activeNames = new Set(activeUsers.map((u) => u.name));
-  const myNotifications = notifications.filter((n) =>
-    activeNames.has(n.user_name)
-  );
+  // Powiadomienia WYBRANEGO pracownika, nie całego urządzenia. Wcześniej
+  // kiosk pokazywał worek wiadomości wszystkich osób z lokalu, więc jedna
+  // osoba otwierająca zakładkę oznaczała jako przeczytane także cudze —
+  // i nikt inny już ich nie zobaczył. Kto ma nieprzeczytaną wiadomość,
+  // widać teraz na liście wyboru (koperta przy nazwisku).
+  const myNotifications = selectedEmployee
+    ? notifications.filter(
+        (n) =>
+          (n.audience || "employee") === "employee" &&
+          n.user_name === selectedEmployee.name
+      )
+    : [];
   const unreadCount = myNotifications.filter((n) => !n.is_read).length;
 
   const lokaleAllowed = lokale.filter((l) => allowed.includes(l.name));
@@ -166,11 +178,40 @@ const KioskDashboard = ({
               const empClosedToday = getTodaysShiftsForUser(shifts, u.id).filter(
                 (s) => s.end_time
               );
+              // Na wspólnym tablecie nikt nie wchodzi na cudzą stronę, więc
+              // giełda musi być widoczna już na liście. Podświetlamy TYLKO
+              // tych, którzy mogą coś wziąć — dla nich to zaproszenie do
+              // działania. Autor oferty dostaje sam napis: on już wie, że
+              // ją wystawił, kolor niczego by mu nie dodał.
+              const propozycje = offersForUser({
+                swaps: shiftSwaps,
+                planShifts,
+                absences,
+                user: u,
+              });
+              // Wiadomości są adresowane imiennie, a na wspólnym tablecie
+              // nikt nie zagląda na cudzą stronę — bez sygnału na liście
+              // powiadomienie potrafiłoby wisieć nieprzeczytane tygodniami.
+              const nieprzeczytane = notifications.filter(
+                (n) =>
+                  (n.audience || "employee") === "employee" &&
+                  n.user_name === u.name &&
+                  !n.is_read
+              ).length;
+              const wystawione = (shiftSwaps || []).filter(
+                (sw) =>
+                  ["na_gieldzie", "przyjeta"].includes(sw.status) &&
+                  String(sw.author_user_id) === String(u.id)
+              );
               return (
                 <button
                   key={u.id}
                   onClick={() => selectEmployee(u)}
-                  className="border-2 border-[#B7B6AE] rounded bg-[#F1F1EE] p-4 flex items-center justify-between gap-3 w-full text-left mb-3.5"
+                  className={`border-2 rounded p-4 flex items-center justify-between gap-3 w-full text-left mb-3.5 ${
+                    propozycje.length > 0
+                      ? "border-[#171714] bg-[#FDF3D4]"
+                      : "border-[#B7B6AE] bg-[#F1F1EE]"
+                  }`}
                 >
                   <div className="min-w-0">
                     <div className="font-['Archivo'] font-extrabold text-[21px] text-[#171714] flex items-center gap-1.5">
@@ -180,6 +221,26 @@ const KioskDashboard = ({
                     <div className="text-[13px] text-[#6E6E66] mt-0.5">
                       {u.default_stanowisko || ""}
                     </div>
+                    {nieprzeczytane > 0 && (
+                      <div className="text-[13px] font-bold text-[#8A3A2B] mt-1 flex items-center gap-1">
+                        <Mail size={14} strokeWidth={2.3} />
+                        {nieprzeczytane === 1
+                          ? "Czeka wiadomość"
+                          : `Czekają ${nieprzeczytane} wiadomości`}
+                      </div>
+                    )}
+                    {propozycje.length > 0 ? (
+                      <div className="text-[13px] font-bold text-[#8A3A2B] mt-1">
+                        ⇄ Giełda: propozycja {opisDnia(propozycje[0].ps.date)} ·{" "}
+                        {trimTime(propozycje[0].ps.start_time)} –{" "}
+                        {trimTime(propozycje[0].ps.end_time)}
+                        {propozycje.length > 1 ? ` (+${propozycje.length - 1})` : ""}
+                      </div>
+                    ) : wystawione.length > 0 ? (
+                      <div className="text-[13px] text-[#6E6E66] mt-1">
+                        ⇄ Giełda: {STATUS_LABEL[wystawione[0].status].toLowerCase()}
+                      </div>
+                    ) : null}
                   </div>
                   {empOpen ? (
                     <span className="flex-shrink-0 text-[13px] font-semibold px-3 py-1.5 rounded bg-[#FAEAE6] text-[#8A3A2B]">
@@ -300,13 +361,16 @@ const KioskDashboard = ({
         myNotifications={myNotifications}
         unreadCount={unreadCount}
         setNotifications={setNotifications}
-        showEmployeeNameInMessages={true}
+        showEmployeeNameInMessages={false}
         issues={issues}
         setIssues={setIssues}
         tasks={tasks}
         taskCompletions={taskCompletions}
         setTaskCompletions={setTaskCompletions}
         absences={absences}
+        planShifts={planShifts}
+        shiftSwaps={shiftSwaps}
+        setShiftSwaps={setShiftSwaps}
         setAbsences={setAbsences}
         onBack={goList}
         onLogout={() => setCurrentView("login")}

@@ -23,6 +23,91 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.23.0",
+    date: "2026-09-04",
+    items: [
+      "Pierwsze wydanie Grafiku — planowanie tygodnia i miesiąca, wymagania obsady, giełda zmian, grafik u pracownika.",
+      "Urlop jest w raportach podpisany 'Urlop' zamiast nazwą lokalu, a w podsumowaniach widać osobno godziny urlopu i godziny bez urlopu.",
+      "Zaimportowany grafik z arkusza Google za styczeń–wrzesień 2026.",
+    ],
+  },
+  {
+    version: "0.22.0",
+    date: "2026-09-03",
+    items: [
+      "Giełda zmian — pracownik wystawia zmianę (najpóźniej 12 h przed), ktoś wolny ją bierze, kierownik zatwierdza w Zatwierdzanie zmian albo ✓/✗ wprost w siatce.",
+      "Zmiana na giełdzie jest podświetlona w siatce — żółto gdy czeka na chętnego, zielono gdy ktoś się zgłosił — i widoczna po obu stronach: u oddającego i (na szaro) u przejmującego.",
+      "Przy nazwisku widać, ile godzin w miesiącu przybędzie lub ubędzie po zatwierdzeniu zamiany; w Zatwierdzaniu zmian pełna różnica godzin obu osób.",
+      "U pracownika: zielony = propozycja do wzięcia, żółty = Twoja zmiana na giełdzie, niebieski = czeka na kierownika. Odznaka na zakładce Grafik liczy nowy grafik i propozycje.",
+      "Jedno 'Wyślij grafik pracownikom' wysyła wszystkie niewysłane zmiany od dziś w przód, ze wszystkich Twoich lokali — nie tylko oglądany tydzień.",
+      "Powiadomienia na Tablecie Służbowym są per pracownik — nikt nie oznacza już cudzych wiadomości jako przeczytane.",
+      "Wolne i urlop można wpisać wprost z grafiku; usunięcie wysłanej zmiany czeka na wysyłkę i pracownik dostaje o tym informację.",
+      "Wniosek o wolne dostępny prosto z zakładki Grafik u pracownika.",
+      "Niedostępność można zgłosić na jeden dzień, bez wpisywania tej samej daty dwa razy.",
+    ],
+  },
+  {
+    version: "0.21.0",
+    date: "2026-09-03",
+    items: [
+      "Pracownik ma własną zakładkę Grafik — lista dni z godzinami, stanowiskiem, lokalem i składem zmiany; przełącznik Ten tydzień / Następny / Miesiąc.",
+      "Na Pulpicie pracownika 'Twoja zmiana dziś' albo kafelek 'Następna zmiana'.",
+      "Pracownik widzi wyłącznie wysłany grafik — wersja robocza nigdy do niego nie trafia.",
+      "W trwającej zmianie widać, ile zostało do końca wg grafiku (i osobno, gdy planowany koniec już minął).",
+    ],
+  },
+  {
+    version: "0.20.0",
+    date: "2026-09-03",
+    items: [
+      "W oknie zmiany wybierasz stanowisko RAZEM z lokalem ('Kelner · Sunset') — pracownika oddajesz do innego lokalu bez przechodzenia na jego zakładkę.",
+      "Widać tylko stanowiska z karty pracownika, a na liście osób tylko tych, którzy mogą pracować w tym lokalu; resztę odsłaniają rozwijane linki.",
+    ],
+  },
+  {
+    version: "0.19.0",
+    date: "2026-09-03",
+    items: [
+      "W oknie przypisania zmiany widać wszystkich pracowników sieci (swoi pierwsi, przy obcych widać lokal) — dobieranie ludzi między lokalami bez wychodzenia z grafiku.",
+      "'Dopisz stanowisko do umiejętności' jednym kliknięciem, prosto z grafiku.",
+    ],
+  },
+  {
+    version: "0.18.0",
+    date: "2026-09-03",
+    items: [
+      "Grafik — widok miesiąca dla jednego lokalu: w kratce dnia skrót stanowiska, godziny i imię, a czerwony numer dnia oznacza niepełną obsadę.",
+      "Druk miesiąca na jednej kartce A4 poziomo — przycisk 'Drukuj'.",
+    ],
+  },
+  {
+    version: "0.17.0",
+    date: "2026-09-03",
+    items: [
+      "Grafik — tryb Edycja: '+ dodaj' w pustych komórkach, okno przypisania zmiany z podpowiadanymi godzinami, 'Przypisz i dodaj następną'.",
+      "Blokujemy tylko nachodzące godziny, urlop i zgłoszony brak dostępności — zmiana dzielona między lokalami jest dozwolona.",
+      "'Kopiuj z poprzedniego tygodnia', 'Dodaj pracownika' (także spoza stałej obsady lokalu) i 'Wyślij grafik pracownikom' — do wysłania grafik jest wersją roboczą.",
+    ],
+  },
+  {
+    version: "0.16.0",
+    date: "2026-09-03",
+    items: [
+      "Grafik — widok tygodnia: pracownicy w wierszach, siedem dni w kolumnach, osobna tabela na lokal. Urlopy, brak dostępności i praca w innym lokalu widoczne w komórkach.",
+      "Dni z niepełną obsadą oznaczone na czerwono — najedź na liczbę, żeby zobaczyć na jakim stanowisku i w jakich godzinach brakuje ludzi.",
+      "Sortowanie pracowników, legenda stanowisk i eksport tygodnia do CSV.",
+    ],
+  },
+  {
+    version: "0.15.0",
+    date: "2026-09-03",
+    items: [
+      "Nowa zakładka Grafik — na razie sekcja Konfiguracja: godziny otwarcia lokalu, wymagania obsady na stanowisko (dni, godziny, ile osób) i wyjątki na konkretne daty.",
+      "Wymagania obsady obowiązują od wybranego miesiąca — można je skopiować na kolejny zamiast wpisywać od nowa.",
+      "W karcie pracownika: lista innych stanowisk, na których umie pracować.",
+    ],
+  },
+  {
     version: "0.14.0",
     date: "2026-09-03",
     items: [

@@ -94,6 +94,16 @@ src/
                                   wspólna logika zatwierdzania korekt godzin
                                   (Zatwierdzanie zmian + inline w Rejestr
                                   Godzin), patrz "Panel kierownika" niżej
+    grafik.ts                   cała arytmetyka Grafiku: kontrola obsady
+                                  (addytywne wymagania, dziury w godzinach),
+                                  zmiany przez północ, plan vs fakt,
+                                  publikacja (publishGrafik), widok
+                                  pracownika (publishedShiftsFor — filtruje
+                                  niewysłane i oznaczone do usunięcia).
+                                  NIE duplikuj tego w komponentach.
+    swaps.ts                    giełda zmian — jedyne miejsce piszące do
+                                  shift_swaps i przepisujące zmianę na
+                                  innego pracownika (resolveSwap)
     tasks.ts                    isTaskDueOn/toggleTaskCompletion/
                                   buildEmployeeChecklist/
                                   getEffectiveAssignmentForDate/
@@ -167,6 +177,13 @@ src/
       ZadaniaISprzatanie.tsx        zakładka "Zadania i sprzątanie" —
                                     "Kontrola wykonania po osobach", patrz
                                     sekcja "Zadania i sprzątanie" niżej
+      Grafik.tsx                    host zakładki Grafik: tydzień/miesiąc/
+                                    konfiguracja, tryb Podgląd/Edycja,
+                                    przycisk publikacji
+      GrafikTydzien.tsx             siatka tygodnia (jedna tabela na lokal)
+      GrafikMiesiac.tsx             kalendarz miesiąca + druk A4 poziomo
+      GrafikZmianaModal.tsx         modal przypisania zmiany + modal blokady
+      GrafikWymagania.tsx           wymagania obsady, godziny otwarcia, wyjątki
       PulpitHome.tsx, RejestrGodzin.tsx, ZatwierdzanieZmian.tsx,
       Aktywni.tsx, Zgloszenia.tsx, Pracownicy.tsx, RaportyIKoszty.tsx,
       Przewodnik.tsx, MojaPraca.tsx
@@ -1175,9 +1192,43 @@ nadpisać zmianą" wciąż czeka na Grafik, jak opisano niżej — dziś
 uboczny materializacji (patrz wyżej), ale to nie jest świadoma,
 dedykowana walidacja.
 
-### 5. Grafik
-Ostatni etap. Nie opisany szczegółowo celowo — wracamy do tego, gdy reszta
-jest stabilna i przetestowana w realnym użyciu.
+### 5. Grafik — **ZROBIONE** (0.23.0, 2026-09-04)
+⚠️ Pełna, aktualna specyfikacja modułu żyje w [`docs/GRAFIK.md`](docs/GRAFIK.md)
+— tam są wszystkie decyzje właściciela z sesji projektowej wraz z
+uzasadnieniami. Poniżej tylko to, o co najłatwiej się potknąć:
+
+- **Plan i fakt to dwie różne tabele.** `grafik_shifts` = plan (kto ma
+  pracować), `shifts` = fakt (odbicia). Grafik NIGDY nie pisze do `shifts`
+  poza materializacją urlopu.
+- **Blokujemy wyłącznie nachodzące godziny.** Druga zmiana tego samego dnia
+  i praca w dwóch lokalach jednego dnia są dozwolone — to normalna praktyka
+  u właściciela, nie błąd.
+- **Wymagania obsady sumują się.** "2 osoby 09:00–21:00" + "1 osoba
+  14:00–19:00" = 3 osoby między 14:00 a 19:00. Kontrola liczy obsadę minuta
+  po minucie i raportuje DŁUGOŚĆ dziury, nie sam fakt niedoboru.
+- **Kto może wejść na zmianę, decyduje STANOWISKO, nie lokal.**
+  `users.allowed_stanowiska` trzyma nazwy stanowisk (tekst po przecinku, jak
+  `allowed_lokale` — NIE tablica Postgresa). Ta sama nazwa w innym lokalu to
+  to samo uprawnienie — na tym opiera się wypożyczanie ludzi między lokalami.
+- **Pracownik widzi tylko grafik wysłany.** Filtr żyje w
+  `publishedShiftsFor` (utils/grafik.ts), nie w dashboardach — inaczej łatwo
+  o wyciek wersji roboczej.
+- **Jedno kliknięcie "Wyślij" publikuje wszystko od dziś w przód, ze
+  wszystkich lokali kierownika.** Wysyłka per oglądany tydzień była zbyt
+  łatwa do zgubienia (zmiana wpisana do innego lokalu zostawała wersją
+  roboczą i nikt tego nie widział).
+- **Usunięcie wysłanej zmiany to zarejestrowana zmiana** — `deleted_at`,
+  wiersz znika z widoku, ale kasuje się dopiero przy publikacji, która
+  informuje o tym pracownika.
+- Import z arkusza Google: [`scripts/import-grafik.py`](scripts/import-grafik.py)
+  (domyślnie suchy przebieg). URP z zerem godzin w dzień roboczy to NIE
+  urlop, tylko niedostępność bez godzin — ustalenie właściciela.
+
+### 5a. Grafik — świadomie NIE zrobione
+- Drugi wariant druku miesiąca (tabela pracownicy × dni) — odłożony.
+- Potwierdzenia odczytu grafiku przez pracownika ("przeczytało 12 z 14").
+- Etat jako reguła (dziś pokazujemy tylko różnicę godzin przy zamianie,
+  żeby kierownik sam ocenił).
 
 ### 6. Automatyczne wylogowanie po nieaktywności — ODŁOŻONE
 Świadomie odłożone (2026-08-28) — obecni główni użytkownicy to kiosk i
