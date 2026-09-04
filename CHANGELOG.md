@@ -5,6 +5,16 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.18.0 — 2026-09-03
+
+- **Grafik — widok miesiąca.** Kalendarz całego miesiąca dla jednego lokalu.
+  W każdej kratce widać nie tylko liczby, ale i skład dnia: skrót stanowiska,
+  godziny i imię. Numer dnia czerwienieje, gdy obsada nie pokrywa wymagań.
+- **Druk na jednej kartce A4** (poziomo) — przycisk "Drukuj" przygotowuje
+  sam kalendarz, bez menu i pasków aplikacji.
+- Nawigacja po miesiącach i powrót do widoku tygodnia. W stopce data
+  ostatniej zmiany w grafiku.
+
 ## 0.17.0 — 2026-09-03
 
 - **Grafik — tryb Edycja.** Przełącznik Podgląd / Edycja nad siatką. W trybie

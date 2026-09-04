@@ -389,7 +389,7 @@ Branch: `feature/grafik`. Każdy etap osobno testowalny na Vercel Preview.
 | 2 | Edytor **Wymagań obsady** + **godzin otwarcia lokalu** + `allowed_stanowiska` w karcie pracownika | tak |
 | 3 | ✅ **ZROBIONE** (0.16.0) — widok tygodnia w trybie Podgląd: `GrafikTydzien.tsx`, siatka per lokal, typy komórek (zmiana / URP / NIE / "w innym lokalu"), sumy dzienne i tygodniowe, sumy miesięczne przy pracowniku (godziny + zmiany + koszt), ostrzeżenia o niedoborze z rozpisaniem godzin, sortowanie, legenda, eksport CSV, prognoza pogody per dzień (`fetchDailyForecast`) | tak |
 | 4 | ✅ **ZROBIONE** (0.17.0) — `GrafikZmianaModal.tsx` (przypisanie/edycja + modal blokady), przełącznik Podgląd/Edycja, "+ dodaj" i "+ druga zmiana" w komórkach, "Kopiuj z poprzedniego tygodnia", publikacja przez `publishWeek()` z jednym powiadomieniem na osobę. Blokada WYŁĄCZNIE na: zatwierdzone wolne + nachodzące godziny (`findOverlappingPlanShift`, testowane też dla zmian przez północ) | tak |
-| 5 | **Widok miesiąca** + eksport CSV | tak |
+| 5 | ✅ **ZROBIONE** (0.18.0) — `GrafikMiesiac.tsx`: kalendarz miesiąca per lokal ze składem dnia w kratce, czerwony numer dnia przy niepełnej obsadzie, nawigacja po miesiącach, druk A4 poziomo (`@media print` + `#grafik-print`). Eksport CSV dostarczony wcześniej, w etapie 3. Drugi wariant druku (tabela pracownicy × dni) nadal odłożony na prośbę właściciela | tak |
 | 6 | **Grafik u pracownika** (własna zakładka, mobile) | tak |
 | 7 | **Giełda zmian** — obie strony + limit 12 h | tak |
 

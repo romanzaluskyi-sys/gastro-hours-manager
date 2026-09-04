@@ -23,6 +23,14 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.18.0",
+    date: "2026-09-03",
+    items: [
+      "Grafik — widok miesiąca dla jednego lokalu: w kratce dnia skrót stanowiska, godziny i imię, a czerwony numer dnia oznacza niepełną obsadę.",
+      "Druk miesiąca na jednej kartce A4 poziomo — przycisk 'Drukuj'.",
+    ],
+  },
+  {
     version: "0.17.0",
     date: "2026-09-03",
     items: [

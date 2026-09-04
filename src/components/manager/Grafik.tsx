@@ -6,9 +6,10 @@
 // Zakres lokali bierzemy z górnego paska ManagerShell (selectedLokal) —
 // nie powtarzamy wyboru lokalu wewnątrz zakładki.
 import React, { useState } from "react";
-import { CalendarRange, SlidersHorizontal, Eye, Pencil, Send } from "lucide-react";
+import { CalendarRange, CalendarDays, SlidersHorizontal, Eye, Pencil, Send } from "lucide-react";
 import GrafikWymagania from "./GrafikWymagania";
 import GrafikTydzien from "./GrafikTydzien";
+import GrafikMiesiac from "./GrafikMiesiac";
 import { pageTitleCls, cardCls, btnPrimaryCls, btnSecondaryCls } from "./designTokens";
 import { toLocalYMD, mondayOf, addDaysYMD, isUnpublished, publishWeek } from "../../utils/grafik";
 
@@ -37,6 +38,9 @@ export default function Grafik({
   const [sortBy, setSortBy] = useState("stanowisko");
   const [lokalOverride, setLokalOverride] = useState(null);
   const [mode, setMode] = useState("podglad");
+  // Miesiąc otwieramy na miesiącu czwartku bieżącego tygodnia — tą samą
+  // zasadą, którą liczy sumy miesięczne widok tygodnia.
+  const [month, setMonth] = useState(() => addDaysYMD(mondayOf(toLocalYMD(new Date())), 3).slice(0, 7));
   const [publishing, setPublishing] = useState(false);
 
   const lokaleNames =
@@ -44,8 +48,8 @@ export default function Grafik({
       ? [selectedLokal]
       : (availableLokaleForManager || []).map((l) => l.name);
 
-  // Konfiguracja dotyczy zawsze JEDNEGO lokalu — przy "Cała sieć" trzeba go
-  // wskazać osobno, bo wymagania obsady są per lokal.
+  // Konfiguracja i widok miesiąca dotyczą zawsze JEDNEGO lokalu — przy
+  // "Cała sieć" trzeba go wskazać osobno.
   const lokalKonfiguracji =
     (lokaleNames.includes(lokalOverride) && lokalOverride) || lokaleNames[0] || null;
 
@@ -110,6 +114,15 @@ export default function Grafik({
             <CalendarRange size={15} className="inline -mt-0.5 mr-1" /> Tydzień
           </button>
           <button
+            onClick={() => {
+              setMonth(addDaysYMD(weekStart, 3).slice(0, 7));
+              setView("miesiac");
+            }}
+            className={view === "miesiac" ? btnPrimaryCls : btnSecondaryCls}
+          >
+            <CalendarDays size={15} className="inline -mt-0.5 mr-1" /> Miesiąc
+          </button>
+          <button
             onClick={() => setView("konfiguracja")}
             className={view === "konfiguracja" ? btnPrimaryCls : btnSecondaryCls}
           >
@@ -147,7 +160,7 @@ export default function Grafik({
             {niewyslane > 0 ? ` (${niewyslane})` : ""}
           </button>
         )}
-        {view === "konfiguracja" && lokaleNames.length > 1 && (
+        {(view === "konfiguracja" || view === "miesiac") && lokaleNames.length > 1 && (
           <select
             value={lokalKonfiguracji}
             onChange={(e) => setLokalOverride(e.target.value)}
@@ -161,6 +174,21 @@ export default function Grafik({
           </select>
         )}
       </div>
+
+      {view === "miesiac" && (
+        <GrafikMiesiac
+          lokal={lokalKonfiguracji}
+          miasto={(lokale || []).find((l) => l.name === lokalKonfiguracji)?.miasto || null}
+          activeStanowiska={activeStanowiska}
+          planShifts={planShifts}
+          staffingRules={staffingRules}
+          staffingRuleSets={staffingRuleSets}
+          grafikWyjatki={grafikWyjatki}
+          month={month}
+          setMonth={setMonth}
+          onBackToWeek={() => setView("tydzien")}
+        />
+      )}
 
       {view === "konfiguracja" ? (
         <GrafikWymagania
@@ -177,7 +205,7 @@ export default function Grafik({
           currentUser={currentUser}
           showMsg={showMsg}
         />
-      ) : (
+      ) : view === "tydzien" ? (
         <GrafikTydzien
           lokaleNames={lokaleNames}
           lokale={lokale}
@@ -196,7 +224,7 @@ export default function Grafik({
           mode={mode}
           showMsg={showMsg}
         />
-      )}
+      ) : null}
     </div>
   );
 }
