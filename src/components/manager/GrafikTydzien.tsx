@@ -111,7 +111,8 @@ function LokalSection({
       .then((data) => {
         if (!cancelled) setForecast(data || {});
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error(`Brak prognozy pogody dla "${miasto}":`, err.message || err);
         if (!cancelled) setForecast({});
       });
     return () => {
@@ -291,7 +292,7 @@ function LokalSection({
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse min-w-[900px]">
+        <table className="w-full border-collapse min-w-[1040px]">
           <thead>
             <tr className="bg-[#F1F1EE]">
               <th className="text-left px-3 py-2 border-r-[2px] border-[#171714] w-[190px] min-w-[190px]">
@@ -308,19 +309,29 @@ function LokalSection({
                     key={d}
                     className="px-3 py-2 text-left border-r-[2px] border-[#E7E7E2] last:border-r-0 align-top"
                   >
-                    <div className="font-['Archivo'] font-extrabold text-[13px]">
+                    <div className="font-['Archivo'] font-extrabold text-[19px] leading-none text-[#8F8E86]">
                       {DZIEN_SKROT[new Date(d + "T00:00:00").getDay()]}
                     </div>
-                    <div className="font-['Archivo'] font-extrabold text-[15px]">
+                    <div className="font-['Archivo'] font-extrabold text-[15px] mt-1">
                       {fmtDay(d)}
                     </div>
-                    <div className="text-[11px] text-[#8F8E86] h-4">
+                    {/* Stała wysokość, żeby dni bez prognozy nie rozjeżdżały
+                        wyrównania nagłówków; "—" zamiast pustki, bo pusty
+                        wiersz nie odróżnia "brak danych" od "nie działa". */}
+                    <div
+                      className="text-[11px] text-[#8F8E86] h-[15px] leading-[15px] whitespace-nowrap"
+                      title={
+                        pogoda && pogoda.temp != null
+                          ? describeWeatherCode(pogoda.code).label
+                          : "Brak prognozy dla tego dnia"
+                      }
+                    >
                       {pogoda && pogoda.temp != null
-                        ? `${Math.round(pogoda.temp)}° ${describeWeatherCode(pogoda.code).label.toLowerCase()}`
-                        : ""}
+                        ? `${describeWeatherCode(pogoda.code).icon} ${Math.round(pogoda.temp)}°`
+                        : "—"}
                     </div>
                     <div
-                      className={`text-[12px] font-bold mt-0.5 ${
+                      className={`flex items-center justify-between gap-2 text-[12px] font-bold mt-1 ${
                         stat.hasGap ? "text-[#DE3A22]" : "text-[#171714]"
                       }`}
                       title={
@@ -334,8 +345,11 @@ function LokalSection({
                           : ""
                       }
                     >
-                      {stat.people} os. · {fmtH(stat.hours)}
-                      {stat.hasGap ? " ⚠" : ""}
+                      <span>{stat.people} os.</span>
+                      <span>
+                        {fmtH(stat.hours)}
+                        {stat.hasGap ? " ⚠" : ""}
+                      </span>
                     </div>
                   </th>
                 );
@@ -410,10 +424,12 @@ function LokalSection({
                   key={stat.date}
                   className="px-3 py-2 border-r-[2px] border-[#E7E7E2] last:border-r-0"
                 >
-                  <div className="font-['Archivo'] font-extrabold text-[14px]">
-                    {fmtH(stat.hours)}
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-[11px] text-[#6E6E66]">{stat.people} os.</span>
+                    <span className="font-['Archivo'] font-extrabold text-[14px]">
+                      {fmtH(stat.hours)}
+                    </span>
                   </div>
-                  <div className="text-[11px] text-[#6E6E66]">{stat.people} osób</div>
                 </td>
               ))}
             </tr>
