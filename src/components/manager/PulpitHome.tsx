@@ -6,7 +6,7 @@
 // pracowników w zestawieniu nie ma stawki ustawionej, pokazujemy to wprost
 // zamiast cichо zaniżać sumę.
 import React from "react";
-import { AlertTriangle, ArrowRight, Palmtree } from "lucide-react";
+import { AlertTriangle, ArrowRight, Palmtree, ArrowLeftRight } from "lucide-react";
 import {
   statTileCls,
   statLabelCls,
@@ -18,6 +18,7 @@ import {
 } from "./designTokens";
 import { isTaskDueOn, findSharedCompletion, toLocalYMD } from "../../utils/tasks";
 import { countWorkdays } from "../../utils/absences";
+import { shiftHours } from "../../utils/grafik";
 
 const ProgressRing = ({ pct, size = 36, stroke = 5 }) => {
   const r = (size - stroke) / 2;
@@ -75,6 +76,8 @@ export default function PulpitHome({
   absences = [],
   matchesFilter, // (lokalName) => bool — hasAccessToLokal + wybrany lokal z paska
   setActiveTab,
+  shiftSwaps = [],
+  planShifts = [],
 }) {
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -159,6 +162,12 @@ export default function PulpitHome({
   // "Wymaga Twojej decyzji" łączy korekty godzin i wnioski o wolne w jedną
   // listę, posortowaną po dacie zgłoszenia — najstarsze najpierw, tak jak
   // dotychczas same korekty.
+  // Giełda zmian trafia do tej samej kolejki co korekty i wnioski o wolne —
+  // to wszystko są decyzje kierownika i mają być w jednym miejscu.
+  const pendingSwaps = (shiftSwaps || []).filter(
+    (sw) => sw.status === "przyjeta" && matchesFilter(sw.lokal)
+  );
+
   const decisionItems = [
     ...pendingCorrections.map((r) => ({
       kind: "correction",
@@ -167,6 +176,22 @@ export default function PulpitHome({
       name: r.iss.user_name || "Anonim",
       sub: `${r.iss.proposed_lokal} · ${fmtPL(r.iss.proposed_date)}`,
     })),
+    ...pendingSwaps.map((sw) => {
+      const ps = (planShifts || []).find(
+        (p) => String(p.id) === String(sw.grafik_shift_id)
+      );
+      return {
+        kind: "swap",
+        key: `s-${sw.id}`,
+        createdAt: sw.created_at,
+        name: sw.taker_user_name || "Pracownik",
+        sub: ps
+          ? `Giełda · od: ${sw.author_user_name} · ${fmtPL(ps.date)} · ${
+              Math.round(shiftHours(ps) * 10) / 10
+            } h`
+          : `Giełda · od: ${sw.author_user_name}`,
+      };
+    }),
     ...pendingAbsences.map((a) => ({
       kind: "absence",
       key: `a-${a.id}`,
@@ -283,7 +308,8 @@ export default function PulpitHome({
           <p className={statLabelCls}>Do decyzji</p>
           <p className={statValueCls}>{decisionItems.length}</p>
           <p className={statSubCls}>
-            {pendingCorrections.length} korekt, {pendingAbsences.length} wniosków o
+            {pendingCorrections.length} korekt, {pendingSwaps.length} zamian,{" "}
+            {pendingAbsences.length} wniosków o
             wolne, {openProblems} zgłoszeń
           </p>
         </div>
@@ -324,6 +350,9 @@ export default function PulpitHome({
               <div key={item.key} className="p-3.5 flex items-center gap-2">
                 {item.kind === "absence" && (
                   <Palmtree size={13} className="flex-shrink-0 text-[#6E6E66]" />
+                )}
+                {item.kind === "swap" && (
+                  <ArrowLeftRight size={13} className="flex-shrink-0 text-[#6E6E66]" />
                 )}
                 <div>
                   <p className="font-bold text-sm">{item.name}</p>

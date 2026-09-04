@@ -10,7 +10,12 @@ import {
   createEmployeeNotification,
   createManagerNotification,
 } from "../api/notifications";
-import { trimTime, findOverlappingPlanShift, findBlockingAbsence } from "./grafik";
+import {
+  trimTime,
+  shiftHours,
+  findOverlappingPlanShift,
+  findBlockingAbsence,
+} from "./grafik";
 
 // Ustalenie właściciela: zmiany nie da się wystawić później niż 12 godzin
 // przed jej rozpoczęciem — bez tego ktoś wystawiałby zmianę o 8:50 na 9:00.
@@ -50,6 +55,50 @@ export const activeSwapFor = (swaps, planShiftId) =>
       String(s.grafik_shift_id) === String(planShiftId) &&
       ["na_gieldzie", "przyjeta"].includes(s.status)
   ) || null;
+
+// Ile godzin w danym miesiącu zyska (dodatnio) albo straci (ujemnie) dany
+// pracownik, jeśli oczekujące zamiany zostaną zatwierdzone. Kierownik musi
+// to widzieć PRZED decyzją — przy pracowniku na etacie kilka przejętych
+// zmian potrafi wywrócić miesiąc.
+export const pendingSwapDelta = (swaps, planShifts, user, monthPrefix) => {
+  if (!user) return 0;
+  return (swaps || [])
+    .filter((sw) => sw.status === "przyjeta")
+    .reduce((delta, sw) => {
+      const ps = (planShifts || []).find(
+        (p) => String(p.id) === String(sw.grafik_shift_id)
+      );
+      if (!ps) return delta;
+      if (monthPrefix && !ps.date.startsWith(monthPrefix)) return delta;
+      const h = shiftHours(ps);
+      if (String(sw.taker_user_id) === String(user.id)) return delta + h;
+      if (String(sw.author_user_id) === String(user.id)) return delta - h;
+      return delta;
+    }, 0);
+};
+
+// Suma zaplanowanych godzin pracownika w miesiącu — punkt odniesienia dla
+// różnicy powyżej (ta sama arytmetyka co w siatce tygodnia).
+export const monthPlanHours = (planShifts, user, monthPrefix) =>
+  (planShifts || [])
+    .filter(
+      (s) =>
+        s.date.startsWith(monthPrefix) &&
+        (s.user_id && user?.id
+          ? String(s.user_id) === String(user.id)
+          : s.user_name === user?.name)
+    )
+    .reduce((sum, s) => sum + shiftHours(s), 0);
+
+// Aktywna oferta dotycząca zmiany danego pracownika — do podświetlenia
+// jego własnego grafiku (jest autorem) oraz oznaczenia u przejmującego.
+export const swapsForUser = (swaps, user) =>
+  (swaps || []).filter(
+    (sw) =>
+      ["na_gieldzie", "przyjeta"].includes(sw.status) &&
+      (String(sw.author_user_id) === String(user?.id) ||
+        String(sw.taker_user_id) === String(user?.id))
+  );
 
 export const offerSwap = async ({ planShift, author, note }) => {
   if (!canOfferSwap(planShift)) {

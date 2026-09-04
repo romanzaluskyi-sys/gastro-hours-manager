@@ -1047,6 +1047,8 @@ const ManagerDashboard = ({
             absences={absences}
             matchesFilter={matchesLokalFilter}
             setActiveTab={setTab}
+            shiftSwaps={shiftSwaps}
+            planShifts={planShifts}
           />
         )}
         {tab === "raporty" && (

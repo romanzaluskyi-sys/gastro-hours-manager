@@ -40,7 +40,7 @@ import {
   buildCopyFromPreviousWeek,
   storedStanowiskaArr,
 } from "../../utils/grafik";
-import { activeSwapFor } from "../../utils/swaps";
+import { activeSwapFor, pendingSwapDelta } from "../../utils/swaps";
 import { stanowiskoShort, stanowiskoBadgeStyle } from "../../utils/stanowiska";
 import { countWorkdays, URLOP_HOURS_PER_DAY } from "../../utils/absences";
 import { fetchDailyForecast, describeWeatherCode } from "../../utils/weather";
@@ -183,6 +183,9 @@ function LokalSection({
     return {
       user: u,
       hours,
+      // Ile godzin doszłoby/ubyło, gdyby oczekujące zamiany zostały
+      // zatwierdzone — kierownik musi to widzieć przed decyzją.
+      swapDelta: pendingSwapDelta(shiftSwaps, planShifts, u, monthPrefix),
       zmian: monthShifts.length,
       koszt: stawka != null ? hours * stawka : null,
       wieleLokali: lokaleOsoby.length > 1,
@@ -255,6 +258,24 @@ function LokalSection({
     const own = planWeek.filter(
       (s) => s.lokal === lokal && s.date === dateStr && isSameUser(s, user)
     );
+    // Zmiany, które trafią do tej osoby, jeśli kierownik zatwierdzi zamianę.
+    // Dublujemy je tutaj na szaro, żeby było widać, DOKĄD zmiana idzie —
+    // bez tego wiadomo tylko, kto ją oddaje.
+    const przychodzace = (shiftSwaps || [])
+      .filter((sw) => sw.status === "przyjeta" && String(sw.taker_user_id) === String(user.id))
+      .map((sw) => (planShifts || []).find((p) => String(p.id) === String(sw.grafik_shift_id)))
+      .filter((p) => p && p.lokal === lokal && p.date === dateStr);
+
+    const renderPrzychodzace = () =>
+      przychodzace.map((p) => (
+        <div
+          key={`in-${p.id}`}
+          className="mt-1 flex items-center gap-1 text-[11px] text-[#6E6E66] bg-[#EFEFEA] border border-dashed border-[#B7B6AE] rounded px-1 py-0.5"
+          title={`Przejmuje od: ${p.user_name} — czeka na Twoją decyzję`}
+        >
+          ⇄ {trimTime(p.start_time)}–{trimTime(p.end_time)} od {p.user_name}
+        </div>
+      ));
     if (own.length > 0) {
       return (
         <div className="space-y-1">
@@ -295,7 +316,7 @@ function LokalSection({
               {oferta && (
                 <div className="flex items-center gap-1 mt-0.5 flex-wrap">
                   <span
-                    className="text-[10px] font-extrabold px-1 py-0.5 rounded bg-[#FAEAE6] text-[#8A3A2B]"
+                    className="text-[12px] font-extrabold px-1.5 py-0.5 rounded bg-[#FAEAE6] text-[#8A3A2B]"
                     title={
                       oferta.status === "przyjeta"
                         ? `${oferta.taker_user_name} chce przejąć tę zmianę`
@@ -327,12 +348,29 @@ function LokalSection({
               </div>
             );
           })}
+          {renderPrzychodzace()}
           {edycja && (
             <button
               onClick={() => onCellClick(user, dateStr, null)}
               className="text-[11px] text-[#8F8E86] hover:text-[#171714] underline"
             >
               + druga zmiana
+            </button>
+          )}
+        </div>
+      );
+    }
+
+    if (przychodzace.length > 0) {
+      return (
+        <div>
+          {renderPrzychodzace()}
+          {edycja && (
+            <button
+              onClick={() => onCellClick(user, dateStr, null)}
+              className="mt-1 text-[11px] text-[#8F8E86] hover:text-[#171714] underline"
+            >
+              + dodaj
             </button>
           )}
         </div>
@@ -516,6 +554,17 @@ function LokalSection({
                       <div className="text-[12px] mt-0.5">
                         <strong>{fmtH(meta.hours)}</strong>{" "}
                         <span className="text-[#6E6E66]">· {meta.zmian} zmian</span>
+                        {Math.abs(meta.swapDelta) > 0.01 && (
+                          <span
+                            className={`ml-1 font-extrabold ${
+                              meta.swapDelta > 0 ? "text-[#2F7A2A]" : "text-[#DE3A22]"
+                            }`}
+                            title="Zmiana godzin po zatwierdzeniu oczekujących zamian z giełdy"
+                          >
+                            {meta.swapDelta > 0 ? "+" : "−"}
+                            {fmtH(Math.abs(meta.swapDelta))}
+                          </span>
+                        )}
                       </div>
                       <div className="text-[11px] text-[#6E6E66]">
                         {meta.koszt != null

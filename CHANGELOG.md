@@ -18,8 +18,22 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 - Zmiana wystawiona na giełdę jest **podświetlona w siatce**: na żółto, gdy
   czeka na chętnego, na zielono, gdy ktoś już się zgłosił i czeka na Twoją
   decyzję. Po otwarciu takiej zmiany okno też o tym mówi.
-- U pracownika "na giełdę" to teraz mały przycisk z boku, a nie pasek na całą
-  szerokość — dopiero po kliknięciu pojawia się duży przycisk potwierdzenia.
+- U pracownika "na giełdę" to mały przycisk po prawej stronie wiersza z
+  godzinami — dopiero po kliknięciu pojawia się duży przycisk potwierdzenia.
+  Zmiana wystawiona na giełdę jest u pracownika podświetlona całym blokiem,
+  tymi samymi kolorami co u kierownika.
+- Na Tablecie Służbowym informacja o giełdzie jest już na liście wyboru
+  osoby — na wspólnym urządzeniu nikt nie wchodzi na cudzą stronę, więc
+  inaczej nie dałoby się jej zauważyć.
+- W siatce kierownika zamiana jest teraz widoczna po OBU stronach: u osoby,
+  która oddaje zmianę, i — na szaro, przerywaną ramką — u tej, która ma ją
+  przejąć. Przy nazwisku obu osób widać, ile godzin w miesiącu im przybędzie
+  (zielone) albo ubędzie (czerwone) po zatwierdzeniu.
+- Zamiany z giełdy trafiły też na Pulpit, do kafelka "Do decyzji" i listy
+  "Wymaga Twojej decyzji".
+- W Zatwierdzaniu zmian przy każdej zamianie widać różnicę godzin obu osób
+  ("168 h → 176 h (+8 h)") — bez tego nie da się odpowiedzialnie zdecydować,
+  gdy ktoś pracuje na etat.
 - **Wniosek o wolne prosto z zakładki Grafik** — bez szukania go w "Zgłoś".
 - **Niedostępność na jeden dzień.** Zamiast wpisywać tę samą datę dwa razy,
   można podać sam dzień; pola "od-do" i "jeden dzień" wykluczają się

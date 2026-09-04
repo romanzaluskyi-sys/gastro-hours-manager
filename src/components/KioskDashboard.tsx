@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { Lock, AlertCircle, Delete, ChevronLeft } from "lucide-react";
 import { getTodaysShiftsForUser } from "../utils/shifts";
+import { swapsForUser, STATUS_LABEL } from "../utils/swaps";
 import {
   fmtHHMM,
   sumHours,
@@ -169,11 +170,22 @@ const KioskDashboard = ({
               const empClosedToday = getTodaysShiftsForUser(shifts, u.id).filter(
                 (s) => s.end_time
               );
+              // Na wspólnym tablecie nikt nie wchodzi na cudzą stronę, więc
+              // informacja o giełdzie musi być widoczna już na liście —
+              // inaczej pracownik nigdy się nie dowie, że ktoś oddaje zmianę
+              // albo że jego własna oferta znalazła chętnego.
+              const mojeOferty = swapsForUser(shiftSwaps, u);
               return (
                 <button
                   key={u.id}
                   onClick={() => selectEmployee(u)}
-                  className="border-2 border-[#B7B6AE] rounded bg-[#F1F1EE] p-4 flex items-center justify-between gap-3 w-full text-left mb-3.5"
+                  className={`border-2 rounded p-4 flex items-center justify-between gap-3 w-full text-left mb-3.5 ${
+                    mojeOferty.length > 0
+                      ? mojeOferty.some((sw) => sw.status === "przyjeta")
+                        ? "border-[#171714] bg-[#E4F3E0]"
+                        : "border-[#171714] bg-[#FDF3D4]"
+                      : "border-[#B7B6AE] bg-[#F1F1EE]"
+                  }`}
                 >
                   <div className="min-w-0">
                     <div className="font-['Archivo'] font-extrabold text-[21px] text-[#171714] flex items-center gap-1.5">
@@ -183,6 +195,12 @@ const KioskDashboard = ({
                     <div className="text-[13px] text-[#6E6E66] mt-0.5">
                       {u.default_stanowisko || ""}
                     </div>
+                    {mojeOferty.length > 0 && (
+                      <div className="text-[13px] font-bold text-[#8A3A2B] mt-1">
+                        ⇄ Giełda: {STATUS_LABEL[mojeOferty[0].status]}
+                        {mojeOferty.length > 1 ? ` (+${mojeOferty.length - 1})` : ""}
+                      </div>
+                    )}
                   </div>
                   {empOpen ? (
                     <span className="flex-shrink-0 text-[13px] font-semibold px-3 py-1.5 rounded bg-[#FAEAE6] text-[#8A3A2B]">

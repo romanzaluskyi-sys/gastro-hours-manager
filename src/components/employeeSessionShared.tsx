@@ -1394,10 +1394,17 @@ export const EmployeeSessionScreens = ({
                   s.lokal,
                   s.stanowisko
                 );
+                const oferta = activeSwapFor(shiftSwaps, s.id);
                 return (
                   <div
                     key={s.id}
-                    className="border-[2.5px] border-[#171714] rounded p-3.5"
+                    className={`border-[2.5px] border-[#171714] rounded p-3.5 ${
+                      oferta
+                        ? oferta.status === "przyjeta"
+                          ? "bg-[#E4F3E0]"
+                          : "bg-[#FDF3D4]"
+                        : ""
+                    }`}
                   >
                     <div className="flex items-center gap-2">
                       <span
@@ -1409,6 +1416,14 @@ export const EmployeeSessionScreens = ({
                       <span className="font-['Archivo'] font-extrabold text-[18px]">
                         {trimTime(s.start_time)} – {trimTime(s.end_time)}
                       </span>
+                      {!oferta && canOfferSwap(s) && swapConfirmId !== s.id && (
+                        <button
+                          onClick={() => setSwapConfirmId(s.id)}
+                          className="ml-auto border-2 border-[#B7B6AE] rounded px-2.5 py-1 text-[12px] font-bold text-[#6E6E66]"
+                        >
+                          na giełdę
+                        </button>
+                      )}
                     </div>
                     <div className="text-[13px] text-[#6E6E66] mt-0.5">
                       {s.stanowisko} · {s.lokal}
@@ -1429,7 +1444,6 @@ export const EmployeeSessionScreens = ({
                       </div>
                     )}
                     {(() => {
-                      const oferta = activeSwapFor(shiftSwaps, s.id);
                       if (oferta) {
                         return (
                           <div className="mt-2.5 flex items-center gap-2 flex-wrap">
@@ -1452,17 +1466,7 @@ export const EmployeeSessionScreens = ({
                           </div>
                         );
                       }
-                      if (!canOfferSwap(s)) return null;
-                      if (swapConfirmId !== s.id) {
-                        return (
-                          <button
-                            onClick={() => setSwapConfirmId(s.id)}
-                            className="mt-2 border-2 border-[#B7B6AE] rounded px-2.5 py-1 text-[12px] font-bold text-[#6E6E66]"
-                          >
-                            na giełdę
-                          </button>
-                        );
-                      }
+                      if (!canOfferSwap(s) || swapConfirmId !== s.id) return null;
                       return (
                         <div className="mt-2.5">
                           <button

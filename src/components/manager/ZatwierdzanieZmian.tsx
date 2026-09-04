@@ -14,7 +14,8 @@ import {
 } from "lucide-react";
 import { resolveCorrection, askAboutCorrection } from "../../utils/corrections";
 import { countWorkdays, URLOP_HOURS_PER_DAY } from "../../utils/absences";
-import { trimTime } from "../../utils/grafik";
+import { trimTime, shiftHours } from "../../utils/grafik";
+import { monthPlanHours } from "../../utils/swaps";
 import { pageTitleCls, statLabelCls, btnPrimaryCls, btnSecondaryCls } from "./designTokens";
 
 const fmtPLAbs = (dateStr) =>
@@ -247,6 +248,54 @@ export default function ZatwierdzanieZmian({
                     {sw.note && (
                       <div className="text-[13px] text-[#6E6E66] mt-1">{sw.note}</div>
                     )}
+                    {ps &&
+                      (() => {
+                        // Różnica godzin w miesiącu dla obu stron — bez tego
+                        // nie da się odpowiedzialnie zdecydować, gdy ktoś
+                        // pracuje na etat. (Sam etat to osobny temat; tutaj
+                        // pokazujemy wyłącznie liczby.)
+                        const mies = ps.date.slice(0, 7);
+                        const h = shiftHours(ps);
+                        const strony = [
+                          {
+                            osoba: sw.taker_user_name,
+                            teraz: monthPlanHours(
+                              planShifts,
+                              { id: sw.taker_user_id, name: sw.taker_user_name },
+                              mies
+                            ),
+                            delta: h,
+                          },
+                          {
+                            osoba: sw.author_user_name,
+                            teraz: monthPlanHours(
+                              planShifts,
+                              { id: sw.author_user_id, name: sw.author_user_name },
+                              mies
+                            ),
+                            delta: -h,
+                          },
+                        ];
+                        return (
+                          <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-[13px]">
+                            {strony.map((r) => (
+                              <span key={r.osoba} className="tabular-nums">
+                                <span className="font-bold">{r.osoba}</span>{" "}
+                                {Math.round(r.teraz * 10) / 10} h →{" "}
+                                {Math.round((r.teraz + r.delta) * 10) / 10} h{" "}
+                                <span
+                                  className={`font-extrabold ${
+                                    r.delta > 0 ? "text-[#2F7A2A]" : "text-[#DE3A22]"
+                                  }`}
+                                >
+                                  ({r.delta > 0 ? "+" : "−"}
+                                  {Math.round(Math.abs(r.delta) * 10) / 10} h)
+                                </span>
+                              </span>
+                            ))}
+                          </div>
+                        );
+                      })()}
                   </div>
                   <div className="flex gap-2">
                     <button
