@@ -123,6 +123,7 @@ export default function GrafikZmianaModal({
   // na Barmana) nadpisywanie kasowałoby właśnie to, co się wybrało.
   const [stanowiskoRuszone, setStanowiskoRuszone] = useState(false);
   const [pokazPozostale, setPokazPozostale] = useState(false);
+  const [pokazWszystkich, setPokazWszystkich] = useState(false);
   const [zrodloGodzin, setZrodloGodzin] = useState(null);
 
   const user = (users || []).find((u) => String(u.id) === String(userId)) || ctx.user;
@@ -149,17 +150,29 @@ export default function GrafikZmianaModal({
 
   // Osoby wolne tego dnia w tym lokalu — plus ta, która jest już wpisana,
   // żeby dało się edytować istniejącą zmianę bez znikania jej autora.
-  // Zawsze cała sieć, swoi pierwsi. Wypożyczanie ludzi między lokalami to
-  // u właściciela normalna praktyka, a nie wyjątek — ograniczanie listy do
-  // stałej obsady lokalu tylko by przeszkadzało. Rozpoznanie "kto może"
-  // idzie przez stanowisko, nie przez lokal.
-  const kandydaci = (users || [])
-    .filter((u) => !u.archived && u.active !== false && u.role !== "kiosk")
-    .sort((a, b) => {
-      const swoj = (u) => (u.default_lokal === lokal ? 0 : 1);
+  // Kto MOŻE tu pracować — decyduje stanowisko, nie lokal. Pokazujemy więc
+  // ludzi z całej sieci, ale wyłącznie tych, którzy mają w karcie choć jedno
+  // stanowisko istniejące w tym lokalu. Lista "wszystkich po kolei" była
+  // nieczytelna: większość nazwisk i tak nie wchodziła w grę.
+  const stanowiskaTegoLokalu = new Set(
+    (activeStanowiska || []).filter((s) => s.lokal_name === ctx.lokal).map((s) => s.name)
+  );
+  const aktywni = (users || []).filter(
+    (u) => !u.archived && u.active !== false && u.role !== "kiosk"
+  );
+  const mozeTu = (u) =>
+    allowedStanowiskaArr(u).some((n) => stanowiskaTegoLokalu.has(n));
+  const pasujacy = aktywni.filter(mozeTu);
+  // Bezpiecznik: gdy nikt nie pasuje (np. stanowiska nie są jeszcze
+  // poustawiane w kartach), nie zostawiamy kierownika ze ślepą listą.
+  const kandydaci = (pokazWszystkich || pasujacy.length === 0 ? aktywni : pasujacy).sort(
+    (a, b) => {
+      const swoj = (u) => (u.default_lokal === ctx.lokal ? 0 : 1);
       if (swoj(a) !== swoj(b)) return swoj(a) - swoj(b);
       return a.name.localeCompare(b.name, "pl");
-    });
+    }
+  );
+  const ukrytych = aktywni.length - pasujacy.length;
 
   // Kafelek wyboru to para STANOWISKO + LOKAL, nie samo stanowisko. Dzięki
   // temu z grafiku lokalu 1 da się od razu oddać człowieka na jeden dzień do
@@ -295,14 +308,35 @@ export default function GrafikZmianaModal({
                     }
                   >
                     {u.name}
-                    {u.default_lokal !== lokal && (
+                    {u.default_lokal && u.default_lokal !== ctx.lokal && (
                       <span className="font-normal opacity-70"> · {u.default_lokal}</span>
                     )}
-                    {zajety ? " ·" : ""}
+                    {zajety && (
+                      <span
+                        className={`ml-1.5 px-1 rounded text-[10px] font-extrabold ${
+                          zajety.type === "urlop"
+                            ? "bg-[#DE3A22] text-white"
+                            : "bg-[#E7E7E2] text-[#6E6E66]"
+                        }`}
+                      >
+                        {zajety.type === "urlop" ? "URP" : "NIE"}
+                      </span>
+                    )}
                   </button>
                 );
               })}
             </div>
+            {ukrytych > 0 && pasujacy.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setPokazWszystkich((v) => !v)}
+                className="mt-1.5 text-[12px] font-bold underline text-[#6E6E66]"
+              >
+                {pokazWszystkich
+                  ? "Pokaż tylko pasujących"
+                  : `Pokaż wszystkich (${ukrytych} bez stanowiska z tego lokalu)`}
+              </button>
+            )}
           </div>
 
           <div>

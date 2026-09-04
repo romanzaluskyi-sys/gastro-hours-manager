@@ -27,7 +27,7 @@ const CHANGELOG = [
     date: "2026-09-03",
     items: [
       "W oknie zmiany wybierasz stanowisko RAZEM z lokalem ('Kelner · Sunset') — pracownika oddajesz do innego lokalu bez przechodzenia na jego zakładkę.",
-      "Widać tylko stanowiska z karty pracownika; pozostałe są schowane pod rozwijanym linkiem.",
+      "Widać tylko stanowiska z karty pracownika, a na liście osób tylko tych, którzy mogą pracować w tym lokalu; resztę odsłaniają rozwijane linki.",
     ],
   },
   {

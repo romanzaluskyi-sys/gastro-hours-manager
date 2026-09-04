@@ -12,6 +12,10 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
   lokalem* — np. "Kelner" (u siebie) albo "Kelner · Sunset". Wpisana w ten
   sposób zmiana pojawia się w grafiku Sunset jako zwykła zmiana, a w grafiku
   macierzystego lokalu jako "w Sunset".
+- **Lista pracowników pokazuje tylko tych, którzy mogą tu pracować** — czyli
+  mają w karcie stanowisko istniejące w tym lokalu. Długa lista wyszarzonych
+  nazwisk, z których większość i tak nie wchodziła w grę, zniknęła; w razie
+  potrzeby jest link "Pokaż wszystkich".
 - **Pokazujemy tylko stanowiska z karty pracownika.** Reszta jest schowana
   pod "Pozostałe stanowiska" — po rozwinięciu nadal można ich użyć razem z
   przyciskiem "Dopisz do umiejętności".
