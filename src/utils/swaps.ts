@@ -15,6 +15,7 @@ import {
   shiftHours,
   findOverlappingPlanShift,
   findBlockingAbsence,
+  knowsStanowisko,
 } from "./grafik";
 
 // Ustalenie właściciela: zmiany nie da się wystawić później niż 12 godzin
@@ -116,6 +117,9 @@ export const offersForUser = ({ swaps, planShifts, absences, user }) =>
       ps: (planShifts || []).find((p) => String(p.id) === String(sw.grafik_shift_id)),
     }))
     .filter(({ ps }) => ps && canOfferSwap(ps))
+    // Na giełdę idzie konkretna PRACA, nie same godziny — propozycja ma
+    // sens tylko dla kogoś, kto ma to stanowisko w swojej karcie.
+    .filter(({ ps }) => knowsStanowisko(user, ps.stanowisko))
     .filter(
       ({ ps }) =>
         !(planShifts || []).some(

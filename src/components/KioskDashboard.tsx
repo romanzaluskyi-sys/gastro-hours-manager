@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React, { useState, useEffect } from "react";
-import { Lock, AlertCircle, Delete, ChevronLeft } from "lucide-react";
+import { Lock, AlertCircle, Delete, ChevronLeft, Mail } from "lucide-react";
 import { getTodaysShiftsForUser } from "../utils/shifts";
 import { offersForUser, STATUS_LABEL } from "../utils/swaps";
 import { trimTime } from "../utils/grafik";
@@ -183,6 +183,15 @@ const KioskDashboard = ({
                 absences,
                 user: u,
               });
+              // Wiadomości są adresowane imiennie, a na wspólnym tablecie
+              // nikt nie zagląda na cudzą stronę — bez sygnału na liście
+              // powiadomienie potrafiłoby wisieć nieprzeczytane tygodniami.
+              const nieprzeczytane = notifications.filter(
+                (n) =>
+                  (n.audience || "employee") === "employee" &&
+                  n.user_name === u.name &&
+                  !n.is_read
+              ).length;
               const wystawione = (shiftSwaps || []).filter(
                 (sw) =>
                   ["na_gieldzie", "przyjeta"].includes(sw.status) &&
@@ -194,7 +203,7 @@ const KioskDashboard = ({
                   onClick={() => selectEmployee(u)}
                   className={`border-2 rounded p-4 flex items-center justify-between gap-3 w-full text-left mb-3.5 ${
                     propozycje.length > 0
-                      ? "border-[#171714] bg-[#E4F3E0]"
+                      ? "border-[#171714] bg-[#FDF3D4]"
                       : "border-[#B7B6AE] bg-[#F1F1EE]"
                   }`}
                 >
@@ -206,8 +215,16 @@ const KioskDashboard = ({
                     <div className="text-[13px] text-[#6E6E66] mt-0.5">
                       {u.default_stanowisko || ""}
                     </div>
+                    {nieprzeczytane > 0 && (
+                      <div className="text-[13px] font-bold text-[#8A3A2B] mt-1 flex items-center gap-1">
+                        <Mail size={14} strokeWidth={2.3} />
+                        {nieprzeczytane === 1
+                          ? "Czeka wiadomość"
+                          : `Czekają ${nieprzeczytane} wiadomości`}
+                      </div>
+                    )}
                     {propozycje.length > 0 ? (
-                      <div className="text-[13px] font-bold text-[#2F5E2A] mt-1">
+                      <div className="text-[13px] font-bold text-[#8A3A2B] mt-1">
                         ⇄ Giełda: propozycja {opisDnia(propozycje[0].ps.date)} ·{" "}
                         {trimTime(propozycje[0].ps.start_time)} –{" "}
                         {trimTime(propozycje[0].ps.end_time)}

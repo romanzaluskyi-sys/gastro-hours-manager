@@ -39,6 +39,7 @@ import {
   findBlockingAbsence,
   buildCopyFromPreviousWeek,
   storedStanowiskaArr,
+  isUnpublished,
 } from "../../utils/grafik";
 import { activeSwapFor, pendingSwapDelta } from "../../utils/swaps";
 import { stanowiskoShort, stanowiskoBadgeStyle } from "../../utils/stanowiska";
@@ -308,6 +309,14 @@ function LokalSection({
                 <span className="text-[12px] tabular-nums whitespace-nowrap">
                   {trimTime(s.start_time)} – {trimTime(s.end_time)}
                 </span>
+                {isUnpublished(s) && (
+                  <span
+                    className="text-[#DE3A22] font-extrabold leading-none"
+                    title="Niewysłane pracownikom"
+                  >
+                    •
+                  </span>
+                )}
               </Wrapper>
               {/* Znacznik giełdy poza <Wrapper>, bo w trybie Edycja Wrapper
                   jest <button>, a przyciski ✓/✗ nie mogą siedzieć w środku
@@ -424,6 +433,14 @@ function LokalSection({
         <span className="text-[13px] text-[#6E6E66]">
           {osobyWTygodniu} osób · {fmtH(weekHours)} w tygodniu
         </span>
+        {(() => {
+          const nw = planWeek.filter((s) => s.lokal === lokal && isUnpublished(s)).length;
+          return nw > 0 ? (
+            <span className="text-[13px] font-bold text-[#DE3A22]">
+              {nw} niewysłanych
+            </span>
+          ) : null;
+        })()}
         {dniPodMinimum > 0 && (
           <span className="text-[13px] font-bold text-[#DE3A22] flex items-center gap-1">
             <AlertTriangle size={14} />

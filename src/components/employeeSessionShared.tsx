@@ -173,6 +173,7 @@ export const Shell = ({
   unreadCount,
   taskBadgeCount = 0,
   grafikBadgeCount = 0,
+  personName = null,
   title,
   showPill = false,
   showBell = true,
@@ -194,6 +195,15 @@ export const Shell = ({
               >
                 <ChevronLeft size={16} strokeWidth={2.5} /> Zmień
               </button>
+            )}
+            {/* Na wspólnym tablecie tytuł ekranu ("Grafik", "Raport") nie
+                mówi, KTO jest wybrany — imię musi być stale widoczne obok
+                przycisku powrotu. Na Pulpicie tytułem jest już imię, więc
+                nie dublujemy. */}
+            {personName && personName !== title && (
+              <span className="font-['Archivo'] font-bold text-[15px] text-[#6E6E66] truncate flex-shrink-0">
+                {personName} ·
+              </span>
             )}
             <span className="font-['Archivo'] font-extrabold text-[19px] text-[#171714] truncate">
               {title}
@@ -1288,6 +1298,7 @@ export const EmployeeSessionScreens = ({
         unreadCount={unreadCount}
         taskBadgeCount={taskBadgeCount}
         grafikBadgeCount={grafikBadgeCount}
+        personName={onBack ? employee.name : null}
         title={employee.name}
         showPill={!!openShift}
       >
@@ -1391,6 +1402,7 @@ export const EmployeeSessionScreens = ({
         unreadCount={unreadCount}
         taskBadgeCount={taskBadgeCount}
         grafikBadgeCount={grafikBadgeCount}
+        personName={onBack ? employee.name : null}
         title={employee.name}
         showPill={!!openShift}
       >
@@ -1618,6 +1630,7 @@ export const EmployeeSessionScreens = ({
         unreadCount={unreadCount}
         taskBadgeCount={taskBadgeCount}
         grafikBadgeCount={grafikBadgeCount}
+        personName={onBack ? employee.name : null}
         title="Grafik"
       >
         <div className="flex gap-1.5 mb-3">
@@ -1753,6 +1766,7 @@ export const EmployeeSessionScreens = ({
         unreadCount={unreadCount}
         taskBadgeCount={taskBadgeCount}
         grafikBadgeCount={grafikBadgeCount}
+        personName={onBack ? employee.name : null}
         title="Raport"
         footer={
           <div className="flex-shrink-0 border-t-[2.5px] border-[#171714] bg-white px-5 pt-[18px] pb-[22px] flex items-baseline justify-between">
@@ -1893,6 +1907,7 @@ export const EmployeeSessionScreens = ({
         unreadCount={unreadCount}
         taskBadgeCount={taskBadgeCount}
         grafikBadgeCount={grafikBadgeCount}
+        personName={onBack ? employee.name : null}
         title="Zadania"
       >
         {myChecklistOwn.some((i) => !i.done) && (
@@ -1957,6 +1972,7 @@ export const EmployeeSessionScreens = ({
         unreadCount={unreadCount}
         taskBadgeCount={taskBadgeCount}
         grafikBadgeCount={grafikBadgeCount}
+        personName={onBack ? employee.name : null}
         title="Więcej"
       >
         <button onClick={() => openZgloszenie(null)} className={menuRowCls}>
@@ -2029,6 +2045,7 @@ export const EmployeeSessionScreens = ({
         unreadCount={unreadCount}
         taskBadgeCount={taskBadgeCount}
         grafikBadgeCount={grafikBadgeCount}
+        personName={onBack ? employee.name : null}
         title="Wiadomości"
         showBell={false}
       >
@@ -2079,6 +2096,7 @@ export const EmployeeSessionScreens = ({
         unreadCount={unreadCount}
         taskBadgeCount={taskBadgeCount}
         grafikBadgeCount={grafikBadgeCount}
+        personName={onBack ? employee.name : null}
         title={
           zgType === "correction"
             ? "Popraw zmianę"

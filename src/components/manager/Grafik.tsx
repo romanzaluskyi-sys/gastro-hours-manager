@@ -62,20 +62,32 @@ export default function Grafik({
     (lokaleNames.includes(lokalOverride) && lokalOverride) || lokaleNames[0] || null;
 
   const weekEnd = addDaysYMD(weekStart, 6);
-  // Tylko lokale w zasięgu kierownika i tylko wyświetlany tydzień — inaczej
-  // licznik obiecywałby wysłanie czegoś, czego ta osoba nawet nie widzi.
-  const niewyslane = (planShifts || []).filter(
+  // Liczymy i wysyłamy po WSZYSTKICH lokalach kierownika, nie tylko po
+  // widocznych. Zmianę można wpisać do innego lokalu z siatki tego, który
+  // się ogląda (kafelek "stanowisko · lokal"), więc przy zawężeniu do
+  // widocznych taka zmiana nigdy nie dałaby się wysłać i po cichu zostawała
+  // wersją roboczą — pracownik jej nie widział, a kierownik nie miał jak się
+  // o tym dowiedzieć.
+  const niewyslaneWiersze = (planShifts || []).filter(
     (s) =>
-      lokaleNames.includes(s.lokal) &&
+      wszystkieLokaleNames.includes(s.lokal) &&
       s.date >= weekStart &&
       s.date <= weekEnd &&
       isUnpublished(s)
+  );
+  const niewyslane = niewyslaneWiersze.length;
+  const niewyslanePozaWidokiem = niewyslaneWiersze.filter(
+    (s) => !lokaleNames.includes(s.lokal)
   ).length;
 
   const handlePublish = async () => {
     if (
       !window.confirm(
-        `Wysłać grafik pracownikom? Zmian do wysłania: ${niewyslane}. Każda osoba dostanie jedno powiadomienie.`
+        `Wysłać grafik pracownikom? Zmian do wysłania: ${niewyslane}` +
+          (niewyslanePozaWidokiem > 0
+            ? ` (w tym ${niewyslanePozaWidokiem} w lokalach spoza tego widoku)`
+            : "") +
+          ". Każda osoba dostanie jedno powiadomienie."
       )
     )
       return;
@@ -83,7 +95,7 @@ export default function Grafik({
     try {
       const { updated, powiadomieni } = await publishWeek({
         planShifts,
-        lokaleNames,
+        lokaleNames: wszystkieLokaleNames,
         from: weekStart,
         to: weekEnd,
         actorName: currentUser?.name,
@@ -161,7 +173,11 @@ export default function Grafik({
             title={
               niewyslane === 0
                 ? "Wszystkie zmiany w tym tygodniu są już wysłane"
-                : `Niewysłanych zmian: ${niewyslane}`
+                : `Niewysłanych zmian: ${niewyslane}${
+                    niewyslanePozaWidokiem > 0
+                      ? ` (${niewyslanePozaWidokiem} w innych lokalach)`
+                      : ""
+                  }`
             }
           >
             <Send size={15} className="inline -mt-0.5 mr-1" /> Wyślij grafik pracownikom

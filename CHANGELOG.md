@@ -36,6 +36,23 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 - Zmiana w **innym lokalu** jest wyraźnie oznaczona w grafiku pracownika.
 - Zakładka Grafik ma odznakę z liczbą: nowy wysłany grafik plus propozycje
   z giełdy, które możesz wziąć.
+- **Propozycja z giełdy trafia tylko do osób, które mają dane stanowisko w
+  swojej karcie.** Na giełdę idzie konkretna praca, nie same godziny — więc
+  nie ma sensu zaczepiać nią wszystkich.
+- Na Tablecie Służbowym podświetlamy (na żółto, jako "zwróć uwagę") tylko
+  tych, którzy mogą zmianę wziąć, i pokazujemy przy nich dzień i godziny.
+  Doszła też **koperta "Czeka wiadomość"** przy osobie z nieprzeczytanym
+  powiadomieniem — na wspólnym urządzeniu nikt nie zagląda na cudzą stronę.
+- Po wybraniu osoby na tablecie jej imię jest stale widoczne w nagłówku,
+  obok przycisku "Zmień".
+- **Wysyłka grafiku obejmuje teraz wszystkie lokale kierownika, nie tylko
+  widoczne.** Zmianę wpisaną z siatki jednego lokalu do drugiego nie dało
+  się wcześniej wysłać — zostawała wersją roboczą, niewidoczną dla
+  pracownika i dla kierownika. Niewysłane zmiany są teraz oznaczone kropką
+  w siatce i licznikiem "N niewysłanych" przy nazwie lokalu.
+- Pracownikowi wpisanemu do lokalu, w którym nie ma żadnego ze swoich
+  stanowisk, można już dopisać kolejną zmianę — wcześniej znikał z listy
+  wyboru i nie było jak.
 - W siatce kierownika zamiana jest teraz widoczna po OBU stronach: u osoby,
   która oddaje zmianę, i — na szaro, przerywaną ramką — u tej, która ma ją
   przejąć. Przy nazwisku obu osób widać, ile godzin w miesiącu im przybędzie

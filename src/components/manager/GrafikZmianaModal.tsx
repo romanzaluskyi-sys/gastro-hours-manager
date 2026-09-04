@@ -160,7 +160,12 @@ export default function GrafikZmianaModal({
   const aktywni = (users || []).filter(
     (u) => !u.archived && u.active !== false && u.role !== "kiosk"
   );
+  // Osoba, na której wierszu kliknięto, ZAWSZE zostaje na liście — bywa
+  // wpisana do lokalu, w którym nie ma żadnego ze swoich stanowisk (np.
+  // wypożyczona z innego lokalu), a mimo to trzeba móc dopisać jej kolejną
+  // zmianę. Odfiltrowanie jej odbierało jedyną drogę do tego.
   const mozeTu = (u) =>
+    String(u.id) === String(ctx.user?.id) ||
     allowedStanowiskaArr(u).some((n) => stanowiskaTegoLokalu.has(n));
   const pasujacy = aktywni.filter(mozeTu);
   // Bezpiecznik: gdy nikt nie pasuje (np. stanowiska nie są jeszcze
