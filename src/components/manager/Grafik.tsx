@@ -1,19 +1,26 @@
 // @ts-nocheck
-// Grafik — host zakładki (odpowiednik ManagerDashboard.tsx dla całego
-// modułu): trzyma wybór podwidoku i przekazuje dane w dół. Widok tygodnia
-// i miesiąca dochodzą w kolejnych etapach (patrz "Plan wdrożenia" w
-// docs/GRAFIK.md) — na razie jest tu tylko konfiguracja, bez której
-// kontrola obsady nie miałaby czego sprawdzać.
+// Grafik — host zakładki: trzyma wybór podwidoku, tydzień i sortowanie,
+// resztę oddaje w dół. Widok miesiąca, tryb Edycja i giełda zmian dochodzą
+// w kolejnych etapach (patrz "Plan wdrożenia" w docs/GRAFIK.md).
+//
+// Zakres lokali bierzemy z górnego paska ManagerShell (selectedLokal) —
+// nie powtarzamy wyboru lokalu wewnątrz zakładki.
 import React, { useState } from "react";
-import { CalendarRange, SlidersHorizontal, Info } from "lucide-react";
+import { CalendarRange, SlidersHorizontal } from "lucide-react";
 import GrafikWymagania from "./GrafikWymagania";
+import GrafikTydzien from "./GrafikTydzien";
 import { pageTitleCls, cardCls, btnPrimaryCls, btnSecondaryCls } from "./designTokens";
+import { toLocalYMD, mondayOf } from "../../utils/grafik";
 
 export default function Grafik({
   currentUser,
   selectedLokal,
   availableLokaleForManager,
+  lokale,
+  users,
   activeStanowiska,
+  planShifts,
+  absences,
   staffingRules,
   setStaffingRules,
   staffingRuleSets,
@@ -24,18 +31,22 @@ export default function Grafik({
   setGrafikWyjatki,
   showMsg,
 }) {
-  const [view, setView] = useState("konfiguracja");
-
-  // Konfiguracja dotyczy zawsze JEDNEGO lokalu — przy "Cała sieć"/"Wszystkie
-  // moje" spadamy na pierwszy dostępny, tak samo jak pogoda w ManagerShell
-  // (weatherLokalName w ManagerDashboard.tsx).
+  const [view, setView] = useState("tydzien");
+  const [weekStart, setWeekStart] = useState(() => mondayOf(toLocalYMD(new Date())));
+  const [sortBy, setSortBy] = useState("stanowisko");
   const [lokalOverride, setLokalOverride] = useState(null);
-  const fallbackLokal = availableLokaleForManager[0]?.name || null;
-  const lokal =
-    lokalOverride ||
-    (selectedLokal !== "ALL" ? selectedLokal : fallbackLokal);
 
-  if (!lokal) {
+  const lokaleNames =
+    selectedLokal !== "ALL"
+      ? [selectedLokal]
+      : (availableLokaleForManager || []).map((l) => l.name);
+
+  // Konfiguracja dotyczy zawsze JEDNEGO lokalu — przy "Cała sieć" trzeba go
+  // wskazać osobno, bo wymagania obsady są per lokal.
+  const lokalKonfiguracji =
+    (lokaleNames.includes(lokalOverride) && lokalOverride) || lokaleNames[0] || null;
+
+  if (!lokalKonfiguracji) {
     return (
       <div className="max-w-3xl mx-auto">
         <div className={cardCls}>
@@ -50,7 +61,7 @@ export default function Grafik({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3 max-w-5xl mx-auto">
+      <div className="flex flex-wrap items-center gap-3">
         <h2 className={pageTitleCls}>Grafik</h2>
         <div className="flex gap-2">
           <button
@@ -66,15 +77,15 @@ export default function Grafik({
             <SlidersHorizontal size={15} className="inline -mt-0.5 mr-1" /> Konfiguracja
           </button>
         </div>
-        {selectedLokal === "ALL" && (
+        {view === "konfiguracja" && lokaleNames.length > 1 && (
           <select
-            value={lokal}
+            value={lokalKonfiguracji}
             onChange={(e) => setLokalOverride(e.target.value)}
             className="ml-auto p-2 border-[2px] border-[#171714] rounded bg-white font-bold text-sm"
           >
-            {availableLokaleForManager.map((l) => (
-              <option key={l.id} value={l.name}>
-                {l.name}
+            {lokaleNames.map((name) => (
+              <option key={name} value={name}>
+                {name}
               </option>
             ))}
           </select>
@@ -83,7 +94,7 @@ export default function Grafik({
 
       {view === "konfiguracja" ? (
         <GrafikWymagania
-          lokal={lokal}
+          lokal={lokalKonfiguracji}
           activeStanowiska={activeStanowiska}
           staffingRules={staffingRules}
           setStaffingRules={setStaffingRules}
@@ -97,23 +108,21 @@ export default function Grafik({
           showMsg={showMsg}
         />
       ) : (
-        <div className="max-w-3xl mx-auto">
-          <div className={cardCls}>
-            <div className="flex items-start gap-3">
-              <Info size={20} className="text-[#DE3A22] flex-shrink-0 mt-0.5" />
-              <div>
-                <h3 className="font-['Archivo'] font-extrabold text-[16px] mb-1">
-                  Siatka tygodnia — w budowie
-                </h3>
-                <p className="text-[14px] text-[#6E6E66]">
-                  Zanim powstanie siatka, uzupełnij <strong>Konfigurację</strong>:
-                  godziny otwarcia lokalu i wymagania obsady. Bez nich grafik nie
-                  ma jak sprawdzić, czy dzień jest obsadzony.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
+        <GrafikTydzien
+          lokaleNames={lokaleNames}
+          lokale={lokale}
+          users={users}
+          activeStanowiska={activeStanowiska}
+          planShifts={planShifts}
+          absences={absences}
+          staffingRules={staffingRules}
+          staffingRuleSets={staffingRuleSets}
+          grafikWyjatki={grafikWyjatki}
+          weekStart={weekStart}
+          setWeekStart={setWeekStart}
+          sortBy={sortBy}
+          setSortBy={setSortBy}
+        />
       )}
     </div>
   );

@@ -23,6 +23,15 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.16.0",
+    date: "2026-09-03",
+    items: [
+      "Grafik — widok tygodnia: pracownicy w wierszach, siedem dni w kolumnach, osobna tabela na lokal. Urlopy, brak dostępności i praca w innym lokalu widoczne w komórkach.",
+      "Dni z niepełną obsadą oznaczone na czerwono — najedź na liczbę, żeby zobaczyć na jakim stanowisku i w jakich godzinach brakuje ludzi.",
+      "Sortowanie pracowników, legenda stanowisk i eksport tygodnia do CSV.",
+    ],
+  },
+  {
     version: "0.15.0",
     date: "2026-09-03",
     items: [

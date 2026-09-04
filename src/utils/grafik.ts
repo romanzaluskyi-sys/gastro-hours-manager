@@ -39,6 +39,15 @@ export const addDaysYMD = (dateStr, delta) => {
 
 export const dowOf = (dateStr) => new Date(dateStr + "T00:00:00").getDay();
 
+// Poniedziałek tygodnia, w którym leży podana data — tydzień w grafiku
+// zawsze zaczyna się od poniedziałku (0=niedziela w JS, stąd korekta).
+export const mondayOf = (dateStr) => {
+  const d = new Date(dateStr + "T00:00:00");
+  const dow = d.getDay();
+  d.setDate(d.getDate() + (dow === 0 ? -6 : 1 - dow));
+  return toLocalYMD(d);
+};
+
 // Lista indeksów dni po przecinku ("1,2,3,4,5", 0=niedziela..6=sobota) —
 // ten sam format i to samo znaczenie co `tasks.days_of_week`, żeby nie
 // wprowadzać drugiej konwencji w tym samym projekcie.
@@ -257,7 +266,9 @@ export const checkDayCoverage = (
     gaps,
     gapMinutes,
     hasGap: gaps.length > 0,
-    people: own.length,
+    // OSOBY, nie zmiany — jedna osoba może mieć tego dnia dwie zmiany
+    // (dzielenie zmiany jest dozwolone, blokujemy tylko nakładanie godzin).
+    people: new Set(own.map((s) => s.user_id || s.user_name)).size,
     hours: minToHours(own.reduce((sum, s) => sum + shiftLengthMin(s), 0)),
   };
 };

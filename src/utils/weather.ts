@@ -6,6 +6,7 @@
 // żeby nie odpytywać API przy każdym re-renderze/przełączeniu zakładki.
 const geoCache = new Map(); // miasto (lowercase) -> {lat, lon} | null
 const weatherCache = new Map(); // miasto (lowercase) -> { data, ts }
+const forecastCache = new Map(); // miasto (lowercase) -> { data, ts }
 const WEATHER_TTL_MS = 20 * 60 * 1000;
 
 async function geocodeCity(city) {
@@ -77,5 +78,38 @@ export async function fetchCurrentWeather(city) {
     code: json.current?.weather_code,
   };
   weatherCache.set(key, { data, ts: Date.now() });
+  return data;
+}
+
+// Prognoza dobowa na siatkę Grafiku — jedna wartość (temperatura maks. +
+// kod pogody) na dzień. Open-Meteo daje bezpłatnie kilkanaście dni do
+// przodu i kilka wstecz; dni spoza tego okna po prostu nie mają pogody i
+// nagłówek dnia zostaje bez niej. To dekoracja, nie dane krytyczne —
+// dlatego, jak w fetchCurrentWeather, nigdy nie pokazujemy tu błędu.
+export async function fetchDailyForecast(city) {
+  if (!city) return {};
+  const key = city.trim().toLowerCase();
+  const cached = forecastCache.get(key);
+  if (cached && Date.now() - cached.ts < WEATHER_TTL_MS) return cached.data;
+  const loc = await geocodeCity(city);
+  if (!loc) {
+    forecastCache.set(key, { data: {}, ts: Date.now() });
+    return {};
+  }
+  const url =
+    `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}` +
+    `&daily=temperature_2m_max,weather_code&past_days=7&forecast_days=16&timezone=auto`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("forecast_failed");
+  const json = await res.json();
+  const days = json.daily?.time || [];
+  const data = {};
+  days.forEach((d, i) => {
+    data[d] = {
+      temp: json.daily.temperature_2m_max?.[i],
+      code: json.daily.weather_code?.[i],
+    };
+  });
+  forecastCache.set(key, { data, ts: Date.now() });
   return data;
 }

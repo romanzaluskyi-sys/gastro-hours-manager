@@ -63,6 +63,7 @@ const ManagerDashboard = ({
   setTaskCompletions,
   absences,
   setAbsences,
+  planShifts,
   staffingRules,
   setStaffingRules,
   staffingRuleSets,
@@ -1038,7 +1039,11 @@ const ManagerDashboard = ({
             currentUser={currentUser}
             selectedLokal={selectedLokal}
             availableLokaleForManager={availableLokaleForManager}
+            lokale={lokale}
+            users={users}
             activeStanowiska={activeStanowiska}
+            planShifts={planShifts}
+            absences={absences}
             staffingRules={staffingRules}
             setStaffingRules={setStaffingRules}
             staffingRuleSets={staffingRuleSets}

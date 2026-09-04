@@ -5,6 +5,21 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.16.0 — 2026-09-03
+
+- **Grafik — widok tygodnia.** Zakładka Grafik pokazuje siatkę: pracownicy w
+  wierszach, siedem dni w kolumnach, osobna tabela na każdy lokal. W nagłówku
+  dnia data, pogoda oraz liczba osób i godzin; przy pracowniku godziny, zmiany
+  i koszt w miesiącu. Widać zatwierdzone urlopy (URP), zgłoszony brak
+  dostępności (NIE) i dni, w które ktoś pracuje w innym lokalu.
+- Dni, w których obsada nie pokrywa wymagań, są oznaczone na czerwono —
+  najechanie na liczbę pokazuje, na jakim stanowisku i w jakich godzinach
+  brakuje ludzi.
+- Sortowanie listy pracowników (stanowisko / godziny / nazwisko), legenda
+  skrótów stanowisk i eksport tygodnia do CSV dla każdego lokalu.
+- Wpisywanie zmian w siatce dochodzi w kolejnej wersji — na razie grafik jest
+  tylko do oglądania.
+
 ## 0.15.0 — 2026-09-03
 
 - **Grafik — konfiguracja.** Nowa zakładka Grafik z sekcją Konfiguracja:
