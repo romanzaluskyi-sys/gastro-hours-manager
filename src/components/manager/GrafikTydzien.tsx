@@ -42,6 +42,7 @@ import {
   isUnpublished,
 } from "../../utils/grafik";
 import { activeSwapFor, pendingSwapDelta } from "../../utils/swaps";
+import { addUrlopDirectly, addNiedostepnoscDirectly } from "../../utils/absences";
 import { stanowiskoShort, stanowiskoBadgeStyle } from "../../utils/stanowiska";
 import { countWorkdays, URLOP_HOURS_PER_DAY } from "../../utils/absences";
 import { fetchDailyForecast, describeWeatherCode } from "../../utils/weather";
@@ -674,6 +675,9 @@ export default function GrafikTydzien({
   mode,
   shiftSwaps,
   onResolveSwap,
+  setAbsences,
+  setShifts,
+  currentUser,
   showMsg,
 }) {
   const [modalCtx, setModalCtx] = useState(null);
@@ -760,11 +764,33 @@ export default function GrafikTydzien({
     }
   };
 
+  // Usunięcie JUŻ WYSŁANEJ zmiany jest zarejestrowaną zmianą grafiku: wiersz
+  // znika z widoku od razu, ale zostaje w bazie z deleted_at, żeby "Wyślij
+  // grafik pracownikom" mogło o nim poinformować pracownika i dopiero wtedy
+  // skasować. Zmiana nigdy niewysłana ginie od razu — nikt jej nie widział.
   const handleDelete = async (shift) => {
-    if (!window.confirm("Usunąć tę zmianę z grafiku?")) return;
+    const bylaWyslana = !!shift.published_at;
+    if (
+      !window.confirm(
+        bylaWyslana
+          ? "Usunąć tę zmianę? Pracownik dowie się o tym przy najbliższej wysyłce grafiku."
+          : "Usunąć tę zmianę z grafiku?"
+      )
+    )
+      return;
     try {
-      await api.delete("grafik_shifts", shift.id);
-      setPlanShifts((planShifts || []).filter((s) => s.id !== shift.id));
+      if (bylaWyslana) {
+        const teraz = new Date().toISOString();
+        const zapisana = await api.patch("grafik_shifts", shift.id, {
+          deleted_at: teraz,
+          updated_at: teraz,
+        });
+        setPlanShifts((planShifts || []).map((s) => (s.id === zapisana.id ? zapisana : s)));
+        showMsg("Zmiana usunięta — wyślij grafik, żeby pracownik o tym wiedział.");
+      } else {
+        await api.delete("grafik_shifts", shift.id);
+        setPlanShifts((planShifts || []).filter((s) => s.id !== shift.id));
+      }
       setModalCtx(null);
     } catch (err) {
       showMsg(`Błąd usuwania: ${err.message || "nieznany błąd"}`, "error");
@@ -825,6 +851,35 @@ export default function GrafikTydzien({
       showMsg(`${stanowisko} dopisane do umiejętności: ${user.name}.`);
     } catch (err) {
       showMsg(`Nie udało się dopisać stanowiska: ${err.message || "nieznany błąd"}`, "error");
+    }
+  };
+
+  // Wolne/urlop wpisane wprost z grafiku — potrzebne, gdy pracownika długo
+  // nie ma, a grafik trzeba układać teraz i nie ma jak czekać, aż sam zgłosi
+  // to z Tabletu Służbowego. Ta sama logika co w karcie pracownika
+  // (utils/absences.ts), tylko wywołana z innego miejsca.
+  const handleAddAbsence = async ({ user, typ, od, doDnia, note }) => {
+    try {
+      const fn = typ === "urlop" ? addUrlopDirectly : addNiedostepnoscDirectly;
+      const { absence, createdShifts } = await fn({
+        user,
+        startDate: od,
+        endDate: doDnia,
+        editorName: currentUser?.name,
+        note,
+      });
+      setAbsences([...(absences || []), absence]);
+      if (createdShifts && createdShifts.length > 0 && setShifts) {
+        setShifts((prev) => [...prev, ...createdShifts]);
+      }
+      setModalCtx(null);
+      showMsg(
+        typ === "urlop" ? "Urlop zapisany." : "Niedostępność zapisana."
+      );
+      return true;
+    } catch (err) {
+      showMsg(`Błąd zapisu wolnego: ${err.message || "nieznany błąd"}`, "error");
+      return false;
     }
   };
 
@@ -977,6 +1032,7 @@ export default function GrafikTydzien({
           onSave={handleSave}
           onDelete={handleDelete}
           onAddStanowisko={handleAddStanowisko}
+          onAddAbsence={handleAddAbsence}
           onClose={() => setModalCtx(null)}
         />
       )}

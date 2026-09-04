@@ -170,6 +170,41 @@ export const addUrlopDirectly = async ({ user, startDate, endDate, editorName, n
   return { absence, createdShifts };
 };
 
+// Niedostępność wpisana wprost przez kierownika — bliźniak addUrlopDirectly,
+// ale BEZ materializacji godzin (niedostępność nic nie generuje, to tylko
+// informacja "wtedy nie mogę"). Potrzebne, gdy pracownika długo nie ma, a
+// grafik trzeba układać już teraz i nie ma jak czekać, aż sam to zgłosi z
+// Tabletu Służbowego.
+export const addNiedostepnoscDirectly = async ({
+  user,
+  startDate,
+  endDate,
+  editorName,
+  note,
+}) => {
+  const absence = await api.post("absences", {
+    user_id: user.id,
+    user_name: user.name,
+    lokal: user.default_lokal || null,
+    start_date: startDate,
+    end_date: endDate,
+    type: "niedostepnosc",
+    status: "approved",
+    note: note || null,
+    requested_by: "manager",
+    decided_by: editorName,
+    decided_at: new Date().toISOString(),
+  });
+  await createEmployeeNotification(
+    user.name,
+    `${editorName} zapisał(a) Ci dni niedostępności: ${fmtPL(startDate)}–${fmtPL(
+      endDate
+    )}.`,
+    "absence_resolved"
+  );
+  return { absence };
+};
+
 // Anulowanie wpisu (np. pomyłka kierownika) — kasuje wniosek i wszystkie
 // powiązane wpisy godzin (dopasowane po absence_id, luźne odwołanie bez
 // FK — ten sam wzorzec co shift_edits/task_completions).

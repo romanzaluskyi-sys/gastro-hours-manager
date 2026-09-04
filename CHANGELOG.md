@@ -55,6 +55,16 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
   dostaje jedno powiadomienie, z zakresem SWOICH dni.
 - Przycisk wysyłki jest widoczny także w trybie Podgląd — wysyłka dotyczy
   całego grafiku, nie tego, co akurat edytujesz.
+- **Kierownik może wpisać wolne albo urlop wprost z grafiku** — w oknie
+  zmiany doszedł link "Zamiast zmiany wpisz wolne / urlop" z wyborem
+  rodzaju, zakresem dat i notatką. Potrzebne, gdy pracownika długo nie ma i
+  nie ma jak czekać, aż sam to zgłosi z Tabletu Służbowego. Urlop od razu
+  zapisuje godziny, niedostępność tylko blokuje te dni.
+- **Usunięcie wysłanej już zmiany jest teraz zarejestrowaną zmianą grafiku.**
+  Znika ona z widoku od razu, ale liczy się do "niewysłanych" i dopiero
+  wysyłka informuje pracownika, że jego zmiana została usunięta. Zmiana,
+  która nigdy nie została wysłana, kasuje się po cichu — nikt jej nie
+  widział.
 - **Powiadomienia na Tablecie Służbowym są teraz per pracownik.** Wcześniej
   urządzenie pokazywało wiadomości wszystkich osób z lokalu, więc pierwsza
   osoba, która weszła w zakładkę, oznaczała jako przeczytane także cudze i

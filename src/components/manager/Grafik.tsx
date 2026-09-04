@@ -32,6 +32,8 @@ export default function Grafik({
   shiftSwaps,
   onResolveSwap,
   absences,
+  setAbsences,
+  setShifts,
   staffingRules,
   setStaffingRules,
   staffingRuleSets,
@@ -79,6 +81,9 @@ export default function Grafik({
   // przy planowaniu na dwa-trzy tygodnie naprzód część zmian zostawała
   // wersją roboczą i pracownik ich po prostu nie widział.
   const dzisYMD = toLocalYMD(new Date());
+  // Wiersze oznaczone do usunięcia znikają z widoków od razu; publikacja
+  // dostaje surową listę, bo to ona je kasuje i informuje pracownika.
+  const zywePlanShifts = (planShifts || []).filter((s) => !s.deleted_at);
   const niewyslaneWiersze = (planShifts || []).filter(
     (s) =>
       wszystkieLokaleNames.includes(s.lokal) &&
@@ -214,7 +219,7 @@ export default function Grafik({
           lokal={lokalKonfiguracji}
           miasto={(lokale || []).find((l) => l.name === lokalKonfiguracji)?.miasto || null}
           activeStanowiska={activeStanowiska}
-          planShifts={planShifts}
+          planShifts={zywePlanShifts}
           staffingRules={staffingRules}
           staffingRuleSets={staffingRuleSets}
           grafikWyjatki={grafikWyjatki}
@@ -247,7 +252,7 @@ export default function Grafik({
           users={users}
           setUsers={setUsers}
           activeStanowiska={activeStanowiska}
-          planShifts={planShifts}
+          planShifts={zywePlanShifts}
           setPlanShifts={setPlanShifts}
           absences={absences}
           staffingRules={staffingRules}
@@ -260,6 +265,9 @@ export default function Grafik({
           mode={mode}
           shiftSwaps={shiftSwaps}
           onResolveSwap={onResolveSwap}
+          setAbsences={setAbsences}
+          setShifts={setShifts}
+          currentUser={currentUser}
           showMsg={showMsg}
         />
       ) : null}

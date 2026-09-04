@@ -474,9 +474,19 @@ export const publishGrafik = async ({ planShifts, lokaleNames, from, actorName }
   if (toPublish.length === 0) return { updated: [], powiadomieni: 0 };
 
   const now = new Date().toISOString();
+  const doUsuniecia = toPublish.filter((s) => s.deleted_at);
+  const doWyslania = toPublish.filter((s) => !s.deleted_at);
+
   const updated = [];
-  for (const s of toPublish) {
+  for (const s of doWyslania) {
     updated.push(await api.patch("grafik_shifts", s.id, { published_at: now }));
+  }
+  // Wiersze oznaczone do usunięcia znikają dopiero teraz — do tego momentu
+  // były potrzebne, żeby wiedzieć, komu i o czym powiedzieć.
+  const usuniete = [];
+  for (const s of doUsuniecia) {
+    await api.delete("grafik_shifts", s.id);
+    usuniete.push(s);
   }
 
   // Zakres liczymy PER OSOBA — każdy dostaje informację o swoich dniach,
@@ -485,23 +495,40 @@ export const publishGrafik = async ({ planShifts, lokaleNames, from, actorName }
   const fmt = (d) => new Date(d + "T00:00:00").toLocaleDateString("pl-PL", opts);
   const names = [...new Set(toPublish.map((s) => s.user_name).filter(Boolean))];
   for (const name of names) {
-    const dni = toPublish
+    const dni = doWyslania
       .filter((s) => s.user_name === name)
       .map((s) => s.date)
       .sort();
-    const zakres =
-      dni[0] === dni[dni.length - 1]
-        ? fmt(dni[0])
-        : `${fmt(dni[0])} – ${fmt(dni[dni.length - 1])}`;
+    const skasowane = usuniete
+      .filter((s) => s.user_name === name)
+      .map((s) => s.date)
+      .sort();
+    const czesci = [];
+    if (dni.length > 0) {
+      const zakres =
+        dni[0] === dni[dni.length - 1]
+          ? fmt(dni[0])
+          : `${fmt(dni[0])} – ${fmt(dni[dni.length - 1])}`;
+      czesci.push(`masz zmiany na ${zakres}`);
+    }
+    if (skasowane.length > 0) {
+      czesci.push(
+        `usunięto ${skasowane.length === 1 ? "zmianę" : "zmiany"} z ${[
+          ...new Set(skasowane),
+        ]
+          .map(fmt)
+          .join(", ")}`
+      );
+    }
     await createEmployeeNotification(
       name,
-      `Grafik zaktualizowany — masz zmiany na ${zakres}. Sprawdź zakładkę Grafik.${
+      `Grafik zaktualizowany — ${czesci.join("; ")}. Sprawdź zakładkę Grafik.${
         actorName ? ` Wysłał(a): ${actorName}.` : ""
       }`,
       "grafik"
     );
   }
-  return { updated, powiadomieni: names.length };
+  return { updated, usuniete, powiadomieni: names.length };
 };
 
 // --- WIDOK PRACOWNIKA ---------------------------------------------------
@@ -512,6 +539,7 @@ export const publishedShiftsFor = (planShifts, user) =>
   (planShifts || []).filter(
     (s) =>
       s.published_at &&
+      !s.deleted_at &&
       (s.user_id && user?.id
         ? String(s.user_id) === String(user.id)
         : s.user_name === user?.name)
@@ -521,7 +549,7 @@ export const publishedShiftsFor = (planShifts, user) =>
 // jest ze mną na zmianie".
 export const publishedShiftsOnDay = (planShifts, lokal, dateStr) =>
   (planShifts || []).filter(
-    (s) => s.published_at && s.lokal === lokal && s.date === dateStr
+    (s) => s.published_at && !s.deleted_at && s.lokal === lokal && s.date === dateStr
   );
 
 // Najbliższa zmiana od podanego dnia włącznie — odpowiedź na pytanie, które

@@ -103,6 +103,7 @@ export default function GrafikZmianaModal({
   onSave,
   onDelete,
   onAddStanowisko,
+  onAddAbsence,
   onClose,
 }) {
   // Otwarcie z nagłówka tabeli ("Dodaj pracownika") nie zna jeszcze dnia —
@@ -124,6 +125,10 @@ export default function GrafikZmianaModal({
   const [stanowiskoRuszone, setStanowiskoRuszone] = useState(false);
   const [pokazPozostale, setPokazPozostale] = useState(false);
   const [pokazWszystkich, setPokazWszystkich] = useState(false);
+  // Tryb "wolne" — zamiast wpisywać zmianę, kierownik zaznacza, że tej
+  // osoby nie ma. Potrzebne, gdy pracownik długo nie ma dostępu do Tabletu
+  // Służbowego, a grafik trzeba układać już teraz.
+  const [wolneForm, setWolneForm] = useState(null);
   const [zrodloGodzin, setZrodloGodzin] = useState(null);
 
   const user = (users || []).find((u) => String(u.id) === String(userId)) || ctx.user;
@@ -499,6 +504,64 @@ export default function GrafikZmianaModal({
             </div>
           </div>
 
+          {wolneForm && (
+            <div className="p-3 rounded border-[2px] border-[#171714] bg-[#F1F1EE] space-y-3">
+              <div className="flex gap-2">
+                {[
+                  { key: "urlop", label: "Urlop" },
+                  { key: "niedostepnosc", label: "Niedostępność" },
+                ].map((o) => (
+                  <button
+                    key={o.key}
+                    type="button"
+                    onClick={() => setWolneForm({ ...wolneForm, typ: o.key })}
+                    className={`px-3 py-1.5 rounded border-[2px] text-[13px] font-bold ${
+                      wolneForm.typ === o.key
+                        ? "bg-[#171714] text-white border-[#171714]"
+                        : "bg-white text-[#171714] border-[#B7B6AE]"
+                    }`}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={statLabelCls}>Od dnia</label>
+                  <input
+                    type="date"
+                    value={wolneForm.od}
+                    onChange={(e) => setWolneForm({ ...wolneForm, od: e.target.value })}
+                    className="w-full p-2 border-[2px] border-[#171714] rounded"
+                  />
+                </div>
+                <div>
+                  <label className={statLabelCls}>Do dnia</label>
+                  <input
+                    type="date"
+                    value={wolneForm.doDnia}
+                    onChange={(e) =>
+                      setWolneForm({ ...wolneForm, doDnia: e.target.value })
+                    }
+                    className="w-full p-2 border-[2px] border-[#171714] rounded"
+                  />
+                </div>
+              </div>
+              <input
+                type="text"
+                value={wolneForm.note}
+                onChange={(e) => setWolneForm({ ...wolneForm, note: e.target.value })}
+                placeholder="Notatka (opcjonalnie)"
+                className="w-full p-2 border-[2px] border-[#171714] rounded"
+              />
+              <p className="text-[12px] text-[#6E6E66]">
+                {wolneForm.typ === "urlop"
+                  ? "Urlop od razu zapisze się jako godziny (8 h za dzień roboczy), a pracownik dostanie powiadomienie."
+                  : "Niedostępność nie generuje godzin — blokuje tylko wpisywanie zmian w te dni."}
+              </p>
+            </div>
+          )}
+
           <p className="text-[12px] text-[#6E6E66]">
             {zrodloGodzin
               ? `Godziny podstawiono ze standardu stanowiska ${zrodloGodzin}. Możesz je nadpisać.`
@@ -510,6 +573,35 @@ export default function GrafikZmianaModal({
         </div>
 
         <div className="px-5 py-4 border-t-[2px] border-[#171714] flex flex-wrap gap-2">
+          {wolneForm ? (
+            <>
+              <button
+                onClick={async () => {
+                  setSaving(true);
+                  await onAddAbsence({ user, ...wolneForm });
+                  setSaving(false);
+                }}
+                disabled={
+                  saving ||
+                  !user ||
+                  !wolneForm.od ||
+                  !wolneForm.doDnia ||
+                  wolneForm.doDnia < wolneForm.od
+                }
+                className={btnPrimaryCls}
+              >
+                Zapisz wolne
+              </button>
+              <button
+                type="button"
+                onClick={() => setWolneForm(null)}
+                className={btnSecondaryCls}
+              >
+                Wróć do zmiany
+              </button>
+            </>
+          ) : (
+            <>
           <button
             onClick={() => zapisz(false)}
             disabled={saving || !user || !stanowisko || !start || !end}
@@ -534,6 +626,19 @@ export default function GrafikZmianaModal({
             >
               <Trash2 size={15} className="inline -mt-0.5 mr-1" /> Usuń zmianę
             </button>
+          )}
+          {user && (
+            <button
+              type="button"
+              onClick={() =>
+                setWolneForm({ typ: "urlop", od: date, doDnia: date, note: "" })
+              }
+              className="w-full text-[13px] font-bold underline text-[#6E6E66] text-left"
+            >
+              Zamiast zmiany wpisz wolne / urlop
+            </button>
+          )}
+            </>
           )}
         </div>
       </div>

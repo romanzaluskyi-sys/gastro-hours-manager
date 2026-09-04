@@ -32,6 +32,7 @@ const CHANGELOG = [
       "U pracownika: zielony = propozycja do wzięcia, żółty = Twoja zmiana na giełdzie, niebieski = czeka na kierownika. Odznaka na zakładce Grafik liczy nowy grafik i propozycje.",
       "Jedno 'Wyślij grafik pracownikom' wysyła wszystkie niewysłane zmiany od dziś w przód, ze wszystkich Twoich lokali — nie tylko oglądany tydzień.",
       "Powiadomienia na Tablecie Służbowym są per pracownik — nikt nie oznacza już cudzych wiadomości jako przeczytane.",
+      "Wolne i urlop można wpisać wprost z grafiku; usunięcie wysłanej zmiany czeka na wysyłkę i pracownik dostaje o tym informację.",
       "Wniosek o wolne dostępny prosto z zakładki Grafik u pracownika.",
       "Niedostępność można zgłosić na jeden dzień, bez wpisywania tej samej daty dwa razy.",
     ],
