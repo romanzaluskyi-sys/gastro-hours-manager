@@ -29,6 +29,7 @@ const CHANGELOG = [
       "Giełda zmian — pracownik wystawia zmianę (najpóźniej 12 h przed), ktoś wolny ją bierze, kierownik zatwierdza w Zatwierdzanie zmian albo ✓/✗ wprost w siatce.",
       "Zmiana na giełdzie jest podświetlona w siatce — żółto gdy czeka na chętnego, zielono gdy ktoś się zgłosił — i widoczna po obu stronach: u oddającego i (na szaro) u przejmującego.",
       "Przy nazwisku widać, ile godzin w miesiącu przybędzie lub ubędzie po zatwierdzeniu zamiany; w Zatwierdzaniu zmian pełna różnica godzin obu osób.",
+      "U pracownika: zielony = propozycja do wzięcia, żółty = Twoja zmiana na giełdzie, niebieski = czeka na kierownika. Odznaka na zakładce Grafik liczy nowy grafik i propozycje.",
       "Wniosek o wolne dostępny prosto z zakładki Grafik u pracownika.",
       "Niedostępność można zgłosić na jeden dzień, bez wpisywania tej samej daty dwa razy.",
     ],

@@ -22,9 +22,20 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
   godzinami — dopiero po kliknięciu pojawia się duży przycisk potwierdzenia.
   Zmiana wystawiona na giełdę jest u pracownika podświetlona całym blokiem,
   tymi samymi kolorami co u kierownika.
-- Na Tablecie Służbowym informacja o giełdzie jest już na liście wyboru
-  osoby — na wspólnym urządzeniu nikt nie wchodzi na cudzą stronę, więc
-  inaczej nie dałoby się jej zauważyć.
+- Na Tablecie Służbowym giełda jest widoczna już na liście wyboru osoby.
+  Podświetlany jest ten, kto może zmianę **wziąć** ("Giełda: propozycja
+  ND 6 wrz · 11:00 – 21:00") — autor oferty ma sam napis, bo on i tak wie,
+  że ją wystawił.
+- Kolory u pracownika mówią teraz jedno na jeden stan: żółty — Twoja zmiana
+  czeka na chętnego, **zielony — cudza propozycja, którą możesz wziąć**,
+  niebieski — decyzja jest po stronie kierownika. Wcześniej propozycja
+  zlewała się z własną zmianą.
+- Zmiana, po którą się zgłosiłeś, jest widoczna w Twoim grafiku (na
+  niebiesko, z adnotacją, że czeka na zgodę kierownika) — wcześniej znikała
+  do czasu decyzji.
+- Zmiana w **innym lokalu** jest wyraźnie oznaczona w grafiku pracownika.
+- Zakładka Grafik ma odznakę z liczbą: nowy wysłany grafik plus propozycje
+  z giełdy, które możesz wziąć.
 - W siatce kierownika zamiana jest teraz widoczna po OBU stronach: u osoby,
   która oddaje zmianę, i — na szaro, przerywaną ramką — u tej, która ma ją
   przejąć. Przy nazwisku obu osób widać, ile godzin w miesiącu im przybędzie

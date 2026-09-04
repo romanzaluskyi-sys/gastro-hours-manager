@@ -32,6 +32,8 @@ import {
   acceptSwap,
   activeSwapFor,
   canOfferSwap,
+  offersForUser,
+  claimedByUser,
   STATUS_LABEL,
   SWAP_MIN_HOURS,
 } from "../utils/swaps";
@@ -93,6 +95,17 @@ export const opisDnia = (dateStr) => {
     day: "numeric",
     month: "short",
   })}`;
+};
+
+// Kolory giełdy u pracownika. Żółty = MOJA zmiana czeka na chętnego,
+// zielony = CUDZA propozycja, którą mogę wziąć (jedyny stan, w którym jest
+// co kliknąć), niebieski = decyzja jest po stronie kierownika. Zielony
+// świadomie zarezerwowany dla "możesz działać" — wcześniej oznaczał też
+// "ktoś przejął", przez co propozycja zlewała się z własną zmianą.
+export const SWAP_TLO = {
+  na_gieldzie: "bg-[#FDF3D4]",
+  przyjeta: "bg-[#DDEAF6]",
+  propozycja: "bg-[#E4F3E0]",
 };
 
 export const sumHours = (arr) =>
@@ -159,6 +172,7 @@ export const Shell = ({
   onBack,
   unreadCount,
   taskBadgeCount = 0,
+  grafikBadgeCount = 0,
   title,
   showPill = false,
   showBell = true,
@@ -225,6 +239,11 @@ export const Shell = ({
                 {key === "WIECEJ" && unreadCount > 0 && (
                   <span className="absolute top-1 right-[18%] bg-[#DE3A22] text-white font-['Archivo'] font-extrabold text-[9.5px] min-w-[15px] h-[15px] rounded-[3px] flex items-center justify-center px-0.5">
                     {unreadCount}
+                  </span>
+                )}
+                {key === "GRAFIK" && grafikBadgeCount > 0 && (
+                  <span className="absolute top-1 right-[18%] bg-[#DE3A22] text-white font-['Archivo'] font-extrabold text-[9.5px] min-w-[15px] h-[15px] rounded-[3px] flex items-center justify-center px-0.5">
+                    {grafikBadgeCount}
                   </span>
                 )}
                 {key === "ZADANIA" && taskBadgeCount > 0 && (
@@ -380,6 +399,51 @@ export const EmployeeSessionScreens = ({
   const mojGrafik = publishedShiftsFor(planShifts, employee);
   const mojeDzis = mojGrafik.filter((s) => s.date === dzisYMD);
   const najblizszaZmiana = nextShiftFrom(planShifts, employee, dzisYMD);
+  // Propozycje, które mogę wziąć, i zmiany, które już przejąłem/przejęłam,
+  // a które czekają na zgodę kierownika (u mnie nie ma ich jeszcze w
+  // grafiku, bo właścicielem wiersza wciąż jest autor oferty).
+  const mojeOferty = offersForUser({
+    swaps: shiftSwaps,
+    planShifts,
+    absences,
+    user: employee,
+  });
+  const mojePrzejete = claimedByUser({ swaps: shiftSwaps, planShifts, user: employee });
+
+  // Odznaka na zakładce Grafik: propozycje z giełdy + zmiany z grafiku
+  // wysłanego po ostatnim wejściu na tę zakładkę. "Ostatnio widziane"
+  // trzymamy w localStorage per pracownik (na kiosku urządzenie jest
+  // wspólne, więc klucz musi być imienny) — to drobna wygoda widoku, nie
+  // dane do raportowania, więc świadomie nie idzie do bazy.
+  const grafikSeenKey = `grafik_seen_${employee?.id}`;
+  const [grafikSeen, setGrafikSeen] = useState(() => {
+    try {
+      return localStorage.getItem(grafikSeenKey) || "";
+    } catch {
+      return "";
+    }
+  });
+  const nowoWyslane = mojGrafik.filter(
+    (s) => s.published_at && s.published_at > grafikSeen && s.date >= dzisYMD
+  ).length;
+  const grafikBadgeCount = mojeOferty.length + nowoWyslane;
+
+  useEffect(() => {
+    if (screen !== "GRAFIK") return;
+    const najnowsze = mojGrafik
+      .map((s) => s.published_at)
+      .filter(Boolean)
+      .sort()
+      .slice(-1)[0];
+    if (najnowsze && najnowsze !== grafikSeen) {
+      try {
+        localStorage.setItem(grafikSeenKey, najnowsze);
+      } catch {
+        // prywatne okno / brak localStorage — odznaka po prostu nie znika
+      }
+      setGrafikSeen(najnowsze);
+    }
+  }, [screen, planShifts]);
 
   // Wpis z grafiku odpowiadający TRWAJĄCEJ zmianie — po nim liczymy, ile
   // zostało do końca. Szukamy po dniu odbicia (a nie po "dziś"), żeby
@@ -1223,6 +1287,7 @@ export const EmployeeSessionScreens = ({
         onBack={onBack}
         unreadCount={unreadCount}
         taskBadgeCount={taskBadgeCount}
+        grafikBadgeCount={grafikBadgeCount}
         title={employee.name}
         showPill={!!openShift}
       >
@@ -1325,6 +1390,7 @@ export const EmployeeSessionScreens = ({
         onBack={onBack}
         unreadCount={unreadCount}
         taskBadgeCount={taskBadgeCount}
+        grafikBadgeCount={grafikBadgeCount}
         title={employee.name}
         showPill={!!openShift}
       >
@@ -1371,6 +1437,7 @@ export const EmployeeSessionScreens = ({
       const inni = wszyscyDnia.filter(
         (s) => !moje.some((m) => String(m.id) === String(s.id))
       );
+      const przejeteDnia = mojePrzejete.filter(({ ps }) => ps.date === dateStr);
 
       return (
         <div key={dateStr} className="mb-4">
@@ -1399,11 +1466,7 @@ export const EmployeeSessionScreens = ({
                   <div
                     key={s.id}
                     className={`border-[2.5px] border-[#171714] rounded p-3.5 ${
-                      oferta
-                        ? oferta.status === "przyjeta"
-                          ? "bg-[#E4F3E0]"
-                          : "bg-[#FDF3D4]"
-                        : ""
+                      oferta ? SWAP_TLO[oferta.status] || "" : ""
                     }`}
                   >
                     <div className="flex items-center gap-2">
@@ -1427,6 +1490,11 @@ export const EmployeeSessionScreens = ({
                     </div>
                     <div className="text-[13px] text-[#6E6E66] mt-0.5">
                       {s.stanowisko} · {s.lokal}
+                      {s.lokal !== employee.default_lokal && (
+                        <span className="ml-1.5 text-[11px] font-extrabold px-1.5 py-0.5 rounded bg-[#FAEAE6] text-[#8A3A2B]">
+                          INNY LOKAL
+                        </span>
+                      )}
                     </div>
                     {inni.length > 0 && (
                       <div className="text-[13px] text-[#6E6E66] mt-2">
@@ -1491,7 +1559,7 @@ export const EmployeeSessionScreens = ({
                 );
               })}
             </div>
-          ) : wolne ? (
+          ) : przejeteDnia.length > 0 ? null : wolne ? (
             <div className="mt-2.5 flex items-center gap-2">
               <span
                 className={`px-1.5 py-0.5 rounded text-[11px] font-extrabold ${
@@ -1509,6 +1577,23 @@ export const EmployeeSessionScreens = ({
           ) : (
             <div className="mt-2.5 text-[15px] text-[#8F8E86] italic">Wolne</div>
           )}
+
+          {przejeteDnia.map(({ sw, ps }) => (
+            <div
+              key={`p-${sw.id}`}
+              className={`mt-2.5 border-[2.5px] border-[#171714] rounded p-3.5 ${SWAP_TLO.przyjeta}`}
+            >
+              <div className="font-['Archivo'] font-extrabold text-[18px]">
+                {trimTime(ps.start_time)} – {trimTime(ps.end_time)}
+              </div>
+              <div className="text-[13px] text-[#6E6E66] mt-0.5">
+                {ps.stanowisko} · {ps.lokal} · od: {sw.author_user_name}
+              </div>
+              <div className="text-[13px] font-bold mt-1.5">
+                Zgłosiłeś(-aś) się po tę zmianę — czeka na zgodę kierownika.
+              </div>
+            </div>
+          ))}
 
           {grafikWszyscy && inni.length > 0 && moje.length === 0 && (
             <div className="mt-2 text-[13px] text-[#6E6E66]">
@@ -1532,6 +1617,7 @@ export const EmployeeSessionScreens = ({
         onBack={onBack}
         unreadCount={unreadCount}
         taskBadgeCount={taskBadgeCount}
+        grafikBadgeCount={grafikBadgeCount}
         title="Grafik"
       >
         <div className="flex gap-1.5 mb-3">
@@ -1605,58 +1691,37 @@ export const EmployeeSessionScreens = ({
               </div>
             )}
 
-            {(() => {
-              // Oferty innych, które mogę wziąć: tylko dni, w które jestem
-              // wolny i nie mam własnej zmiany. Niezgodne stanowisko nie
-              // blokuje — o tym decyduje kierownik przy zatwierdzaniu.
-              const doWziecia = (shiftSwaps || []).filter((sw) => {
-                if (sw.status !== "na_gieldzie") return false;
-                if (String(sw.author_user_id) === String(employee.id)) return false;
-                const ps = (planShifts || []).find(
-                  (p) => String(p.id) === String(sw.grafik_shift_id)
-                );
-                if (!ps || !canOfferSwap(ps)) return false;
-                if (mojGrafik.some((m) => m.date === ps.date)) return false;
-                return !wolneNa(ps.date);
-              });
-              if (doWziecia.length === 0) return null;
-              return (
-                <>
-                  <div className={sectionLabelCls}>Giełda — wolne zmiany</div>
-                  <div className={ruleStrongCls} />
-                  <div className="mt-3 space-y-2">
-                    {doWziecia.map((sw) => {
-                      const ps = (planShifts || []).find(
-                        (p) => String(p.id) === String(sw.grafik_shift_id)
-                      );
-                      return (
-                        <div
-                          key={sw.id}
-                          className="border-2 border-[#B7B6AE] rounded p-3.5"
-                        >
-                          <div className="font-['Archivo'] font-extrabold text-[16px]">
-                            {opisDnia(ps.date)} · {trimTime(ps.start_time)} –{" "}
-                            {trimTime(ps.end_time)}
-                          </div>
-                          <div className="text-[13px] text-[#6E6E66]">
-                            {ps.stanowisko} · {ps.lokal} · od: {sw.author_user_name}
-                          </div>
-                          {sw.note && (
-                            <div className="text-[13px] text-[#6E6E66] mt-1">{sw.note}</div>
-                          )}
-                          <button
-                            onClick={() => handleAcceptSwap(sw)}
-                            className="mt-2.5 w-full border-[2.5px] border-[#171714] rounded py-2 text-[14px] font-extrabold"
-                          >
-                            Wezmę tę zmianę
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </>
-              );
-            })()}
+            {mojeOferty.length > 0 && (
+              <>
+                <div className={sectionLabelCls}>Giełda — możesz wziąć</div>
+                <div className={ruleStrongCls} />
+                <div className="mt-3 space-y-2">
+                  {mojeOferty.map(({ sw, ps }) => (
+                    <div
+                      key={sw.id}
+                      className={`border-[2.5px] border-[#171714] rounded p-3.5 ${SWAP_TLO.propozycja}`}
+                    >
+                      <div className="font-['Archivo'] font-extrabold text-[16px]">
+                        {opisDnia(ps.date)} · {trimTime(ps.start_time)} –{" "}
+                        {trimTime(ps.end_time)}
+                      </div>
+                      <div className="text-[13px] text-[#6E6E66]">
+                        {ps.stanowisko} · {ps.lokal} · od: {sw.author_user_name}
+                      </div>
+                      {sw.note && (
+                        <div className="text-[13px] text-[#6E6E66] mt-1">{sw.note}</div>
+                      )}
+                      <button
+                        onClick={() => handleAcceptSwap(sw)}
+                        className="mt-2.5 w-full border-[2.5px] border-[#171714] rounded py-2 text-[14px] font-extrabold bg-white"
+                      >
+                        Wezmę tę zmianę
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
 
             <div className="mt-6">
               <button onClick={openWniosekOWolne} className={menuRowCls}>
@@ -1687,6 +1752,7 @@ export const EmployeeSessionScreens = ({
         onBack={onBack}
         unreadCount={unreadCount}
         taskBadgeCount={taskBadgeCount}
+        grafikBadgeCount={grafikBadgeCount}
         title="Raport"
         footer={
           <div className="flex-shrink-0 border-t-[2.5px] border-[#171714] bg-white px-5 pt-[18px] pb-[22px] flex items-baseline justify-between">
@@ -1826,6 +1892,7 @@ export const EmployeeSessionScreens = ({
         onBack={onBack}
         unreadCount={unreadCount}
         taskBadgeCount={taskBadgeCount}
+        grafikBadgeCount={grafikBadgeCount}
         title="Zadania"
       >
         {myChecklistOwn.some((i) => !i.done) && (
@@ -1889,6 +1956,7 @@ export const EmployeeSessionScreens = ({
         onBack={onBack}
         unreadCount={unreadCount}
         taskBadgeCount={taskBadgeCount}
+        grafikBadgeCount={grafikBadgeCount}
         title="Więcej"
       >
         <button onClick={() => openZgloszenie(null)} className={menuRowCls}>
@@ -1960,6 +2028,7 @@ export const EmployeeSessionScreens = ({
         onBack={onBack}
         unreadCount={unreadCount}
         taskBadgeCount={taskBadgeCount}
+        grafikBadgeCount={grafikBadgeCount}
         title="Wiadomości"
         showBell={false}
       >
@@ -2009,6 +2078,7 @@ export const EmployeeSessionScreens = ({
         onBack={onBack}
         unreadCount={unreadCount}
         taskBadgeCount={taskBadgeCount}
+        grafikBadgeCount={grafikBadgeCount}
         title={
           zgType === "correction"
             ? "Popraw zmianę"

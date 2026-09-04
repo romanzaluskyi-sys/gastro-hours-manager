@@ -100,6 +100,45 @@ export const swapsForUser = (swaps, user) =>
         String(sw.taker_user_id) === String(user?.id))
   );
 
+// Oferty, które dana osoba realnie może wziąć: cudze, wciąż wolne, w
+// terminie (12 h), w dzień bez własnej zmiany i bez zatwierdzonego wolnego.
+// Jedno miejsce dla obu konsumentów — zakładki Grafik pracownika i listy
+// wyboru osoby na Tablecie Służbowym.
+export const offersForUser = ({ swaps, planShifts, absences, user }) =>
+  (swaps || [])
+    .filter(
+      (sw) =>
+        sw.status === "na_gieldzie" &&
+        String(sw.author_user_id) !== String(user?.id)
+    )
+    .map((sw) => ({
+      sw,
+      ps: (planShifts || []).find((p) => String(p.id) === String(sw.grafik_shift_id)),
+    }))
+    .filter(({ ps }) => ps && canOfferSwap(ps))
+    .filter(
+      ({ ps }) =>
+        !(planShifts || []).some(
+          (p) => p.date === ps.date && String(p.user_id) === String(user?.id)
+        )
+    )
+    .filter(({ ps }) => !findBlockingAbsence(absences, user, ps.date))
+    .sort((a, b) => a.ps.date.localeCompare(b.ps.date));
+
+// Zmiany, które ta osoba przejęła i które czekają na decyzję kierownika —
+// u niej samej nie ma ich jeszcze w grafiku (właścicielem wciąż jest autor),
+// więc bez tego byłyby dla niej niewidoczne.
+export const claimedByUser = ({ swaps, planShifts, user }) =>
+  (swaps || [])
+    .filter(
+      (sw) => sw.status === "przyjeta" && String(sw.taker_user_id) === String(user?.id)
+    )
+    .map((sw) => ({
+      sw,
+      ps: (planShifts || []).find((p) => String(p.id) === String(sw.grafik_shift_id)),
+    }))
+    .filter(({ ps }) => ps);
+
 export const offerSwap = async ({ planShift, author, note }) => {
   if (!canOfferSwap(planShift)) {
     throw new Error(

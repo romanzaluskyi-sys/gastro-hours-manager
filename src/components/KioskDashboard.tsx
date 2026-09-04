@@ -2,10 +2,12 @@
 import React, { useState, useEffect } from "react";
 import { Lock, AlertCircle, Delete, ChevronLeft } from "lucide-react";
 import { getTodaysShiftsForUser } from "../utils/shifts";
-import { swapsForUser, STATUS_LABEL } from "../utils/swaps";
+import { offersForUser, STATUS_LABEL } from "../utils/swaps";
+import { trimTime } from "../utils/grafik";
 import {
   fmtHHMM,
   sumHours,
+  opisDnia,
   EmployeeSessionScreens,
 } from "./employeeSessionShared";
 import WeatherBadge from "./WeatherBadge";
@@ -171,19 +173,28 @@ const KioskDashboard = ({
                 (s) => s.end_time
               );
               // Na wspólnym tablecie nikt nie wchodzi na cudzą stronę, więc
-              // informacja o giełdzie musi być widoczna już na liście —
-              // inaczej pracownik nigdy się nie dowie, że ktoś oddaje zmianę
-              // albo że jego własna oferta znalazła chętnego.
-              const mojeOferty = swapsForUser(shiftSwaps, u);
+              // giełda musi być widoczna już na liście. Podświetlamy TYLKO
+              // tych, którzy mogą coś wziąć — dla nich to zaproszenie do
+              // działania. Autor oferty dostaje sam napis: on już wie, że
+              // ją wystawił, kolor niczego by mu nie dodał.
+              const propozycje = offersForUser({
+                swaps: shiftSwaps,
+                planShifts,
+                absences,
+                user: u,
+              });
+              const wystawione = (shiftSwaps || []).filter(
+                (sw) =>
+                  ["na_gieldzie", "przyjeta"].includes(sw.status) &&
+                  String(sw.author_user_id) === String(u.id)
+              );
               return (
                 <button
                   key={u.id}
                   onClick={() => selectEmployee(u)}
                   className={`border-2 rounded p-4 flex items-center justify-between gap-3 w-full text-left mb-3.5 ${
-                    mojeOferty.length > 0
-                      ? mojeOferty.some((sw) => sw.status === "przyjeta")
-                        ? "border-[#171714] bg-[#E4F3E0]"
-                        : "border-[#171714] bg-[#FDF3D4]"
+                    propozycje.length > 0
+                      ? "border-[#171714] bg-[#E4F3E0]"
                       : "border-[#B7B6AE] bg-[#F1F1EE]"
                   }`}
                 >
@@ -195,12 +206,18 @@ const KioskDashboard = ({
                     <div className="text-[13px] text-[#6E6E66] mt-0.5">
                       {u.default_stanowisko || ""}
                     </div>
-                    {mojeOferty.length > 0 && (
-                      <div className="text-[13px] font-bold text-[#8A3A2B] mt-1">
-                        ⇄ Giełda: {STATUS_LABEL[mojeOferty[0].status]}
-                        {mojeOferty.length > 1 ? ` (+${mojeOferty.length - 1})` : ""}
+                    {propozycje.length > 0 ? (
+                      <div className="text-[13px] font-bold text-[#2F5E2A] mt-1">
+                        ⇄ Giełda: propozycja {opisDnia(propozycje[0].ps.date)} ·{" "}
+                        {trimTime(propozycje[0].ps.start_time)} –{" "}
+                        {trimTime(propozycje[0].ps.end_time)}
+                        {propozycje.length > 1 ? ` (+${propozycje.length - 1})` : ""}
                       </div>
-                    )}
+                    ) : wystawione.length > 0 ? (
+                      <div className="text-[13px] text-[#6E6E66] mt-1">
+                        ⇄ Giełda: {STATUS_LABEL[wystawione[0].status].toLowerCase()}
+                      </div>
+                    ) : null}
                   </div>
                   {empOpen ? (
                     <span className="flex-shrink-0 text-[13px] font-semibold px-3 py-1.5 rounded bg-[#FAEAE6] text-[#8A3A2B]">
