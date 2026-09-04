@@ -93,33 +93,72 @@ def main():
             "end_time": r["Koniec"][:5],
         })
 
-    # urlopy -> ciągłe zakresy per osoba
-    zakresy = []
+    # URP z arkusza rozpada się na dwie różne rzeczy:
+    #  * dzień z godzinami (09-17)          -> dzień urlopu
+    #  * dzień zerowy w SOBOTĘ/NIEDZIELĘ    -> weekend w środku urlopu, wchodzi
+    #                                          w zakres, godzin i tak nie daje
+    #  * dzień zerowy w DZIEŃ ROBOCZY       -> NIE urlop: pracownik nie mógł
+    #                                          przyjść, ale prawnie godzin nie
+    #                                          było (ustalenie właściciela) ->
+    #                                          zapisujemy jako niedostępność
+    def scal(dni):
+        """Ciągłe zakresy dat z posortowanej listy."""
+        out = []
+        if not dni:
+            return out
+        start = prev = dni[0]
+        for x in dni[1:]:
+            if (x - prev).days == 1:
+                prev = x
+            else:
+                out.append((start, prev))
+                start = prev = x
+        out.append((start, prev))
+        return out
+
+    zakresy, zakresy_nd = [], []
     per = collections.defaultdict(list)
     for u in urlopy:
         per[u["user"]["name"]].append(u)
     for imie, lista in per.items():
+        user = lista[0]["user"]
         lista.sort(key=lambda x: x["date"])
-        start = prev = lista[0]
-        for x in lista[1:]:
-            if (x["date"] - prev["date"]).days == 1:
-                prev = x
-            else:
-                zakresy.append((lista[0]["user"], start["date"], prev["date"]))
-                start = prev = x
-        zakresy.append((lista[0]["user"], start["date"], prev["date"]))
+        dni_urlopu = sorted(
+            x["date"] for x in lista if x["godzin"] or x["date"].weekday() >= 5
+        )
+        dni_nd = sorted(
+            x["date"] for x in lista if not x["godzin"] and x["date"].weekday() < 5
+        )
+        # weekend na samym KOŃCU zakresu nie jest już urlopem — to po prostu
+        # wolne, więc nie doklejamy go do zakresu (godzin i tak nie daje).
+        dni_z_godzinami = {x["date"] for x in lista if x["godzin"]}
+        while dni_urlopu and dni_urlopu[-1] not in dni_z_godzinami:
+            dni_urlopu.pop()
+        zakresy += [(user, a, b) for a, b in scal(dni_urlopu)]
+        zakresy_nd += [(user, a, b) for a, b in scal(dni_nd)]
 
     print(f"CSV: {len(rows)} wierszy")
     print(f"  zmiany do grafik_shifts : {len(zmiany)}")
-    print(f"  dni urlopu              : {len(urlopy)}  ->  {len(zakresy)} zakresów")
+    print(f"  dni URP w arkuszu       : {len(urlopy)}")
+    print(f"    -> urlop              : {len(zakresy)} zakresów")
+    print(f"    -> niedostępność      : {len(zakresy_nd)} zakresów (dzień roboczy bez godzin)")
     print(f"  odrzucone               : {len(odrzucone)}")
     for r, powod in odrzucone[:10]:
         print("     ", powod, r)
     print("\n  wg lokalu:", dict(collections.Counter(z["lokal"] for z in zmiany)))
     print("  zakres dat:", min(z['date'] for z in zmiany), "→", max(z['date'] for z in zmiany))
-    print("\n  urlopy:")
+    print("\n  urlopy (z godzinami 8h/dzień roboczy):")
     for user, od, do in zakresy:
-        print(f"     {user['name']:10} {od} → {do}")
+        dni_rob = sum(
+            1
+            for i in range((do - od).days + 1)
+            if (od + datetime.timedelta(days=i)).weekday() < 5
+        )
+        print(f"     {user['name']:10} {od} → {do}   ({dni_rob} dni rob. = {dni_rob * URLOP_HOURS} h)")
+    if zakresy_nd:
+        print("\n  niedostępność (bez godzin):")
+        for user, od, do in zakresy_nd:
+            print(f"     {user['name']:10} {od} → {do}")
 
     if not a.wykonaj:
         print("\nSUCHY PRZEBIEG — nic nie zapisano. Dodaj --wykonaj, żeby zapisać.")
@@ -154,7 +193,16 @@ def main():
                         "godzin": URLOP_HOURS, "is_urlop": True, "absence_id": abs_row["id"],
                     })
                 cur += datetime.timedelta(days=1)
-    print(f"  zapisano {len(zakresy)} urlopów")
+    for user, od, do in zakresy_nd:
+        rest("absences", "POST", {
+            "user_id": user["id"], "user_name": user["name"],
+            "lokal": user.get("default_lokal") or None,
+            "start_date": str(od), "end_date": str(do),
+            "type": "niedostepnosc", "status": "approved",
+            "requested_by": "manager", "decided_by": "Import z arkusza",
+            "decided_at": teraz, "note": "Import z Google Sheets — dzień bez godzin",
+        })
+    print(f"  zapisano {len(zakresy)} urlopów i {len(zakresy_nd)} niedostępności")
 
 
 if __name__ == "__main__":
