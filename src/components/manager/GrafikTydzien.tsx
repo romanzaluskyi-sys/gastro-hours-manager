@@ -520,6 +520,7 @@ function LokalSection({
 
 export default function GrafikTydzien({
   lokaleNames,
+  allLokaleNames,
   lokale,
   users,
   activeStanowiska,
@@ -824,7 +825,7 @@ export default function GrafikTydzien({
           ctx={modalCtx}
           users={users}
           activeStanowiska={activeStanowiska}
-          lokaleNames={lokaleNames}
+          lokaleNames={allLokaleNames || lokaleNames}
           absences={absences}
           staffingRules={staffingRules}
           staffingRuleSets={staffingRuleSets}

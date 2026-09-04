@@ -23,6 +23,14 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.20.0",
+    date: "2026-09-03",
+    items: [
+      "W oknie zmiany wybierasz stanowisko RAZEM z lokalem ('Kelner · Sunset') — pracownika oddajesz do innego lokalu bez przechodzenia na jego zakładkę.",
+      "Widać tylko stanowiska z karty pracownika; pozostałe są schowane pod rozwijanym linkiem.",
+    ],
+  },
+  {
     version: "0.19.0",
     date: "2026-09-03",
     items: [

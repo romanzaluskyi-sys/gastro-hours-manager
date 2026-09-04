@@ -17,6 +17,7 @@ import {
   getRulesForDate,
   knowsStanowisko,
   findBlockingAbsence,
+  allowedStanowiskaArr,
 } from "../../utils/grafik";
 
 const DZIEN_PELNY = ["ND", "PON", "WT", "ŚR", "CZW", "PT", "SOB"];
@@ -28,6 +29,33 @@ const fmtNaglowek = (dateStr) => {
     month: "short",
   })}`;
 };
+
+// Kafelek wyboru "stanowisko + lokal". Lokal dopisujemy tylko wtedy, gdy
+// jest inny niż tabela, z której otwarto modal — inaczej byłby szumem przy
+// każdym kafelku.
+function ParaKafelek({ para, wybrana, obcyLokal, activeStanowiska, onClick }) {
+  const style = stanowiskoBadgeStyle(activeStanowiska, para.lokal, para.stanowisko);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`px-2 py-1.5 rounded border-[2px] flex items-center gap-1.5 ${
+        wybrana ? "border-[#171714] bg-[#F1F1EE]" : "border-[#B7B6AE] bg-white"
+      }`}
+    >
+      <span
+        className="px-1.5 py-0.5 rounded text-[11px] font-extrabold"
+        style={style || { backgroundColor: "#E7E7E2", color: "#171714" }}
+      >
+        {stanowiskoShort(activeStanowiska, para.lokal, para.stanowisko)}
+      </span>
+      <span className="text-[13px] font-bold">{para.stanowisko}</span>
+      {obcyLokal && (
+        <span className="text-[12px] font-normal text-[#8A3A2B]">· {para.lokal}</span>
+      )}
+    </button>
+  );
+}
 
 export function GrafikBlokadaModal({ powod, onClose, onNotify }) {
   if (!powod) return null;
@@ -94,6 +122,7 @@ export default function GrafikZmianaModal({
   // nadpisuje — przy dobieraniu ludzi "po stanowisku" (osoba z innego lokalu
   // na Barmana) nadpisywanie kasowałoby właśnie to, co się wybrało.
   const [stanowiskoRuszone, setStanowiskoRuszone] = useState(false);
+  const [pokazPozostale, setPokazPozostale] = useState(false);
   const [zrodloGodzin, setZrodloGodzin] = useState(null);
 
   const user = (users || []).find((u) => String(u.id) === String(userId)) || ctx.user;
@@ -132,7 +161,36 @@ export default function GrafikZmianaModal({
       return a.name.localeCompare(b.name, "pl");
     });
 
-  const stanowiskaLokalu = (activeStanowiska || []).filter((s) => s.lokal_name === lokal);
+  // Kafelek wyboru to para STANOWISKO + LOKAL, nie samo stanowisko. Dzięki
+  // temu z grafiku lokalu 1 da się od razu oddać człowieka na jeden dzień do
+  // lokalu 2 — bez przechodzenia na drugą zakładkę i szukania go tam.
+  // Domyślnie pokazujemy WYŁĄCZNIE stanowiska z karty pracownika; resztę
+  // trzeba rozwinąć świadomie (i wtedy dojdzie ostrzeżenie + "Dopisz").
+  const znaneStanowiska = user ? allowedStanowiskaArr(user) : [];
+  const wszystkieParty = [];
+  (lokaleNames || []).forEach((l) => {
+    (activeStanowiska || [])
+      .filter((s) => s.lokal_name === l)
+      .forEach((s) => {
+        if (!wszystkieParty.some((p) => p.lokal === l && p.stanowisko === s.name)) {
+          wszystkieParty.push({ lokal: l, stanowisko: s.name, id: `${l}|${s.name}` });
+        }
+      });
+  });
+  const sortujPary = (a, b) => {
+    const domowy = (p) => (p.lokal === (user?.default_lokal || ctx.lokal) ? 0 : 1);
+    if (domowy(a) !== domowy(b)) return domowy(a) - domowy(b);
+    const glowne = (p) => (p.stanowisko === user?.default_stanowisko ? 0 : 1);
+    if (glowne(a) !== glowne(b)) return glowne(a) - glowne(b);
+    if (a.lokal !== b.lokal) return a.lokal.localeCompare(b.lokal, "pl");
+    return a.stanowisko.localeCompare(b.stanowisko, "pl");
+  };
+  const paryZKarty = wszystkieParty
+    .filter((p) => znaneStanowiska.includes(p.stanowisko))
+    .sort(sortujPary);
+  const paryPozostale = wszystkieParty
+    .filter((p) => !znaneStanowiska.includes(p.stanowisko))
+    .sort(sortujPary);
   const obceStanowisko = user && stanowisko && !knowsStanowisko(user, stanowisko);
   const wolneUzytkownika = user ? findBlockingAbsence(absences, user, date) : null;
 
@@ -216,8 +274,9 @@ export default function GrafikZmianaModal({
                     type="button"
                     onClick={() => {
                       setUserId(u.id);
-                      if (!ctx.shift && !stanowiskoRuszone && u.default_stanowisko) {
-                        setStanowisko(u.default_stanowisko);
+                      if (!ctx.shift && !stanowiskoRuszone) {
+                        if (u.default_stanowisko) setStanowisko(u.default_stanowisko);
+                        setLokal(ctx.lokal);
                       }
                     }}
                     className={`px-2.5 py-1.5 rounded border-[2px] text-[13px] font-bold ${
@@ -247,34 +306,67 @@ export default function GrafikZmianaModal({
           </div>
 
           <div>
-            <label className={statLabelCls}>Stanowisko na tę zmianę</label>
+            <label className={statLabelCls}>Stanowisko i lokal na tę zmianę</label>
             <div className="flex flex-wrap gap-1.5 mt-1">
-              {stanowiskaLokalu.map((s) => {
-                const wybrane = s.name === stanowisko;
-                const style = stanowiskoBadgeStyle(activeStanowiska, lokal, s.name);
-                return (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => {
-                      setStanowisko(s.name);
-                      setStanowiskoRuszone(true);
-                    }}
-                    className={`px-2 py-1.5 rounded border-[2px] flex items-center gap-1.5 ${
-                      wybrane ? "border-[#171714] bg-[#F1F1EE]" : "border-[#B7B6AE] bg-white"
-                    }`}
-                  >
-                    <span
-                      className="px-1.5 py-0.5 rounded text-[11px] font-extrabold"
-                      style={style || { backgroundColor: "#E7E7E2", color: "#171714" }}
-                    >
-                      {stanowiskoShort(activeStanowiska, lokal, s.name)}
-                    </span>
-                    <span className="text-[13px] font-bold">{s.name}</span>
-                  </button>
-                );
-              })}
+              {paryZKarty.length === 0 && (
+                <p className="text-[13px] text-[#6E6E66]">
+                  {user
+                    ? `${user.name} nie ma jeszcze ustawionych stanowisk — rozwiń "Pozostałe stanowiska" poniżej.`
+                    : "Najpierw wybierz pracownika."}
+                </p>
+              )}
+              {paryZKarty.map((p) => (
+                <ParaKafelek
+                  key={p.id}
+                  para={p}
+                  wybrana={p.stanowisko === stanowisko && p.lokal === lokal}
+                  obcyLokal={p.lokal !== ctx.lokal}
+                  activeStanowiska={activeStanowiska}
+                  onClick={() => {
+                    setStanowisko(p.stanowisko);
+                    setLokal(p.lokal);
+                    setStanowiskoRuszone(true);
+                  }}
+                />
+              ))}
             </div>
+
+            {paryPozostale.length > 0 && (
+              <div className="mt-2">
+                <button
+                  type="button"
+                  onClick={() => setPokazPozostale((v) => !v)}
+                  className="text-[12px] font-bold underline text-[#6E6E66]"
+                >
+                  {pokazPozostale ? "Ukryj" : "Pozostałe stanowiska"} ({paryPozostale.length})
+                </button>
+                {pokazPozostale && (
+                  <div className="flex flex-wrap gap-1.5 mt-1.5 opacity-70">
+                    {paryPozostale.map((p) => (
+                      <ParaKafelek
+                        key={p.id}
+                        para={p}
+                        wybrana={p.stanowisko === stanowisko && p.lokal === lokal}
+                        obcyLokal={p.lokal !== ctx.lokal}
+                        activeStanowiska={activeStanowiska}
+                        onClick={() => {
+                          setStanowisko(p.stanowisko);
+                          setLokal(p.lokal);
+                          setStanowiskoRuszone(true);
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {lokal !== ctx.lokal && (
+              <p className="mt-2 text-[13px] font-bold text-[#8A3A2B] bg-[#FAEAE6] border-[2px] border-[#DE3A22] rounded px-3 py-2">
+                Ta zmiana trafi do lokalu <strong>{lokal}</strong>. W grafiku{" "}
+                {ctx.lokal} pojawi się jako "w {lokal}".
+              </p>
+            )}
           </div>
 
           {obceStanowisko && (
@@ -315,7 +407,7 @@ export default function GrafikZmianaModal({
             </div>
           )}
 
-          <div className="grid md:grid-cols-3 gap-3">
+          <div className="grid md:grid-cols-2 gap-3">
             <div>
               <label className={statLabelCls}>Od</label>
               <input
@@ -339,20 +431,6 @@ export default function GrafikZmianaModal({
                 }}
                 className="w-full p-2 border-[2px] border-[#171714] rounded"
               />
-            </div>
-            <div>
-              <label className={statLabelCls}>Lokal</label>
-              <select
-                value={lokal}
-                onChange={(e) => setLokal(e.target.value)}
-                className="w-full p-2 border-[2px] border-[#171714] rounded bg-white"
-              >
-                {lokaleNames.map((l) => (
-                  <option key={l} value={l}>
-                    {l}
-                  </option>
-                ))}
-              </select>
             </div>
           </div>
 

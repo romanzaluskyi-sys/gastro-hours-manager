@@ -5,6 +5,19 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.20.0 — 2026-09-03
+
+- **Oddanie pracownika do innego lokalu bez opuszczania jego grafiku.**
+  W oknie zmiany wybiera się teraz jednym kafelkiem *stanowisko razem z
+  lokalem* — np. "Kelner" (u siebie) albo "Kelner · Sunset". Wpisana w ten
+  sposób zmiana pojawia się w grafiku Sunset jako zwykła zmiana, a w grafiku
+  macierzystego lokalu jako "w Sunset".
+- **Pokazujemy tylko stanowiska z karty pracownika.** Reszta jest schowana
+  pod "Pozostałe stanowiska" — po rozwinięciu nadal można ich użyć razem z
+  przyciskiem "Dopisz do umiejętności".
+- Osobne pole wyboru lokalu zniknęło — lokal wynika z wybranego kafelka, a
+  gdy jest inny niż oglądany, okno wyraźnie o tym mówi przed zapisem.
+
 ## 0.19.0 — 2026-09-03
 
 - **Dobieranie ludzi między lokalami prosto z grafiku.** W oknie przypisania

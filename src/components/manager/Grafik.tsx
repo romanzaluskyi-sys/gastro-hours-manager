@@ -44,10 +44,15 @@ export default function Grafik({
   const [month, setMonth] = useState(() => addDaysYMD(mondayOf(toLocalYMD(new Date())), 3).slice(0, 7));
   const [publishing, setPublishing] = useState(false);
 
+  // Lokale WYŚWIETLANE w siatce (zależne od górnego paska)...
   const lokaleNames =
     selectedLokal !== "ALL"
       ? [selectedLokal]
       : (availableLokaleForManager || []).map((l) => l.name);
+  // ...i wszystkie, do których kierownik ma dostęp. To drugie zasila wybór
+  // "stanowisko + lokal" w modalu: oddanie człowieka do innego lokalu musi
+  // działać także wtedy, gdy w pasku wybrano pojedynczy lokal.
+  const wszystkieLokaleNames = (availableLokaleForManager || []).map((l) => l.name);
 
   // Konfiguracja i widok miesiąca dotyczą zawsze JEDNEGO lokalu — przy
   // "Cała sieć" trzeba go wskazać osobno.
@@ -209,6 +214,7 @@ export default function Grafik({
       ) : view === "tydzien" ? (
         <GrafikTydzien
           lokaleNames={lokaleNames}
+          allLokaleNames={wszystkieLokaleNames}
           lokale={lokale}
           users={users}
           setUsers={setUsers}

@@ -405,6 +405,12 @@ dowolnym lokalu. Stąd:
 - Lista kandydatów w modalu przypisania obejmuje **całą sieć**, swoi
   pierwsi, przy obcych widać ich lokal. Ograniczanie jej do stałej obsady
   lokalu tylko przeszkadzało.
+- Wybór w modalu to **para stanowisko + lokal** (`ParaKafelek`), a nie samo
+  stanowisko z osobnym selectem lokalu. Kafelki budujemy ze stanowisk **z
+  karty pracownika** przeciętych ze wszystkimi lokalami, do których
+  kierownik ma dostęp (`allLokaleNames`, NIE `lokaleNames` — te drugie
+  zależą od górnego paska i zawężałyby wybór do oglądanego lokalu).
+  Pozostałe stanowiska są schowane pod rozwijanym linkiem.
 - Stanowisko można dopisać pracownikowi **prosto z grafiku**
   (`handleAddStanowisko` w `GrafikTydzien.tsx` → patch `users`), bez
   wchodzenia do karty pracownika.
