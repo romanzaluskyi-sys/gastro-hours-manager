@@ -1042,6 +1042,7 @@ const ManagerDashboard = ({
             availableLokaleForManager={availableLokaleForManager}
             lokale={lokale}
             users={users}
+            setUsers={setUsers}
             activeStanowiska={activeStanowiska}
             planShifts={planShifts}
             setPlanShifts={setPlanShifts}

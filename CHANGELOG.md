@@ -5,6 +5,19 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.19.0 — 2026-09-03
+
+- **Dobieranie ludzi między lokalami prosto z grafiku.** W oknie przypisania
+  zmiany widać teraz wszystkich pracowników sieci — swoi z danego lokalu są
+  pierwsi, a przy pozostałych widać, skąd są. Osoby, które nie mają
+  zaznaczonego wybranego stanowiska, są przygaszone, ale nadal można je wpisać.
+- **"Dopisz stanowisko do umiejętności"** — jeśli wpisujesz komuś zmianę na
+  stanowisko, którego nie ma na swojej liście, możesz je dopisać jednym
+  kliknięciem, bez wchodzenia do karty pracownika. Następnym razem ostrzeżenia
+  już nie będzie.
+- Wybrane stanowisko nie jest już kasowane przy zmianie osoby — można najpierw
+  wskazać stanowisko, a potem szukać, kto może na nie wejść.
+
 ## 0.18.0 — 2026-09-03
 
 - **Grafik — widok miesiąca.** Kalendarz całego miesiąca dla jednego lokalu.

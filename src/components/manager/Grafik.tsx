@@ -19,6 +19,7 @@ export default function Grafik({
   availableLokaleForManager,
   lokale,
   users,
+  setUsers,
   activeStanowiska,
   planShifts,
   setPlanShifts,
@@ -210,6 +211,7 @@ export default function Grafik({
           lokaleNames={lokaleNames}
           lokale={lokale}
           users={users}
+          setUsers={setUsers}
           activeStanowiska={activeStanowiska}
           planShifts={planShifts}
           setPlanShifts={setPlanShifts}

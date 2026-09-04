@@ -393,6 +393,25 @@ Branch: `feature/grafik`. Każdy etap osobno testowalny na Vercel Preview.
 | 6 | **Grafik u pracownika** (własna zakładka, mobile) | tak |
 | 7 | **Giełda zmian** — obie strony + limit 12 h | tak |
 
+### Mieszanie ludzi między lokalami (2026-09-03)
+
+U właściciela pracownicy krążą między lokalami i **decyduje o tym
+stanowisko, nie lokal** — kto umie "Kelner", może wejść na Kelnera w
+dowolnym lokalu. Stąd:
+
+- `allowed_stanowiska` trzyma **nazwy** stanowisk, nie wiersze per lokal —
+  to nie jest uproszczenie, tylko dokładnie ten model, którego wymaga
+  praca właściciela.
+- Lista kandydatów w modalu przypisania obejmuje **całą sieć**, swoi
+  pierwsi, przy obcych widać ich lokal. Ograniczanie jej do stałej obsady
+  lokalu tylko przeszkadzało.
+- Stanowisko można dopisać pracownikowi **prosto z grafiku**
+  (`handleAddStanowisko` w `GrafikTydzien.tsx` → patch `users`), bez
+  wchodzenia do karty pracownika.
+- Wybrane stanowisko nie jest nadpisywane przy zmianie osoby
+  (`stanowiskoRuszone`) — inaczej kolejność "najpierw stanowisko, potem
+  kto może" byłaby nie do przejścia.
+
 ## Do ustalenia (pytania otwarte)
 
 - Wyjątki dat (święta / niedziela handlowa) — UI dopiero po etapie 2.

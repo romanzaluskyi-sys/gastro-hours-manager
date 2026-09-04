@@ -8,7 +8,7 @@
 // Zapis idzie przez onSave/onDelete z GrafikTydzien — modal sam nie pisze
 // do bazy. Reguły (kolizje, podpowiadane godziny) żyją w utils/grafik.ts.
 import React, { useState, useEffect } from "react";
-import { AlertTriangle, Trash2 } from "lucide-react";
+import { AlertTriangle, Trash2, Plus } from "lucide-react";
 import { btnPrimaryCls, btnSecondaryCls, statLabelCls } from "./designTokens";
 import { stanowiskoShort, stanowiskoBadgeStyle } from "../../utils/stanowiska";
 import {
@@ -74,6 +74,7 @@ export default function GrafikZmianaModal({
   weekDays,
   onSave,
   onDelete,
+  onAddStanowisko,
   onClose,
 }) {
   // Otwarcie z nagłówka tabeli ("Dodaj pracownika") nie zna jeszcze dnia —
@@ -88,6 +89,11 @@ export default function GrafikZmianaModal({
   const [start, setStart] = useState(trimTime(ctx.shift?.start_time) || "");
   const [end, setEnd] = useState(trimTime(ctx.shift?.end_time) || "");
   const [saving, setSaving] = useState(false);
+  const [dopisywanie, setDopisywanie] = useState(false);
+  // Czy kierownik sam wskazał stanowisko. Jeśli tak, wybór osoby go już nie
+  // nadpisuje — przy dobieraniu ludzi "po stanowisku" (osoba z innego lokalu
+  // na Barmana) nadpisywanie kasowałoby właśnie to, co się wybrało.
+  const [stanowiskoRuszone, setStanowiskoRuszone] = useState(false);
   const [zrodloGodzin, setZrodloGodzin] = useState(null);
 
   const user = (users || []).find((u) => String(u.id) === String(userId)) || ctx.user;
@@ -114,20 +120,12 @@ export default function GrafikZmianaModal({
 
   // Osoby wolne tego dnia w tym lokalu — plus ta, która jest już wpisana,
   // żeby dało się edytować istniejącą zmianę bez znikania jej autora.
-  // Z komórki: osoby związane z tym lokalem. Z "Dodaj pracownika": wszyscy,
-  // bo sensem tego przycisku jest dobranie kogoś spoza stałej obsady lokalu.
+  // Zawsze cała sieć, swoi pierwsi. Wypożyczanie ludzi między lokalami to
+  // u właściciela normalna praktyka, a nie wyjątek — ograniczanie listy do
+  // stałej obsady lokalu tylko by przeszkadzało. Rozpoznanie "kto może"
+  // idzie przez stanowisko, nie przez lokal.
   const kandydaci = (users || [])
-    .filter(
-      (u) =>
-        !u.archived &&
-        u.active !== false &&
-        u.role !== "kiosk" &&
-        (ctx.pickDate ||
-          u.default_lokal === lokal ||
-          (planShifts || []).some(
-            (s) => s.lokal === lokal && String(s.user_id) === String(u.id)
-          ))
-    )
+    .filter((u) => !u.archived && u.active !== false && u.role !== "kiosk")
     .sort((a, b) => {
       const swoj = (u) => (u.default_lokal === lokal ? 0 : 1);
       if (swoj(a) !== swoj(b)) return swoj(a) - swoj(b);
@@ -211,24 +209,29 @@ export default function GrafikZmianaModal({
               {kandydaci.map((u) => {
                 const zajety = findBlockingAbsence(absences, u, date);
                 const wybrany = String(u.id) === String(userId);
+                const umie = !stanowisko || knowsStanowisko(u, stanowisko);
                 return (
                   <button
                     key={u.id}
                     type="button"
                     onClick={() => {
                       setUserId(u.id);
-                      if (!ctx.shift && u.default_stanowisko) setStanowisko(u.default_stanowisko);
+                      if (!ctx.shift && !stanowiskoRuszone && u.default_stanowisko) {
+                        setStanowisko(u.default_stanowisko);
+                      }
                     }}
                     className={`px-2.5 py-1.5 rounded border-[2px] text-[13px] font-bold ${
                       wybrany
                         ? "bg-[#171714] text-white border-[#171714]"
                         : "bg-white text-[#171714] border-[#B7B6AE] hover:border-[#171714]"
-                    } ${zajety ? "opacity-50" : ""}`}
+                    } ${zajety || !umie ? "opacity-50" : ""}`}
                     title={
                       zajety
                         ? zajety.type === "urlop"
                           ? "Ma urlop tego dnia"
                           : "Zgłosił brak dostępności"
+                        : !umie
+                        ? `Nie ma zaznaczonego stanowiska ${stanowisko}`
                         : ""
                     }
                   >
@@ -253,7 +256,10 @@ export default function GrafikZmianaModal({
                   <button
                     key={s.id}
                     type="button"
-                    onClick={() => setStanowisko(s.name)}
+                    onClick={() => {
+                      setStanowisko(s.name);
+                      setStanowiskoRuszone(true);
+                    }}
                     className={`px-2 py-1.5 rounded border-[2px] flex items-center gap-1.5 ${
                       wybrane ? "border-[#171714] bg-[#F1F1EE]" : "border-[#B7B6AE] bg-white"
                     }`}
@@ -274,11 +280,26 @@ export default function GrafikZmianaModal({
           {obceStanowisko && (
             <div className="flex items-start gap-2 p-3 rounded border-[2px] border-[#DE3A22] bg-[#FAEAE6]">
               <AlertTriangle size={16} className="text-[#8A3A2B] flex-shrink-0 mt-0.5" />
-              <p className="text-[13px] text-[#8A3A2B]">
-                <strong>{user.name}</strong> nie ma zaznaczonego stanowiska{" "}
-                <strong>{stanowisko}</strong> jako "umie pracować". Możesz wpisać tę
-                zmianę mimo to — decyzja należy do Ciebie.
-              </p>
+              <div className="text-[13px] text-[#8A3A2B]">
+                <p>
+                  <strong>{user.name}</strong> nie ma zaznaczonego stanowiska{" "}
+                  <strong>{stanowisko}</strong> jako "umie pracować". Możesz wpisać tę
+                  zmianę mimo to — decyzja należy do Ciebie.
+                </p>
+                <button
+                  type="button"
+                  disabled={dopisywanie}
+                  onClick={async () => {
+                    setDopisywanie(true);
+                    await onAddStanowisko(user, stanowisko);
+                    setDopisywanie(false);
+                  }}
+                  className="mt-2 px-2.5 py-1.5 rounded border-[2px] border-[#8A3A2B] text-[#8A3A2B] text-[12px] font-bold hover:bg-white disabled:opacity-50"
+                >
+                  <Plus size={13} className="inline -mt-0.5 mr-1" />
+                  Dopisz {stanowisko} do umiejętności {user.name}
+                </button>
+              </div>
             </div>
           )}
 

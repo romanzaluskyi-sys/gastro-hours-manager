@@ -23,6 +23,14 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.19.0",
+    date: "2026-09-03",
+    items: [
+      "W oknie przypisania zmiany widać wszystkich pracowników sieci (swoi pierwsi, przy obcych widać lokal) — dobieranie ludzi między lokalami bez wychodzenia z grafiku.",
+      "'Dopisz stanowisko do umiejętności' jednym kliknięciem, prosto z grafiku.",
+    ],
+  },
+  {
     version: "0.18.0",
     date: "2026-09-03",
     items: [

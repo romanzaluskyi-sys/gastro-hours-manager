@@ -38,6 +38,7 @@ import {
   findOverlappingPlanShift,
   findBlockingAbsence,
   buildCopyFromPreviousWeek,
+  storedStanowiskaArr,
 } from "../../utils/grafik";
 import { stanowiskoShort, stanowiskoBadgeStyle } from "../../utils/stanowiska";
 import { countWorkdays, URLOP_HOURS_PER_DAY } from "../../utils/absences";
@@ -528,6 +529,7 @@ export default function GrafikTydzien({
   staffingRules,
   staffingRuleSets,
   grafikWyjatki,
+  setUsers,
   weekStart,
   setWeekStart,
   sortBy,
@@ -665,6 +667,25 @@ export default function GrafikTydzien({
       );
     } catch (err) {
       showMsg(`Błąd kopiowania: ${err.message || "nieznany błąd"}`, "error");
+    }
+  };
+
+  // Dopisanie stanowiska prosto z grafiku — u właściciela ludzie krążą
+  // między lokalami i to stanowisko, a nie lokal, decyduje kto może wejść
+  // na zmianę. Chodzenie za każdym razem do karty pracownika tylko po to,
+  // żeby odhaczyć jeden checkbox, byłoby stratą czasu.
+  const handleAddStanowisko = async (user, stanowisko) => {
+    try {
+      const lista = [...new Set([...storedStanowiskaArr(user), stanowisko])].filter(
+        (n) => n && n !== user.default_stanowisko
+      );
+      const zapisany = await api.patch("users", user.id, {
+        allowed_stanowiska: lista.length > 0 ? lista.join(",") : null,
+      });
+      setUsers((users || []).map((u) => (u.id === zapisany.id ? zapisany : u)));
+      showMsg(`${stanowisko} dopisane do umiejętności: ${user.name}.`);
+    } catch (err) {
+      showMsg(`Nie udało się dopisać stanowiska: ${err.message || "nieznany błąd"}`, "error");
     }
   };
 
@@ -812,6 +833,7 @@ export default function GrafikTydzien({
           weekDays={weekDays}
           onSave={handleSave}
           onDelete={handleDelete}
+          onAddStanowisko={handleAddStanowisko}
           onClose={() => setModalCtx(null)}
         />
       )}

@@ -499,17 +499,24 @@ export const publishWeek = async ({ planShifts, lokaleNames, from, to, actorName
 // `allowed_stanowiska` jest tekstem rozdzielonym przecinkami, dokładnie jak
 // istniejące `allowed_lokale` (patrz ManagerDashboard.tsx — join/split), a
 // NIE tablicą Postgresa, mimo zapisu "[]" w CLAUDE.md.
-export const allowedStanowiskaArr = (user) => {
-  if (!user) return [];
-  const raw = user.allowed_stanowiska;
+// Sama zawartość kolumny, BEZ doklejonego default_stanowisko — tej wersji
+// używamy przy zapisie, żeby nie duplikować stanowiska domyślnego w liście.
+export const storedStanowiskaArr = (user) => {
+  const raw = user?.allowed_stanowiska;
   const list = Array.isArray(raw)
     ? raw
     : raw
     ? String(raw).split(",").map((s) => s.trim())
     : [];
+  return [...new Set(list.filter(Boolean))];
+};
+
+// Wersja do odczytu — stanowisko domyślne zawsze liczy się jako "umie".
+export const allowedStanowiskaArr = (user) => {
+  if (!user) return [];
   const withDefault = user.default_stanowisko
-    ? [user.default_stanowisko, ...list]
-    : list;
+    ? [user.default_stanowisko, ...storedStanowiskaArr(user)]
+    : storedStanowiskaArr(user);
   return [...new Set(withDefault.filter(Boolean))];
 };
 
