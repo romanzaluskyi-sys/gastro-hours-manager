@@ -38,6 +38,7 @@ const PersonalDashboard = ({
   taskCompletions,
   setTaskCompletions,
   absences,
+  planShifts,
   setAbsences,
   showMsg,
 }) => {
@@ -64,6 +65,7 @@ const PersonalDashboard = ({
       taskCompletions={taskCompletions}
       setTaskCompletions={setTaskCompletions}
       absences={absences}
+      planShifts={planShifts}
       setAbsences={setAbsences}
       onLogout={() => setCurrentView("login")}
     />

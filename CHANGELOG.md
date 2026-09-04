@@ -5,6 +5,19 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.21.0 — 2026-09-03
+
+- **Grafik u pracownika.** Nowa, stała zakładka Grafik na telefonie i na
+  Tablecie Służbowym — lista dni, a nie siatka, bo na telefonie siatka jest
+  nieczytelna. Przy każdym dniu godziny, stanowisko, lokal i kto jeszcze jest
+  z tobą na zmianie. Urlop i zgłoszona niedostępność widoczne jako URP / NIE.
+- Przełącznik **Ten tydzień / Następny / Miesiąc** (miesiąc to lista własnych
+  zmian z podsumowaniem godzin) oraz "Pokaż wszystkich w lokalu".
+- Na **Pulpicie** widać teraz "Twoja zmiana dziś", a gdy dziś wolne — kafelek
+  "Następna zmiana" z datą i godzinami. Zniknął napis o nieistniejącym module.
+- Pracownik widzi **wyłącznie wysłany grafik** — wersja robocza kierownika
+  nigdy się tu nie pokazuje.
+
 ## 0.20.0 — 2026-09-03
 
 - **Oddanie pracownika do innego lokalu bez opuszczania jego grafiku.**

@@ -269,6 +269,7 @@ export default function App() {
           setTaskCompletions={setTaskCompletions}
           absences={absences}
           setAbsences={setAbsences}
+          planShifts={planShifts}
           showMsg={showMsg}
         />
       )}
@@ -290,6 +291,7 @@ export default function App() {
           setTaskCompletions={setTaskCompletions}
           absences={absences}
           setAbsences={setAbsences}
+          planShifts={planShifts}
           showMsg={showMsg}
         />
       )}

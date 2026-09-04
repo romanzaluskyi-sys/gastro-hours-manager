@@ -495,6 +495,37 @@ export const publishWeek = async ({ planShifts, lokaleNames, from, to, actorName
   return { updated, powiadomieni: names.length };
 };
 
+// --- WIDOK PRACOWNIKA ---------------------------------------------------
+// Pracownik widzi WYŁĄCZNIE opublikowane zmiany. Wersja robocza kierownika
+// (published_at = null) nie może do niego przeciekać — filtrujemy tu, w
+// jednym miejscu, a nie w każdym z dwóch dashboardów osobno.
+export const publishedShiftsFor = (planShifts, user) =>
+  (planShifts || []).filter(
+    (s) =>
+      s.published_at &&
+      (s.user_id && user?.id
+        ? String(s.user_id) === String(user.id)
+        : s.user_name === user?.name)
+  );
+
+// Wszystkie opublikowane zmiany danego dnia w danym lokalu — "kto jeszcze
+// jest ze mną na zmianie".
+export const publishedShiftsOnDay = (planShifts, lokal, dateStr) =>
+  (planShifts || []).filter(
+    (s) => s.published_at && s.lokal === lokal && s.date === dateStr
+  );
+
+// Najbliższa zmiana od podanego dnia włącznie — odpowiedź na pytanie, które
+// pracownik zadaje najczęściej: "kiedy następnym razem pracuję".
+export const nextShiftFrom = (planShifts, user, fromDate) =>
+  publishedShiftsFor(planShifts, user)
+    .filter((s) => s.date >= fromDate)
+    .sort((a, b) =>
+      a.date === b.date
+        ? trimTime(a.start_time).localeCompare(trimTime(b.start_time))
+        : a.date.localeCompare(b.date)
+    )[0] || null;
+
 // --- STANOWISKA PRACOWNIKA ---------------------------------------------
 // `allowed_stanowiska` jest tekstem rozdzielonym przecinkami, dokładnie jak
 // istniejące `allowed_lokale` (patrz ManagerDashboard.tsx — join/split), a

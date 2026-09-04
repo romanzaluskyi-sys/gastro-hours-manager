@@ -23,6 +23,15 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.21.0",
+    date: "2026-09-03",
+    items: [
+      "Pracownik ma własną zakładkę Grafik — lista dni z godzinami, stanowiskiem, lokalem i składem zmiany; przełącznik Ten tydzień / Następny / Miesiąc.",
+      "Na Pulpicie pracownika 'Twoja zmiana dziś' albo kafelek 'Następna zmiana'.",
+      "Pracownik widzi wyłącznie wysłany grafik — wersja robocza nigdy do niego nie trafia.",
+    ],
+  },
+  {
     version: "0.20.0",
     date: "2026-09-03",
     items: [

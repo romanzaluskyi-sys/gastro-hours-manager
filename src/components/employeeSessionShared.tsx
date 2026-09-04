@@ -7,7 +7,7 @@ import {
   ClipboardCheck,
   MoreHorizontal,
   Bell,
-  Calendar,
+  CalendarDays,
   Flag,
   ChevronLeft,
   ChevronDown,
@@ -27,6 +27,15 @@ import {
 } from "../utils/format";
 import { stanowiskoShort, stanowiskoBadgeStyle } from "../utils/stanowiska";
 import {
+  trimTime,
+  mondayOf,
+  addDaysYMD,
+  shiftHours,
+  publishedShiftsFor,
+  publishedShiftsOnDay,
+  nextShiftFrom,
+} from "../utils/grafik";
+import {
   buildEmployeeChecklist,
   getEffectiveAssignmentForDate,
   toggleTaskCompletion,
@@ -43,9 +52,13 @@ import {
 // CLAUDE.md sekcja "Tablet Służbowy — KioskDashboard".
 // ==========================================
 
+// Grafik dostał własną, stałą zakładkę zamiast wiersza w "Więcej" — to
+// rzecz oglądana codziennie, a "Więcej" jest szufladą na rzeczy rzadkie
+// (decyzja właściciela, patrz docs/GRAFIK.md, Runda 5).
 export const TABS = [
   { key: "PULPIT", label: "Pulpit", Icon: Home },
   { key: "ZMIANA", label: "Zmiana", Icon: Clock },
+  { key: "GRAFIK", label: "Grafik", Icon: CalendarDays },
   { key: "RAPORT", label: "Raport", Icon: FileText },
   { key: "ZADANIA", label: "Zadania", Icon: ClipboardCheck },
   { key: "WIECEJ", label: "Więcej", Icon: MoreHorizontal },
@@ -56,6 +69,22 @@ export const fmtHHMM = (d) =>
     2,
     "0"
   )}`;
+
+// "dziś" / "jutro" / "PON 8 wrz" — pracownik myśli dniami, nie datami,
+// więc dwa najbliższe dni nazywamy po ludzku.
+const DZIEN_SKROT = ["ND", "PON", "WT", "ŚR", "CZW", "PT", "SOB"];
+export const opisDnia = (dateStr) => {
+  const dzis = toLocalYMD(new Date());
+  if (dateStr === dzis) return "dziś";
+  const jutro = new Date();
+  jutro.setDate(jutro.getDate() + 1);
+  if (dateStr === toLocalYMD(jutro)) return "jutro";
+  const d = new Date(dateStr + "T00:00:00");
+  return `${DZIEN_SKROT[d.getDay()]} ${d.toLocaleDateString("pl-PL", {
+    day: "numeric",
+    month: "short",
+  })}`;
+};
 
 export const sumHours = (arr) =>
   arr.reduce(
@@ -235,6 +264,7 @@ export const EmployeeSessionScreens = ({
   setTaskCompletions,
   absences,
   setAbsences,
+  planShifts,
   onBack,
   onLogout,
   deviceNote = null,
@@ -257,7 +287,8 @@ export const EmployeeSessionScreens = ({
   const [raportMonth, setRaportMonth] = useState(new Date().getMonth());
   const [raportYear, setRaportYear] = useState(new Date().getFullYear());
 
-  const [grafikToastShown, setGrafikToastShown] = useState(false);
+  const [grafikZakres, setGrafikZakres] = useState("ten"); // ten | nast | miesiac
+  const [grafikWszyscy, setGrafikWszyscy] = useState(false);
 
   const [zgType, setZgType] = useState("problem"); // "correction" | "problem"
   const [zgAnon, setZgAnon] = useState(false);
@@ -322,6 +353,13 @@ export const EmployeeSessionScreens = ({
     "all"
   );
   const taskBadgeCount = myChecklistOwn.filter((i) => !i.done).length;
+
+  // Pracownik widzi tylko OPUBLIKOWANY grafik — wersja robocza kierownika
+  // nie może tu przeciekać (filtruje publishedShiftsFor w utils/grafik.ts).
+  const dzisYMD = toLocalYMD(new Date());
+  const mojGrafik = publishedShiftsFor(planShifts, employee);
+  const mojeDzis = mojGrafik.filter((s) => s.date === dzisYMD);
+  const najblizszaZmiana = nextShiftFrom(planShifts, employee, dzisYMD);
   const myWeeklyStats = weeklyChecklistStats(
     tasks,
     taskCompletions,
@@ -1069,9 +1107,41 @@ export const EmployeeSessionScreens = ({
             </div>
             <div className={sectionLabelCls}>Twoja zmiana dziś</div>
             <div className={ruleStrongCls} />
-            <div className="text-[15px] text-[#8F8E86] italic mt-4">
-              Brak zaplanowanego grafiku — moduł Grafik jeszcze nie istnieje.
-            </div>
+            {mojeDzis.length > 0 ? (
+              <div className="mt-3 space-y-2">
+                {mojeDzis.map((s) => (
+                  <div key={s.id} className={staticBoxCls}>
+                    <span className="font-['Archivo'] font-extrabold text-[19px]">
+                      {trimTime(s.start_time)} – {trimTime(s.end_time)}
+                    </span>
+                    <span className="text-[13px] text-[#6E6E66] text-right">
+                      {s.stanowisko}
+                      <br />
+                      {s.lokal}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : najblizszaZmiana ? (
+              <button
+                onClick={() => setScreen("GRAFIK")}
+                className="mt-3 w-full text-left border-2 border-[#B7B6AE] rounded bg-[#F1F1EE] p-3.5"
+              >
+                <div className={sectionLabelCls}>Następna zmiana</div>
+                <div className="font-['Archivo'] font-extrabold text-[19px] mt-0.5">
+                  {opisDnia(najblizszaZmiana.date)} ·{" "}
+                  {trimTime(najblizszaZmiana.start_time)} –{" "}
+                  {trimTime(najblizszaZmiana.end_time)}
+                </div>
+                <div className="text-[13px] text-[#6E6E66]">
+                  {najblizszaZmiana.stanowisko} · {najblizszaZmiana.lokal}
+                </div>
+              </button>
+            ) : (
+              <div className="text-[15px] text-[#8F8E86] italic mt-4">
+                Nie masz jeszcze wpisanych zmian w grafiku.
+              </div>
+            )}
             {myChecklistOwn.length > 0 && (
               <>
                 <div className="flex items-baseline justify-between mt-6">
@@ -1124,6 +1194,220 @@ export const EmployeeSessionScreens = ({
           : justClosed
           ? renderJustClosedSummary()
           : renderStartForm()}
+      </Shell>
+    );
+  }
+
+  // ==========================================
+  // EKRAN: GRAFIK
+  // ==========================================
+  // Pionowa lista dni, nie siatka — siatka kierownika (7 kolumn x N osób)
+  // na telefonie jest nieczytelna. Pracownika interesuje przede wszystkim
+  // "kiedy następnym razem pracuję", więc dzień jest tu jednostką.
+  if (screen === "GRAFIK") {
+    const startTygodnia = mondayOf(dzisYMD);
+    const bazowy = grafikZakres === "nast" ? addDaysYMD(startTygodnia, 7) : startTygodnia;
+    const dniTygodnia = [0, 1, 2, 3, 4, 5, 6].map((i) => addDaysYMD(bazowy, i));
+    const miesiacPrefix = dzisYMD.slice(0, 7);
+    const mojeWMiesiacu = mojGrafik
+      .filter((s) => s.date.startsWith(miesiacPrefix))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    const wolneNa = (dateStr) =>
+      (absences || []).find(
+        (a) =>
+          a.status === "approved" &&
+          a.start_date <= dateStr &&
+          dateStr <= a.end_date &&
+          (a.user_id
+            ? String(a.user_id) === String(employee.id)
+            : a.user_name === employee.name)
+      );
+
+    const renderDzien = (dateStr) => {
+      const moje = mojGrafik.filter((s) => s.date === dateStr);
+      const wolne = wolneNa(dateStr);
+      const lokalDnia = moje[0]?.lokal || effectiveAssignment.lokal;
+      const wszyscyDnia = publishedShiftsOnDay(planShifts, lokalDnia, dateStr);
+      const inni = wszyscyDnia.filter(
+        (s) => !moje.some((m) => String(m.id) === String(s.id))
+      );
+
+      return (
+        <div key={dateStr} className="mb-4">
+          <div className="flex items-baseline justify-between">
+            <span className="font-['Archivo'] font-extrabold text-[15px] text-[#171714]">
+              {opisDnia(dateStr)}
+            </span>
+            {dateStr === dzisYMD && (
+              <span className="text-[11px] font-extrabold px-2 py-0.5 rounded bg-[#DE3A22] text-white">
+                DZIŚ
+              </span>
+            )}
+          </div>
+          <div className={ruleSoftCls} />
+
+          {moje.length > 0 ? (
+            <div className="mt-2.5 space-y-2">
+              {moje.map((s) => {
+                const style = stanowiskoBadgeStyle(
+                  stanowiskaOptions,
+                  s.lokal,
+                  s.stanowisko
+                );
+                return (
+                  <div
+                    key={s.id}
+                    className="border-[2.5px] border-[#171714] rounded p-3.5"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="px-1.5 py-0.5 rounded text-[11px] font-extrabold"
+                        style={style || { backgroundColor: "#E7E7E2", color: "#171714" }}
+                      >
+                        {stanowiskoShort(stanowiskaOptions, s.lokal, s.stanowisko)}
+                      </span>
+                      <span className="font-['Archivo'] font-extrabold text-[18px]">
+                        {trimTime(s.start_time)} – {trimTime(s.end_time)}
+                      </span>
+                    </div>
+                    <div className="text-[13px] text-[#6E6E66] mt-0.5">
+                      {s.stanowisko} · {s.lokal}
+                    </div>
+                    {inni.length > 0 && (
+                      <div className="text-[13px] text-[#6E6E66] mt-2">
+                        <span className="font-semibold">Z tobą: </span>
+                        {inni
+                          .map(
+                            (o) =>
+                              `${o.user_name} (${stanowiskoShort(
+                                stanowiskaOptions,
+                                o.lokal,
+                                o.stanowisko
+                              )})`
+                          )
+                          .join(", ")}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : wolne ? (
+            <div className="mt-2.5 flex items-center gap-2">
+              <span
+                className={`px-1.5 py-0.5 rounded text-[11px] font-extrabold ${
+                  wolne.type === "urlop"
+                    ? "bg-[#DE3A22] text-white"
+                    : "bg-[#E7E7E2] text-[#6E6E66]"
+                }`}
+              >
+                {wolne.type === "urlop" ? "URP" : "NIE"}
+              </span>
+              <span className="text-[15px] text-[#6E6E66]">
+                {wolne.type === "urlop" ? "Urlop" : "Zgłoszona niedostępność"}
+              </span>
+            </div>
+          ) : (
+            <div className="mt-2.5 text-[15px] text-[#8F8E86] italic">Wolne</div>
+          )}
+
+          {grafikWszyscy && inni.length > 0 && moje.length === 0 && (
+            <div className="mt-2 text-[13px] text-[#6E6E66]">
+              <span className="font-semibold">W lokalu: </span>
+              {inni
+                .map(
+                  (o) =>
+                    `${o.user_name} ${trimTime(o.start_time)}–${trimTime(o.end_time)}`
+                )
+                .join(", ")}
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    return (
+      <Shell
+        screen={screen}
+        setScreen={setScreen}
+        onBack={onBack}
+        unreadCount={unreadCount}
+        taskBadgeCount={taskBadgeCount}
+        title="Grafik"
+      >
+        <div className="flex gap-1.5 mb-3">
+          {[
+            { key: "ten", label: "Ten tydzień" },
+            { key: "nast", label: "Następny" },
+            { key: "miesiac", label: "Miesiąc" },
+          ].map((o) => (
+            <button
+              key={o.key}
+              onClick={() => setGrafikZakres(o.key)}
+              className={`flex-1 py-2 rounded border-2 text-[13px] font-bold ${
+                grafikZakres === o.key
+                  ? "bg-[#171714] text-white border-[#171714]"
+                  : "bg-white text-[#171714] border-[#B7B6AE]"
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+
+        {grafikZakres === "miesiac" ? (
+          <>
+            <div className="flex items-baseline justify-between">
+              <span className={sectionLabelCls}>
+                {getMonthName(new Date().getMonth())}
+              </span>
+              <span className="font-['Archivo'] font-extrabold text-sm tabular-nums">
+                {mojeWMiesiacu.length} zmian ·{" "}
+                {Math.round(mojeWMiesiacu.reduce((a, s) => a + shiftHours(s), 0))} h
+              </span>
+            </div>
+            <div className={ruleStrongCls} />
+            {mojeWMiesiacu.length === 0 ? (
+              <div className="text-[15px] text-[#8F8E86] italic mt-4">
+                Brak zmian w tym miesiącu.
+              </div>
+            ) : (
+              <div className="mt-3 space-y-2">
+                {mojeWMiesiacu.map((s) => (
+                  <div
+                    key={s.id}
+                    className="flex items-center justify-between border-2 border-[#B7B6AE] rounded p-3"
+                  >
+                    <span className="font-['Archivo'] font-bold text-[15px]">
+                      {opisDnia(s.date)}
+                    </span>
+                    <span className="text-[14px] tabular-nums">
+                      {trimTime(s.start_time)} – {trimTime(s.end_time)}
+                    </span>
+                    <span className="text-[12px] text-[#6E6E66]">{s.lokal}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <button
+              onClick={() => setGrafikWszyscy((v) => !v)}
+              className="mb-3 text-[13px] font-bold underline text-[#6E6E66] self-start"
+            >
+              {grafikWszyscy ? "Pokaż tylko moje" : "Pokaż wszystkich w lokalu"}
+            </button>
+            {dniTygodnia.map(renderDzien)}
+            {mojGrafik.length === 0 && (
+              <div className="text-[13.5px] text-[#6E6E66] leading-relaxed">
+                Kierownik nie wysłał jeszcze grafiku na ten okres. Gdy to zrobi,
+                dostaniesz powiadomienie.
+              </div>
+            )}
+          </>
+        )}
       </Shell>
     );
   }
@@ -1343,24 +1627,6 @@ export const EmployeeSessionScreens = ({
         taskBadgeCount={taskBadgeCount}
         title="Więcej"
       >
-        <button
-          onClick={() => setGrafikToastShown((v) => !v)}
-          className={menuRowCls}
-        >
-          <Calendar size={21} className="text-[#171714] flex-shrink-0" />
-          <span className="flex-1 text-base font-semibold text-[#171714]">
-            Grafik
-          </span>
-          <span className="flex-shrink-0 text-[13px] font-semibold px-3 py-1.5 rounded border-[1.5px] border-[#DE3A22] text-[#DE3A22]">
-            w budowie
-          </span>
-        </button>
-        {grafikToastShown && (
-          <div className="text-xs text-[#A83226] bg-[#FBEAE6] rounded p-2.5 -mt-2 mb-3.5">
-            Grafik — ostatni etap Roadmapy (p.5), świadomie jeszcze nie
-            zaczęty.
-          </div>
-        )}
         <button onClick={() => openZgloszenie(null)} className={menuRowCls}>
           <Flag size={21} className="text-[#171714] flex-shrink-0" />
           <span className="flex-1 text-base font-semibold text-[#171714]">
