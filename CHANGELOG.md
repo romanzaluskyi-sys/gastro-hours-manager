@@ -17,6 +17,9 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
   "Następna zmiana" z datą i godzinami. Zniknął napis o nieistniejącym module.
 - Pracownik widzi **wyłącznie wysłany grafik** — wersja robocza kierownika
   nigdy się tu nie pokazuje.
+- Podczas trwającej zmiany, obok licznika "pracujesz już X", widać też
+  **ile zostało do końca** według grafiku — a po przekroczeniu planowanej
+  godziny licznik zmienia się na czerwony "Po planowanym końcu".
 
 ## 0.20.0 — 2026-09-03
 

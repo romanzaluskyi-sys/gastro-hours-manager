@@ -29,6 +29,7 @@ const CHANGELOG = [
       "Pracownik ma własną zakładkę Grafik — lista dni z godzinami, stanowiskiem, lokalem i składem zmiany; przełącznik Ten tydzień / Następny / Miesiąc.",
       "Na Pulpicie pracownika 'Twoja zmiana dziś' albo kafelek 'Następna zmiana'.",
       "Pracownik widzi wyłącznie wysłany grafik — wersja robocza nigdy do niego nie trafia.",
+      "W trwającej zmianie widać, ile zostało do końca wg grafiku (i osobno, gdy planowany koniec już minął).",
     ],
   },
   {

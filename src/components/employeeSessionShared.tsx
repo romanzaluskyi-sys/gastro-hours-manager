@@ -360,6 +360,36 @@ export const EmployeeSessionScreens = ({
   const mojGrafik = publishedShiftsFor(planShifts, employee);
   const mojeDzis = mojGrafik.filter((s) => s.date === dzisYMD);
   const najblizszaZmiana = nextShiftFrom(planShifts, employee, dzisYMD);
+
+  // Wpis z grafiku odpowiadający TRWAJĄCEJ zmianie — po nim liczymy, ile
+  // zostało do końca. Szukamy po dniu odbicia (a nie po "dziś"), żeby
+  // zmiana rozpoczęta przed północą też trafiła na swój wiersz w planie.
+  const planTrwajacej = (() => {
+    if (!openShift) return null;
+    const dzien = toLocalYMD(openShift.start_time);
+    const tegoDnia = mojGrafik.filter((s) => s.date === dzien);
+    const wLokalu = tegoDnia.filter((s) => s.lokal === openShift.lokal);
+    return (
+      wLokalu.find((s) => s.stanowisko === openShift.stanowisko) ||
+      wLokalu[0] ||
+      tegoDnia[0] ||
+      null
+    );
+  })();
+
+  // Planowany koniec jako konkretny moment. end <= start oznacza zmianę
+  // przez północ, więc koniec wypada nazajutrz (ta sama konwencja co w
+  // utils/grafik.ts).
+  const planowanyKoniec = (() => {
+    if (!planTrwajacej) return null;
+    const [eh, em] = trimTime(planTrwajacej.end_time).split(":").map(Number);
+    const [sh, sm] = trimTime(planTrwajacej.start_time).split(":").map(Number);
+    if ([eh, em, sh, sm].some((n) => Number.isNaN(n))) return null;
+    const d = new Date(planTrwajacej.date + "T00:00:00");
+    if (eh * 60 + em <= sh * 60 + sm) d.setDate(d.getDate() + 1);
+    d.setHours(eh, em, 0, 0);
+    return d;
+  })();
   const myWeeklyStats = weeklyChecklistStats(
     tasks,
     taskCompletions,
@@ -805,6 +835,38 @@ export const EmployeeSessionScreens = ({
         <div className="text-sm text-[#6E6E66] mt-1">
           {openShift.lokal} · {openShift.stanowisko}
         </div>
+        {planowanyKoniec &&
+          (() => {
+            const zostaloMs = planowanyKoniec - now;
+            const po = zostaloMs < 0;
+            const absMs = Math.abs(zostaloMs);
+            const h = Math.floor(absMs / 3600000);
+            const m = Math.floor((absMs % 3600000) / 60000);
+            return (
+              <div
+                className={`mt-2.5 rounded p-3 border-2 ${
+                  po
+                    ? "border-[#DE3A22] bg-[#FBEAE6]"
+                    : "border-[#B7B6AE] bg-[#F1F1EE]"
+                }`}
+              >
+                <div className={sectionLabelCls}>
+                  {po ? "Po planowanym końcu" : "Do końca zmiany"}
+                </div>
+                <div
+                  className={`font-['Archivo'] font-extrabold text-[22px] tabular-nums ${
+                    po ? "text-[#8A3A2B]" : "text-[#171714]"
+                  }`}
+                >
+                  {h} godz. {m} min
+                </div>
+                <div className="text-[13px] text-[#6E6E66]">
+                  Wg grafiku {trimTime(planTrwajacej.start_time)} –{" "}
+                  {trimTime(planTrwajacej.end_time)}
+                </div>
+              </div>
+            );
+          })()}
         <div className={ruleSoftCls} />
         {myChecklistOwn.length > 0 && (
           <>
