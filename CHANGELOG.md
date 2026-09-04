@@ -5,6 +5,21 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.23.0 — 2026-09-04
+
+Pierwsze wydanie **Grafiku** — wszystko poniżej (0.15.0–0.22.0) trafia na
+produkcję razem.
+
+- **Urlop nie udaje pracy w lokalu.** W Rejestrze Godzin, Raportach i
+  kosztach oraz w Raporcie pracownika dzień urlopu jest podpisany "Urlop"
+  zamiast nazwą lokalu, a w podsumowaniach doszła druga liczba: ile z sumy
+  godzin to urlop i **ile bez urlopu**. Same sumy i koszty liczą się jak
+  dotąd — urlop nadal jest płatny.
+- W zestawieniu "Według lokalu" urlop ma własny wiersz i nie zawyża obsady
+  żadnego lokalu.
+- Grafik z arkusza Google (styczeń–wrzesień 2026) został zaimportowany:
+  1247 zmian, 4 urlopy i 1 dzień niedostępności.
+
 ## 0.22.0 — 2026-09-03
 
 - **Giełda zmian.** Pracownik może wystawić swoją przyszłą zmianę na giełdę

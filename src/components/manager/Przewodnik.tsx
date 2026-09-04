@@ -23,6 +23,15 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.23.0",
+    date: "2026-09-04",
+    items: [
+      "Pierwsze wydanie Grafiku — planowanie tygodnia i miesiąca, wymagania obsady, giełda zmian, grafik u pracownika.",
+      "Urlop jest w raportach podpisany 'Urlop' zamiast nazwą lokalu, a w podsumowaniach widać osobno godziny urlopu i godziny bez urlopu.",
+      "Zaimportowany grafik z arkusza Google za styczeń–wrzesień 2026.",
+    ],
+  },
+  {
     version: "0.22.0",
     date: "2026-09-03",
     items: [

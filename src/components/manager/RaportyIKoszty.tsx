@@ -15,6 +15,7 @@ import {
   sectionHeaderCls,
   statTileCls,
   statLabelCls,
+  statSubCls,
   statValueCls,
   btnSecondaryCls,
   cardCls,
@@ -85,15 +86,25 @@ export default function RaportyIKoszty({
     .sort((a, b) => (b.cost ?? b.hours) - (a.cost ?? a.hours));
 
   const totalHours = employeeRows.reduce((a, r) => a + r.hours, 0);
+  // Urlop jest zwykłym wierszem w shifts (8 h za dzień roboczy), więc wchodzi
+  // do sum godzin i kosztów automatycznie — i tak ma być. Ale kierownik musi
+  // widzieć, ILE z tych godzin to urlop, bo to nie jest czas na sali.
+  const urlopHours = periodShifts
+    .filter((s) => s.is_urlop)
+    .reduce((a, s) => a + hoursOf(s), 0);
+  const pracaHours = totalHours - urlopHours;
   const totalCostRows = employeeRows.filter((r) => r.cost != null);
   const totalCost = totalCostRows.reduce((a, r) => a + r.cost, 0);
   const costIncomplete = employeeRows.some((r) => r.cost == null);
 
   // --- agregacja per lokal ---
+  // Urlopu nie przypisujemy do lokalu — pracownik go tam nie przepracował,
+  // a wliczony w "Według lokalu" zawyżałby obsadę konkretnego miejsca.
   const byLokal = {};
   periodShifts.forEach((s) => {
-    byLokal[s.lokal] = byLokal[s.lokal] || { hours: 0 };
-    byLokal[s.lokal].hours += hoursOf(s);
+    const klucz = s.is_urlop ? "Urlop" : s.lokal;
+    byLokal[klucz] = byLokal[klucz] || { hours: 0 };
+    byLokal[klucz].hours += hoursOf(s);
   });
 
   useEffect(() => {
@@ -109,6 +120,9 @@ export default function RaportyIKoszty({
         .sort((a, b) => a.start_time - b.start_time)
     : [];
   const selectedHours = selectedShifts.reduce((a, s) => a + hoursOf(s), 0);
+  const selectedUrlop = selectedShifts
+    .filter((s) => s.is_urlop)
+    .reduce((a, s) => a + hoursOf(s), 0);
   const selectedRate = selectedUserId ? rateByUser[selectedUserId] : null;
   const selectedCost = selectedRate != null ? selectedHours * selectedRate : null;
 
@@ -152,6 +166,12 @@ export default function RaportyIKoszty({
         <div className={statTileCls}>
           <p className={statLabelCls}>Godziny</p>
           <p className={statValueCls}>{totalHours.toFixed(1).replace(".", ",")}</p>
+          {urlopHours > 0 && (
+            <p className={statSubCls}>
+              w tym urlop {urlopHours.toFixed(1).replace(".", ",")} h ·{" "}
+              <strong>bez urlopu {pracaHours.toFixed(1).replace(".", ",")} h</strong>
+            </p>
+          )}
         </div>
         <div className={statTileCls}>
           <p className={statLabelCls}>Koszt</p>
@@ -244,6 +264,12 @@ export default function RaportyIKoszty({
                 <div className="text-right">
                   <p className="font-['Archivo'] font-extrabold text-xl tabular-nums">
                     {selectedHours.toFixed(1).replace(".", ",")} h
+                    {selectedUrlop > 0 && (
+                      <span className="block text-[12px] font-normal text-[#6E6E66]">
+                        w tym urlop {selectedUrlop.toFixed(1).replace(".", ",")} h · bez
+                        urlopu {(selectedHours - selectedUrlop).toFixed(1).replace(".", ",")} h
+                      </span>
+                    )}
                   </p>
                   <p className="text-xs text-[#6E6E66]">
                     {selectedCost != null ? `${selectedCost.toFixed(0)} zł` : "brak stawki"}
@@ -270,10 +296,26 @@ export default function RaportyIKoszty({
                       {getDayOfWeek(s.start_time)}
                     </span>
                   </span>
-                  <span className="w-20 flex-shrink-0 text-xs text-[#6E6E66] truncate">{s.lokal}</span>
+                  <span className="w-20 flex-shrink-0 text-xs truncate">
+                    {s.is_urlop ? (
+                      <span className="font-extrabold text-[#8A3A2B]">Urlop</span>
+                    ) : (
+                      <span className="text-[#6E6E66]">{s.lokal}</span>
+                    )}
+                  </span>
                   <span className="flex-1 text-[13.5px] tabular-nums">
-                    {fmtHM(s.start_time)} –{" "}
-                    {s.end_time ? fmtHM(s.end_time) : <span className="text-[#DE3A22] font-bold">trwa</span>}
+                    {s.is_urlop ? (
+                      <span className="text-[#6E6E66]">dzień urlopu</span>
+                    ) : (
+                      <>
+                        {fmtHM(s.start_time)} –{" "}
+                        {s.end_time ? (
+                          fmtHM(s.end_time)
+                        ) : (
+                          <span className="text-[#DE3A22] font-bold">trwa</span>
+                        )}
+                      </>
+                    )}
                   </span>
                   <span className="w-16 flex-shrink-0 text-right font-['Archivo'] font-extrabold text-[14px] tabular-nums">
                     {s.end_time ? hoursOf(s).toFixed(1).replace(".", ",") : "-"}

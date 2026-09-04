@@ -13,6 +13,7 @@ import {
   sectionCardCls,
   statTileCls,
   statLabelCls,
+  statSubCls,
   statValueCls,
   btnPrimaryCls,
   btnSecondaryCls,
@@ -102,6 +103,11 @@ export default function RejestrGodzin({
     (a, s) => a + (s.end_time ? (s.end_time - s.start_time) / 3600000 : 0),
     0
   );
+  // Urlop wchodzi w sumę godzin (tak ma być — 8 h za dzień roboczy liczy się
+  // do wypłaty), ale kierownik musi widzieć, ile z tego to czas na sali.
+  const urlopHours = periodShifts
+    .filter((s) => s.is_urlop)
+    .reduce((a, s) => a + (s.end_time ? (s.end_time - s.start_time) / 3600000 : 0), 0);
   const korektyCount = periodShifts.filter((s) => editsByShiftId[s.id]).length;
   const doDecyzjiCount = periodShifts.filter((s) => pendingByShiftId[s.id]).length;
   const otwarteCount = periodShifts.filter(
@@ -194,6 +200,14 @@ export default function RejestrGodzin({
         <div className={statTileCls}>
           <p className={statLabelCls}>Godziny w okresie</p>
           <p className={statValueCls}>{totalHours.toFixed(1).replace(".", ",")}</p>
+          {urlopHours > 0 && (
+            <p className={statSubCls}>
+              w tym urlop {urlopHours.toFixed(1).replace(".", ",")} h ·{" "}
+              <strong>
+                bez urlopu {(totalHours - urlopHours).toFixed(1).replace(".", ",")} h
+              </strong>
+            </p>
+          )}
         </div>
         <div className={statTileCls}>
           <p className={statLabelCls}>Korekty kierownika</p>
@@ -288,8 +302,12 @@ export default function RejestrGodzin({
                       >
                         {s.user_name}
                       </button>
-                      <span className="hidden md:inline w-24 flex-shrink-0 text-xs text-[#6E6E66]">
-                        {getShort(s.lokal)}
+                      <span className="hidden md:inline w-24 flex-shrink-0 text-xs">
+                        {s.is_urlop ? (
+                          <span className="font-extrabold text-[#8A3A2B]">Urlop</span>
+                        ) : (
+                          <span className="text-[#6E6E66]">{getShort(s.lokal)}</span>
+                        )}
                       </span>
                       <span className="md:w-28 flex-shrink-0 text-[10.5px] md:text-sm tabular-nums whitespace-nowrap">
                         {s.is_urlop ? (

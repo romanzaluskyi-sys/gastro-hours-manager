@@ -504,6 +504,11 @@ export const EmployeeSessionScreens = ({
     (acc, s) => acc + (s.end_time ? (s.end_time - s.start_time) / 3600000 : 0),
     0
   );
+  // Urlop liczy się do sumy (8 h za dzień roboczy), ale pracownik ma prawo
+  // wiedzieć, ile z tego faktycznie przepracował.
+  const raportUrlop = raportShifts
+    .filter((s) => s.is_urlop)
+    .reduce((acc, s) => acc + (s.end_time ? (s.end_time - s.start_time) / 3600000 : 0), 0);
 
   const recentShiftsForZgloszenie = shifts
     .filter((s) => s.user_id === employee.id)
@@ -1770,9 +1775,17 @@ export const EmployeeSessionScreens = ({
         title="Raport"
         footer={
           <div className="flex-shrink-0 border-t-[2.5px] border-[#171714] bg-white px-5 pt-[18px] pb-[22px] flex items-baseline justify-between">
-            <span className={sectionLabelCls}>
-              {employee.name} · {getMonthName(raportMonth)}
-            </span>
+            <div>
+              <span className={sectionLabelCls}>
+                {employee.name} · {getMonthName(raportMonth)}
+              </span>
+              {raportUrlop > 0 && (
+                <div className="text-[12px] text-[#6E6E66]">
+                  urlop {raportUrlop.toFixed(1).replace(".", ",")} h · bez urlopu{" "}
+                  {(raportTotal - raportUrlop).toFixed(1).replace(".", ",")} h
+                </div>
+              )}
+            </div>
             <span className="font-['Archivo'] font-extrabold text-[28px] text-[#171714] tabular-nums">
               {raportTotal.toFixed(1).replace(".", ",")} godz.
             </span>
@@ -1861,7 +1874,7 @@ export const EmployeeSessionScreens = ({
             </span>
             <span className="flex-1 text-[13.5px] text-[#171714] tabular-nums">
               {s.is_urlop ? (
-                <span className="text-[#6E6E66] italic">Urlop</span>
+                <span className="font-bold text-[#8A3A2B]">Urlop</span>
               ) : (
                 <>
                   {fmtHHMM(s.start_time)} –{" "}
