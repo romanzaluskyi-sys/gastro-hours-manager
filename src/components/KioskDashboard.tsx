@@ -40,6 +40,8 @@ const KioskDashboard = ({
   setTaskCompletions,
   absences,
   planShifts,
+  shiftSwaps,
+  setShiftSwaps,
   setAbsences,
   showMsg,
 }) => {
@@ -309,6 +311,8 @@ const KioskDashboard = ({
         setTaskCompletions={setTaskCompletions}
         absences={absences}
         planShifts={planShifts}
+        shiftSwaps={shiftSwaps}
+        setShiftSwaps={setShiftSwaps}
         setAbsences={setAbsences}
         onBack={goList}
         onLogout={() => setCurrentView("login")}

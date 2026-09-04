@@ -27,6 +27,15 @@ import {
 } from "../utils/format";
 import { stanowiskoShort, stanowiskoBadgeStyle } from "../utils/stanowiska";
 import {
+  offerSwap,
+  withdrawSwap,
+  acceptSwap,
+  activeSwapFor,
+  canOfferSwap,
+  STATUS_LABEL,
+  SWAP_MIN_HOURS,
+} from "../utils/swaps";
+import {
   trimTime,
   mondayOf,
   addDaysYMD,
@@ -265,6 +274,8 @@ export const EmployeeSessionScreens = ({
   absences,
   setAbsences,
   planShifts,
+  shiftSwaps,
+  setShiftSwaps,
   onBack,
   onLogout,
   deviceNote = null,
@@ -309,6 +320,11 @@ export const EmployeeSessionScreens = ({
 
   // ---- "Wniosek o wolne" (type: absence) — patrz handleSendAbsence ----
   const [zgAbsType, setZgAbsType] = useState("urlop"); // "urlop" | "niedostepnosc"
+  // Niedostępność bywa zgłaszana na JEDEN dzień znacznie częściej niż na
+  // okres, a wpisywanie tej samej daty dwa razy było uciążliwe. Technicznie
+  // to nadal jedno pole start/end — dzień po prostu wypełnia oba naraz.
+  // Urlop zostaje bez zmian (tam okres to reguła, nie wyjątek).
+  const [zgAbsDay, setZgAbsDay] = useState("");
   const [zgAbsStart, setZgAbsStart] = useState("");
   const [zgAbsEnd, setZgAbsEnd] = useState("");
   const [zgAbsNote, setZgAbsNote] = useState("");
@@ -505,6 +521,55 @@ export const EmployeeSessionScreens = ({
   const openZgloszenie = (shiftId) => {
     setZgPrefillShiftId(shiftId || null);
     setScreen("ZGLOS");
+  };
+
+  // Skrót z zakładki Grafik — wniosek o wolne mieszka w "Zgłoś", ale
+  // najczęściej przychodzi do głowy przy oglądaniu grafiku, nie tam.
+  const openWniosekOWolne = () => {
+    setZgType("absence");
+    setZgSent(false);
+    setZgPrefillShiftId(null);
+    setScreen("ZGLOS");
+  };
+
+  const handleOfferSwap = async (planShift) => {
+    try {
+      const sw = await offerSwap({ planShift, author: employee });
+      setShiftSwaps([...(shiftSwaps || []), sw]);
+      showMsg("Zmiana wystawiona na giełdę.");
+    } catch (err) {
+      showMsg(err.message || "Nie udało się wystawić zmiany.", "error");
+    }
+  };
+
+  const handleWithdrawSwap = async (swap) => {
+    try {
+      const up = await withdrawSwap(swap);
+      setShiftSwaps((shiftSwaps || []).map((x) => (x.id === up.id ? up : x)));
+      showMsg("Oferta wycofana.");
+    } catch (err) {
+      showMsg(err.message || "Nie udało się wycofać.", "error");
+    }
+  };
+
+  const handleAcceptSwap = async (swap) => {
+    const planShift = (planShifts || []).find(
+      (s) => String(s.id) === String(swap.grafik_shift_id)
+    );
+    if (!planShift) return showMsg("Nie znaleziono tej zmiany.", "error");
+    try {
+      const up = await acceptSwap({
+        swap,
+        planShift,
+        taker: employee,
+        planShifts,
+        absences,
+      });
+      setShiftSwaps((shiftSwaps || []).map((x) => (x.id === up.id ? up : x)));
+      showMsg("Zgłoszenie wysłane — czeka na zgodę kierownika.");
+    } catch (err) {
+      showMsg(err.message || "Nie udało się przejąć zmiany.", "error");
+    }
   };
 
   // ---- wypełnia proponowane pola danymi z wybranej zmiany (punkt odniesienia
@@ -710,10 +775,18 @@ export const EmployeeSessionScreens = ({
   };
 
   const handleSendAbsence = async () => {
-    if (!zgAbsStart || !zgAbsEnd) {
-      return showMsg("Podaj daty od-do!", "error");
+    const jedenDzien = zgAbsType === "niedostepnosc" && zgAbsDay;
+    const odData = jedenDzien ? zgAbsDay : zgAbsStart;
+    const doData = jedenDzien ? zgAbsDay : zgAbsEnd;
+    if (!odData || !doData) {
+      return showMsg(
+        zgAbsType === "niedostepnosc"
+          ? "Podaj dzień albo zakres od-do!"
+          : "Podaj daty od-do!",
+        "error"
+      );
     }
-    if (zgAbsEnd < zgAbsStart) {
+    if (doData < odData) {
       return showMsg("Data „do” nie może być wcześniejsza niż „od”.", "error");
     }
     setZgSaving(true);
@@ -723,8 +796,8 @@ export const EmployeeSessionScreens = ({
         user_id: employee.id,
         user_name: employee.name,
         lokal,
-        start_date: zgAbsStart,
-        end_date: zgAbsEnd,
+        start_date: odData,
+        end_date: doData,
         type: zgAbsType,
         status: "pending",
         note: zgAbsNote || null,
@@ -736,7 +809,7 @@ export const EmployeeSessionScreens = ({
           lokal,
           `${employee.name} prosi o ${
             zgAbsType === "urlop" ? "urlop" : "dni niedostępności"
-          } (${zgAbsStart}–${zgAbsEnd}).`,
+          } (${odData === doData ? odData : `${odData}–${doData}`}).`,
           "absence_request"
         );
       }
@@ -1351,6 +1424,40 @@ export const EmployeeSessionScreens = ({
                           .join(", ")}
                       </div>
                     )}
+                    {(() => {
+                      const oferta = activeSwapFor(shiftSwaps, s.id);
+                      if (oferta) {
+                        return (
+                          <div className="mt-2.5 flex items-center gap-2 flex-wrap">
+                            <span className="text-[12px] font-extrabold px-2 py-1 rounded bg-[#E7E7E2] text-[#6E6E66]">
+                              {STATUS_LABEL[oferta.status]}
+                            </span>
+                            {oferta.taker_user_name && (
+                              <span className="text-[13px] text-[#6E6E66]">
+                                przejmuje: {oferta.taker_user_name}
+                              </span>
+                            )}
+                            {oferta.status === "na_gieldzie" && (
+                              <button
+                                onClick={() => handleWithdrawSwap(oferta)}
+                                className="text-[13px] font-bold underline text-[#6E6E66]"
+                              >
+                                Wycofaj
+                              </button>
+                            )}
+                          </div>
+                        );
+                      }
+                      if (!canOfferSwap(s)) return null;
+                      return (
+                        <button
+                          onClick={() => handleOfferSwap(s)}
+                          className="mt-2.5 w-full border-2 border-[#B7B6AE] rounded py-2 text-[13px] font-bold text-[#171714]"
+                        >
+                          Wystaw na giełdę
+                        </button>
+                      );
+                    })()}
                   </div>
                 );
               })}
@@ -1468,6 +1575,72 @@ export const EmployeeSessionScreens = ({
                 dostaniesz powiadomienie.
               </div>
             )}
+
+            {(() => {
+              // Oferty innych, które mogę wziąć: tylko dni, w które jestem
+              // wolny i nie mam własnej zmiany. Niezgodne stanowisko nie
+              // blokuje — o tym decyduje kierownik przy zatwierdzaniu.
+              const doWziecia = (shiftSwaps || []).filter((sw) => {
+                if (sw.status !== "na_gieldzie") return false;
+                if (String(sw.author_user_id) === String(employee.id)) return false;
+                const ps = (planShifts || []).find(
+                  (p) => String(p.id) === String(sw.grafik_shift_id)
+                );
+                if (!ps || !canOfferSwap(ps)) return false;
+                if (mojGrafik.some((m) => m.date === ps.date)) return false;
+                return !wolneNa(ps.date);
+              });
+              if (doWziecia.length === 0) return null;
+              return (
+                <>
+                  <div className={sectionLabelCls}>Giełda — wolne zmiany</div>
+                  <div className={ruleStrongCls} />
+                  <div className="mt-3 space-y-2">
+                    {doWziecia.map((sw) => {
+                      const ps = (planShifts || []).find(
+                        (p) => String(p.id) === String(sw.grafik_shift_id)
+                      );
+                      return (
+                        <div
+                          key={sw.id}
+                          className="border-2 border-[#B7B6AE] rounded p-3.5"
+                        >
+                          <div className="font-['Archivo'] font-extrabold text-[16px]">
+                            {opisDnia(ps.date)} · {trimTime(ps.start_time)} –{" "}
+                            {trimTime(ps.end_time)}
+                          </div>
+                          <div className="text-[13px] text-[#6E6E66]">
+                            {ps.stanowisko} · {ps.lokal} · od: {sw.author_user_name}
+                          </div>
+                          {sw.note && (
+                            <div className="text-[13px] text-[#6E6E66] mt-1">{sw.note}</div>
+                          )}
+                          <button
+                            onClick={() => handleAcceptSwap(sw)}
+                            className="mt-2.5 w-full border-[2.5px] border-[#171714] rounded py-2 text-[14px] font-extrabold"
+                          >
+                            Wezmę tę zmianę
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              );
+            })()}
+
+            <div className="mt-6">
+              <button onClick={openWniosekOWolne} className={menuRowCls}>
+                <Flag size={21} className="text-[#171714] flex-shrink-0" />
+                <span className="flex-1 text-base font-semibold text-[#171714]">
+                  Wniosek o wolne
+                </span>
+              </button>
+              <p className={helperTextCls}>
+                Zmianę można wystawić na giełdę najpóźniej {SWAP_MIN_HOURS} godzin
+                przed jej rozpoczęciem. Zamianę musi zatwierdzić kierownik.
+              </p>
+            </div>
           </>
         )}
       </Shell>
@@ -1990,7 +2163,10 @@ export const EmployeeSessionScreens = ({
             <div className="mt-5 grid grid-cols-2 gap-3">
               <button
                 type="button"
-                onClick={() => setZgAbsType("urlop")}
+                onClick={() => {
+                  setZgAbsType("urlop");
+                  setZgAbsDay("");
+                }}
                 className={checkboxRowCls(zgAbsType === "urlop")}
               >
                 <span className="text-[15px] font-semibold text-[#171714]">Urlop</span>
@@ -2005,14 +2181,36 @@ export const EmployeeSessionScreens = ({
                 </span>
               </button>
             </div>
+            {zgAbsType === "niedostepnosc" && (
+              <>
+                <div className="mt-5">
+                  <span className={fieldLabelCls}>Jeden dzień</span>
+                  <input
+                    type="date"
+                    value={zgAbsDay}
+                    disabled={!!(zgAbsStart || zgAbsEnd)}
+                    onChange={(e) => setZgAbsDay(e.target.value)}
+                    className={`${selectElCls} disabled:opacity-40`}
+                  />
+                </div>
+                <div className="flex items-center gap-3 mt-4">
+                  <span className="h-px bg-[#B7B6AE] flex-1" />
+                  <span className="text-[12px] font-bold uppercase tracking-wider text-[#8F8E86]">
+                    albo
+                  </span>
+                  <span className="h-px bg-[#B7B6AE] flex-1" />
+                </div>
+              </>
+            )}
             <div className="grid grid-cols-2 gap-3 mt-5">
               <div>
                 <span className={fieldLabelCls}>Od</span>
                 <input
                   type="date"
                   value={zgAbsStart}
+                  disabled={!!zgAbsDay}
                   onChange={(e) => setZgAbsStart(e.target.value)}
-                  className={selectElCls}
+                  className={`${selectElCls} disabled:opacity-40`}
                 />
               </div>
               <div>
@@ -2020,11 +2218,25 @@ export const EmployeeSessionScreens = ({
                 <input
                   type="date"
                   value={zgAbsEnd}
+                  disabled={!!zgAbsDay}
                   onChange={(e) => setZgAbsEnd(e.target.value)}
-                  className={selectElCls}
+                  className={`${selectElCls} disabled:opacity-40`}
                 />
               </div>
             </div>
+            {zgAbsType === "niedostepnosc" && (zgAbsDay || zgAbsStart || zgAbsEnd) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setZgAbsDay("");
+                  setZgAbsStart("");
+                  setZgAbsEnd("");
+                }}
+                className="mt-2 text-[13px] font-bold underline text-[#6E6E66] self-start"
+              >
+                Wyczyść daty
+              </button>
+            )}
             <div className="mt-5">
               <span className={fieldLabelCls}>Komentarz (opcjonalnie)</span>
               <textarea

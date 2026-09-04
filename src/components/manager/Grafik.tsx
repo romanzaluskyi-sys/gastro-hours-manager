@@ -23,6 +23,8 @@ export default function Grafik({
   activeStanowiska,
   planShifts,
   setPlanShifts,
+  shiftSwaps,
+  onResolveSwap,
   absences,
   staffingRules,
   setStaffingRules,
@@ -230,6 +232,8 @@ export default function Grafik({
           sortBy={sortBy}
           setSortBy={setSortBy}
           mode={mode}
+          shiftSwaps={shiftSwaps}
+          onResolveSwap={onResolveSwap}
           showMsg={showMsg}
         />
       ) : null}

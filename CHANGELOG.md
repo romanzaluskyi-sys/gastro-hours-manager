@@ -5,6 +5,21 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.22.0 — 2026-09-03
+
+- **Giełda zmian.** Pracownik może wystawić swoją przyszłą zmianę na giełdę
+  (najpóźniej 12 godzin przed jej rozpoczęciem), a ktoś, kto ma wtedy wolne,
+  może ją wziąć. Zamianę zatwierdza kierownik — w zakładce Zatwierdzanie
+  zmian albo od razu w siatce grafiku (✓ / ✗ przy zmianie, w trybie Edycja).
+  Po zatwierdzeniu zmiana przechodzi na nową osobę i obie strony dostają
+  powiadomienie; po odmowie zostaje u autora.
+- Przy przejmowaniu zmiany sprawdzamy to samo co przy ręcznym wpisywaniu:
+  zatwierdzone wolne i kolizję godzin.
+- **Wniosek o wolne prosto z zakładki Grafik** — bez szukania go w "Zgłoś".
+- **Niedostępność na jeden dzień.** Zamiast wpisywać tę samą datę dwa razy,
+  można podać sam dzień; pola "od-do" i "jeden dzień" wykluczają się
+  nawzajem. Urlop bez zmian.
+
 ## 0.21.0 — 2026-09-03
 
 - **Grafik u pracownika.** Nowa, stała zakładka Grafik na telefonie i na

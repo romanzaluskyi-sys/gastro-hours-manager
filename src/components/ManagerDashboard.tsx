@@ -36,6 +36,7 @@ import Pracownicy from "./manager/Pracownicy";
 import RaportyIKoszty from "./manager/RaportyIKoszty";
 import Przewodnik from "./manager/Przewodnik";
 import Grafik from "./manager/Grafik";
+import { resolveSwap } from "../utils/swaps";
 
 // ==========================================
 // KIEROWNIK DASHBOARD
@@ -147,9 +148,47 @@ const ManagerDashboard = ({
   });
 
   // --- WNIOSKI O WOLNE OCZEKUJĄCE NA DECYZJĘ (absences.status === "pending") ---
+  // Giełda: kierownik decyduje dopiero wtedy, gdy ktoś już zgłosił się po
+  // zmianę ("przyjeta"). Sama oferta wisząca na giełdzie nie wymaga decyzji.
+  const pendingSwaps = (shiftSwaps || []).filter(
+    (s) => s.status === "przyjeta" && hasAccessToLokal(s.lokal)
+  );
+
   const pendingAbsences = absences.filter(
     (a) => a.status === "pending" && hasAccessToLokal(a.lokal)
   );
+
+  // Decyzja o zamianie z giełdy. Cała logika (przepisanie zmiany na nowego
+  // pracownika, powiadomienia obu stron) siedzi w resolveSwap w
+  // utils/swaps.ts — tutaj tylko odświeżamy stan.
+  const handleResolveSwap = async (swap, decision) => {
+    const planShift = (planShifts || []).find(
+      (p) => String(p.id) === String(swap.grafik_shift_id)
+    );
+    if (!planShift) {
+      showMsg("Nie znaleziono zmiany, której dotyczy zamiana.", "error");
+      return;
+    }
+    try {
+      const res = await resolveSwap({
+        swap,
+        planShift,
+        decision,
+        editorName: currentUser.name,
+      });
+      setShiftSwaps((shiftSwaps || []).map((s) => (s.id === res.swap.id ? res.swap : s)));
+      if (res.planShift) {
+        setPlanShifts(
+          (planShifts || []).map((p) => (p.id === res.planShift.id ? res.planShift : p))
+        );
+      }
+      showMsg(
+        decision === "approve" ? "Zamiana zatwierdzona." : "Zamiana odrzucona."
+      );
+    } catch (err) {
+      showMsg(`Błąd zapisu zamiany: ${err.message || "nieznany błąd"}`, "error");
+    }
+  };
 
   const handleResolveAbsence = async (absence, decision) => {
     const user = users.find((u) => u.id === absence.user_id);
@@ -313,7 +352,8 @@ const ManagerDashboard = ({
   ).length;
 
   const shellBadges = {
-    zatwierdzanie: pendingCorrections.length + pendingAbsences.length,
+    zatwierdzanie:
+      pendingCorrections.length + pendingAbsences.length + pendingSwaps.length,
     zgloszenia: issues.filter((i) => i.status === "nowe" && i.type !== "correction")
       .length,
     powiadomienia: unreadManagerCount,
@@ -1046,6 +1086,8 @@ const ManagerDashboard = ({
             activeStanowiska={activeStanowiska}
             planShifts={planShifts}
             setPlanShifts={setPlanShifts}
+            shiftSwaps={shiftSwaps}
+            onResolveSwap={handleResolveSwap}
             absences={absences}
             staffingRules={staffingRules}
             setStaffingRules={setStaffingRules}
@@ -1587,6 +1629,9 @@ const ManagerDashboard = ({
             activeStanowiska={activeStanowiska}
             pendingAbsences={pendingAbsences}
             onResolveAbsence={handleResolveAbsence}
+            pendingSwaps={pendingSwaps}
+            planShifts={planShifts}
+            onResolveSwap={handleResolveSwap}
             showMsg={showMsg}
           />
         )}

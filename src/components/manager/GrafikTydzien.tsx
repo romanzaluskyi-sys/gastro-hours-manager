@@ -40,6 +40,7 @@ import {
   buildCopyFromPreviousWeek,
   storedStanowiskaArr,
 } from "../../utils/grafik";
+import { activeSwapFor } from "../../utils/swaps";
 import { stanowiskoShort, stanowiskoBadgeStyle } from "../../utils/stanowiska";
 import { countWorkdays, URLOP_HOURS_PER_DAY } from "../../utils/absences";
 import { fetchDailyForecast, describeWeatherCode } from "../../utils/weather";
@@ -119,6 +120,8 @@ function LokalSection({
   onCellClick,
   onCopyPrevWeek,
   onAddEmployee,
+  shiftSwaps,
+  onResolveSwap,
 }) {
   const [forecast, setForecast] = useState({});
 
@@ -258,9 +261,10 @@ function LokalSection({
           {own.map((s) => {
             const style = stanowiskoBadgeStyle(activeStanowiska, lokal, s.stanowisko);
             const Wrapper = edycja ? "button" : "div";
+            const oferta = activeSwapFor(shiftSwaps, s.id);
             return (
+              <div key={s.id}>
               <Wrapper
-                key={s.id}
                 onClick={edycja ? () => onCellClick(user, dateStr, s) : undefined}
                 className={`flex items-center gap-1.5 w-full text-left ${
                   edycja ? "hover:bg-[#F1F1EE] rounded px-1 -mx-1" : ""
@@ -278,6 +282,43 @@ function LokalSection({
                   {trimTime(s.start_time)} – {trimTime(s.end_time)}
                 </span>
               </Wrapper>
+              {/* Znacznik giełdy poza <Wrapper>, bo w trybie Edycja Wrapper
+                  jest <button>, a przyciski ✓/✗ nie mogą siedzieć w środku
+                  innego przycisku. Zatwierdzać można TYLKO w Edycji —
+                  ostrzeżenie widać też w Podglądzie. */}
+              {oferta && (
+                <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                  <span
+                    className="text-[10px] font-extrabold px-1 py-0.5 rounded bg-[#FAEAE6] text-[#8A3A2B]"
+                    title={
+                      oferta.status === "przyjeta"
+                        ? `${oferta.taker_user_name} chce przejąć tę zmianę`
+                        : "Wystawiona na giełdę, nikt jeszcze nie przejął"
+                    }
+                  >
+                    ⇄ {oferta.status === "przyjeta" ? oferta.taker_user_name : "giełda"}
+                  </span>
+                  {edycja && oferta.status === "przyjeta" && onResolveSwap && (
+                    <>
+                      <button
+                        onClick={() => onResolveSwap(oferta, "approve")}
+                        className="text-[11px] font-extrabold px-1 rounded border border-[#171714]"
+                        title="Zatwierdź zamianę"
+                      >
+                        ✓
+                      </button>
+                      <button
+                        onClick={() => onResolveSwap(oferta, "reject")}
+                        className="text-[11px] font-extrabold px-1 rounded border border-[#DE3A22] text-[#DE3A22]"
+                        title="Odrzuć zamianę"
+                      >
+                        ✗
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+              </div>
             );
           })}
           {edycja && (
@@ -536,6 +577,8 @@ export default function GrafikTydzien({
   sortBy,
   setSortBy,
   mode,
+  shiftSwaps,
+  onResolveSwap,
   showMsg,
 }) {
   const [modalCtx, setModalCtx] = useState(null);
@@ -807,6 +850,8 @@ export default function GrafikTydzien({
           onCellClick={(user, dateStr, shift) => openCell(user, dateStr, shift, lokal)}
           onCopyPrevWeek={handleCopyPrevWeek}
           onAddEmployee={openAddEmployee}
+          shiftSwaps={shiftSwaps}
+          onResolveSwap={onResolveSwap}
         />
       ))}
 

@@ -270,6 +270,8 @@ export default function App() {
           absences={absences}
           setAbsences={setAbsences}
           planShifts={planShifts}
+          shiftSwaps={shiftSwaps}
+          setShiftSwaps={setShiftSwaps}
           showMsg={showMsg}
         />
       )}
@@ -292,6 +294,8 @@ export default function App() {
           absences={absences}
           setAbsences={setAbsences}
           planShifts={planShifts}
+          shiftSwaps={shiftSwaps}
+          setShiftSwaps={setShiftSwaps}
           showMsg={showMsg}
         />
       )}

@@ -23,6 +23,15 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.22.0",
+    date: "2026-09-03",
+    items: [
+      "Giełda zmian — pracownik wystawia zmianę (najpóźniej 12 h przed), ktoś wolny ją bierze, kierownik zatwierdza w Zatwierdzanie zmian albo ✓/✗ wprost w siatce.",
+      "Wniosek o wolne dostępny prosto z zakładki Grafik u pracownika.",
+      "Niedostępność można zgłosić na jeden dzień, bez wpisywania tej samej daty dwa razy.",
+    ],
+  },
+  {
     version: "0.21.0",
     date: "2026-09-03",
     items: [
