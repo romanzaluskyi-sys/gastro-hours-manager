@@ -66,6 +66,8 @@ const ManagerDashboard = ({
   setAbsences,
   planShifts,
   setPlanShifts,
+  shiftSwaps,
+  setShiftSwaps,
   staffingRules,
   setStaffingRules,
   staffingRuleSets,

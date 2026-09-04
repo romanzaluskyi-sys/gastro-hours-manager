@@ -249,6 +249,19 @@ export default function GrafikZmianaModal({
         </div>
 
         <div className="p-5 space-y-4">
+          {ctx.oferta && (
+            <div className="flex items-start gap-2 p-3 rounded border-[2px] border-[#171714] bg-[#FDF3D4]">
+              <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
+              <p className="text-[13px]">
+                Ta zmiana jest <strong>na giełdzie</strong>
+                {ctx.oferta.taker_user_name
+                  ? ` — ${ctx.oferta.taker_user_name} chce ją przejąć i czeka na Twoją decyzję.`
+                  : " — nikt jeszcze się po nią nie zgłosił."}{" "}
+                Decyzję podejmiesz przyciskami ✓ / ✗ przy zmianie w siatce albo w
+                zakładce Zatwierdzanie zmian.
+              </p>
+            </div>
+          )}
           {ctx.pickDate && (
             <div>
               <label className={statLabelCls}>Dzień</label>

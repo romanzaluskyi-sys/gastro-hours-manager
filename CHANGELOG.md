@@ -15,6 +15,11 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
   powiadomienie; po odmowie zostaje u autora.
 - Przy przejmowaniu zmiany sprawdzamy to samo co przy ręcznym wpisywaniu:
   zatwierdzone wolne i kolizję godzin.
+- Zmiana wystawiona na giełdę jest **podświetlona w siatce**: na żółto, gdy
+  czeka na chętnego, na zielono, gdy ktoś już się zgłosił i czeka na Twoją
+  decyzję. Po otwarciu takiej zmiany okno też o tym mówi.
+- U pracownika "na giełdę" to teraz mały przycisk z boku, a nie pasek na całą
+  szerokość — dopiero po kliknięciu pojawia się duży przycisk potwierdzenia.
 - **Wniosek o wolne prosto z zakładki Grafik** — bez szukania go w "Zgłoś".
 - **Niedostępność na jeden dzień.** Zamiast wpisywać tę samą datę dwa razy,
   można podać sam dzień; pola "od-do" i "jeden dzień" wykluczają się

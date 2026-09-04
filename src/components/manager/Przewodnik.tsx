@@ -27,6 +27,7 @@ const CHANGELOG = [
     date: "2026-09-03",
     items: [
       "Giełda zmian — pracownik wystawia zmianę (najpóźniej 12 h przed), ktoś wolny ją bierze, kierownik zatwierdza w Zatwierdzanie zmian albo ✓/✗ wprost w siatce.",
+      "Zmiana na giełdzie jest podświetlona w siatce — żółto gdy czeka na chętnego, zielono gdy ktoś się zgłosił.",
       "Wniosek o wolne dostępny prosto z zakładki Grafik u pracownika.",
       "Niedostępność można zgłosić na jeden dzień, bez wpisywania tej samej daty dwa razy.",
     ],

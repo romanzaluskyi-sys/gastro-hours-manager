@@ -265,9 +265,15 @@ function LokalSection({
             return (
               <div key={s.id}>
               <Wrapper
-                onClick={edycja ? () => onCellClick(user, dateStr, s) : undefined}
-                className={`flex items-center gap-1.5 w-full text-left ${
-                  edycja ? "hover:bg-[#F1F1EE] rounded px-1 -mx-1" : ""
+                onClick={edycja ? () => onCellClick(user, dateStr, s, oferta) : undefined}
+                className={`flex items-center gap-1.5 w-full text-left rounded px-1 -mx-1 ${
+                  edycja ? "hover:brightness-95" : ""
+                } ${
+                  oferta
+                    ? oferta.status === "przyjeta"
+                      ? "bg-[#E4F3E0]"
+                      : "bg-[#FDF3D4]"
+                    : ""
                 }`}
                 title={edycja ? "Kliknij, aby edytować" : ""}
               >
@@ -590,8 +596,8 @@ export default function GrafikTydzien({
   // dni to wrzesień.
   const monthPrefix = weekDays[3].slice(0, 7);
 
-  const openCell = (user, dateStr, shift, lokal) =>
-    setModalCtx({ user, date: dateStr, shift, lokal });
+  const openCell = (user, dateStr, shift, lokal, oferta) =>
+    setModalCtx({ user, date: dateStr, shift, lokal, oferta: oferta || null });
 
   // "Dodaj pracownika" z nagłówka tabeli: ten sam modal, ale bez wybranej
   // osoby i bez wybranego dnia — lokal jest już znany z tabeli, w której
@@ -847,7 +853,9 @@ export default function GrafikTydzien({
           sortBy={sortBy}
           monthPrefix={monthPrefix}
           mode={mode}
-          onCellClick={(user, dateStr, shift) => openCell(user, dateStr, shift, lokal)}
+          onCellClick={(user, dateStr, shift, oferta) =>
+            openCell(user, dateStr, shift, lokal, oferta)
+          }
           onCopyPrevWeek={handleCopyPrevWeek}
           onAddEmployee={openAddEmployee}
           shiftSwaps={shiftSwaps}

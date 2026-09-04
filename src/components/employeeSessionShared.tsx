@@ -300,6 +300,10 @@ export const EmployeeSessionScreens = ({
 
   const [grafikZakres, setGrafikZakres] = useState("ten"); // ten | nast | miesiac
   const [grafikWszyscy, setGrafikWszyscy] = useState(false);
+  // Który wpis czeka na potwierdzenie wystawienia na giełdę. Duży przycisk
+  // na całą szerokość pod każdą zmianą zjadał ekran, więc domyślnie jest
+  // mały link z boku, a pełny przycisk pojawia się dopiero po kliknięciu.
+  const [swapConfirmId, setSwapConfirmId] = useState(null);
 
   const [zgType, setZgType] = useState("problem"); // "correction" | "problem"
   const [zgAnon, setZgAnon] = useState(false);
@@ -1449,13 +1453,34 @@ export const EmployeeSessionScreens = ({
                         );
                       }
                       if (!canOfferSwap(s)) return null;
+                      if (swapConfirmId !== s.id) {
+                        return (
+                          <button
+                            onClick={() => setSwapConfirmId(s.id)}
+                            className="mt-2 border-2 border-[#B7B6AE] rounded px-2.5 py-1 text-[12px] font-bold text-[#6E6E66]"
+                          >
+                            na giełdę
+                          </button>
+                        );
+                      }
                       return (
-                        <button
-                          onClick={() => handleOfferSwap(s)}
-                          className="mt-2.5 w-full border-2 border-[#B7B6AE] rounded py-2 text-[13px] font-bold text-[#171714]"
-                        >
-                          Wystaw na giełdę
-                        </button>
+                        <div className="mt-2.5">
+                          <button
+                            onClick={async () => {
+                              await handleOfferSwap(s);
+                              setSwapConfirmId(null);
+                            }}
+                            className="w-full border-[2.5px] border-[#171714] rounded py-2.5 text-[14px] font-extrabold"
+                          >
+                            Wystaw na giełdę
+                          </button>
+                          <button
+                            onClick={() => setSwapConfirmId(null)}
+                            className="mt-1.5 text-[13px] font-bold underline text-[#6E6E66]"
+                          >
+                            Anuluj
+                          </button>
+                        </div>
                       );
                     })()}
                   </div>
