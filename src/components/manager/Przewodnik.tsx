@@ -28,7 +28,7 @@ const CHANGELOG = [
     items: [
       "Grafik — tryb Edycja: '+ dodaj' w pustych komórkach, okno przypisania zmiany z podpowiadanymi godzinami, 'Przypisz i dodaj następną'.",
       "Blokujemy tylko nachodzące godziny, urlop i zgłoszony brak dostępności — zmiana dzielona między lokalami jest dozwolona.",
-      "'Kopiuj z poprzedniego tygodnia' i 'Wyślij grafik pracownikom' — do wysłania grafik jest wersją roboczą.",
+      "'Kopiuj z poprzedniego tygodnia', 'Dodaj pracownika' (także spoza stałej obsady lokalu) i 'Wyślij grafik pracownikom' — do wysłania grafik jest wersją roboczą.",
     ],
   },
   {

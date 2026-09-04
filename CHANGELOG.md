@@ -20,9 +20,14 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
   ostrzeżenie, ale nie blokuje — decyduje kierownik.
 - **"Kopiuj z poprzedniego tygodnia"** dla każdego lokalu, z pominięciem osób,
   które mają w nowym terminie wolne albo kolizję godzin.
+- **"Dodaj pracownika"** w rogu tabeli lokalu — pozwala dobrać do grafiku
+  osobę spoza stałej obsady lokalu (przy nazwisku widać, skąd jest), wybrać
+  dzień z tygodnia i od razu wpisać jej zmianę.
 - **"Wyślij grafik pracownikom"** — do tego momentu grafik jest wersją
   roboczą, niewidoczną dla zespołu. Po wysłaniu każda osoba ze zmianami w tym
   tygodniu dostaje jedno powiadomienie.
+- Pogoda w nagłówku dnia sięga tyle, ile daje prognoza (16 dni w przód) —
+  dalsze tygodnie mają puste miejsce zamiast mylącego znaku.
 
 ## 0.16.0 — 2026-09-03
 

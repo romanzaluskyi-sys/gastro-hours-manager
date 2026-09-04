@@ -71,10 +71,15 @@ export default function GrafikZmianaModal({
   staffingRuleSets,
   grafikWyjatki,
   planShifts,
+  weekDays,
   onSave,
   onDelete,
   onClose,
 }) {
+  // Otwarcie z nagłówka tabeli ("Dodaj pracownika") nie zna jeszcze dnia —
+  // wtedy modal pokazuje wybór dnia z bieżącego tygodnia. Z komórki dzień
+  // jest znany i pozostaje stały.
+  const [date, setDate] = useState(ctx.date);
   const [userId, setUserId] = useState(ctx.user?.id || null);
   const [stanowisko, setStanowisko] = useState(
     ctx.shift?.stanowisko || ctx.user?.default_stanowisko || ""
@@ -89,7 +94,7 @@ export default function GrafikZmianaModal({
   const rulesForDay = getRulesForDate(
     { rules: staffingRules, ruleSets: staffingRuleSets, wyjatki: grafikWyjatki },
     lokal,
-    ctx.date
+    date
   );
 
   // Godziny podstawiamy ze standardu stanowiska, ale tylko dopóki kierownik
@@ -105,26 +110,33 @@ export default function GrafikZmianaModal({
     } else {
       setZrodloGodzin(null);
     }
-  }, [stanowisko, lokal]);
+  }, [stanowisko, lokal, date]);
 
   // Osoby wolne tego dnia w tym lokalu — plus ta, która jest już wpisana,
   // żeby dało się edytować istniejącą zmianę bez znikania jej autora.
+  // Z komórki: osoby związane z tym lokalem. Z "Dodaj pracownika": wszyscy,
+  // bo sensem tego przycisku jest dobranie kogoś spoza stałej obsady lokalu.
   const kandydaci = (users || [])
     .filter(
       (u) =>
         !u.archived &&
         u.active !== false &&
         u.role !== "kiosk" &&
-        (u.default_lokal === lokal ||
+        (ctx.pickDate ||
+          u.default_lokal === lokal ||
           (planShifts || []).some(
             (s) => s.lokal === lokal && String(s.user_id) === String(u.id)
           ))
     )
-    .sort((a, b) => a.name.localeCompare(b.name, "pl"));
+    .sort((a, b) => {
+      const swoj = (u) => (u.default_lokal === lokal ? 0 : 1);
+      if (swoj(a) !== swoj(b)) return swoj(a) - swoj(b);
+      return a.name.localeCompare(b.name, "pl");
+    });
 
   const stanowiskaLokalu = (activeStanowiska || []).filter((s) => s.lokal_name === lokal);
   const obceStanowisko = user && stanowisko && !knowsStanowisko(user, stanowisko);
-  const wolneUzytkownika = user ? findBlockingAbsence(absences, user, ctx.date) : null;
+  const wolneUzytkownika = user ? findBlockingAbsence(absences, user, date) : null;
 
   const zapisz = async (dodajNastepna) => {
     if (!user || !stanowisko || !start || !end) return;
@@ -135,7 +147,7 @@ export default function GrafikZmianaModal({
       user_id: user.id,
       user_name: user.name,
       stanowisko,
-      date: ctx.date,
+      date,
       start_time: start,
       end_time: end,
       dodajNastepna,
@@ -158,8 +170,8 @@ export default function GrafikZmianaModal({
               {ctx.shift ? "Edytuj zmianę" : "Przypisz zmianę"}
             </div>
             <h3 className="font-['Archivo'] font-extrabold text-xl">
-              {fmtNaglowek(ctx.date)}
-              {user ? ` · ${user.name}` : ""}
+              {fmtNaglowek(date)}
+              {user ? ` · ${user.name}` : " · wybierz osobę"}
             </h3>
           </div>
           <button onClick={onClose} className={btnSecondaryCls}>
@@ -168,11 +180,36 @@ export default function GrafikZmianaModal({
         </div>
 
         <div className="p-5 space-y-4">
+          {ctx.pickDate && (
+            <div>
+              <label className={statLabelCls}>Dzień</label>
+              <div className="flex flex-wrap gap-1.5 mt-1">
+                {(weekDays || []).map((d) => {
+                  const wybrany = d === date;
+                  return (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setDate(d)}
+                      className={`px-2.5 py-1.5 rounded border-[2px] text-[13px] font-bold ${
+                        wybrany
+                          ? "bg-[#171714] text-white border-[#171714]"
+                          : "bg-white text-[#171714] border-[#B7B6AE] hover:border-[#171714]"
+                      }`}
+                    >
+                      {fmtNaglowek(d)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div>
             <label className={statLabelCls}>Pracownik</label>
             <div className="flex flex-wrap gap-1.5 mt-1">
               {kandydaci.map((u) => {
-                const zajety = findBlockingAbsence(absences, u, ctx.date);
+                const zajety = findBlockingAbsence(absences, u, date);
                 const wybrany = String(u.id) === String(userId);
                 return (
                   <button
@@ -196,6 +233,9 @@ export default function GrafikZmianaModal({
                     }
                   >
                     {u.name}
+                    {u.default_lokal !== lokal && (
+                      <span className="font-normal opacity-70"> · {u.default_lokal}</span>
+                    )}
                     {zajety ? " ·" : ""}
                   </button>
                 );

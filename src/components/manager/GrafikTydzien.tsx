@@ -10,7 +10,15 @@
 // Cała arytmetyka (dziury w obsadzie, godziny zmian, zmiany przez północ)
 // żyje w utils/grafik.ts — tu jest wyłącznie prezentacja.
 import React, { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, Download, AlertTriangle, Plus, CopyPlus } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  AlertTriangle,
+  Plus,
+  CopyPlus,
+  UserPlus,
+} from "lucide-react";
 import { api } from "../../api/supabase";
 import { createEmployeeNotification } from "../../api/notifications";
 import GrafikZmianaModal, { GrafikBlokadaModal } from "./GrafikZmianaModal";
@@ -109,6 +117,7 @@ function LokalSection({
   mode,
   onCellClick,
   onCopyPrevWeek,
+  onAddEmployee,
 }) {
   const [forecast, setForecast] = useState({});
 
@@ -128,6 +137,16 @@ function LokalSection({
       cancelled = true;
     };
   }, [miasto]);
+
+  // Open-Meteo daje maksymalnie 16 dni w przód (i 7 wstecz) — dla dat poza
+  // tym oknem nie ma czego pokazać, więc zostawiamy pusto zamiast mylnie
+  // wyglądającego "—", które sugerowałoby awarię.
+  const forecastKeys = Object.keys(forecast);
+  const forecastFrom = forecastKeys.length > 0 ? forecastKeys[0] : null;
+  const forecastTo =
+    forecastKeys.length > 0 ? forecastKeys[forecastKeys.length - 1] : null;
+  const wZasieguProgozy = (d) =>
+    forecastFrom != null && d >= forecastFrom && d <= forecastTo;
 
   const weekFrom = weekDays[0];
   const weekTo = weekDays[6];
@@ -341,11 +360,19 @@ function LokalSection({
         <table className="w-full border-collapse min-w-[1040px]">
           <thead>
             <tr className="bg-[#F1F1EE]">
-              <th className="text-left px-3 py-2 border-r-[2px] border-[#171714] w-[190px] min-w-[190px]">
+              <th className="text-left px-3 py-2 border-r-[2px] border-[#171714] w-[190px] min-w-[190px] align-top">
                 <span className={statLabelCls}>Pracownik</span>
                 <div className="text-[11px] text-[#8F8E86] font-normal normal-case">
                   godziny i zmiany w miesiącu
                 </div>
+                {mode === "edycja" && (
+                  <button
+                    onClick={() => onAddEmployee(lokal)}
+                    className="mt-1.5 w-full px-2 py-1 rounded border-[2px] border-[#DE3A22] text-[#DE3A22] text-[12px] font-bold hover:bg-[#FAEAE6]"
+                  >
+                    <UserPlus size={13} className="inline -mt-0.5 mr-1" /> Dodaj pracownika
+                  </button>
+                )}
               </th>
               {weekDays.map((d, i) => {
                 const stat = dayStats[i];
@@ -369,12 +396,16 @@ function LokalSection({
                       title={
                         pogoda && pogoda.temp != null
                           ? describeWeatherCode(pogoda.code).label
-                          : "Brak prognozy dla tego dnia"
+                          : wZasieguProgozy(d)
+                          ? "Brak prognozy dla tego dnia"
+                          : "Prognoza sięga 16 dni w przód"
                       }
                     >
                       {pogoda && pogoda.temp != null
                         ? `${describeWeatherCode(pogoda.code).icon} ${Math.round(pogoda.temp)}°`
-                        : "—"}
+                        : wZasieguProgozy(d)
+                        ? "—"
+                        : ""}
                     </div>
                     <div
                       className={`flex items-center justify-between gap-2 text-[12px] font-bold mt-1 ${
@@ -515,6 +546,12 @@ export default function GrafikTydzien({
 
   const openCell = (user, dateStr, shift, lokal) =>
     setModalCtx({ user, date: dateStr, shift, lokal });
+
+  // "Dodaj pracownika" z nagłówka tabeli: ten sam modal, ale bez wybranej
+  // osoby i bez wybranego dnia — lokal jest już znany z tabeli, w której
+  // kliknięto. Po zapisaniu zmiany osoba pojawia się w siatce sama.
+  const openAddEmployee = (lokal) =>
+    setModalCtx({ user: null, date: weekStart, shift: null, lokal, pickDate: true });
 
   // Jedyne miejsce, które zapisuje zaplanowaną zmianę. Kolejność sprawdzeń
   // jest istotna: najpierw zatwierdzone wolne (twarda odmowa), potem
@@ -747,6 +784,7 @@ export default function GrafikTydzien({
           mode={mode}
           onCellClick={(user, dateStr, shift) => openCell(user, dateStr, shift, lokal)}
           onCopyPrevWeek={handleCopyPrevWeek}
+          onAddEmployee={openAddEmployee}
         />
       ))}
 
@@ -771,6 +809,7 @@ export default function GrafikTydzien({
           staffingRuleSets={staffingRuleSets}
           grafikWyjatki={grafikWyjatki}
           planShifts={planShifts}
+          weekDays={weekDays}
           onSave={handleSave}
           onDelete={handleDelete}
           onClose={() => setModalCtx(null)}
