@@ -196,6 +196,10 @@ export default function GrafikZmianaModal({
       });
   });
   const sortujPary = (a, b) => {
+    // Najpierw lokal, którego siatkę kierownik ma przed sobą — to tam
+    // najczęściej wpisuje zmianę; dopiero potem lokal macierzysty osoby.
+    const tutaj = (p) => (p.lokal === ctx.lokal ? 0 : 1);
+    if (tutaj(a) !== tutaj(b)) return tutaj(a) - tutaj(b);
     const domowy = (p) => (p.lokal === (user?.default_lokal || ctx.lokal) ? 0 : 1);
     if (domowy(a) !== domowy(b)) return domowy(a) - domowy(b);
     const glowne = (p) => (p.stanowisko === user?.default_stanowisko ? 0 : 1);
@@ -203,12 +207,21 @@ export default function GrafikZmianaModal({
     if (a.lokal !== b.lokal) return a.lokal.localeCompare(b.lokal, "pl");
     return a.stanowisko.localeCompare(b.stanowisko, "pl");
   };
-  const paryZKarty = wszystkieParty
-    .filter((p) => znaneStanowiska.includes(p.stanowisko))
-    .sort(sortujPary);
-  const paryPozostale = wszystkieParty
-    .filter((p) => !znaneStanowiska.includes(p.stanowisko))
-    .sort(sortujPary);
+  // Zasada: pokazujemy stanowiska z karty pracownika. Wyjątek — gdy w
+  // OGLĄDANYM lokalu nie ma ani jednego z nich, dokładamy stanowiska tego
+  // lokalu. Inaczej osoba wypożyczona z innego lokalu (np. Paulina wpisana
+  // do Marynaty) nie miała tu żadnego kafelka i nie dało się dopisać jej
+  // kolejnej zmiany — a to jest dokładnie ten przypadek, dla którego
+  // wypożyczanie w ogóle istnieje. Takie kafelki i tak pokażą ostrzeżenie
+  // "to nie jego stanowisko" plus przycisk dopisania do umiejętności.
+  const maTuCosZKarty = wszystkieParty.some(
+    (p) => p.lokal === ctx.lokal && znaneStanowiska.includes(p.stanowisko)
+  );
+  const wKarcie = (p) =>
+    znaneStanowiska.includes(p.stanowisko) ||
+    (!maTuCosZKarty && p.lokal === ctx.lokal);
+  const paryZKarty = wszystkieParty.filter(wKarcie).sort(sortujPary);
+  const paryPozostale = wszystkieParty.filter((p) => !wKarcie(p)).sort(sortujPary);
   const obceStanowisko = user && stanowisko && !knowsStanowisko(user, stanowisko);
   const wolneUzytkownika = user ? findBlockingAbsence(absences, user, date) : null;
 

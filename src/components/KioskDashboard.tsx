@@ -65,12 +65,18 @@ const KioskDashboard = ({
       u.role === "open" &&
       allowed.includes(u.default_lokal)
   );
-  // Kiosk to wspólne urządzenie — powiadomienia dla WSZYSTKICH pracowników
-  // przypisanych do lokalu, nie tylko wybranego (patrz CLAUDE.md).
-  const activeNames = new Set(activeUsers.map((u) => u.name));
-  const myNotifications = notifications.filter((n) =>
-    activeNames.has(n.user_name)
-  );
+  // Powiadomienia WYBRANEGO pracownika, nie całego urządzenia. Wcześniej
+  // kiosk pokazywał worek wiadomości wszystkich osób z lokalu, więc jedna
+  // osoba otwierająca zakładkę oznaczała jako przeczytane także cudze —
+  // i nikt inny już ich nie zobaczył. Kto ma nieprzeczytaną wiadomość,
+  // widać teraz na liście wyboru (koperta przy nazwisku).
+  const myNotifications = selectedEmployee
+    ? notifications.filter(
+        (n) =>
+          (n.audience || "employee") === "employee" &&
+          n.user_name === selectedEmployee.name
+      )
+    : [];
   const unreadCount = myNotifications.filter((n) => !n.is_read).length;
 
   const lokaleAllowed = lokale.filter((l) => allowed.includes(l.name));
@@ -355,7 +361,7 @@ const KioskDashboard = ({
         myNotifications={myNotifications}
         unreadCount={unreadCount}
         setNotifications={setNotifications}
-        showEmployeeNameInMessages={true}
+        showEmployeeNameInMessages={false}
         issues={issues}
         setIssues={setIssues}
         tasks={tasks}

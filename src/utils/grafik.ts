@@ -458,17 +458,18 @@ export const buildCopyFromPreviousWeek = ({
   return { drafts, skipped };
 };
 
-// Publikacja tygodnia — stempluje published_at na wszystkich niewysłanych
-// zmianach z zakresu i wysyła JEDNO powiadomienie na osobę (nie na zmianę,
-// bo pięć zmian w tygodniu to nadal jedna informacja "grafik gotowy").
-// Jedyne miejsce, które publikuje grafik — nie duplikuj tego w komponencie.
-export const publishWeek = async ({ planShifts, lokaleNames, from, to, actorName }) => {
+// Publikacja grafiku — jedno kliknięcie wysyła WSZYSTKO, co jeszcze nie
+// poszło, od podanego dnia w przód (domyślnie od dziś; wysyłanie zmian
+// sprzed tygodnia nie ma sensu). Świadoma zmiana względem pierwszej wersji,
+// która publikowała tylko oglądany tydzień: przy planowaniu na kilka
+// tygodni naprzód łatwo było zapomnieć wrócić i wysłać kolejny tydzień, a
+// niewysłana zmiana jest dla pracownika po prostu niewidoczna.
+//
+// Jedno powiadomienie na OSOBĘ, nie na zmianę — pięć zmian to nadal jedna
+// informacja "grafik gotowy". Jedyne miejsce, które publikuje grafik.
+export const publishGrafik = async ({ planShifts, lokaleNames, from, actorName }) => {
   const toPublish = (planShifts || []).filter(
-    (s) =>
-      lokaleNames.includes(s.lokal) &&
-      s.date >= from &&
-      s.date <= to &&
-      isUnpublished(s)
+    (s) => lokaleNames.includes(s.lokal) && s.date >= from && isUnpublished(s)
   );
   if (toPublish.length === 0) return { updated: [], powiadomieni: 0 };
 
@@ -478,15 +479,23 @@ export const publishWeek = async ({ planShifts, lokaleNames, from, to, actorName
     updated.push(await api.patch("grafik_shifts", s.id, { published_at: now }));
   }
 
+  // Zakres liczymy PER OSOBA — każdy dostaje informację o swoich dniach,
+  // a nie o całym zakresie, jaki akurat wysłał kierownik.
   const opts = { day: "numeric", month: "long" };
-  const zakres = `${new Date(from + "T00:00:00").toLocaleDateString("pl-PL", opts)} – ${new Date(
-    to + "T00:00:00"
-  ).toLocaleDateString("pl-PL", opts)}`;
+  const fmt = (d) => new Date(d + "T00:00:00").toLocaleDateString("pl-PL", opts);
   const names = [...new Set(toPublish.map((s) => s.user_name).filter(Boolean))];
   for (const name of names) {
+    const dni = toPublish
+      .filter((s) => s.user_name === name)
+      .map((s) => s.date)
+      .sort();
+    const zakres =
+      dni[0] === dni[dni.length - 1]
+        ? fmt(dni[0])
+        : `${fmt(dni[0])} – ${fmt(dni[dni.length - 1])}`;
     await createEmployeeNotification(
       name,
-      `Grafik na ${zakres} jest gotowy — sprawdź swoje zmiany.${
+      `Grafik zaktualizowany — masz zmiany na ${zakres}. Sprawdź zakładkę Grafik.${
         actorName ? ` Wysłał(a): ${actorName}.` : ""
       }`,
       "grafik"

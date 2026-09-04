@@ -11,7 +11,13 @@ import GrafikWymagania from "./GrafikWymagania";
 import GrafikTydzien from "./GrafikTydzien";
 import GrafikMiesiac from "./GrafikMiesiac";
 import { pageTitleCls, cardCls, btnPrimaryCls, btnSecondaryCls } from "./designTokens";
-import { toLocalYMD, mondayOf, addDaysYMD, isUnpublished, publishWeek } from "../../utils/grafik";
+import {
+  toLocalYMD,
+  mondayOf,
+  addDaysYMD,
+  isUnpublished,
+  publishGrafik,
+} from "../../utils/grafik";
 
 export default function Grafik({
   currentUser,
@@ -68,36 +74,40 @@ export default function Grafik({
   // widocznych taka zmiana nigdy nie dałaby się wysłać i po cichu zostawała
   // wersją roboczą — pracownik jej nie widział, a kierownik nie miał jak się
   // o tym dowiedzieć.
+  // Jedno kliknięcie wysyła WSZYSTKO od dziś w przód, ze wszystkich lokali
+  // kierownika. Wysyłka per oglądany tydzień była zbyt łatwa do zgubienia:
+  // przy planowaniu na dwa-trzy tygodnie naprzód część zmian zostawała
+  // wersją roboczą i pracownik ich po prostu nie widział.
+  const dzisYMD = toLocalYMD(new Date());
   const niewyslaneWiersze = (planShifts || []).filter(
     (s) =>
       wszystkieLokaleNames.includes(s.lokal) &&
-      s.date >= weekStart &&
-      s.date <= weekEnd &&
+      s.date >= dzisYMD &&
       isUnpublished(s)
   );
   const niewyslane = niewyslaneWiersze.length;
-  const niewyslanePozaWidokiem = niewyslaneWiersze.filter(
-    (s) => !lokaleNames.includes(s.lokal)
+  const niewyslanePozaTygodniem = niewyslaneWiersze.filter(
+    (s) => s.date < weekStart || s.date > weekEnd
   ).length;
 
   const handlePublish = async () => {
     if (
       !window.confirm(
         `Wysłać grafik pracownikom? Zmian do wysłania: ${niewyslane}` +
-          (niewyslanePozaWidokiem > 0
-            ? ` (w tym ${niewyslanePozaWidokiem} w lokalach spoza tego widoku)`
+          (niewyslanePozaTygodniem > 0
+            ? ` (w tym ${niewyslanePozaTygodniem} poza oglądanym tygodniem)`
             : "") +
-          ". Każda osoba dostanie jedno powiadomienie."
+          ". Wysyłamy wszystko od dziś w przód, ze wszystkich Twoich lokali." +
+          " Każda osoba dostanie jedno powiadomienie."
       )
     )
       return;
     setPublishing(true);
     try {
-      const { updated, powiadomieni } = await publishWeek({
+      const { updated, powiadomieni } = await publishGrafik({
         planShifts,
         lokaleNames: wszystkieLokaleNames,
-        from: weekStart,
-        to: weekEnd,
+        from: dzisYMD,
         actorName: currentUser?.name,
       });
       const mapa = new Map(updated.map((s) => [s.id, s]));
@@ -165,17 +175,17 @@ export default function Grafik({
             </button>
           </div>
         )}
-        {view === "tydzien" && mode === "edycja" && (
+        {view === "tydzien" && (
           <button
             onClick={handlePublish}
             disabled={publishing || niewyslane === 0}
             className={`ml-auto ${btnPrimaryCls}`}
             title={
               niewyslane === 0
-                ? "Wszystkie zmiany w tym tygodniu są już wysłane"
-                : `Niewysłanych zmian: ${niewyslane}${
-                    niewyslanePozaWidokiem > 0
-                      ? ` (${niewyslanePozaWidokiem} w innych lokalach)`
+                ? "Wszystko wysłane — nic nie czeka na wysyłkę"
+                : `Niewysłanych zmian od dziś: ${niewyslane}${
+                    niewyslanePozaTygodniem > 0
+                      ? ` (${niewyslanePozaTygodniem} poza tym tygodniem)`
                       : ""
                   }`
             }

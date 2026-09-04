@@ -407,12 +407,35 @@ function LokalSection({
 
     const gdzieIndziej = planWeek.find((s) => s.date === dateStr && isSameUser(s, user));
     if (gdzieIndziej) {
+      // Praca w dwóch lokalach jednego dnia jest dozwolona (blokujemy tylko
+      // nachodzące godziny), więc ta komórka MUSI dawać się uzupełnić —
+      // wcześniej była martwa i nie dało się dopisać drugiej zmiany osobie,
+      // która tego dnia jest wypożyczona gdzie indziej.
       return (
-        <span className="text-[12px] text-[#8F8E86]">— w {gdzieIndziej.lokal}</span>
+        <div>
+          <button
+            onClick={
+              edycja ? () => onCellClick(user, dateStr, gdzieIndziej) : undefined
+            }
+            className="text-[12px] text-[#8F8E86] text-left hover:text-[#171714]"
+            title={edycja ? `Kliknij, aby edytować zmianę w ${gdzieIndziej.lokal}` : ""}
+          >
+            — w {gdzieIndziej.lokal} {trimTime(gdzieIndziej.start_time)}–
+            {trimTime(gdzieIndziej.end_time)}
+          </button>
+          {edycja && (
+            <button
+              onClick={() => onCellClick(user, dateStr, null)}
+              className="mt-1 w-full text-[12px] text-[#8F8E86] border-[2px] border-dashed border-[#B7B6AE] rounded px-2 py-1 hover:border-[#171714] hover:text-[#171714]"
+            >
+              <Plus size={12} className="inline -mt-0.5" /> dodaj
+            </button>
+          )}
+        </div>
       );
     }
-    // Komórki z URP/NIE i "w innym lokalu" świadomie NIE dostają "+ dodaj":
-    // pierwszych nie wolno obsadzić, drugie to cudzy plan.
+    // Komórki z URP/NIE świadomie NIE dostają "+ dodaj" — tam po prostu nie
+    // wolno nikogo obsadzić.
     if (edycja) {
       return (
         <button

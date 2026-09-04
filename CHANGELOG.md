@@ -45,11 +45,23 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
   powiadomieniem — na wspólnym urządzeniu nikt nie zagląda na cudzą stronę.
 - Po wybraniu osoby na tablecie jej imię jest stale widoczne w nagłówku,
   obok przycisku "Zmień".
-- **Wysyłka grafiku obejmuje teraz wszystkie lokale kierownika, nie tylko
-  widoczne.** Zmianę wpisaną z siatki jednego lokalu do drugiego nie dało
-  się wcześniej wysłać — zostawała wersją roboczą, niewidoczną dla
-  pracownika i dla kierownika. Niewysłane zmiany są teraz oznaczone kropką
-  w siatce i licznikiem "N niewysłanych" przy nazwie lokalu.
+- **Jedno kliknięcie "Wyślij grafik pracownikom" wysyła wszystko.** Nie tylko
+  oglądany tydzień i nie tylko widoczny lokal — wszystkie niewysłane zmiany
+  od dziś w przód, ze wszystkich Twoich lokali. Wcześniej wysyłka była
+  przypisana do oglądanego tygodnia, więc przy planowaniu na kilka tygodni
+  naprzód łatwo było zostawić zmiany jako wersję roboczą — a takiej zmiany
+  pracownik po prostu nie widzi. Niewysłane są dodatkowo oznaczone kropką w
+  siatce i licznikiem "N niewysłanych" przy nazwie lokalu. Każdy pracownik
+  dostaje jedno powiadomienie, z zakresem SWOICH dni.
+- Przycisk wysyłki jest widoczny także w trybie Podgląd — wysyłka dotyczy
+  całego grafiku, nie tego, co akurat edytujesz.
+- **Powiadomienia na Tablecie Służbowym są teraz per pracownik.** Wcześniej
+  urządzenie pokazywało wiadomości wszystkich osób z lokalu, więc pierwsza
+  osoba, która weszła w zakładkę, oznaczała jako przeczytane także cudze i
+  nikt inny już ich nie widział.
+- W komórce "w innym lokalu" można teraz kliknąć zmianę (żeby ją edytować)
+  i dopisać kolejną — praca w dwóch lokalach jednego dnia jest dozwolona,
+  a komórka była martwa.
 - Pracownikowi wpisanemu do lokalu, w którym nie ma żadnego ze swoich
   stanowisk, można już dopisać kolejną zmianę — wcześniej znikał z listy
   wyboru i nie było jak.
