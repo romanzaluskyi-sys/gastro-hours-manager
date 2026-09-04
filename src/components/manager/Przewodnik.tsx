@@ -23,6 +23,15 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.17.0",
+    date: "2026-09-03",
+    items: [
+      "Grafik — tryb Edycja: '+ dodaj' w pustych komórkach, okno przypisania zmiany z podpowiadanymi godzinami, 'Przypisz i dodaj następną'.",
+      "Blokujemy tylko nachodzące godziny, urlop i zgłoszony brak dostępności — zmiana dzielona między lokalami jest dozwolona.",
+      "'Kopiuj z poprzedniego tygodnia' i 'Wyślij grafik pracownikom' — do wysłania grafik jest wersją roboczą.",
+    ],
+  },
+  {
     version: "0.16.0",
     date: "2026-09-03",
     items: [

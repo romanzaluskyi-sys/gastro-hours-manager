@@ -5,6 +5,25 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.17.0 — 2026-09-03
+
+- **Grafik — tryb Edycja.** Przełącznik Podgląd / Edycja nad siatką. W trybie
+  Edycja puste komórki mają "+ dodaj", a klik w istniejącą zmianę ją otwiera.
+  W oknie zmiany wybierasz pracownika, stanowisko, godziny i lokal — godziny
+  podpowiadają się z wymagań obsady. "Przypisz i dodaj następną" przyspiesza
+  wpisywanie seriami.
+- **Blokada tylko przy nachodzących godzinach.** Zmiana dzielona (do 14:00 w
+  jednym lokalu, od 14:00 w drugim) jest dozwolona. Blokujemy zatwierdzony
+  urlop, zgłoszony brak dostępności i kolidujące godziny — z okienkiem, które
+  mówi dokładnie co koliduje, i przyciskiem "Napisz do pracownika".
+- Wpisanie zmiany na stanowisko spoza listy "umie pracować" pokazuje
+  ostrzeżenie, ale nie blokuje — decyduje kierownik.
+- **"Kopiuj z poprzedniego tygodnia"** dla każdego lokalu, z pominięciem osób,
+  które mają w nowym terminie wolne albo kolizję godzin.
+- **"Wyślij grafik pracownikom"** — do tego momentu grafik jest wersją
+  roboczą, niewidoczną dla zespołu. Po wysłaniu każda osoba ze zmianami w tym
+  tygodniu dostaje jedno powiadomienie.
+
 ## 0.16.0 — 2026-09-03
 
 - **Grafik — widok tygodnia.** Zakładka Grafik pokazuje siatkę: pracownicy w

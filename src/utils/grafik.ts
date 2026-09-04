@@ -7,6 +7,8 @@
 //
 // Pełna specyfikacja modułu: docs/GRAFIK.md.
 import { toLocalYMD } from "../api/googleSheets";
+import { api } from "../api/supabase";
+import { createEmployeeNotification } from "../api/notifications";
 
 // --- CZAS ---------------------------------------------------------------
 // PostgREST zwraca kolumny `time` jako "09:00:00", a <input type="time">
@@ -346,6 +348,152 @@ export const countUnpublished = (planShifts, lokal, fromDate, toDate) =>
       s.date <= toDate &&
       isUnpublished(s)
   ).length;
+
+// --- WPISYWANIE ZMIAN (tryb Edycja) ------------------------------------
+// Absolutny zakres zmiany w minutach od epoki, żeby porównywać zmiany z
+// różnych dni jedną miarą — zmiana 18:00–02:00 kończy się już następnego
+// dnia i musi kolidować ze zmianą 01:00–09:00 z tego następnego dnia.
+export const planAbsRange = (shift) => {
+  const base = new Date(shift.date + "T00:00:00").getTime() / 60000;
+  const s = timeToMin(shift.start_time);
+  const e = timeToMin(shift.end_time);
+  if (s == null || e == null) return null;
+  return [base + s, base + (e > s ? e : e + 1440)];
+};
+
+export const sameUserKey = (a, b) =>
+  a.user_id && b.user_id
+    ? String(a.user_id) === String(b.user_id)
+    : a.user_name === b.user_name;
+
+// JEDYNA rzecz, która blokuje wpisanie zmiany. Nie blokujemy drugiej
+// zmiany tego samego dnia ani pracy w dwóch lokalach — pracownik może
+// pracować 09:00–12:00 w jednym miejscu i od 12:00 w innym (ustalenie
+// właściciela, patrz docs/GRAFIK.md). Kolidują dopiero nachodzące godziny.
+export const findOverlappingPlanShift = (planShifts, candidate) => {
+  const range = planAbsRange(candidate);
+  if (!range) return null;
+  const [cs, ce] = range;
+  return (
+    (planShifts || []).find((s) => {
+      if (String(s.id) === String(candidate.excludeId)) return false;
+      if (!sameUserKey(s, candidate)) return false;
+      const other = planAbsRange(s);
+      if (!other) return false;
+      return other[0] < ce && cs < other[1];
+    }) || null
+  );
+};
+
+// Zatwierdzony wniosek o wolne obowiązujący danego dnia — urlop albo
+// zgłoszona niedostępność. Oczekujące i odrzucone niczego nie blokują.
+export const findBlockingAbsence = (absences, user, dateStr) =>
+  (absences || []).find(
+    (a) =>
+      a.status === "approved" &&
+      a.start_date <= dateStr &&
+      dateStr <= a.end_date &&
+      (a.user_id ? String(a.user_id) === String(user.id) : a.user_name === user.name)
+  ) || null;
+
+// Godziny podpowiadane w modalu wpisywania zmiany — bierzemy je z wymagań
+// obsady, a nie z osobnego pola na stanowisku, żeby nie mieć dwóch źródeł
+// prawdy, które z czasem się rozjadą. Przy kilku przedziałach wygrywa
+// najdłuższy (bazowy), bo krótsze to zwykle "dodatkowa osoba na szczyt".
+export const defaultHoursForStanowisko = (rulesForDay, stanowisko) => {
+  const rows = (rulesForDay || []).filter((r) => r.stanowisko === stanowisko);
+  if (rows.length === 0) return null;
+  const best = rows
+    .map((r) => {
+      const s = timeToMin(r.start_time);
+      const e = timeToMin(r.end_time);
+      return { r, len: s == null || e == null ? 0 : (e > s ? e - s : 1440 - s + e) };
+    })
+    .sort((a, b) => b.len - a.len)[0];
+  return { start: trimTime(best.r.start_time), end: trimTime(best.r.end_time) };
+};
+
+// Kopiowanie poprzedniego tygodnia — zwraca gotowe wiersze do wstawienia.
+// Pomijamy osoby, które w nowym terminie mają zatwierdzone wolne albo
+// kolidującą zmianę: cicha kolizja byłaby gorsza niż brak wpisu.
+export const buildCopyFromPreviousWeek = ({
+  planShifts,
+  absences,
+  users,
+  lokal,
+  weekStart,
+}) => {
+  const prevFrom = addDaysYMD(weekStart, -7);
+  const prevTo = addDaysYMD(weekStart, -1);
+  const source = (planShifts || []).filter(
+    (s) => s.lokal === lokal && s.date >= prevFrom && s.date <= prevTo
+  );
+  const drafts = [];
+  const skipped = [];
+  source.forEach((s) => {
+    const date = addDaysYMD(s.date, 7);
+    const candidate = {
+      lokal: s.lokal,
+      user_id: s.user_id,
+      user_name: s.user_name,
+      stanowisko: s.stanowisko,
+      date,
+      start_time: trimTime(s.start_time),
+      end_time: trimTime(s.end_time),
+    };
+    const user =
+      (users || []).find((u) =>
+        s.user_id ? String(u.id) === String(s.user_id) : u.name === s.user_name
+      ) || { id: s.user_id, name: s.user_name };
+    if (findBlockingAbsence(absences, user, date)) {
+      skipped.push({ ...candidate, powod: "wolne" });
+      return;
+    }
+    if (findOverlappingPlanShift([...(planShifts || []), ...drafts], candidate)) {
+      skipped.push({ ...candidate, powod: "kolizja godzin" });
+      return;
+    }
+    drafts.push(candidate);
+  });
+  return { drafts, skipped };
+};
+
+// Publikacja tygodnia — stempluje published_at na wszystkich niewysłanych
+// zmianach z zakresu i wysyła JEDNO powiadomienie na osobę (nie na zmianę,
+// bo pięć zmian w tygodniu to nadal jedna informacja "grafik gotowy").
+// Jedyne miejsce, które publikuje grafik — nie duplikuj tego w komponencie.
+export const publishWeek = async ({ planShifts, lokaleNames, from, to, actorName }) => {
+  const toPublish = (planShifts || []).filter(
+    (s) =>
+      lokaleNames.includes(s.lokal) &&
+      s.date >= from &&
+      s.date <= to &&
+      isUnpublished(s)
+  );
+  if (toPublish.length === 0) return { updated: [], powiadomieni: 0 };
+
+  const now = new Date().toISOString();
+  const updated = [];
+  for (const s of toPublish) {
+    updated.push(await api.patch("grafik_shifts", s.id, { published_at: now }));
+  }
+
+  const opts = { day: "numeric", month: "long" };
+  const zakres = `${new Date(from + "T00:00:00").toLocaleDateString("pl-PL", opts)} – ${new Date(
+    to + "T00:00:00"
+  ).toLocaleDateString("pl-PL", opts)}`;
+  const names = [...new Set(toPublish.map((s) => s.user_name).filter(Boolean))];
+  for (const name of names) {
+    await createEmployeeNotification(
+      name,
+      `Grafik na ${zakres} jest gotowy — sprawdź swoje zmiany.${
+        actorName ? ` Wysłał(a): ${actorName}.` : ""
+      }`,
+      "grafik"
+    );
+  }
+  return { updated, powiadomieni: names.length };
+};
 
 // --- STANOWISKA PRACOWNIKA ---------------------------------------------
 // `allowed_stanowiska` jest tekstem rozdzielonym przecinkami, dokładnie jak

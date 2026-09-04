@@ -6,11 +6,11 @@
 // Zakres lokali bierzemy z górnego paska ManagerShell (selectedLokal) —
 // nie powtarzamy wyboru lokalu wewnątrz zakładki.
 import React, { useState } from "react";
-import { CalendarRange, SlidersHorizontal } from "lucide-react";
+import { CalendarRange, SlidersHorizontal, Eye, Pencil, Send } from "lucide-react";
 import GrafikWymagania from "./GrafikWymagania";
 import GrafikTydzien from "./GrafikTydzien";
 import { pageTitleCls, cardCls, btnPrimaryCls, btnSecondaryCls } from "./designTokens";
-import { toLocalYMD, mondayOf } from "../../utils/grafik";
+import { toLocalYMD, mondayOf, addDaysYMD, isUnpublished, publishWeek } from "../../utils/grafik";
 
 export default function Grafik({
   currentUser,
@@ -20,6 +20,7 @@ export default function Grafik({
   users,
   activeStanowiska,
   planShifts,
+  setPlanShifts,
   absences,
   staffingRules,
   setStaffingRules,
@@ -35,6 +36,8 @@ export default function Grafik({
   const [weekStart, setWeekStart] = useState(() => mondayOf(toLocalYMD(new Date())));
   const [sortBy, setSortBy] = useState("stanowisko");
   const [lokalOverride, setLokalOverride] = useState(null);
+  const [mode, setMode] = useState("podglad");
+  const [publishing, setPublishing] = useState(false);
 
   const lokaleNames =
     selectedLokal !== "ALL"
@@ -45,6 +48,42 @@ export default function Grafik({
   // wskazać osobno, bo wymagania obsady są per lokal.
   const lokalKonfiguracji =
     (lokaleNames.includes(lokalOverride) && lokalOverride) || lokaleNames[0] || null;
+
+  const weekEnd = addDaysYMD(weekStart, 6);
+  // Tylko lokale w zasięgu kierownika i tylko wyświetlany tydzień — inaczej
+  // licznik obiecywałby wysłanie czegoś, czego ta osoba nawet nie widzi.
+  const niewyslane = (planShifts || []).filter(
+    (s) =>
+      lokaleNames.includes(s.lokal) &&
+      s.date >= weekStart &&
+      s.date <= weekEnd &&
+      isUnpublished(s)
+  ).length;
+
+  const handlePublish = async () => {
+    if (
+      !window.confirm(
+        `Wysłać grafik pracownikom? Zmian do wysłania: ${niewyslane}. Każda osoba dostanie jedno powiadomienie.`
+      )
+    )
+      return;
+    setPublishing(true);
+    try {
+      const { updated, powiadomieni } = await publishWeek({
+        planShifts,
+        lokaleNames,
+        from: weekStart,
+        to: weekEnd,
+        actorName: currentUser?.name,
+      });
+      const mapa = new Map(updated.map((s) => [s.id, s]));
+      setPlanShifts((planShifts || []).map((s) => mapa.get(s.id) || s));
+      showMsg(`Grafik wysłany. Powiadomionych osób: ${powiadomieni}.`);
+    } catch (err) {
+      showMsg(`Błąd wysyłki grafiku: ${err.message || "nieznany błąd"}`, "error");
+    }
+    setPublishing(false);
+  };
 
   if (!lokalKonfiguracji) {
     return (
@@ -77,6 +116,37 @@ export default function Grafik({
             <SlidersHorizontal size={15} className="inline -mt-0.5 mr-1" /> Konfiguracja
           </button>
         </div>
+        {view === "tydzien" && (
+          <div className="flex gap-2 ml-2">
+            <button
+              onClick={() => setMode("podglad")}
+              className={mode === "podglad" ? btnPrimaryCls : btnSecondaryCls}
+            >
+              <Eye size={15} className="inline -mt-0.5 mr-1" /> Podgląd
+            </button>
+            <button
+              onClick={() => setMode("edycja")}
+              className={mode === "edycja" ? btnPrimaryCls : btnSecondaryCls}
+            >
+              <Pencil size={15} className="inline -mt-0.5 mr-1" /> Edycja
+            </button>
+          </div>
+        )}
+        {view === "tydzien" && mode === "edycja" && (
+          <button
+            onClick={handlePublish}
+            disabled={publishing || niewyslane === 0}
+            className={`ml-auto ${btnPrimaryCls}`}
+            title={
+              niewyslane === 0
+                ? "Wszystkie zmiany w tym tygodniu są już wysłane"
+                : `Niewysłanych zmian: ${niewyslane}`
+            }
+          >
+            <Send size={15} className="inline -mt-0.5 mr-1" /> Wyślij grafik pracownikom
+            {niewyslane > 0 ? ` (${niewyslane})` : ""}
+          </button>
+        )}
         {view === "konfiguracja" && lokaleNames.length > 1 && (
           <select
             value={lokalKonfiguracji}
@@ -114,6 +184,7 @@ export default function Grafik({
           users={users}
           activeStanowiska={activeStanowiska}
           planShifts={planShifts}
+          setPlanShifts={setPlanShifts}
           absences={absences}
           staffingRules={staffingRules}
           staffingRuleSets={staffingRuleSets}
@@ -122,6 +193,8 @@ export default function Grafik({
           setWeekStart={setWeekStart}
           sortBy={sortBy}
           setSortBy={setSortBy}
+          mode={mode}
+          showMsg={showMsg}
         />
       )}
     </div>

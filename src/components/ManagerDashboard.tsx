@@ -64,6 +64,7 @@ const ManagerDashboard = ({
   absences,
   setAbsences,
   planShifts,
+  setPlanShifts,
   staffingRules,
   setStaffingRules,
   staffingRuleSets,
@@ -1043,6 +1044,7 @@ const ManagerDashboard = ({
             users={users}
             activeStanowiska={activeStanowiska}
             planShifts={planShifts}
+            setPlanShifts={setPlanShifts}
             absences={absences}
             staffingRules={staffingRules}
             setStaffingRules={setStaffingRules}

@@ -10,7 +10,10 @@
 // Cała arytmetyka (dziury w obsadzie, godziny zmian, zmiany przez północ)
 // żyje w utils/grafik.ts — tu jest wyłącznie prezentacja.
 import React, { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, Download, AlertTriangle } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, AlertTriangle, Plus, CopyPlus } from "lucide-react";
+import { api } from "../../api/supabase";
+import { createEmployeeNotification } from "../../api/notifications";
+import GrafikZmianaModal, { GrafikBlokadaModal } from "./GrafikZmianaModal";
 import {
   sectionCardCls,
   btnPrimaryCls,
@@ -24,6 +27,9 @@ import {
   addDaysYMD,
   toLocalYMD,
   mondayOf,
+  findOverlappingPlanShift,
+  findBlockingAbsence,
+  buildCopyFromPreviousWeek,
 } from "../../utils/grafik";
 import { stanowiskoShort, stanowiskoBadgeStyle } from "../../utils/stanowiska";
 import { countWorkdays, URLOP_HOURS_PER_DAY } from "../../utils/absences";
@@ -100,6 +106,9 @@ function LokalSection({
   grafikWyjatki,
   sortBy,
   monthPrefix,
+  mode,
+  onCellClick,
+  onCopyPrevWeek,
 }) {
   const [forecast, setForecast] = useState({});
 
@@ -217,6 +226,8 @@ function LokalSection({
     URL.revokeObjectURL(url);
   };
 
+  const edycja = mode === "edycja";
+
   const renderCell = (user, dateStr) => {
     const own = planWeek.filter(
       (s) => s.lokal === lokal && s.date === dateStr && isSameUser(s, user)
@@ -226,8 +237,16 @@ function LokalSection({
         <div className="space-y-1">
           {own.map((s) => {
             const style = stanowiskoBadgeStyle(activeStanowiska, lokal, s.stanowisko);
+            const Wrapper = edycja ? "button" : "div";
             return (
-              <div key={s.id} className="flex items-center gap-1.5">
+              <Wrapper
+                key={s.id}
+                onClick={edycja ? () => onCellClick(user, dateStr, s) : undefined}
+                className={`flex items-center gap-1.5 w-full text-left ${
+                  edycja ? "hover:bg-[#F1F1EE] rounded px-1 -mx-1" : ""
+                }`}
+                title={edycja ? "Kliknij, aby edytować" : ""}
+              >
                 <span
                   className="px-1.5 py-0.5 rounded text-[11px] font-extrabold flex-shrink-0"
                   style={style || { backgroundColor: "#E7E7E2", color: "#171714" }}
@@ -238,9 +257,17 @@ function LokalSection({
                 <span className="text-[12px] tabular-nums whitespace-nowrap">
                   {trimTime(s.start_time)} – {trimTime(s.end_time)}
                 </span>
-              </div>
+              </Wrapper>
             );
           })}
+          {edycja && (
+            <button
+              onClick={() => onCellClick(user, dateStr, null)}
+              className="text-[11px] text-[#8F8E86] hover:text-[#171714] underline"
+            >
+              + druga zmiana
+            </button>
+          )}
         </div>
       );
     }
@@ -270,6 +297,18 @@ function LokalSection({
         <span className="text-[12px] text-[#8F8E86]">— w {gdzieIndziej.lokal}</span>
       );
     }
+    // Komórki z URP/NIE i "w innym lokalu" świadomie NIE dostają "+ dodaj":
+    // pierwszych nie wolno obsadzić, drugie to cudzy plan.
+    if (edycja) {
+      return (
+        <button
+          onClick={() => onCellClick(user, dateStr, null)}
+          className="w-full text-[12px] text-[#8F8E86] border-[2px] border-dashed border-[#B7B6AE] rounded px-2 py-1 hover:border-[#171714] hover:text-[#171714]"
+        >
+          <Plus size={12} className="inline -mt-0.5" /> dodaj
+        </button>
+      );
+    }
     return null;
   };
 
@@ -286,9 +325,16 @@ function LokalSection({
             {dniPodMinimum} {dniPodMinimum === 1 ? "dzień" : "dni"} pod minimum
           </span>
         )}
-        <button onClick={exportCsv} className={`ml-auto ${btnSecondaryCls}`}>
-          <Download size={15} className="inline -mt-0.5 mr-1" /> Eksport lokalu
-        </button>
+        <div className="ml-auto flex gap-2">
+          {mode === "edycja" && (
+            <button onClick={() => onCopyPrevWeek(lokal)} className={btnSecondaryCls}>
+              <CopyPlus size={15} className="inline -mt-0.5 mr-1" /> Kopiuj z poprzedniego tygodnia
+            </button>
+          )}
+          <button onClick={exportCsv} className={btnSecondaryCls}>
+            <Download size={15} className="inline -mt-0.5 mr-1" /> Eksport lokalu
+          </button>
+        </div>
       </div>
 
       <div className="overflow-x-auto">
@@ -446,6 +492,7 @@ export default function GrafikTydzien({
   users,
   activeStanowiska,
   planShifts,
+  setPlanShifts,
   absences,
   staffingRules,
   staffingRuleSets,
@@ -454,13 +501,149 @@ export default function GrafikTydzien({
   setWeekStart,
   sortBy,
   setSortBy,
+  mode,
+  showMsg,
 }) {
+  const [modalCtx, setModalCtx] = useState(null);
+  const [blokada, setBlokada] = useState(null);
   const weekDays = [0, 1, 2, 3, 4, 5, 6].map((i) => addDaysYMD(weekStart, i));
   // Tydzień na przełomie miesięcy przypisujemy do miesiąca swojego czwartku
   // (ta sama zasada co w ISO 8601 dla numeru tygodnia) — inaczej "31 sie –
   // 6 wrz" liczyłoby sumy miesięczne z sierpnia, mimo że sześć z siedmiu
   // dni to wrzesień.
   const monthPrefix = weekDays[3].slice(0, 7);
+
+  const openCell = (user, dateStr, shift, lokal) =>
+    setModalCtx({ user, date: dateStr, shift, lokal });
+
+  // Jedyne miejsce, które zapisuje zaplanowaną zmianę. Kolejność sprawdzeń
+  // jest istotna: najpierw zatwierdzone wolne (twarda odmowa), potem
+  // nakładające się godziny. Praca w dwóch lokalach jednego dnia i druga
+  // zmiana tego samego dnia są DOZWOLONE — patrz docs/GRAFIK.md.
+  const handleSave = async (data) => {
+    const user = (users || []).find((u) => String(u.id) === String(data.user_id));
+    const wolne = user ? findBlockingAbsence(absences, user, data.date) : null;
+    if (wolne) {
+      setBlokada({
+        userName: data.user_name,
+        tekst:
+          wolne.type === "urlop"
+            ? `${data.user_name} ma tego dnia zatwierdzony urlop (${wolne.start_date} – ${wolne.end_date}).`
+            : `${data.user_name} zgłosił(a) brak dostępności na ten dzień (${wolne.start_date} – ${wolne.end_date}).`,
+        podpowiedz:
+          "Dostępność zgłasza pracownik w swojej aplikacji. Aby to obejść, poproś o wycofanie zgłoszenia.",
+      });
+      return false;
+    }
+
+    const kolizja = findOverlappingPlanShift(planShifts, {
+      user_id: data.user_id,
+      user_name: data.user_name,
+      date: data.date,
+      start_time: data.start_time,
+      end_time: data.end_time,
+      excludeId: data.id,
+    });
+    if (kolizja) {
+      setBlokada({
+        userName: data.user_name,
+        tekst: `${data.user_name} ma już zmianę w lokalu ${kolizja.lokal} (${trimTime(
+          kolizja.start_time
+        )} – ${trimTime(kolizja.end_time)}, ${kolizja.date}), która nachodzi na te godziny.`,
+        podpowiedz:
+          "Blokujemy tylko nachodzące godziny — zmianę dzieloną (np. do 14:00 tu, od 14:00 gdzie indziej) można wpisać normalnie.",
+      });
+      return false;
+    }
+
+    try {
+      const payload = {
+        lokal: data.lokal,
+        user_id: data.user_id,
+        user_name: data.user_name,
+        stanowisko: data.stanowisko,
+        date: data.date,
+        start_time: data.start_time,
+        end_time: data.end_time,
+        updated_at: new Date().toISOString(),
+      };
+      if (data.id) {
+        const zapisana = await api.patch("grafik_shifts", data.id, payload);
+        setPlanShifts((planShifts || []).map((s) => (s.id === zapisana.id ? zapisana : s)));
+      } else {
+        const zapisana = await api.post("grafik_shifts", payload);
+        setPlanShifts([...(planShifts || []), zapisana]);
+      }
+      if (!data.dodajNastepna) setModalCtx(null);
+      return true;
+    } catch (err) {
+      showMsg(`Błąd zapisu zmiany: ${err.message || "nieznany błąd"}`, "error");
+      return false;
+    }
+  };
+
+  const handleDelete = async (shift) => {
+    if (!window.confirm("Usunąć tę zmianę z grafiku?")) return;
+    try {
+      await api.delete("grafik_shifts", shift.id);
+      setPlanShifts((planShifts || []).filter((s) => s.id !== shift.id));
+      setModalCtx(null);
+    } catch (err) {
+      showMsg(`Błąd usuwania: ${err.message || "nieznany błąd"}`, "error");
+    }
+  };
+
+  const handleCopyPrevWeek = async (lokal) => {
+    const { drafts, skipped } = buildCopyFromPreviousWeek({
+      planShifts,
+      absences,
+      users,
+      lokal,
+      weekStart,
+    });
+    if (drafts.length === 0) {
+      showMsg("Poprzedni tydzień jest pusty — nie ma czego skopiować.", "error");
+      return;
+    }
+    if (
+      !window.confirm(
+        `Skopiować ${drafts.length} zmian z poprzedniego tygodnia do ${lokal}?` +
+          (skipped.length > 0
+            ? `\n\nPominiętych: ${skipped.length} (wolne albo kolizja godzin).`
+            : "")
+      )
+    )
+      return;
+    try {
+      const utworzone = [];
+      for (const d of drafts) {
+        utworzone.push(
+          await api.post("grafik_shifts", { ...d, updated_at: new Date().toISOString() })
+        );
+      }
+      setPlanShifts([...(planShifts || []), ...utworzone]);
+      showMsg(
+        `Skopiowano ${utworzone.length} zmian.` +
+          (skipped.length > 0 ? ` Pominięto ${skipped.length}.` : "")
+      );
+    } catch (err) {
+      showMsg(`Błąd kopiowania: ${err.message || "nieznany błąd"}`, "error");
+    }
+  };
+
+  const handleNotify = async (powod) => {
+    try {
+      await createEmployeeNotification(
+        powod.userName,
+        `Kierownik próbował wpisać Ci zmianę, ale koliduje ona z Twoim zgłoszeniem. ${powod.tekst}`,
+        "grafik"
+      );
+      showMsg("Wysłano wiadomość do pracownika.");
+      setBlokada(null);
+    } catch (err) {
+      showMsg(`Nie udało się wysłać: ${err.message || "nieznany błąd"}`, "error");
+    }
+  };
 
   const legenda = [
     ...new Map(
@@ -561,6 +744,9 @@ export default function GrafikTydzien({
           grafikWyjatki={grafikWyjatki}
           sortBy={sortBy}
           monthPrefix={monthPrefix}
+          mode={mode}
+          onCellClick={(user, dateStr, shift) => openCell(user, dateStr, shift, lokal)}
+          onCopyPrevWeek={handleCopyPrevWeek}
         />
       ))}
 
@@ -568,9 +754,33 @@ export default function GrafikTydzien({
         <strong>URP</strong> — urlop zatwierdzony · <strong>NIE</strong> — pracownik
         zgłosił brak dostępności, nie da się tu wpisać zmiany · czerwony pasek przy
         nazwisku — kilka lokali lub stanowisk · szare "w ..." — tego dnia osoba ma
-        zmianę w innym lokalu. Tryb podglądu — wpisywanie zmian dochodzi w kolejnym
-        etapie.
+        zmianę w innym lokalu.{" "}
+        {mode === "edycja"
+          ? "Tryb edycji — zmiany nie są jeszcze wysłane pracownikom."
+          : "Tryb podglądu — przełącz na Edycję, żeby wpisywać zmiany."}
       </p>
+
+      {modalCtx && (
+        <GrafikZmianaModal
+          ctx={modalCtx}
+          users={users}
+          activeStanowiska={activeStanowiska}
+          lokaleNames={lokaleNames}
+          absences={absences}
+          staffingRules={staffingRules}
+          staffingRuleSets={staffingRuleSets}
+          grafikWyjatki={grafikWyjatki}
+          planShifts={planShifts}
+          onSave={handleSave}
+          onDelete={handleDelete}
+          onClose={() => setModalCtx(null)}
+        />
+      )}
+      <GrafikBlokadaModal
+        powod={blokada}
+        onClose={() => setBlokada(null)}
+        onNotify={handleNotify}
+      />
     </div>
   );
 }

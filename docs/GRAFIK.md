@@ -388,7 +388,7 @@ Branch: `feature/grafik`. Każdy etap osobno testowalny na Vercel Preview.
 | 1 | `utils/grafik.ts` — kontrola obsady (addytywne wymagania, dziury w godzinach, zmiany przez północ), porównanie plan/fakt; ładowanie nowych tabel w `App.tsx` jako osobne nieblokujące fetche (wzorzec `shift_edits`/`tasks`/`absences`) | nie |
 | 2 | Edytor **Wymagań obsady** + **godzin otwarcia lokalu** + `allowed_stanowiska` w karcie pracownika | tak |
 | 3 | ✅ **ZROBIONE** (0.16.0) — widok tygodnia w trybie Podgląd: `GrafikTydzien.tsx`, siatka per lokal, typy komórek (zmiana / URP / NIE / "w innym lokalu"), sumy dzienne i tygodniowe, sumy miesięczne przy pracowniku (godziny + zmiany + koszt), ostrzeżenia o niedoborze z rozpisaniem godzin, sortowanie, legenda, eksport CSV, prognoza pogody per dzień (`fetchDailyForecast`) | tak |
-| 4 | **Tryb Edycja** — modal "Przypisz zmianę", modal blokady, publikacja ("Wyślij grafik pracownikom") | tak |
+| 4 | ✅ **ZROBIONE** (0.17.0) — `GrafikZmianaModal.tsx` (przypisanie/edycja + modal blokady), przełącznik Podgląd/Edycja, "+ dodaj" i "+ druga zmiana" w komórkach, "Kopiuj z poprzedniego tygodnia", publikacja przez `publishWeek()` z jednym powiadomieniem na osobę. Blokada WYŁĄCZNIE na: zatwierdzone wolne + nachodzące godziny (`findOverlappingPlanShift`, testowane też dla zmian przez północ) | tak |
 | 5 | **Widok miesiąca** + eksport CSV | tak |
 | 6 | **Grafik u pracownika** (własna zakładka, mobile) | tak |
 | 7 | **Giełda zmian** — obie strony + limit 12 h | tak |
