@@ -5,6 +5,16 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.26.1 — 2026-09-05
+
+- W Raportach i kosztach oraz w Rejestrze Godzin **liczba godzin stoi w
+  stałej kolumnie**, a różnica plan/fakt jest na lewo od niej. Wcześniej
+  odznaka różnicy wchodziła za godziny i wiersze przestawały się zgadzać w
+  pionie.
+- W karcie pracownika z kontem otwartym (kiosk) doszło **pole e-mail** obok
+  PIN-u blokady — bez niego nie dało się nadać dostępu z prywatnego
+  telefonu. Pod spodem widać wprost, czy dana osoba ten dostęp już ma.
+
 ## 0.26.0 — 2026-09-05
 
 - **Tablet Służbowy na prywatnym telefonie pracownika.** To ten sam ekran co

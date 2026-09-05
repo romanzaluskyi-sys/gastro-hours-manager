@@ -399,38 +399,41 @@ export default function RejestrGodzin({
                           </>
                         )}
                       </span>
+                      {/* Różnica dotyczy CAŁEGO dnia tej osoby, nie tego
+                          jednego wpisu — przy dwóch zmianach jednego dnia
+                          pokazujemy ją więc raz, przy pierwszym wierszu.
+                          Stoi PRZED godzinami i ma stałą szerokość, żeby
+                          kolumna godzin nie skakała między wierszami. */}
+                      <span className="hidden md:block w-[62px] flex-shrink-0 text-right">
+                        {(() => {
+                          if (s.is_urlop) return null;
+                          const d = diffDnia(s);
+                          if (!d || Math.abs(d.diff) < PLAN_FAKT_PROG_H) return null;
+                          const klucz = `${d.userKey}|${d.date}`;
+                          if (pokazaneRoznice.has(klucz)) return null;
+                          pokazaneRoznice.add(klucz);
+                          return (
+                            <span
+                              className={`text-[11px] font-extrabold px-1.5 py-0.5 rounded ${
+                                d.diff > 0
+                                  ? "bg-[#E4F3E0] text-[#2F5E2A]"
+                                  : "bg-[#FAEAE6] text-[#8A3A2B]"
+                              }`}
+                              title={`Ten dzień: grafik ${d.planH
+                                .toFixed(1)
+                                .replace(".", ",")} h, odbito ${d.faktH
+                                .toFixed(1)
+                                .replace(".", ",")} h`}
+                            >
+                              {d.diff > 0 ? "+" : "−"}
+                              {Math.abs(d.diff).toFixed(1).replace(".", ",")} h
+                            </span>
+                          );
+                        })()}
+                      </span>
                       <span className="w-9 md:w-16 flex-shrink-0 text-right font-['Archivo'] font-extrabold text-[12px] md:text-sm tabular-nums">
                         {hours != null ? hours.toFixed(1).replace(".", ",") : "-"}
                       </span>
-                      {/* Różnica dotyczy CAŁEGO dnia tej osoby, nie tego
-                          jednego wpisu — przy dwóch zmianach jednego dnia
-                          pokazujemy ją więc tylko raz, przy pierwszym
-                          wierszu, żeby nie czytało się jak podwójna. */}
-                      {(() => {
-                        if (s.is_urlop) return null;
-                        const d = diffDnia(s);
-                        if (!d || Math.abs(d.diff) < PLAN_FAKT_PROG_H) return null;
-                        const klucz = `${d.userKey}|${d.date}`;
-                        if (pokazaneRoznice.has(klucz)) return null;
-                        pokazaneRoznice.add(klucz);
-                        return (
-                          <span
-                            className={`hidden md:inline text-[11px] font-extrabold px-1.5 py-0.5 rounded flex-shrink-0 ${
-                              d.diff > 0
-                                ? "bg-[#E4F3E0] text-[#2F5E2A]"
-                                : "bg-[#FAEAE6] text-[#8A3A2B]"
-                            }`}
-                            title={`Ten dzień: grafik ${d.planH
-                              .toFixed(1)
-                              .replace(".", ",")} h, odbito ${d.faktH
-                              .toFixed(1)
-                              .replace(".", ",")} h`}
-                          >
-                            {d.diff > 0 ? "+" : "−"}
-                            {Math.abs(d.diff).toFixed(1).replace(".", ",")} h
-                          </span>
-                        );
-                      })()}
                       <span
                         className={`hidden md:inline text-xs font-bold px-2 py-1 rounded flex-shrink-0 ${status.cls}`}
                       >

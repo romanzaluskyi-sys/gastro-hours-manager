@@ -23,6 +23,14 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.26.1",
+    date: "2026-09-05",
+    items: [
+      "Liczba godzin w stałej kolumnie, różnica plan/fakt na lewo od niej (Raporty i koszty, Rejestr Godzin).",
+      "Pole e-mail w karcie pracownika z kontem otwartym — potrzebne, żeby nadać dostęp z prywatnego telefonu.",
+    ],
+  },
+  {
     version: "0.26.0",
     date: "2026-09-05",
     items: [

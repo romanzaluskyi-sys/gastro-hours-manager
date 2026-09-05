@@ -421,34 +421,39 @@ export default function RaportyIKoszty({
                       </>
                     )}
                   </span>
+                  {/* Różnica PRZED liczbą godzin i w stałej szerokości —
+                      dzięki temu kolumna godzin stoi w jednej linii we
+                      wszystkich wierszach, także tych bez różnicy. */}
+                  <span className="w-[62px] flex-shrink-0 text-right">
+                    {(() => {
+                      if (s.is_urlop) return null;
+                      const d = diffDnia(s);
+                      if (!d || Math.abs(d.diff) < PLAN_FAKT_PROG_H) return null;
+                      const klucz = `${d.userKey}|${d.date}`;
+                      if (pokazaneRoznice.has(klucz)) return null;
+                      pokazaneRoznice.add(klucz);
+                      return (
+                        <span
+                          className={`text-[11px] font-extrabold px-1.5 py-0.5 rounded ${
+                            d.diff > 0
+                              ? "bg-[#E4F3E0] text-[#2F5E2A]"
+                              : "bg-[#FAEAE6] text-[#8A3A2B]"
+                          }`}
+                          title={`Ten dzień: grafik ${d.planH
+                            .toFixed(1)
+                            .replace(".", ",")} h, odbito ${d.faktH
+                            .toFixed(1)
+                            .replace(".", ",")} h`}
+                        >
+                          {d.diff > 0 ? "+" : "−"}
+                          {Math.abs(d.diff).toFixed(1).replace(".", ",")} h
+                        </span>
+                      );
+                    })()}
+                  </span>
                   <span className="w-16 flex-shrink-0 text-right font-['Archivo'] font-extrabold text-[14px] tabular-nums">
                     {s.end_time ? hoursOf(s).toFixed(1).replace(".", ",") : "-"}
                   </span>
-                  {(() => {
-                    if (s.is_urlop) return null;
-                    const d = diffDnia(s);
-                    if (!d || Math.abs(d.diff) < PLAN_FAKT_PROG_H) return null;
-                    const klucz = `${d.userKey}|${d.date}`;
-                    if (pokazaneRoznice.has(klucz)) return null;
-                    pokazaneRoznice.add(klucz);
-                    return (
-                      <span
-                        className={`text-[11px] font-extrabold px-1.5 py-0.5 rounded flex-shrink-0 ${
-                          d.diff > 0
-                            ? "bg-[#E4F3E0] text-[#2F5E2A]"
-                            : "bg-[#FAEAE6] text-[#8A3A2B]"
-                        }`}
-                        title={`Ten dzień: grafik ${d.planH
-                          .toFixed(1)
-                          .replace(".", ",")} h, odbito ${d.faktH
-                          .toFixed(1)
-                          .replace(".", ",")} h`}
-                      >
-                        {d.diff > 0 ? "+" : "−"}
-                        {Math.abs(d.diff).toFixed(1).replace(".", ",")} h
-                      </span>
-                    );
-                  })()}
                   <button
                     onClick={() => onEditShift(s)}
                     className="w-9 h-[30px] flex-shrink-0 border-[2px] border-[#B7B6AE] rounded flex items-center justify-center text-[#6E6E66] hover:border-[#171714] hover:text-[#171714]"
