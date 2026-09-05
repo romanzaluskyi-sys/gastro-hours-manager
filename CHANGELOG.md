@@ -5,6 +5,18 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.25.2 — 2026-09-05
+
+- Pulpit: szeroki kafelek "Godziny — ten miesiąc vs poprzedni" zmienił się w
+  zwykły ("Godziny w miesiącu", z procentem względem poprzedniego miesiąca),
+  więc wszystkie liczby stoją teraz w jednym rzędzie.
+- W Raportach i kosztach przy liście zmian pracownika widać **znacznik
+  różnicy na konkretnym dniu** — ten sam co w Rejestrze Godzin — obok
+  podsumowania, ile komuś wyszło ponad grafik albo poniżej.
+- W stopce siatki grafiku powtórzony **dzień tygodnia i data** przy sumie
+  osób i godzin: przy kilkunastu pracownikach nagłówek jest już poza
+  ekranem i nie było wiadomo, którego dnia dotyczy suma.
+
 ## 0.25.1 — 2026-09-05
 
 - **Zmiany osoby z wyłączonym kontem nie udają już obsady.** Gdy pracownik

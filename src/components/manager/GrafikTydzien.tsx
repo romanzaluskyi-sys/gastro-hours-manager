@@ -651,6 +651,13 @@ function LokalSection({
                   key={stat.date}
                   className="px-3 py-2 border-r-[2px] border-[#E7E7E2] last:border-r-0"
                 >
+                  {/* Data powtórzona w stopce: przy kilkunastu pracownikach
+                      nagłówek jest już poza ekranem i bez tego nie wiadomo,
+                      do którego dnia odnosi się suma. */}
+                  <div className="text-[11px] font-bold text-[#8F8E86] leading-none mb-1">
+                    {DZIEN_SKROT[new Date(stat.date + "T00:00:00").getDay()]}{" "}
+                    {fmtDay(stat.date)}
+                  </div>
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="text-[11px] text-[#6E6E66]">{stat.people} os.</span>
                     <span className="font-['Archivo'] font-extrabold text-[14px]">

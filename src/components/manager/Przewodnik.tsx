@@ -23,6 +23,15 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.25.2",
+    date: "2026-09-05",
+    items: [
+      "Wszystkie liczby na Pulpicie w jednym rzędzie — szeroki kafelek godzin stał się zwykłym.",
+      "W Raportach i kosztach znacznik różnicy plan/fakt przy konkretnym dniu, jak w Rejestrze Godzin.",
+      "Dzień tygodnia i data powtórzone w stopce siatki grafiku.",
+    ],
+  },
+  {
     version: "0.25.1",
     date: "2026-09-05",
     items: [

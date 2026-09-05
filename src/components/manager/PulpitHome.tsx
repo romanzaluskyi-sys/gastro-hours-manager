@@ -297,7 +297,7 @@ export default function PulpitHome({
         <h2 className={pageTitleCls}>Dziś w liczbach</h2>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-6">
         <div className={statTileCls}>
           <p className={statLabelCls}>Godziny dziś</p>
           <p className={statValueCls}>{fmtH(todayHours)}</p>
@@ -325,6 +325,19 @@ export default function PulpitHome({
           {monthCost.incomplete && (
             <p className="text-[12px] text-[#DE3A22] mt-0.5 flex items-center gap-1">
               <AlertTriangle size={12} /> dane niepełne (brak stawki)
+            </p>
+          )}
+        </div>
+        <div className={statTileCls}>
+          <p className={statLabelCls}>Godziny w miesiącu</p>
+          <p className={statValueCls}>{fmtH(monthHours)}</p>
+          {hoursDelta != null && (
+            <p className={statSubCls}>
+              vs poprzedni miesiąc{" "}
+              <strong className={hoursDelta >= 0 ? "" : "text-[#DE3A22]"}>
+                {hoursDelta >= 0 ? "+" : ""}
+                {hoursDelta}%
+              </strong>
             </p>
           )}
         </div>
@@ -367,23 +380,6 @@ export default function PulpitHome({
             wolne, {openProblems} zgłoszeń
           </p>
         </div>
-      </div>
-
-      <div className={`${statTileCls} mb-6 flex items-center justify-between`}>
-        <div>
-          <p className={statLabelCls}>Godziny — ten miesiąc vs poprzedni</p>
-          <p className={statValueCls}>{fmtH(monthHours)}</p>
-        </div>
-        {hoursDelta != null && (
-          <p
-            className={`font-['Archivo'] font-bold text-lg ${
-              hoursDelta >= 0 ? "text-[#171714]" : "text-[#DE3A22]"
-            }`}
-          >
-            {hoursDelta >= 0 ? "+" : ""}
-            {hoursDelta}%
-          </p>
-        )}
       </div>
 
       <div className="grid md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5 gap-4">
