@@ -1321,6 +1321,29 @@ uzasadnieniami. Poniżej tylko to, o co najłatwiej się potknąć:
   worek wiadomości wszystkich i pierwsza osoba oznaczała cudze jako
   przeczytane.
 
+- **Ostrzeżenia o obsadzie stoją WPROST w siatce** (0.28.0), nie w dymku —
+  `problemyObsady()` skleja dziury i nadmiary w jedną listę posortowaną po
+  godzinie, `ProblemyObsady` w `GrafikTydzien.tsx` rysuje je pod nagłówkiem
+  dnia i powtarza w stopce. Czerwone = brakuje, żółte = wpisano za dużo.
+  `coverageSegments()` (dawne `coverageGaps`) zwraca teraz `{ gaps,
+  nadmiary }`, a `checkDayCoverage` dokłada `nadmiary`/`hasNadmiar`/
+  `nadmiarMinutes`.
+  - **Nadmiar liczymy tylko dla stanowisk, które mają tego dnia jakiekolwiek
+    wymaganie.** Bez tego lokal z niewypełnioną konfiguracją świeciłby na
+    żółto od pierwszej wpisanej zmiany — "nie wiem, ilu ludzi trzeba" to nie
+    to samo co "jest ich za dużo".
+  - **`required === 0` dostaje znak `?`**, nie zwykłe "+N". To prawie zawsze
+    znaczy "wymagania na tę porę w ogóle nie wpisano", a nie nadmiar ludzi —
+    tak wychodzi np. w Bułce w soboty, gdzie reguła bazowa ma dni
+    `1,2,3,4,5,0` (bez soboty), więc dodatkowa sobotnia reguła "+1 os.
+    14:00–19:00" nie ma się do czego dodać.
+- **Druga zmiana w innym lokalu jest widoczna zawsze** (0.28.0). Wcześniej
+  wiersz "— w {lokal} HH:MM–HH:MM" pokazywał się TYLKO wtedy, gdy w oglądanym
+  lokalu osoba nie miała nic, i tylko dla pierwszej takiej zmiany
+  (`planWeek.find`). Osoba wypożyczona po południu gdzie indziej wyglądała
+  więc na wolną cały dzień. Dziś `gdzieIndziej` to `filter` po wszystkich
+  zmianach dnia poza tym lokalem, renderowany w każdej gałęzi komórki.
+
 ### 5b. Plan vs fakt — od 0.25.0
 
 `grafik_shifts` (plan) kontra `shifts` (fakt). Całość w `utils/grafik.ts`

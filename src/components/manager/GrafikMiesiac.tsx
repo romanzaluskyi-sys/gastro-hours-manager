@@ -114,6 +114,7 @@ export default function GrafikMiesiac({
   const sumaGodzin = zmianyLokalu.reduce((sum, s) => sum + shiftHours(s), 0);
   const ileOsob = new Set(zmianyLokalu.map((s) => s.user_id || s.user_name)).size;
   const dniBezObsady = dni.filter((d) => statyDnia[d].hasGap).length;
+  const dniZNadmiarem = dni.filter((d) => statyDnia[d].hasNadmiar).length;
 
   // Siatka zaczyna się od poniedziałku — puste kratki przed 1. dniem
   // miesiąca, żeby kolumny odpowiadały dniom tygodnia.
@@ -168,7 +169,12 @@ export default function GrafikMiesiac({
           </h3>
           <span className="text-[13px] text-[#6E6E66]">
             {Math.round(sumaGodzin)} h zaplanowane · {ileOsob} osób
-            {dniBezObsady > 0 ? ` · ${dniBezObsady} dni bez pełnej obsady` : ""}
+            {dniBezObsady > 0
+              ? ` · ${dniBezObsady} ${dniBezObsady === 1 ? "dzień" : "dni"} bez pełnej obsady`
+              : ""}
+            {dniZNadmiarem > 0
+              ? ` · ${dniZNadmiarem} ${dniZNadmiarem === 1 ? "dzień" : "dni"} z nadmiarem`
+              : ""}
           </span>
         </div>
 
@@ -202,15 +208,22 @@ export default function GrafikMiesiac({
                   <div className="flex items-baseline justify-between gap-1">
                     <span
                       className={`gp-day font-['Archivo'] font-extrabold text-[14px] ${
-                        stat.hasGap ? "text-[#DE3A22]" : "text-[#171714]"
-                      }`}
-                      title={
                         stat.hasGap
-                          ? stat.gaps
-                              .map((g) => `${g.stanowisko}: ${g.from}–${g.to}, brakuje ${g.missing}`)
-                              .join("\n")
-                          : ""
-                      }
+                          ? "text-[#DE3A22]"
+                          : stat.hasNadmiar
+                          ? "text-[#7A5B12]"
+                          : "text-[#171714]"
+                      }`}
+                      title={[
+                        ...stat.gaps.map(
+                          (g) =>
+                            `${g.stanowisko}: ${g.from}–${g.to}, brakuje ${g.missing}`
+                        ),
+                        ...stat.nadmiary.map(
+                          (g) =>
+                            `${g.stanowisko}: ${g.from}–${g.to}, ${g.nadmiar} os. ponad wymaganie`
+                        ),
+                      ].join("\n")}
                     >
                       {Number(d.slice(8))}
                     </span>

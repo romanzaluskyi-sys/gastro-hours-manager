@@ -23,6 +23,15 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.28.0",
+    date: "2026-09-05",
+    items: [
+      "Ostrzeżenia o obsadzie widać wprost w siatce Grafiku — czego brakuje, na jakim stanowisku i w jakich godzinach, bez najeżdżania kursorem.",
+      "Nowe ostrzeżenie na żółto: wpisano więcej osób, niż wynika z wymagań. Znak zapytania znaczy, że na tę porę wymagania w ogóle nie wpisano.",
+      "Druga zmiana pracownika w innym lokalu jest widoczna zawsze — wcześniej znikała, gdy miał już zmianę w oglądanym lokalu.",
+    ],
+  },
+  {
     version: "0.27.0",
     date: "2026-09-05",
     items: [

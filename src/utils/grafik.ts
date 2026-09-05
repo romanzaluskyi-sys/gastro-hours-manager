@@ -165,10 +165,17 @@ export const getRulesForDate = (
 // momencie zaplanowanych. Jedna osoba na całą zmianę i dwie osoby po pół
 // dnia spełniają je tak samo (ustalenie właściciela, patrz docs/GRAFIK.md).
 //
-// Zwraca listę dziur: { stanowisko, from, to, required, actual, missing }
-// z godzinami jako "HH:MM".
-export const coverageGaps = (rulesForDay, shiftsOnDay) => {
+// Zwraca DWIE listy odcinków: `gaps` (za mało osób) i `nadmiary` (za dużo).
+// Każdy odcinek to { stanowisko, from, to, minutes, required, actual,
+// missing, nadmiar } z godzinami jako "HH:MM".
+//
+// Nadmiar liczymy WYŁĄCZNIE dla stanowisk, które mają tego dnia jakiekolwiek
+// wymaganie. Bez tego ograniczenia lokal, w którym wymagań jeszcze nie
+// wpisano, świeciłby ostrzeżeniem od pierwszej wpisanej zmiany — a "nie wiem,
+// ilu ludzi tu trzeba" to nie to samo co "jest ich za dużo".
+export const coverageSegments = (rulesForDay, shiftsOnDay) => {
   const gaps = [];
+  const nadmiary = [];
   const stanowiska = [...new Set(rulesForDay.map((r) => r.stanowisko))];
 
   stanowiska.forEach((stanowisko) => {
@@ -193,7 +200,16 @@ export const coverageGaps = (rulesForDay, shiftsOnDay) => {
     });
     const sorted = [...points].sort((a, b) => a - b);
 
+    // Scalanie sąsiadujących odcinków o tej samej różnicy, żeby
+    // "14:00–19:00" nie rozpadało się na kilka wpisów tylko dlatego, że w
+    // środku ktoś inny zaczynał albo kończył zmianę.
     let current = null;
+    const zamknij = () => {
+      if (!current) return;
+      (current.actual < current.required ? gaps : nadmiary).push(current);
+      current = null;
+    };
+
     for (let i = 0; i < sorted.length - 1; i++) {
       const from = sorted[i];
       const to = sorted[i + 1];
@@ -209,30 +225,26 @@ export const coverageGaps = (rulesForDay, shiftsOnDay) => {
       }, 0);
       const actual = segments.filter(([a, b]) => mid >= a && mid < b).length;
 
-      if (actual < required) {
-        // Scalanie sąsiadujących odcinków o tym samym niedoborze, żeby
-        // "14:00–15:00" nie rozpadało się na kilka wpisów tylko dlatego,
-        // że w środku ktoś inny zaczynał zmianę.
-        if (
-          current &&
-          current.to === from &&
-          current.required === required &&
-          current.actual === actual
-        ) {
-          current.to = to;
-        } else {
-          if (current) gaps.push(current);
-          current = { stanowisko, from, to, required, actual };
-        }
-      } else if (current) {
-        gaps.push(current);
-        current = null;
+      if (actual === required) {
+        zamknij();
+        continue;
+      }
+      if (
+        current &&
+        current.to === from &&
+        current.required === required &&
+        current.actual === actual
+      ) {
+        current.to = to;
+      } else {
+        zamknij();
+        current = { stanowisko, from, to, required, actual };
       }
     }
-    if (current) gaps.push(current);
+    zamknij();
   });
 
-  return gaps.map((g) => ({
+  const opisz = (g) => ({
     stanowisko: g.stanowisko,
     from: minToTime(g.from),
     to: minToTime(g.to),
@@ -240,7 +252,35 @@ export const coverageGaps = (rulesForDay, shiftsOnDay) => {
     required: g.required,
     actual: g.actual,
     missing: g.required - g.actual,
-  }));
+    nadmiar: g.actual - g.required,
+  });
+
+  return { gaps: gaps.map(opisz), nadmiary: nadmiary.map(opisz) };
+};
+
+// Jedna lista problemów dnia, posortowana po godzinie — do pokazania WPROST
+// w siatce. Kierownik ma widzieć, czego brakuje, bez najeżdżania kursorem
+// na dymek (prośba właściciela): `typ` steruje kolorem (czerwony/żółty),
+// `ile` to liczba osób różnicy.
+export const problemyObsady = (stat) =>
+  [
+    ...((stat && stat.gaps) || []).map((g) => ({ ...g, typ: "brak", ile: g.missing })),
+    ...((stat && stat.nadmiary) || []).map((g) => ({ ...g, typ: "nadmiar", ile: g.nadmiar })),
+  ].sort((a, b) =>
+    a.from === b.from
+      ? a.stanowisko.localeCompare(b.stanowisko, "pl")
+      : a.from < b.from
+      ? -1
+      : 1
+  );
+
+// "08:30" → "8:30", "14:00" → "14" — w kolumnie dnia jest miejsce na jeden
+// krótki wiersz, a pełne "08:30–14:00" już się tam nie mieści.
+export const krotkaGodzina = (hhmm) => {
+  const t = trimTime(hhmm);
+  if (!t) return "";
+  const [h, m] = t.split(":");
+  return m === "00" ? String(Number(h)) : `${Number(h)}:${m}`;
 };
 
 // Kontrola obsady jednego dnia w jednym lokalu. `planShifts` to wszystkie
@@ -262,8 +302,9 @@ export const checkDayCoverage = (
     .map((s) => ({ ...s, __segments: shiftSegmentsOnDate(s, dateStr) }))
     .filter((s) => s.__segments.length > 0);
 
-  const gaps = coverageGaps(rulesForDay, shiftsOnDay);
+  const { gaps, nadmiary } = coverageSegments(rulesForDay, shiftsOnDay);
   const gapMinutes = gaps.reduce((sum, g) => sum + g.minutes * g.missing, 0);
+  const nadmiarMinutes = nadmiary.reduce((sum, g) => sum + g.minutes * g.nadmiar, 0);
   const own = (planShifts || []).filter(
     (s) => s.lokal === lokal && s.date === dateStr && !s.__nieaktywny
   );
@@ -272,8 +313,11 @@ export const checkDayCoverage = (
     date: dateStr,
     lokal,
     gaps,
+    nadmiary,
     gapMinutes,
+    nadmiarMinutes,
     hasGap: gaps.length > 0,
+    hasNadmiar: nadmiary.length > 0,
     // OSOBY, nie zmiany — jedna osoba może mieć tego dnia dwie zmiany
     // (dzielenie zmiany jest dozwolone, blokujemy tylko nakładanie godzin).
     people: new Set(own.map((s) => s.user_id || s.user_name)).size,

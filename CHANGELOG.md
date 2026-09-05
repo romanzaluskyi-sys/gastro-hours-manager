@@ -5,6 +5,21 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.28.0 — 2026-09-05
+
+- **Ostrzeżenia o obsadzie widać wprost w siatce Grafiku**, bez najeżdżania
+  kursorem na dymek. Pod każdym dniem stoi lista konkretów: czego brakuje,
+  na jakim stanowisku i w jakich godzinach.
+- **Nowe ostrzeżenie: za dużo osób.** Czerwone, gdy kogoś brakuje, żółte, gdy
+  wpisano więcej ludzi, niż wynika z wymagań obsady. W nagłówku lokalu i w
+  kalendarzu miesiąca doszedł licznik dni z nadmiarem.
+- Znak zapytania przy żółtym ostrzeżeniu znaczy, że na tę porę nie ma w ogóle
+  wpisanego wymagania — to najczęściej luka w konfiguracji, nie nadmiar ludzi.
+- **Druga zmiana pracownika jest wreszcie widoczna.** Jeśli ktoś ma tego dnia
+  zmianę też w innym lokalu, jego wiersz pokazuje ją zawsze — wcześniej
+  znikała, gdy w oglądanym lokalu miał już wpisaną własną zmianę, i dzień
+  wyglądał na wolny, mimo że był zajęty.
+
 ## 0.27.0 — 2026-09-05
 
 - **"Wyczyść tydzień" w Grafiku** — obok "Kopiuj z poprzedniego tygodnia",

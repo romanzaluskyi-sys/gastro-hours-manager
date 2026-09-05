@@ -41,6 +41,8 @@ import {
   buildCopyFromPreviousWeek,
   storedStanowiskaArr,
   isUnpublished,
+  problemyObsady,
+  krotkaGodzina,
 } from "../../utils/grafik";
 import { activeSwapFor, pendingSwapDelta } from "../../utils/swaps";
 import { addUrlopDirectly, addNiedostepnoscDirectly } from "../../utils/absences";
@@ -75,6 +77,51 @@ const absenceOn = (absences, user, dateStr) =>
       dateStr <= a.end_date &&
       (a.user_id ? String(a.user_id) === String(user.id) : a.user_name === user.name)
   ) || null;
+
+// Ostrzeżenia o obsadzie pokazywane WPROST w kolumnie dnia — czerwone, gdy
+// kogoś brakuje, żółte, gdy wpisano więcej osób, niż wynika z wymagań. Te
+// same dane siedziały wcześniej wyłącznie w dymku `title` i praktycznie nikt
+// ich nie oglądał; kierownik ma widzieć problem od razu, bez najeżdżania
+// kursorem (prośba właściciela).
+//
+// Definicja MUSI zostać na poziomie modułu — nagłówek tabeli przerysowuje się
+// co sekundę przez żywy zegar w ManagerShell, a komponent zdefiniowany w
+// środku innego komponentu byłby przy każdym tyknięciu nowym typem i React
+// montowałby go od nowa (patrz błąd #10 w CLAUDE.md).
+function ProblemyObsady({ stat, activeStanowiska, lokal }) {
+  const problemy = problemyObsady(stat);
+  if (problemy.length === 0) return null;
+  return (
+    <div className="mt-1 space-y-[2px] font-normal normal-case">
+      {problemy.map((p, i) => (
+        <div
+          key={`${p.stanowisko}-${p.from}-${p.typ}-${i}`}
+          className={`text-[10px] leading-[14px] font-bold rounded px-1 truncate ${
+            p.typ === "brak"
+              ? "bg-[#FAEAE6] text-[#8A3A2B]"
+              : "bg-[#FDF3D4] text-[#7A5B12]"
+          }`}
+          title={
+            `${p.stanowisko}, ${p.from}–${p.to}: ` +
+            (p.typ === "brak"
+              ? `brakuje ${p.ile} os. (potrzeba ${p.required}, jest ${p.actual})`
+              : p.required === 0
+              ? `${p.actual} os. poza wymaganiami — na tę porę nie ma wpisanego żadnego wymagania`
+              : `${p.ile} os. za dużo (potrzeba ${p.required}, jest ${p.actual})`)
+          }
+        >
+          {p.typ === "brak" ? "−" : "+"}
+          {p.ile} {stanowiskoShort(activeStanowiska, lokal, p.stanowisko)}{" "}
+          {krotkaGodzina(p.from)}–{krotkaGodzina(p.to)}
+          {/* "potrzeba 0" prawie zawsze znaczy "wymagania na tę porę w ogóle
+              nie wpisano", a nie "tylu ludzi tu nie trzeba" — bez tego
+              znaku kierownik czytałby brak konfiguracji jako nadmiar. */}
+          {p.typ === "nadmiar" && p.required === 0 ? " ?" : ""}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 const isSameUser = (planShift, user) =>
   planShift.user_id
@@ -224,6 +271,7 @@ function LokalSection({
     planWeek.filter((s) => s.lokal === lokal).map((s) => s.user_name)
   ).size;
   const dniPodMinimum = dayStats.filter((s) => s.hasGap).length;
+  const dniZNadmiarem = dayStats.filter((s) => s.hasNadmiar).length;
 
   const exportCsv = () => {
     const head = ["Pracownik", "Stanowisko", ...weekDays.map((d) => `${d}`)];
@@ -274,6 +322,38 @@ function LokalSection({
       .filter((sw) => sw.status === "przyjeta" && String(sw.taker_user_id) === String(user.id))
       .map((sw) => (planShifts || []).find((p) => String(p.id) === String(sw.grafik_shift_id)))
       .filter((p) => p && p.lokal === lokal && p.date === dateStr);
+
+    // Zmiany tej osoby tego dnia w INNYM lokalu. Wcześniej pokazywały się
+    // tylko wtedy, gdy w tym lokalu nie miała nic — więc druga zmiana osoby
+    // wypożyczonej gdzie indziej znikała z siatki i kierownik planował dzień,
+    // nie wiedząc, że jest już częściowo zajęty. Praca w dwóch lokalach
+    // jednego dnia jest dozwolona (blokujemy tylko nachodzące godziny), więc
+    // te wiersze pokazujemy ZAWSZE i zawsze dają się otworzyć do edycji.
+    const gdzieIndziej = planWeek.filter(
+      (s) => s.date === dateStr && s.lokal !== lokal && isSameUser(s, user)
+    );
+
+    const renderGdzieIndziej = () =>
+      gdzieIndziej.map((s) => (
+        <button
+          key={`inny-${s.id}`}
+          onClick={edycja ? () => onCellClick(user, dateStr, s) : undefined}
+          className="block w-full text-[12px] text-[#8F8E86] text-left hover:text-[#171714]"
+          title={
+            edycja
+              ? `Kliknij, aby edytować zmianę w ${s.lokal}`
+              : `Zmiana w lokalu ${s.lokal}`
+          }
+        >
+          — w {s.lokal} {trimTime(s.start_time)}–{trimTime(s.end_time)}
+          {isUnpublished(s) && (
+            <span className="text-[#DE3A22] font-extrabold" title="Niewysłane pracownikom">
+              {" "}
+              •
+            </span>
+          )}
+        </button>
+      ));
 
     const renderPrzychodzace = () =>
       przychodzace.map((p) => (
@@ -368,6 +448,7 @@ function LokalSection({
             );
           })}
           {renderPrzychodzace()}
+          {renderGdzieIndziej()}
           {edycja && (
             <button
               onClick={() => onCellClick(user, dateStr, null)}
@@ -384,6 +465,7 @@ function LokalSection({
       return (
         <div>
           {renderPrzychodzace()}
+          {renderGdzieIndziej()}
           {edycja && (
             <button
               onClick={() => onCellClick(user, dateStr, null)}
@@ -415,24 +497,13 @@ function LokalSection({
       );
     }
 
-    const gdzieIndziej = planWeek.find((s) => s.date === dateStr && isSameUser(s, user));
-    if (gdzieIndziej) {
-      // Praca w dwóch lokalach jednego dnia jest dozwolona (blokujemy tylko
-      // nachodzące godziny), więc ta komórka MUSI dawać się uzupełnić —
-      // wcześniej była martwa i nie dało się dopisać drugiej zmiany osobie,
-      // która tego dnia jest wypożyczona gdzie indziej.
+    if (gdzieIndziej.length > 0) {
+      // Ta komórka MUSI dawać się uzupełnić — wcześniej była martwa i nie
+      // dało się dopisać drugiej zmiany osobie wypożyczonej tego dnia gdzie
+      // indziej.
       return (
         <div>
-          <button
-            onClick={
-              edycja ? () => onCellClick(user, dateStr, gdzieIndziej) : undefined
-            }
-            className="text-[12px] text-[#8F8E86] text-left hover:text-[#171714]"
-            title={edycja ? `Kliknij, aby edytować zmianę w ${gdzieIndziej.lokal}` : ""}
-          >
-            — w {gdzieIndziej.lokal} {trimTime(gdzieIndziej.start_time)}–
-            {trimTime(gdzieIndziej.end_time)}
-          </button>
+          {renderGdzieIndziej()}
           {edycja && (
             <button
               onClick={() => onCellClick(user, dateStr, null)}
@@ -478,6 +549,15 @@ function LokalSection({
           <span className="text-[13px] font-bold text-[#DE3A22] flex items-center gap-1">
             <AlertTriangle size={14} />
             {dniPodMinimum} {dniPodMinimum === 1 ? "dzień" : "dni"} pod minimum
+          </span>
+        )}
+        {dniZNadmiarem > 0 && (
+          <span
+            className="text-[13px] font-bold text-[#7A5B12] flex items-center gap-1"
+            title="Wpisano więcej osób, niż wynika z wymagań obsady"
+          >
+            <AlertTriangle size={14} />
+            {dniZNadmiarem} {dniZNadmiarem === 1 ? "dzień" : "dni"} z nadmiarem
           </span>
         )}
         <div className="ml-auto flex gap-2">
@@ -555,25 +635,21 @@ function LokalSection({
                     </div>
                     <div
                       className={`flex items-center justify-between gap-2 text-[12px] font-bold mt-1 ${
-                        stat.hasGap ? "text-[#DE3A22]" : "text-[#171714]"
-                      }`}
-                      title={
                         stat.hasGap
-                          ? stat.gaps
-                              .map(
-                                (g) =>
-                                  `${g.stanowisko}: ${g.from}–${g.to}, brakuje ${g.missing}`
-                              )
-                              .join("\n")
-                          : ""
-                      }
+                          ? "text-[#DE3A22]"
+                          : stat.hasNadmiar
+                          ? "text-[#7A5B12]"
+                          : "text-[#171714]"
+                      }`}
                     >
                       <span>{stat.people} os.</span>
-                      <span>
-                        {fmtH(stat.hours)}
-                        {stat.hasGap ? " ⚠" : ""}
-                      </span>
+                      <span>{fmtH(stat.hours)}</span>
                     </div>
+                    <ProblemyObsady
+                      stat={stat}
+                      activeStanowiska={activeStanowiska}
+                      lokal={lokal}
+                    />
                   </th>
                 );
               })}
@@ -676,6 +752,14 @@ function LokalSection({
                       {fmtH(stat.hours)}
                     </span>
                   </div>
+                  {/* Ostrzeżenia powtórzone w stopce z tego samego powodu co
+                      data: przy kilkunastu pracownikach nagłówek jest już
+                      poza ekranem. */}
+                  <ProblemyObsady
+                    stat={stat}
+                    activeStanowiska={activeStanowiska}
+                    lokal={lokal}
+                  />
                 </td>
               ))}
             </tr>
