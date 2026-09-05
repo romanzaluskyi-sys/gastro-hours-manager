@@ -32,6 +32,7 @@ import {
   acceptSwap,
   activeSwapFor,
   canOfferSwap,
+  hoursUntilStart,
   offersForUser,
   claimedByUser,
   STATUS_LABEL,
@@ -1086,21 +1087,33 @@ export const EmployeeSessionScreens = ({
         )}
         <div className="mb-4" />
         <div className="flex-1" />
-        <button
-          onClick={() => handleCloseShift(null)}
-          disabled={saving}
-          className={ctaPrimaryCls}
-        >
-          Zakończ zmianę o {fmtHHMM(now)}
-        </button>
-        <button className={ctaSecondaryCls}>
-          Wybierz inną godzinę
-          <input
-            type="time"
-            onChange={(e) => e.target.value && handleCloseShift(e.target.value)}
-            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-          />
-        </button>
+        {/* Wyłączone "Wpisy" zabierają całą obsługę zmiany, także jej
+            zakończenie — inaczej pracownik mógłby zamknąć zmianę z telefonu
+            mimo że lokal tego nie udostępnia. Zmianę kończy wtedy na
+            Tablecie Służbowym. */}
+        {bloki.includes("WPISY") ? (
+          <>
+            <button
+              onClick={() => handleCloseShift(null)}
+              disabled={saving}
+              className={ctaPrimaryCls}
+            >
+              Zakończ zmianę o {fmtHHMM(now)}
+            </button>
+            <button className={ctaSecondaryCls}>
+              Wybierz inną godzinę
+              <input
+                type="time"
+                onChange={(e) => e.target.value && handleCloseShift(e.target.value)}
+                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+              />
+            </button>
+          </>
+        ) : (
+          <p className={helperTextCls}>
+            Zmianę kończysz na Tablecie Służbowym w lokalu.
+          </p>
+        )}
       </>
     );
   };
@@ -1541,6 +1554,17 @@ export const EmployeeSessionScreens = ({
                           na giełdę
                         </button>
                       )}
+                      {/* Brak przycisku wygląda jak awaria, jeśli nie wiadomo
+                          dlaczego go nie ma — mówimy wprost, że minął limit
+                          12 h. Dla zmian już rozpoczętych nic nie piszemy,
+                          tam to oczywiste. */}
+                      {!oferta &&
+                        !canOfferSwap(s) &&
+                        hoursUntilStart(s) > 0 && (
+                          <span className="ml-auto text-[11px] text-[#8F8E86]">
+                            za późno na giełdę
+                          </span>
+                        )}
                     </div>
                     <div className="text-[13px] text-[#6E6E66] mt-0.5">
                       {s.stanowisko} · {s.lokal}

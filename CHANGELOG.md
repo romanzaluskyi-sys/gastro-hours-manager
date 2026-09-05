@@ -5,6 +5,16 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.26.3 — 2026-09-05
+
+- **Wyłączone "Wpisy" zabierają też kończenie zmiany.** Ukryty był tylko
+  przycisk rozpoczęcia, więc osoba z trwającą zmianą mogła ją mimo wszystko
+  zamknąć z telefonu. Teraz w tym miejscu jest zdanie: zmianę kończysz na
+  Tablecie Służbowym.
+- Przy zmianie, której nie da się już wystawić na giełdę (mniej niż 12 h do
+  startu), widać **"za późno na giełdę"** zamiast pustego miejsca po
+  przycisku. Sam brak przycisku wyglądał jak awaria.
+
 ## 0.26.2 — 2026-09-05
 
 - **E-mail konta otwartego już się nie kasuje przy zapisie.** Zapis czyścił

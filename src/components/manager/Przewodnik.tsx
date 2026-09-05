@@ -23,6 +23,14 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.26.3",
+    date: "2026-09-05",
+    items: [
+      "Wyłączone 'Wpisy' ukrywają też kończenie zmiany — pracownik kończy ją wtedy na Tablecie Służbowym.",
+      "Przy zmianie mniej niż 12 h przed startem widać 'za późno na giełdę' zamiast pustego miejsca.",
+    ],
+  },
+  {
     version: "0.26.2",
     date: "2026-09-05",
     items: [
