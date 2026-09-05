@@ -23,6 +23,14 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.27.0",
+    date: "2026-09-05",
+    items: [
+      "'Wyczyść tydzień' obok 'Kopiuj z poprzedniego tygodnia' — tylko w trybie Edycja i tylko dla jednego lokalu, z potwierdzeniem podającym zakres i liczbę zmian.",
+      "W widoku dnia przycisk czyści tylko ten dzień.",
+    ],
+  },
+  {
     version: "0.26.3",
     date: "2026-09-05",
     items: [

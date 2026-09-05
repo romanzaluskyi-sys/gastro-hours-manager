@@ -5,6 +5,18 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.27.0 — 2026-09-05
+
+- **"Wyczyść tydzień" w Grafiku** — obok "Kopiuj z poprzedniego tygodnia",
+  widoczne tylko w trybie Edycja. Czyści grafik **jednego lokalu**, tego, w
+  którego nagłówku stoi przycisk; przy "Cała sieć" każdy lokal ma własny i
+  żaden nie rusza sąsiada.
+- Przed usunięciem pytamy o potwierdzenie z konkretami: nazwa lokalu, zakres
+  dat, ile zmian zniknie i ile z nich było już wysłanych. Wysłane zostają
+  zdjęte tą samą zasadą co pojedyncze usunięcie — pracownicy dowiedzą się
+  przy najbliższej wysyłce grafiku.
+- W widoku dnia przycisk nazywa się "Wyczyść dzień" i czyści tylko ten dzień.
+
 ## 0.26.3 — 2026-09-05
 
 - **Wyłączone "Wpisy" zabierają też kończenie zmiany.** Ukryty był tylko
