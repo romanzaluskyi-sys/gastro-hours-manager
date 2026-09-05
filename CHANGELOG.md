@@ -5,6 +5,16 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.26.2 — 2026-09-05
+
+- **E-mail konta otwartego już się nie kasuje przy zapisie.** Zapis czyścił
+  to pole dla wszystkich kont kiosku — reguła z czasów, gdy takie konto nie
+  logowało się w ogóle — więc dostępu z prywatnego telefonu nie dało się
+  nadać i logowanie mówiło "nie ma takiego użytkownika".
+- E-mail jest przy zapisie sprowadzany do małych liter i bez spacji, a
+  logowanie porównuje go tak samo. Klawiatura telefonu sama podnosi pierwszą
+  literę i to wystarczało, żeby logowanie nie działało bez widocznego powodu.
+
 ## 0.26.1 — 2026-09-05
 
 - W Raportach i kosztach oraz w Rejestrze Godzin **liczba godzin stoi w

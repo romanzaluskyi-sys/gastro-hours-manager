@@ -489,8 +489,17 @@ const ManagerDashboard = ({
     try {
       const dataToSave = { ...editingUser };
       if (dataToSave.role === "open") {
-        dataToSave.email = "";
+        // E-mail ZOSTAJE: razem z kiosk_pin daje pracownikowi dostęp do jego
+        // ekranów z prywatnego telefonu. Czyścimy tylko `pin` — sześciocyfrowy
+        // PIN logowania, którego konto otwarte nie używa (loguje się PIN-em
+        // blokady, patrz LoginScreen).
         dataToSave.pin = "";
+      }
+      // Logowanie porównuje e-mail dosłownie, a klawiatura telefonu lubi
+      // dopisać spację i wielką literę — normalizujemy przy zapisie, żeby
+      // "nie ma takiego użytkownika" nie brało się z niewidocznej różnicy.
+      if (typeof dataToSave.email === "string") {
+        dataToSave.email = dataToSave.email.trim().toLowerCase();
       }
       // Puste "" z <input type="date"> Postgres odrzuca jako nieprawidłową
       // datę (kolumna date, nullable) — trzeba jawnie zamienić na null.

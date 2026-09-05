@@ -23,6 +23,14 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.26.2",
+    date: "2026-09-05",
+    items: [
+      "E-mail konta otwartego nie kasuje się już przy zapisie — bez tego nie dało się nadać dostępu z prywatnego telefonu.",
+      "Logowanie nie rozróżnia wielkości liter ani spacji w e-mailu.",
+    ],
+  },
+  {
     version: "0.26.1",
     date: "2026-09-05",
     items: [

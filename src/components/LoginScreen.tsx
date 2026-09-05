@@ -33,8 +33,19 @@ const LoginScreen = ({
     // e-mail — ustalenie właściciela: kto jest chroniony PIN-em, ten ma
     // własny dostęp; kto nie ma PIN-u, nie ma i dostępu. Loguje się tym
     // samym PIN-em co na tablecie, żeby nie pamiętać dwóch.
+    // Porównanie bez rozróżniania wielkości liter i bez spacji — na telefonie
+    // klawiatura sama podnosi pierwszą literę, a stare wpisy w bazie mogą
+    // mieć dowolną pisownię.
+    const wpisany = email.trim().toLowerCase();
+    // Bez tego pusty e-mail zrównałby się z pustym e-mailem w bazie (konta
+    // otwarte miały go pustego do 0.26.1) i wystarczyłby sam PIN.
+    if (!wpisany || !pin) {
+      setError("Podaj e-mail i PIN.");
+      return;
+    }
     const user = users.find((u) => {
-      if (u.email !== email || !u.active || u.archived) return false;
+      if ((u.email || "").trim().toLowerCase() !== wpisany) return false;
+      if (!u.active || u.archived) return false;
       if (u.role === "open") return !!u.kiosk_pin && u.kiosk_pin === pin;
       return u.pin === pin;
     });
