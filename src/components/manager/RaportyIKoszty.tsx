@@ -339,12 +339,14 @@ export default function RaportyIKoszty({
               </button>
               <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                 <h3 className="font-['Archivo'] font-extrabold text-lg">{selectedUser.name}</h3>
-                <div className="text-right">
-                  <p className="font-['Archivo'] font-extrabold text-xl tabular-nums">
-                    {selectedHours.toFixed(1).replace(".", ",")} h
+                {/* Suma godzin z powrotem w jednej linii; szczegóły (plan vs
+                    fakt, urlop) po LEWEJ, żeby liczba główna została na
+                    swoim miejscu i nie rozpychała nagłówka. */}
+                <div className="flex items-baseline gap-4 ml-auto">
+                  <div className="text-right text-[12px] leading-tight">
                     {selectedPF &&
                       Math.abs(selectedPF.faktH - selectedPF.planH) >= PLAN_FAKT_PROG_H && (
-                        <span className="block text-[12px] font-normal">
+                        <div>
                           wg grafiku {selectedPF.planH.toFixed(1).replace(".", ",")} h ·{" "}
                           <span
                             className={
@@ -359,18 +361,23 @@ export default function RaportyIKoszty({
                               .replace(".", ",")}{" "}
                             h
                           </span>
-                        </span>
+                        </div>
                       )}
                     {selectedUrlop > 0 && (
-                      <span className="block text-[12px] font-normal text-[#6E6E66]">
-                        w tym urlop {selectedUrlop.toFixed(1).replace(".", ",")} h · bez
-                        urlopu {(selectedHours - selectedUrlop).toFixed(1).replace(".", ",")} h
-                      </span>
+                      <div className="text-[#6E6E66]">
+                        urlop {selectedUrlop.toFixed(1).replace(".", ",")} h · bez urlopu{" "}
+                        {(selectedHours - selectedUrlop).toFixed(1).replace(".", ",")} h
+                      </div>
                     )}
-                  </p>
-                  <p className="text-xs text-[#6E6E66]">
-                    {selectedCost != null ? `${selectedCost.toFixed(0)} zł` : "brak stawki"}
-                  </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-['Archivo'] font-extrabold text-xl tabular-nums whitespace-nowrap">
+                      {selectedHours.toFixed(1).replace(".", ",")} h
+                    </p>
+                    <p className="text-xs text-[#6E6E66]">
+                      {selectedCost != null ? `${selectedCost.toFixed(0)} zł` : "brak stawki"}
+                    </p>
+                  </div>
                 </div>
               </div>
 

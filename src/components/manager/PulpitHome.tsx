@@ -382,7 +382,7 @@ export default function PulpitHome({
         </div>
       </div>
 
-      <div className="grid md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5 gap-4">
+      <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
         <div className={sectionCardCls}>
           <div className={sectionHeaderCls}>
             <span>Wymaga Twojej decyzji</span>
