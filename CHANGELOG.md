@@ -5,6 +5,23 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.25.1 — 2026-09-05
+
+- **Zmiany osoby z wyłączonym kontem nie udają już obsady.** Gdy pracownik
+  odchodzi, jego zmiany zostawały w grafiku: znikały z siatki (bo znikał
+  cały wiersz), ale nadal liczyły się jako obsadzone — kierownik widział
+  "wszystko pokryte", choć na te zmiany nikt nie miał przyjść.
+  - Taka osoba **zostaje widoczna w siatce**, dopóki wiszą jej zmiany, z
+    podpisem "KONTO WYŁĄCZONE" i przekreślonymi zmianami — da się je komuś
+    przepisać albo usunąć.
+  - Jej zmiany **nie liczą się do obsady** ani do sum dnia, więc dzień
+    uczciwie pokazuje brak.
+  - Przy archiwizacji pracownika kierownik dostaje pytanie: *"ma jeszcze N
+    zmian w grafiku od dziś — zostaną zdjęte"*. Zdjęcie działa tą samą
+    zasadą co ręczne usuwanie: wysłane czekają na wysyłkę grafiku,
+    niewysłane znikają od razu.
+  - W widoku miesiąca i na wydruku takie zmiany są przekreślone.
+
 ## 0.25.0 — 2026-09-05
 
 - **Plan vs fakt — ile naprawdę wyszło godzin względem grafiku.**

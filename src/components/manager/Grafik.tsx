@@ -94,7 +94,19 @@ export default function Grafik({
   const dzisYMD = toLocalYMD(new Date());
   // Wiersze oznaczone do usunięcia znikają z widoków od razu; publikacja
   // dostaje surową listę, bo to ona je kasuje i informuje pracownika.
-  const zywePlanShifts = (planShifts || []).filter((s) => !s.deleted_at);
+  // Zmiany osób z wyłączonym kontem oznaczamy tu raz, a niżej wszystko już
+  // wie, że nie należy ich liczyć jako obsady (utils/grafik.ts) i że trzeba
+  // je pokazać z ostrzeżeniem (GrafikTydzien/GrafikMiesiac).
+  const nieaktywniIds = new Set(
+    (users || [])
+      .filter((u) => u.archived || u.active === false)
+      .map((u) => String(u.id))
+  );
+  const zywePlanShifts = (planShifts || [])
+    .filter((s) => !s.deleted_at)
+    .map((s) =>
+      nieaktywniIds.has(String(s.user_id)) ? { ...s, __nieaktywny: true } : s
+    );
   const niewyslaneWiersze = (planShifts || []).filter(
     (s) =>
       wszystkieLokaleNames.includes(s.lokal) &&

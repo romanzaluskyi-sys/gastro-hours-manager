@@ -253,14 +253,20 @@ export const checkDayCoverage = (
   dateStr
 ) => {
   const rulesForDay = getRulesForDate({ rules, ruleSets, wyjatki }, lokal, dateStr);
+  // Zmiany osób z wyłączonym kontem NIE liczą się jako obsada — ktoś, kto
+  // odszedł, na tę zmianę nie przyjdzie, a policzenie jej jako pokrytej
+  // ukrywałoby prawdziwą dziurę w grafiku. Wiersze zostają widoczne (patrz
+  // GrafikTydzien), żeby dało się je przepisać albo usunąć.
   const shiftsOnDay = (planShifts || [])
-    .filter((s) => s.lokal === lokal)
+    .filter((s) => s.lokal === lokal && !s.__nieaktywny)
     .map((s) => ({ ...s, __segments: shiftSegmentsOnDate(s, dateStr) }))
     .filter((s) => s.__segments.length > 0);
 
   const gaps = coverageGaps(rulesForDay, shiftsOnDay);
   const gapMinutes = gaps.reduce((sum, g) => sum + g.minutes * g.missing, 0);
-  const own = (planShifts || []).filter((s) => s.lokal === lokal && s.date === dateStr);
+  const own = (planShifts || []).filter(
+    (s) => s.lokal === lokal && s.date === dateStr && !s.__nieaktywny
+  );
 
   return {
     date: dateStr,
@@ -413,6 +419,19 @@ export const sumujPlanFakt = (mapa) => {
 // Zmiana jest "niewysłana", gdy nigdy nie została opublikowana albo została
 // zmieniona po ostatniej publikacji. Nie ma osobnej tabeli publikacji —
 // wystarczą dwa znaczniki czasu na samym wierszu.
+// Zmiany zaplanowane od danego dnia w przód dla osoby z wyłączonym kontem —
+// używane przy archiwizacji pracownika, żeby kierownik wiedział, co zostaje
+// w grafiku po jego odejściu.
+export const futureShiftsOfUser = (planShifts, user, fromDate) =>
+  (planShifts || []).filter(
+    (s) =>
+      !s.deleted_at &&
+      s.date >= fromDate &&
+      (s.user_id && user?.id
+        ? String(s.user_id) === String(user.id)
+        : s.user_name === user?.name)
+  );
+
 export const isUnpublished = (planShift) =>
   !planShift.published_at ||
   new Date(planShift.updated_at) > new Date(planShift.published_at);

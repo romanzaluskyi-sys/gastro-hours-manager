@@ -163,14 +163,17 @@ function LokalSection({
 
   // Wiersze: wszyscy przypisani do lokalu + każdy, kto ma tu w tym tygodniu
   // zaplanowaną zmianę (np. wyjątkowo, mimo innego lokalu domyślnego).
-  const rows = (users || []).filter(
-    (u) =>
-      !u.archived &&
-      u.active !== false &&
-      u.role !== "kiosk" &&
-      (u.default_lokal === lokal ||
-        planWeek.some((s) => s.lokal === lokal && isSameUser(s, u)))
-  );
+  // Osoba z wyłączonym kontem znika z listy "kogo mogę wpisać", ale MUSI
+  // zostać widoczna, dopóki wiszą jej zmiany — inaczej po odejściu
+  // pracownika jego zmiany stają się niewidzialne i nie da się ich nikomu
+  // przepisać ani usunąć (a obsada i tak jest wtedy dziurawa).
+  const rows = (users || []).filter((u) => {
+    if (u.role === "kiosk") return false;
+    const maTuZmiany = planWeek.some((s) => s.lokal === lokal && isSameUser(s, u));
+    const wylaczone = u.archived || u.active === false;
+    if (wylaczone) return maTuZmiany;
+    return u.default_lokal === lokal || maTuZmiany;
+  });
 
   const monthPlanFor = (u) =>
     (planShifts || []).filter((s) => s.date.startsWith(monthPrefix) && isSameUser(s, u));
@@ -185,6 +188,7 @@ function LokalSection({
     const stanowiskaOsoby = [...new Set(monthShifts.map((s) => s.stanowisko).filter(Boolean))];
     return {
       user: u,
+      wylaczone: u.archived || u.active === false,
       hours,
       // Ile godzin doszłoby/ubyło, gdyby oczekujące zamiany zostały
       // zatwierdzone — kierownik musi to widzieć przed decyzją.
@@ -293,7 +297,9 @@ function LokalSection({
                 className={`flex items-center gap-1.5 w-full text-left rounded px-1 -mx-1 ${
                   edycja ? "hover:brightness-95" : ""
                 } ${
-                  oferta
+                  s.__nieaktywny
+                    ? "bg-[#FAEAE6] line-through decoration-[#8A3A2B]"
+                    : oferta
                     ? oferta.status === "przyjeta"
                       ? "bg-[#E4F3E0]"
                       : "bg-[#FDF3D4]"
@@ -590,6 +596,11 @@ function LokalSection({
                       <div className="font-['Archivo'] font-bold text-[14px] truncate">
                         {meta.user.name}
                       </div>
+                      {meta.wylaczone && (
+                        <div className="text-[10px] font-extrabold text-[#8A3A2B] bg-[#FAEAE6] rounded px-1 inline-block">
+                          KONTO WYŁĄCZONE
+                        </div>
+                      )}
                       <div className="text-[11px] text-[#6E6E66] truncate">
                         {meta.user.default_stanowisko || "bez stanowiska"}
                       </div>

@@ -23,6 +23,14 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.25.1",
+    date: "2026-09-05",
+    items: [
+      "Zmiany pracownika z wyłączonym kontem nie liczą się już jako obsada — dzień pokazuje brak, a osoba zostaje widoczna z podpisem 'KONTO WYŁĄCZONE', żeby dało się je przepisać.",
+      "Archiwizacja pracownika pyta o jego przyszłe zmiany i zdejmuje je z grafiku.",
+    ],
+  },
+  {
     version: "0.25.0",
     date: "2026-09-05",
     items: [
