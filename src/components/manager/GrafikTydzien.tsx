@@ -18,6 +18,7 @@ import {
   Plus,
   CopyPlus,
   UserPlus,
+  Trash2,
 } from "lucide-react";
 import { api } from "../../api/supabase";
 import { createEmployeeNotification } from "../../api/notifications";
@@ -122,6 +123,7 @@ function LokalSection({
   mode,
   onCellClick,
   onCopyPrevWeek,
+  onClearRange,
   onAddEmployee,
   shiftSwaps,
   onResolveSwap,
@@ -482,6 +484,16 @@ function LokalSection({
           {mode === "edycja" && !trybDnia && (
             <button onClick={() => onCopyPrevWeek(lokal)} className={btnSecondaryCls}>
               <CopyPlus size={15} className="inline -mt-0.5 mr-1" /> Kopiuj z poprzedniego tygodnia
+            </button>
+          )}
+          {mode === "edycja" && (
+            <button
+              onClick={() => onClearRange(lokal)}
+              className="bg-white text-[#DE3A22] font-['Archivo'] font-bold text-sm px-4 py-2.5 rounded border-[2px] border-[#DE3A22] hover:bg-[#FAEAE6]"
+              title={`Usuwa grafik tylko tego lokalu (${lokal}) za oglądany zakres`}
+            >
+              <Trash2 size={15} className="inline -mt-0.5 mr-1" />{" "}
+              {trybDnia ? "Wyczyść dzień" : "Wyczyść tydzień"}
             </button>
           )}
           <button onClick={exportCsv} className={btnSecondaryCls}>
@@ -909,6 +921,70 @@ export default function GrafikTydzien({
     }
   };
 
+  // Wyczyszczenie całego oglądanego zakresu w JEDNYM lokalu. Przy "Cała
+  // sieć" i tak dotyczy tylko tego lokalu, bo przycisk stoi w jego
+  // nagłówku. Kasujemy tą samą zasadą co pojedyncze usunięcie: wysłane
+  // zostają z deleted_at i pracownicy dowiedzą się przy najbliższej
+  // wysyłce, niewysłane znikają od razu.
+  const handleClearRange = async (lokal) => {
+    const doUsuniecia = (planShifts || []).filter(
+      (s) =>
+        s.lokal === lokal &&
+        !s.deleted_at &&
+        s.date >= weekDays[0] &&
+        s.date <= weekDays[weekDays.length - 1]
+    );
+    if (doUsuniecia.length === 0) {
+      showMsg("W tym zakresie nie ma czego usuwać.", "error");
+      return;
+    }
+    const wyslanych = doUsuniecia.filter((s) => s.published_at).length;
+    const zakres =
+      weekDays.length === 1
+        ? weekDays[0]
+        : `${weekDays[0]} – ${weekDays[weekDays.length - 1]}`;
+    if (
+      !window.confirm(
+        `Usunąć CAŁY grafik lokalu ${lokal} za ${zakres}?\n\n` +
+          `Zmian do usunięcia: ${doUsuniecia.length}` +
+          (wyslanych > 0
+            ? `, w tym ${wyslanych} już wysłanych — pracownicy dowiedzą się o tym przy najbliższej wysyłce grafiku.`
+            : ".") +
+          `\n\nTej operacji nie da się cofnąć.`
+      )
+    )
+      return;
+    try {
+      const teraz = new Date().toISOString();
+      const zmienione = new Map();
+      const skasowane = new Set();
+      for (const zm of doUsuniecia) {
+        if (zm.published_at) {
+          const up = await api.patch("grafik_shifts", zm.id, {
+            deleted_at: teraz,
+            updated_at: teraz,
+          });
+          zmienione.set(String(up.id), up);
+        } else {
+          await api.delete("grafik_shifts", zm.id);
+          skasowane.add(String(zm.id));
+        }
+      }
+      setPlanShifts(
+        (planShifts || [])
+          .filter((s) => !skasowane.has(String(s.id)))
+          .map((s) => zmienione.get(String(s.id)) || s)
+      );
+      showMsg(
+        wyslanych > 0
+          ? `Usunięto ${doUsuniecia.length} zmian. Wyślij grafik, żeby pracownicy o tym wiedzieli.`
+          : `Usunięto ${doUsuniecia.length} zmian.`
+      );
+    } catch (err) {
+      showMsg(`Błąd usuwania: ${err.message || "nieznany błąd"}`, "error");
+    }
+  };
+
   const handleNotify = async (powod) => {
     try {
       await createEmployeeNotification(
@@ -1041,6 +1117,7 @@ export default function GrafikTydzien({
             openCell(user, dateStr, shift, lokal, oferta)
           }
           onCopyPrevWeek={handleCopyPrevWeek}
+          onClearRange={handleClearRange}
           onAddEmployee={openAddEmployee}
           shiftSwaps={shiftSwaps}
           onResolveSwap={onResolveSwap}
