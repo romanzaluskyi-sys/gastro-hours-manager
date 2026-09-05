@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React from "react";
-import { EmployeeSessionScreens } from "./employeeSessionShared";
+import { EmployeeSessionScreens, BLOKI_WSZYSTKIE } from "./employeeSessionShared";
+import { blokiLokalu } from "../utils/grafik";
 
 // ==========================================
 // OSOBISTY TELEFON PRACOWNIKA — nowy design, ten sam język co
@@ -48,6 +49,12 @@ const PersonalDashboard = ({
     (n) => n.user_name === currentUser.name
   );
   const unreadCount = myNotifications.filter((n) => !n.is_read).length;
+  // Prywatny telefon widzi tylko bloki włączone dla jego lokalu. Tablet
+  // Służbowy zostaje bez zmian — jest w lokalu, pod fizyczną kontrolą.
+  const bloki = currentUser.role === "open"
+    ? blokiLokalu((lokale || []).find((l) => l.name === currentUser.default_lokal))
+    : BLOKI_WSZYSTKIE;
+
 
   return (
     <EmployeeSessionScreens
@@ -68,6 +75,7 @@ const PersonalDashboard = ({
       setTaskCompletions={setTaskCompletions}
       absences={absences}
       planShifts={planShifts}
+      bloki={bloki}
       shiftSwaps={shiftSwaps}
       setShiftSwaps={setShiftSwaps}
       setAbsences={setAbsences}

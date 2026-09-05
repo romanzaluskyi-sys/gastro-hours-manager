@@ -28,14 +28,16 @@ const LoginScreen = ({
 
   const handleLogin = (e) => {
     e.preventDefault();
-    const user = users.find(
-      (u) =>
-        u.email === email &&
-        u.pin === pin &&
-        u.active &&
-        !u.archived &&
-        u.role !== "open"
-    );
+    // Pracownik kiosku (role "open") może zalogować się na PRYWATNYM
+    // telefonie tylko wtedy, gdy ma ustawiony PIN blokady (kiosk_pin) i
+    // e-mail — ustalenie właściciela: kto jest chroniony PIN-em, ten ma
+    // własny dostęp; kto nie ma PIN-u, nie ma i dostępu. Loguje się tym
+    // samym PIN-em co na tablecie, żeby nie pamiętać dwóch.
+    const user = users.find((u) => {
+      if (u.email !== email || !u.active || u.archived) return false;
+      if (u.role === "open") return !!u.kiosk_pin && u.kiosk_pin === pin;
+      return u.pin === pin;
+    });
     if (user) {
       setCurrentUser(user);
       if (

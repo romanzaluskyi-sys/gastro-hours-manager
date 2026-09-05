@@ -23,6 +23,15 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.26.0",
+    date: "2026-09-05",
+    items: [
+      "Pracownik z PIN-em blokady i e-mailem może wejść na swój Tablet Służbowy z prywatnego telefonu — tym samym PIN-em co na tablecie.",
+      "W Pracownicy → Lokale wybierasz raz dla całego lokalu, które bloki widzi pracownik na swoim telefonie (Wpisy, Raport, Grafik, Zadania, Wiadomości, Zgłoś, Wolne).",
+      "Sam Tablet Służbowy zostaje bez zmian — zawsze ma pełny zestaw.",
+    ],
+  },
+  {
     version: "0.25.2",
     date: "2026-09-05",
     items: [

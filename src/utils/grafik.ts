@@ -659,6 +659,38 @@ export const nextShiftFrom = (planShifts, user, fromDate) =>
         : a.date.localeCompare(b.date)
     )[0] || null;
 
+// --- DOSTĘPNE BLOKI (prywatny telefon) ---------------------------------
+// Kierownik ustawia to raz na LOKAL, nie na osobę. Prywatny telefon jest
+// kopią Tabletu Służbowego bez wyboru pracownika — więc te same klucze
+// sterują tym, co widać na obu, i to samo ustawienie chowa np. przycisk
+// "Rozpocznij zmianę" razem z zakładką Zmiana.
+export const BLOKI_PRACOWNIKA = [
+  { key: "WPISY", label: "Wpisy (rozpoczynanie i kończenie zmiany)" },
+  { key: "RAPORT", label: "Raport godzin (razem z „Popraw zmianę”)" },
+  { key: "GRAFIK", label: "Grafik" },
+  { key: "ZADANIA", label: "Zadania" },
+  { key: "WIADOMOSCI", label: "Wiadomości" },
+  { key: "ZGLOS_PROBLEM", label: "Zgłoś problem" },
+  { key: "WOLNE", label: "Wniosek o wolne / urlop" },
+];
+
+// Brak wartości = wszystko dostępne. Dzięki temu istniejące lokale nic nie
+// tracą po migracji, a kierownik zaczyna od pełnego zestawu i odejmuje.
+export const blokiLokalu = (lokalRow) => {
+  const raw = lokalRow?.dostepne_bloki;
+  // NULL = nigdy nie ustawiano, więc wszystko dostępne (tak działają lokale
+  // sprzed tej funkcji). Pusty string to co innego: kierownik świadomie
+  // odznaczył wszystko i pracownik ma widzieć tylko Pulpit i Więcej.
+  if (raw == null) return BLOKI_PRACOWNIKA.map((b) => b.key);
+  if (raw === "") return [];
+  return String(raw)
+    .split(",")
+    .map((x) => x.trim())
+    .filter(Boolean);
+};
+
+export const maBlok = (lokalRow, key) => blokiLokalu(lokalRow).includes(key);
+
 // --- STANOWISKA PRACOWNIKA ---------------------------------------------
 // `allowed_stanowiska` jest tekstem rozdzielonym przecinkami, dokładnie jak
 // istniejące `allowed_lokale` (patrz ManagerDashboard.tsx — join/split), a

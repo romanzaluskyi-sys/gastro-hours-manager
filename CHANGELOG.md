@@ -5,6 +5,24 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.26.0 — 2026-09-05
+
+- **Tablet Służbowy na prywatnym telefonie pracownika.** To ten sam ekran co
+  na tablecie, bez wyboru osoby — konto jest już konkretną osobą.
+  - Dostęp ma **tylko pracownik z ustawionym PIN-em blokady i e-mailem**.
+    Loguje się tym samym PIN-em co na tablecie. Kto nie ma PIN-u, nie ma
+    dostępu — nic się dla niego nie zmienia.
+  - Kierownik wybiera **raz na lokal** (Pracownicy → Lokale), które bloki są
+    dostępne: Wpisy, Raport, Grafik, Zadania, Wiadomości, Zgłoś problem,
+    Wniosek o wolne. "Popraw zmianę" chodzi razem z Raportem — bez listy
+    swoich zmian nie ma czego poprawiać.
+  - Wyłączony blok znika w całości: bez **Wpisów** nie ma zakładki Zmiana ani
+    przycisku "Rozpocznij zmianę", bez **Grafiku** nie ma na Pulpicie
+    najbliższej zmiany ani licznika do końca zmiany.
+  - **Tablet Służbowy zostaje bez zmian** — stoi w lokalu, pod fizyczną
+    kontrolą, i ma zawsze pełny zestaw.
+- Lokale sprzed tej zmiany mają wszystko włączone; nikt nic nie traci.
+
 ## 0.25.2 — 2026-09-05
 
 - Pulpit: szeroki kafelek "Godziny — ten miesiąc vs poprzedni" zmienił się w

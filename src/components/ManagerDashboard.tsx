@@ -637,6 +637,12 @@ const ManagerDashboard = ({
         const payload = {
           name: editingDict.name,
           miasto: editingDict.miasto || null,
+          // Lista kluczy po przecinku, jak allowed_lokale. NULL nie jest tym
+          // samym co pusty string: NULL = wszystko dostępne (tak zachowują
+          // się lokale sprzed tej funkcji), "" = nic nie jest dostępne.
+          dostepne_bloki: Array.isArray(editingDict.dostepne_bloki)
+            ? editingDict.dostepne_bloki.join(",")
+            : editingDict.dostepne_bloki ?? null,
         };
         if (editingDict.id) {
           const l = await api.patch("lokale", editingDict.id, payload);
