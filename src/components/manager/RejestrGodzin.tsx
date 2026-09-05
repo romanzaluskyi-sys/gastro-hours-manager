@@ -7,6 +7,12 @@
 import React, { useState } from "react";
 import { Plus, Download, History, Edit2, X } from "lucide-react";
 import { getShort, getDayOfWeek, getMonthName } from "../../utils/format";
+import {
+  buildPlanFactMap,
+  sumujPlanFakt,
+  toLocalYMD,
+  PLAN_FAKT_PROG_H,
+} from "../../utils/grafik";
 import { findStanowisko } from "../../utils/stanowiska";
 import {
   pageTitleCls,
@@ -38,6 +44,7 @@ const rowStatus = (shift, hasPendingCorrection) => {
 
 export default function RejestrGodzin({
   shifts,
+  planShifts = [],
   issues,
   shiftEdits,
   stanowiska,
@@ -51,6 +58,7 @@ export default function RejestrGodzin({
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("data");
   const [historyFor, setHistoryFor] = useState(null);
+  const [tylkoRoznice, setTylkoRoznice] = useState(false);
 
   const shiftMonth = (delta) => {
     let m = month + delta;
@@ -108,6 +116,41 @@ export default function RejestrGodzin({
   const urlopHours = periodShifts
     .filter((s) => s.is_urlop)
     .reduce((a, s) => a + (s.end_time ? (s.end_time - s.start_time) / 3600000 : 0), 0);
+  // Plan vs fakt liczony na sumach dnia (patrz utils/grafik.ts) — odporne na
+  // to, że ludzie wymieniają się między sobą bez systemu.
+  // Porównujemy tylko dni ZAMKNIĘTE: plan na cały miesiąc zestawiony z
+  // faktem za pięć dni dawałby "-82%" i nie znaczyłby nic. Dzisiejszy dzień
+  // też pomijamy — połowa ludzi jeszcze nie skończyła zmiany.
+  const wczorajYMD = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return toLocalYMD(d);
+  })();
+  const okresOd = toLocalYMD(new Date(year, month, 1));
+  const koniecMiesiaca = toLocalYMD(new Date(year, month + 1, 0));
+  const okresDo = koniecMiesiaca < wczorajYMD ? koniecMiesiaca : wczorajYMD;
+  const okresPusty = okresDo < okresOd;
+  const planFakt = buildPlanFactMap({
+    planShifts,
+    factShifts: shifts,
+    from: okresOd,
+    to: okresDo,
+    lokalOk: matchesFilter,
+  });
+  const pf = sumujPlanFakt(planFakt);
+  const diffDnia = (s) =>
+    planFakt.get(`${String(s.user_id || s.user_name || "")}|${toLocalYMD(s.start_time)}`);
+
+  // Filtr "tylko różnice" zawęża listę do dni, w których fakt rozjechał się
+  // z grafikiem o więcej niż próg. Nie ocenia, kto zawinił — pokazuje, gdzie
+  // w ogóle jest o czym rozmawiać.
+  const widoczneShifts = tylkoRoznice
+    ? periodShifts.filter((s) => {
+        const d = diffDnia(s);
+        return d && Math.abs(d.diff) >= PLAN_FAKT_PROG_H;
+      })
+    : periodShifts;
+
   const korektyCount = periodShifts.filter((s) => editsByShiftId[s.id]).length;
   const doDecyzjiCount = periodShifts.filter((s) => pendingByShiftId[s.id]).length;
   const otwarteCount = periodShifts.filter(
@@ -116,7 +159,7 @@ export default function RejestrGodzin({
 
   // --- grupowanie ---
   const groups = {};
-  periodShifts.forEach((s) => {
+  widoczneShifts.forEach((s) => {
     const key = s.stanowisko || "Bez stanowiska";
     (groups[key] = groups[key] || []).push(s);
   });
@@ -128,6 +171,9 @@ export default function RejestrGodzin({
     return sorted;
   };
   const groupNames = Object.keys(groups).sort();
+  // Zbierany w trakcie renderu — resetowany przy każdym przejściu, żeby
+  // odznaka różnicy pojawiła się raz na (osoba, dzień).
+  const pokazaneRoznice = new Set();
 
   const handleExportCsv = () => {
     const header = ["Data", "Pracownik", "Lokal", "Stanowisko", "Wejście", "Wyjście", "Godziny"];
@@ -218,8 +264,29 @@ export default function RejestrGodzin({
           <p className={statValueCls}>{doDecyzjiCount}</p>
         </div>
         <div className={statTileCls}>
-          <p className={statLabelCls}>Wpisy otwarte</p>
-          <p className={statValueCls}>{otwarteCount}</p>
+          <p className={statLabelCls}>Plan vs fakt</p>
+          <p
+            className={`${statValueCls} ${
+              Math.abs(pf.diff) < PLAN_FAKT_PROG_H
+                ? ""
+                : pf.diff > 0
+                ? "text-[#2F7A2A]"
+                : "text-[#DE3A22]"
+            }`}
+          >
+            {pf.diff >= 0 ? "+" : "−"}
+            {Math.abs(pf.diff).toFixed(1).replace(".", ",")} h
+          </p>
+          <p className={statSubCls}>
+            plan {pf.planH.toFixed(1).replace(".", ",")} h · fakt{" "}
+            {pf.faktH.toFixed(1).replace(".", ",")} h
+          </p>
+          <p className={statSubCls}>
+            {okresPusty
+              ? "brak zamkniętych dni"
+              : `${pf.rozbieznosci} dni z różnicą (do ${okresDo.slice(8)}.${okresDo.slice(5, 7)})`}
+            {otwarteCount > 0 ? ` · ${otwarteCount} wpisów otwartych` : ""}
+          </p>
         </div>
       </div>
 
@@ -231,6 +298,17 @@ export default function RejestrGodzin({
           placeholder="Szukaj po nazwisku, stanowisku, dacie lub godzinie..."
           className="flex-1 min-w-[220px] border-[2px] border-[#171714] rounded p-2.5 text-sm"
         />
+        <button
+          onClick={() => setTylkoRoznice((v) => !v)}
+          className={`px-3 py-2 rounded text-sm font-bold border-[2px] ${
+            tylkoRoznice
+              ? "bg-[#171714] text-white border-[#171714]"
+              : "bg-white text-[#171714] border-[#B7B6AE]"
+          }`}
+          title="Pokaż tylko dni, w których fakt różni się od grafiku"
+        >
+          Tylko różnice{pf.rozbieznosci > 0 ? ` (${pf.rozbieznosci})` : ""}
+        </button>
         <span className="text-xs text-[#8F8E86] uppercase font-bold">Sortuj</span>
         {[
           ["data", "Data"],
@@ -324,6 +402,35 @@ export default function RejestrGodzin({
                       <span className="w-9 md:w-16 flex-shrink-0 text-right font-['Archivo'] font-extrabold text-[12px] md:text-sm tabular-nums">
                         {hours != null ? hours.toFixed(1).replace(".", ",") : "-"}
                       </span>
+                      {/* Różnica dotyczy CAŁEGO dnia tej osoby, nie tego
+                          jednego wpisu — przy dwóch zmianach jednego dnia
+                          pokazujemy ją więc tylko raz, przy pierwszym
+                          wierszu, żeby nie czytało się jak podwójna. */}
+                      {(() => {
+                        if (s.is_urlop) return null;
+                        const d = diffDnia(s);
+                        if (!d || Math.abs(d.diff) < PLAN_FAKT_PROG_H) return null;
+                        const klucz = `${d.userKey}|${d.date}`;
+                        if (pokazaneRoznice.has(klucz)) return null;
+                        pokazaneRoznice.add(klucz);
+                        return (
+                          <span
+                            className={`hidden md:inline text-[11px] font-extrabold px-1.5 py-0.5 rounded flex-shrink-0 ${
+                              d.diff > 0
+                                ? "bg-[#E4F3E0] text-[#2F5E2A]"
+                                : "bg-[#FAEAE6] text-[#8A3A2B]"
+                            }`}
+                            title={`Ten dzień: grafik ${d.planH
+                              .toFixed(1)
+                              .replace(".", ",")} h, odbito ${d.faktH
+                              .toFixed(1)
+                              .replace(".", ",")} h`}
+                          >
+                            {d.diff > 0 ? "+" : "−"}
+                            {Math.abs(d.diff).toFixed(1).replace(".", ",")} h
+                          </span>
+                        );
+                      })()}
                       <span
                         className={`hidden md:inline text-xs font-bold px-2 py-1 rounded flex-shrink-0 ${status.cls}`}
                       >

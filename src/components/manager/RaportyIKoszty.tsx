@@ -10,6 +10,12 @@ import React, { useState, useEffect } from "react";
 import { Edit2, Download } from "lucide-react";
 import { getDayOfWeek, getMonthName } from "../../utils/format";
 import {
+  buildPlanFactMap,
+  sumujPlanFakt,
+  toLocalYMD,
+  PLAN_FAKT_PROG_H,
+} from "../../utils/grafik";
+import {
   pageTitleCls,
   sectionCardCls,
   sectionHeaderCls,
@@ -33,6 +39,7 @@ export default function RaportyIKoszty({
   onEditShift,
   selectedUserId,
   setSelectedUserId,
+  planShifts = [],
 }) {
   const [month, setMonth] = useState(new Date().getMonth());
   const [year, setYear] = useState(new Date().getFullYear());
@@ -89,6 +96,36 @@ export default function RaportyIKoszty({
   // Urlop jest zwykłym wierszem w shifts (8 h za dzień roboczy), więc wchodzi
   // do sum godzin i kosztów automatycznie — i tak ma być. Ale kierownik musi
   // widzieć, ILE z tych godzin to urlop, bo to nie jest czas na sali.
+  // Plan vs fakt za oglądany miesiąc — dla analityki, nie dla oceny. Urlop
+  // jest z tego wyłączony po stronie faktu (nie ma go w grafiku), więc
+  // porównujemy tylko realnie przepracowany czas.
+  // Porównujemy tylko dni ZAMKNIĘTE: plan na cały miesiąc zestawiony z
+  // faktem za pięć dni dawałby "-82%" i nie znaczyłby nic. Dzisiejszy dzień
+  // też pomijamy — połowa ludzi jeszcze nie skończyła zmiany.
+  const wczorajYMD = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return toLocalYMD(d);
+  })();
+  const okresOd = toLocalYMD(new Date(year, month, 1));
+  const koniecMiesiaca = toLocalYMD(new Date(year, month + 1, 0));
+  const okresDo = koniecMiesiaca < wczorajYMD ? koniecMiesiaca : wczorajYMD;
+  const okresPusty = okresDo < okresOd;
+  const planFaktMapa = buildPlanFactMap({
+    planShifts,
+    factShifts: shifts,
+    from: okresOd,
+    to: okresDo,
+    lokalOk: matchesFilter,
+  });
+  const pf = sumujPlanFakt(planFaktMapa);
+  const pfOsoby = {};
+  planFaktMapa.forEach((v) => {
+    const r = (pfOsoby[v.userKey] = pfOsoby[v.userKey] || { planH: 0, faktH: 0 });
+    r.planH += v.planH;
+    r.faktH += v.faktH;
+  });
+
   const urlopHours = periodShifts
     .filter((s) => s.is_urlop)
     .reduce((a, s) => a + hoursOf(s), 0);
@@ -120,6 +157,7 @@ export default function RaportyIKoszty({
         .sort((a, b) => a.start_time - b.start_time)
     : [];
   const selectedHours = selectedShifts.reduce((a, s) => a + hoursOf(s), 0);
+  const selectedPF = selectedUserId ? pfOsoby[String(selectedUserId)] : null;
   const selectedUrlop = selectedShifts
     .filter((s) => s.is_urlop)
     .reduce((a, s) => a + hoursOf(s), 0);
@@ -162,7 +200,7 @@ export default function RaportyIKoszty({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 mb-6">
         <div className={statTileCls}>
           <p className={statLabelCls}>Godziny</p>
           <p className={statValueCls}>{totalHours.toFixed(1).replace(".", ",")}</p>
@@ -181,6 +219,38 @@ export default function RaportyIKoszty({
         <div className={statTileCls}>
           <p className={statLabelCls}>Pracownicy</p>
           <p className={statValueCls}>{employeeRows.length}</p>
+        </div>
+        <div className={statTileCls}>
+          <p className={statLabelCls}>Plan vs fakt</p>
+          {okresPusty || (pf.planH === 0 && pf.faktH === 0) ? (
+            <>
+              <p className={statValueCls}>—</p>
+              <p className={statSubCls}>brak zamkniętych dni w tym okresie</p>
+            </>
+          ) : (
+            <>
+              <p
+                className={`${statValueCls} ${
+                  Math.abs(pf.diff) < PLAN_FAKT_PROG_H
+                    ? ""
+                    : pf.diff > 0
+                    ? "text-[#2F7A2A]"
+                    : "text-[#DE3A22]"
+                }`}
+              >
+                {pf.diff >= 0 ? "+" : "−"}
+                {Math.abs(pf.diff).toFixed(1).replace(".", ",")} h
+              </p>
+              <p className={statSubCls}>
+                plan {pf.planH.toFixed(1).replace(".", ",")} h · fakt{" "}
+                {pf.faktH.toFixed(1).replace(".", ",")} h
+                {pf.planH > 0
+                  ? ` (${((pf.diff / pf.planH) * 100).toFixed(1).replace(".", ",")}%)`
+                  : ""}
+              </p>
+              <p className={statSubCls}>za dni do {okresDo.slice(8)}.{okresDo.slice(5, 7)}</p>
+            </>
+          )}
         </div>
         <div className={statTileCls}>
           <p className={statLabelCls}>Śr. koszt/h</p>
@@ -264,6 +334,25 @@ export default function RaportyIKoszty({
                 <div className="text-right">
                   <p className="font-['Archivo'] font-extrabold text-xl tabular-nums">
                     {selectedHours.toFixed(1).replace(".", ",")} h
+                    {selectedPF &&
+                      Math.abs(selectedPF.faktH - selectedPF.planH) >= PLAN_FAKT_PROG_H && (
+                        <span className="block text-[12px] font-normal">
+                          wg grafiku {selectedPF.planH.toFixed(1).replace(".", ",")} h ·{" "}
+                          <span
+                            className={
+                              selectedPF.faktH > selectedPF.planH
+                                ? "text-[#2F7A2A] font-bold"
+                                : "text-[#DE3A22] font-bold"
+                            }
+                          >
+                            {selectedPF.faktH > selectedPF.planH ? "+" : "−"}
+                            {Math.abs(selectedPF.faktH - selectedPF.planH)
+                              .toFixed(1)
+                              .replace(".", ",")}{" "}
+                            h
+                          </span>
+                        </span>
+                      )}
                     {selectedUrlop > 0 && (
                       <span className="block text-[12px] font-normal text-[#6E6E66]">
                         w tym urlop {selectedUrlop.toFixed(1).replace(".", ",")} h · bez

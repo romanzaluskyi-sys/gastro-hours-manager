@@ -1059,6 +1059,7 @@ const ManagerDashboard = ({
             onEditShift={openEditShift}
             selectedUserId={reportUserId}
             setSelectedUserId={setReportUserId}
+            planShifts={planShifts}
           />
         )}
 
@@ -1364,6 +1365,7 @@ const ManagerDashboard = ({
             onEditShift={openEditShift}
             onNewShift={openNewShift}
             onNameClick={goToEmployeeReport}
+            planShifts={planShifts}
           />
         )}
 

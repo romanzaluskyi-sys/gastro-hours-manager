@@ -18,7 +18,12 @@ import {
 } from "./designTokens";
 import { isTaskDueOn, findSharedCompletion, toLocalYMD } from "../../utils/tasks";
 import { countWorkdays } from "../../utils/absences";
-import { shiftHours } from "../../utils/grafik";
+import {
+  shiftHours,
+  buildPlanFactMap,
+  sumujPlanFakt,
+  PLAN_FAKT_PROG_H,
+} from "../../utils/grafik";
 
 const ProgressRing = ({ pct, size = 36, stroke = 5 }) => {
   const r = (size - stroke) / 2;
@@ -168,6 +173,25 @@ export default function PulpitHome({
     (sw) => sw.status === "przyjeta" && matchesFilter(sw.lokal)
   );
 
+  // Plan vs fakt za WCZORAJ — dzień zamknięty, więc liczba jest już pełna
+  // (dziś połowa ludzi jeszcze nie skończyła zmiany i różnica nic nie znaczy).
+  // Rozbieżność to sygnał, nie zarzut: wymiany między sobą bez systemu są
+  // normalne i mają prawo się zdarzać.
+  const wczoraj = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return toLocalYMD(d);
+  })();
+  const pfWczoraj = sumujPlanFakt(
+    buildPlanFactMap({
+      planShifts,
+      factShifts: shifts,
+      from: wczoraj,
+      to: wczoraj,
+      lokalOk: matchesFilter,
+    })
+  );
+
   const decisionItems = [
     ...pendingCorrections.map((r) => ({
       kind: "correction",
@@ -305,6 +329,36 @@ export default function PulpitHome({
           )}
         </div>
         <div className={statTileCls}>
+          <p className={statLabelCls}>Wczoraj — plan vs fakt</p>
+          {pfWczoraj.planH === 0 && pfWczoraj.faktH === 0 ? (
+            <p className={statValueCls}>—</p>
+          ) : (
+            <>
+              <p
+                className={`${statValueCls} ${
+                  Math.abs(pfWczoraj.diff) < PLAN_FAKT_PROG_H
+                    ? ""
+                    : pfWczoraj.diff > 0
+                    ? "text-[#2F7A2A]"
+                    : "text-[#DE3A22]"
+                }`}
+              >
+                {pfWczoraj.diff >= 0 ? "+" : "−"}
+                {Math.abs(pfWczoraj.diff).toFixed(1).replace(".", ",")} h
+              </p>
+              <p className={statSubCls}>
+                plan {pfWczoraj.planH.toFixed(1).replace(".", ",")} h · fakt{" "}
+                {pfWczoraj.faktH.toFixed(1).replace(".", ",")} h
+              </p>
+              <p className={statSubCls}>
+                {pfWczoraj.rozbieznosci === 0
+                  ? "wszystko wg grafiku"
+                  : `${pfWczoraj.rozbieznosci} os. z różnicą`}
+              </p>
+            </>
+          )}
+        </div>
+        <div className={statTileCls}>
           <p className={statLabelCls}>Do decyzji</p>
           <p className={statValueCls}>{decisionItems.length}</p>
           <p className={statSubCls}>
@@ -332,7 +386,7 @@ export default function PulpitHome({
         )}
       </div>
 
-      <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5 gap-4">
         <div className={sectionCardCls}>
           <div className={sectionHeaderCls}>
             <span>Wymaga Twojej decyzji</span>

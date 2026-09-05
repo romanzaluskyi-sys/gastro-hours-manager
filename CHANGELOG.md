@@ -5,6 +5,24 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.25.0 — 2026-09-05
+
+- **Plan vs fakt — ile naprawdę wyszło godzin względem grafiku.**
+  - Na **Pulpicie** nowy kafelek "Wczoraj — plan vs fakt": plan, fakt i
+    różnica na plus lub minus.
+  - W **Rejestrze Godzin** kafelek "Wpisy otwarte" zastąpiony różnicą
+    plan/fakt za okres, przy wierszu widać różnicę dnia, a przycisk
+    **"Tylko różnice"** zawęża listę do dni, w których coś się rozjechało.
+  - W **Raportach i kosztach** różnica za miesiąc (z procentem) oraz przy
+    karcie pracownika, ile wyszło mu ponad grafik albo poniżej.
+- Porównujemy **sumy godzin w obrębie (osoba, dzień)**, nie parujemy zmiany
+  jedna do jednej — ludzie wymieniają się między sobą bez systemu i tylko
+  suma dnia jest na to odporna. Rozbieżność to sygnał dla kierownika, nie
+  zarzut wobec pracownika.
+- Liczymy tylko **dni zamknięte** (do wczoraj włącznie). Plan na cały miesiąc
+  zestawiony z faktem za kilka dni pokazywałby "−80%" i nie znaczyłby nic.
+- Różnice poniżej 15 minut są pomijane — to naturalny rozrzut odbić.
+
 ## 0.24.0 — 2026-09-05
 
 - **Tablet Służbowy pokazuje, o której kto ma być.** Przy osobie, która

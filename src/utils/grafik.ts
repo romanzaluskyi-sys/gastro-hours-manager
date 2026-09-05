@@ -332,6 +332,83 @@ export const factWithoutPlan = (factShifts, planShifts, lokal, dateStr) =>
         )
     );
 
+// --- PLAN vs FAKT -------------------------------------------------------
+// Porównujemy SUMY GODZIN w obrębie (osoba, dzień), a nie parujemy zmiana do
+// zmiany. Powód jest praktyczny: ludzie wymieniają się między sobą bez
+// systemu, ktoś wychodzi wcześniej i przychodzi zmiennik — parowanie
+// pojedynczych wpisów dawałoby wtedy bzdury, a suma dnia jest odporna na to
+// wszystko. Rozbieżność NIE jest tu traktowana jak wykroczenie: to sygnał
+// dla kierownika, nie oskarżenie (ustalenie właściciela).
+
+// Poniżej tej wartości nie ma o czym mówić — kilkanaście minut to naturalny
+// rozrzut odbić, nie zjawisko do analizy.
+export const PLAN_FAKT_PROG_H = 0.25;
+
+const kluczOsoby = (x) => String(x.user_id || x.user_name || "");
+
+export const planHoursOnDay = (planShifts, userKey, dateStr) =>
+  (planShifts || [])
+    .filter((s) => !s.deleted_at && s.date === dateStr && kluczOsoby(s) === userKey)
+    .reduce((sum, s) => sum + shiftHours(s), 0);
+
+export const factHoursOnDay = (factShifts, userKey, dateStr) =>
+  (factShifts || [])
+    .filter(
+      (s) =>
+        !s.is_urlop &&
+        s.end_time &&
+        s.start_time &&
+        toLocalYMD(s.start_time) === dateStr &&
+        kluczOsoby(s) === userKey
+    )
+    .reduce((sum, s) => sum + (s.end_time - s.start_time) / 3600000, 0);
+
+// Mapa "osoba|dzień" -> { planH, faktH, diff } dla zakresu dat. Buduje się z
+// obu stron naraz, więc łapie też dni, w których był plan bez faktu i fakt
+// bez planu — obie sytuacje są dozwolone i nie są tu wyróżniane.
+export const buildPlanFactMap = ({ planShifts, factShifts, from, to, lokalOk }) => {
+  const mapa = new Map();
+  const dodaj = (userKey, userName, dateStr) => {
+    const k = `${userKey}|${dateStr}`;
+    if (!mapa.has(k)) {
+      mapa.set(k, { userKey, userName, date: dateStr, planH: 0, faktH: 0 });
+    }
+    return mapa.get(k);
+  };
+  (planShifts || []).forEach((s) => {
+    if (s.deleted_at) return;
+    if (from && s.date < from) return;
+    if (to && s.date > to) return;
+    if (lokalOk && !lokalOk(s.lokal)) return;
+    dodaj(kluczOsoby(s), s.user_name, s.date).planH += shiftHours(s);
+  });
+  (factShifts || []).forEach((s) => {
+    if (s.is_urlop || !s.start_time || !s.end_time) return;
+    const dateStr = toLocalYMD(s.start_time);
+    if (from && dateStr < from) return;
+    if (to && dateStr > to) return;
+    if (lokalOk && !lokalOk(s.lokal)) return;
+    dodaj(kluczOsoby(s), s.user_name, dateStr).faktH +=
+      (s.end_time - s.start_time) / 3600000;
+  });
+  mapa.forEach((v) => {
+    v.diff = v.faktH - v.planH;
+  });
+  return mapa;
+};
+
+export const sumujPlanFakt = (mapa) => {
+  let planH = 0;
+  let faktH = 0;
+  let rozbieznosci = 0;
+  mapa.forEach((v) => {
+    planH += v.planH;
+    faktH += v.faktH;
+    if (Math.abs(v.diff) >= PLAN_FAKT_PROG_H) rozbieznosci += 1;
+  });
+  return { planH, faktH, diff: faktH - planH, rozbieznosci, dni: mapa.size };
+};
+
 // --- PUBLIKACJA ---------------------------------------------------------
 // Zmiana jest "niewysłana", gdy nigdy nie została opublikowana albo została
 // zmieniona po ostatniej publikacji. Nie ma osobnej tabeli publikacji —

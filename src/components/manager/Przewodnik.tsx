@@ -23,6 +23,15 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.25.0",
+    date: "2026-09-05",
+    items: [
+      "Plan vs fakt: kafelek 'Wczoraj' na Pulpicie, różnica za okres i filtr 'Tylko różnice' w Rejestrze Godzin, różnica miesiąca i per pracownik w Raportach.",
+      "Porównujemy sumy dnia, nie pojedyncze zmiany — wymiany między pracownikami bez systemu nie psują wtedy liczb.",
+      "Liczymy tylko dni zamknięte (do wczoraj) i pomijamy różnice poniżej 15 minut.",
+    ],
+  },
+  {
     version: "0.24.0",
     date: "2026-09-05",
     items: [
