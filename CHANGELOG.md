@@ -5,6 +5,23 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.24.0 — 2026-09-05
+
+- **Tablet Służbowy pokazuje, o której kto ma być.** Przy osobie, która
+  jeszcze nie odbiła, widnieje zielone "o 09:00" wg grafiku — obok
+  dotychczasowego czerwonego "od HH:MM" (zmiana trwa) i szarego "N godz."
+  (zmiana skończona).
+- Licznik nad listą mówi teraz prawdę: **ile osób jest na zmianie, ile wg
+  grafiku jeszcze nie odbiło i ile już zakończyło**. Wcześniej "jeszcze nie
+  odbiło" obejmowało też tych, którzy mają dziś wolne.
+- **Lista jest posortowana wg grafiku**: najpierw ci na zmianie, potem
+  oczekiwani dziś (wg godziny wejścia), potem ci po pracy, a osoby z wolnym
+  na końcu.
+- **Nowy widok "Dzień" w Grafiku kierownika**, obok "Tydzień" — jedna kolumna
+  zamiast siedmiu, więc szybka poprawka da się zrobić z telefonu. Nawigacja
+  chodzi wtedy po dniach, a "Miesiąc" i "Konfiguracja" odsunięte na bok jako
+  osobna para.
+
 ## 0.23.0 — 2026-09-04
 
 Pierwsze wydanie **Grafiku** — wszystko poniżej (0.15.0–0.22.0) trafia na

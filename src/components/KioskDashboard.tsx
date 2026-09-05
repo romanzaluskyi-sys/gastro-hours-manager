@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import { Lock, AlertCircle, Delete, ChevronLeft, Mail } from "lucide-react";
 import { getTodaysShiftsForUser } from "../utils/shifts";
 import { offersForUser, STATUS_LABEL } from "../utils/swaps";
-import { trimTime } from "../utils/grafik";
+import { trimTime, toLocalYMD } from "../utils/grafik";
 import {
   fmtHHMM,
   sumHours,
@@ -84,10 +84,55 @@ const KioskDashboard = ({
     allowed.includes(s.lokal_name)
   );
 
-  const workingCount = activeUsers.filter((u) =>
-    shifts.some((s) => s.user_id === u.id && !s.end_time)
-  ).length;
-  const notYetCount = activeUsers.length - workingCount;
+  // Stan każdej osoby na DZIŚ, liczony raz i używany zarówno przez licznik
+  // nad listą, jak i przez sortowanie i kafelki. "Jeszcze nie odbiło" liczymy
+  // WG GRAFIKU — kto ma dziś wolne, nie jest nikomu potrzebny na liście
+  // braków (wcześniej licznik brał wszystkich przypisanych do lokalu i
+  // pokazywał nieprawdę).
+  const dzisYMD = toLocalYMD(new Date());
+  const stanDnia = new Map(
+    activeUsers.map((u) => {
+      const otwarta = shifts.find((s) => s.user_id === u.id && !s.end_time);
+      const zamkniete = getTodaysShiftsForUser(shifts, u.id).filter((s) => s.end_time);
+      const zaplanowane = (planShifts || [])
+        .filter(
+          (s) =>
+            s.published_at &&
+            !s.deleted_at &&
+            s.date === dzisYMD &&
+            String(s.user_id) === String(u.id)
+        )
+        .sort((a, b) => trimTime(a.start_time).localeCompare(trimTime(b.start_time)));
+      const stan = otwarta
+        ? "na_zmianie"
+        : zamkniete.length > 0
+        ? "zakonczyl"
+        : zaplanowane.length > 0
+        ? "oczekiwany"
+        : "wolne";
+      return [u.id, { otwarta, zamkniete, zaplanowane, stan }];
+    })
+  );
+  const ile = (stan) => activeUsers.filter((u) => stanDnia.get(u.id).stan === stan).length;
+  const naZmianie = ile("na_zmianie");
+  const oczekiwani = ile("oczekiwany");
+  const zakonczyli = ile("zakonczyl");
+
+  // Kolejność: kto jest teraz na zmianie, potem kto jest dziś oczekiwany,
+  // potem kto już skończył, na końcu wolne. Na wspólnym tablecie to skraca
+  // szukanie siebie do jednego spojrzenia.
+  const KOLEJNOSC = { na_zmianie: 0, oczekiwany: 1, zakonczyl: 2, wolne: 3 };
+  const widoczniUsers = [...activeUsers].sort((a, b) => {
+    const sa = KOLEJNOSC[stanDnia.get(a.id).stan];
+    const sb = KOLEJNOSC[stanDnia.get(b.id).stan];
+    if (sa !== sb) return sa - sb;
+    if (sa === 1) {
+      const ga = trimTime(stanDnia.get(a.id).zaplanowane[0]?.start_time) || "99:99";
+      const gb = trimTime(stanDnia.get(b.id).zaplanowane[0]?.start_time) || "99:99";
+      if (ga !== gb) return ga.localeCompare(gb);
+    }
+    return a.name.localeCompare(b.name, "pl");
+  });
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
@@ -168,16 +213,16 @@ const KioskDashboard = ({
             </div>
             <div className="text-sm text-[#6E6E66] mt-0.5 mb-3.5">
               {activeUsers.length > 0
-                ? `${workingCount} os. na zmianie, ${notYetCount} jeszcze nie odbiło`
+                ? [
+                    `${naZmianie} na zmianie`,
+                    `${oczekiwani} wg grafiku jeszcze nie odbiło`,
+                    `${zakonczyli} zakończyło`,
+                  ].join(" · ")
                 : "Brak przypisanych pracowników"}
             </div>
-            {activeUsers.map((u) => {
-              const empOpen = shifts.find(
-                (s) => s.user_id === u.id && !s.end_time
-              );
-              const empClosedToday = getTodaysShiftsForUser(shifts, u.id).filter(
-                (s) => s.end_time
-              );
+            {widoczniUsers.map((u) => {
+              const { otwarta: empOpen, zamkniete: empClosedToday, zaplanowane } =
+                stanDnia.get(u.id);
               // Na wspólnym tablecie nikt nie wchodzi na cudzą stronę, więc
               // giełda musi być widoczna już na liście. Podświetlamy TYLKO
               // tych, którzy mogą coś wziąć — dla nich to zaproszenie do
@@ -249,6 +294,12 @@ const KioskDashboard = ({
                   ) : empClosedToday.length > 0 ? (
                     <span className="flex-shrink-0 text-[13px] font-semibold px-3 py-1.5 rounded bg-[#EAEAE5] text-[#4A4A43]">
                       {sumHours(empClosedToday).toFixed(1).replace(".", ",")} godz.
+                    </span>
+                  ) : zaplanowane.length > 0 ? (
+                    /* Trzeci stan obok "od HH:MM" (trwa) i "N godz."
+                       (skończone): o której ma dziś być wg grafiku. */
+                    <span className="flex-shrink-0 text-[13px] font-semibold px-3 py-1.5 rounded bg-[#E4F3E0] text-[#2F5E2A]">
+                      o {trimTime(zaplanowane[0].start_time)}
                     </span>
                   ) : null}
                 </button>

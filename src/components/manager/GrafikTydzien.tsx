@@ -118,6 +118,7 @@ function LokalSection({
   grafikWyjatki,
   sortBy,
   monthPrefix,
+  trybDnia,
   mode,
   onCellClick,
   onCopyPrevWeek,
@@ -455,7 +456,7 @@ function LokalSection({
       <div className="px-4 py-3 border-b-[2px] border-[#171714] flex flex-wrap items-center gap-3">
         <h3 className="font-['Archivo'] font-extrabold text-[16px]">{lokal}</h3>
         <span className="text-[13px] text-[#6E6E66]">
-          {osobyWTygodniu} osób · {fmtH(weekHours)} w tygodniu
+          {osobyWTygodniu} osób · {fmtH(weekHours)} {trybDnia ? "tego dnia" : "w tygodniu"}
         </span>
         {(() => {
           const nw = planWeek.filter((s) => s.lokal === lokal && isUnpublished(s)).length;
@@ -472,7 +473,7 @@ function LokalSection({
           </span>
         )}
         <div className="ml-auto flex gap-2">
-          {mode === "edycja" && (
+          {mode === "edycja" && !trybDnia && (
             <button onClick={() => onCopyPrevWeek(lokal)} className={btnSecondaryCls}>
               <CopyPlus size={15} className="inline -mt-0.5 mr-1" /> Kopiuj z poprzedniego tygodnia
             </button>
@@ -484,7 +485,7 @@ function LokalSection({
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse min-w-[1040px]">
+        <table className={`w-full border-collapse ${trybDnia ? "min-w-[340px]" : "min-w-[1040px]"}`}>
           <thead>
             <tr className="bg-[#F1F1EE]">
               <th className="text-left px-3 py-2 border-r-[2px] border-[#171714] w-[190px] min-w-[190px] align-top">
@@ -672,6 +673,10 @@ export default function GrafikTydzien({
   setWeekStart,
   sortBy,
   setSortBy,
+  // Widok dnia to ta sama siatka, tylko jedna kolumna — dzięki temu
+  // wpisywanie, kontrola obsady i sumy działają identycznie, a na telefonie
+  // jedna kolumna wreszcie mieści się na ekranie.
+  trybDnia = false,
   mode,
   shiftSwaps,
   onResolveSwap,
@@ -682,12 +687,15 @@ export default function GrafikTydzien({
 }) {
   const [modalCtx, setModalCtx] = useState(null);
   const [blokada, setBlokada] = useState(null);
-  const weekDays = [0, 1, 2, 3, 4, 5, 6].map((i) => addDaysYMD(weekStart, i));
+  const krok = trybDnia ? 1 : 7;
+  const weekDays = (trybDnia ? [0] : [0, 1, 2, 3, 4, 5, 6]).map((i) =>
+    addDaysYMD(weekStart, i)
+  );
   // Tydzień na przełomie miesięcy przypisujemy do miesiąca swojego czwartku
   // (ta sama zasada co w ISO 8601 dla numeru tygodnia) — inaczej "31 sie –
   // 6 wrz" liczyłoby sumy miesięczne z sierpnia, mimo że sześć z siedmiu
   // dni to wrzesień.
-  const monthPrefix = weekDays[3].slice(0, 7);
+  const monthPrefix = (trybDnia ? weekDays[0] : weekDays[3]).slice(0, 7);
 
   const openCell = (user, dateStr, shift, lokal, oferta) =>
     setModalCtx({ user, date: dateStr, shift, lokal, oferta: oferta || null });
@@ -909,24 +917,34 @@ export default function GrafikTydzien({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <button
-          onClick={() => setWeekStart(addDaysYMD(weekStart, -7))}
+          onClick={() => setWeekStart(addDaysYMD(weekStart, -krok))}
           className={btnSecondaryCls}
-          title="Poprzedni tydzień"
+          title={trybDnia ? "Poprzedni dzień" : "Poprzedni tydzień"}
         >
           <ChevronLeft size={16} />
         </button>
         <span className="font-['Archivo'] font-extrabold text-[16px] min-w-[220px] text-center">
-          {fmtRange(weekDays[0], weekDays[6])}
+          {trybDnia
+            ? new Date(weekDays[0] + "T00:00:00").toLocaleDateString("pl-PL", {
+                weekday: "long",
+                day: "numeric",
+                month: "long",
+              })
+            : fmtRange(weekDays[0], weekDays[6])}
         </span>
         <button
-          onClick={() => setWeekStart(addDaysYMD(weekStart, 7))}
+          onClick={() => setWeekStart(addDaysYMD(weekStart, krok))}
           className={btnSecondaryCls}
-          title="Następny tydzień"
+          title={trybDnia ? "Następny dzień" : "Następny tydzień"}
         >
           <ChevronRight size={16} />
         </button>
         <button
-          onClick={() => setWeekStart(mondayOf(toLocalYMD(new Date())))}
+          onClick={() =>
+            setWeekStart(
+              trybDnia ? toLocalYMD(new Date()) : mondayOf(toLocalYMD(new Date()))
+            )
+          }
           className={btnPrimaryCls}
         >
           Dziś
@@ -934,9 +952,12 @@ export default function GrafikTydzien({
         <input
           type="date"
           value={weekStart}
-          onChange={(e) => e.target.value && setWeekStart(mondayOf(e.target.value))}
+          onChange={(e) =>
+            e.target.value &&
+            setWeekStart(trybDnia ? e.target.value : mondayOf(e.target.value))
+          }
           className="p-2 border-[2px] border-[#171714] rounded"
-          title="Skocz do tygodnia z tą datą"
+          title={trybDnia ? "Skocz do dnia" : "Skocz do tygodnia z tą datą"}
         />
 
         <div className="ml-auto flex items-center gap-2">
@@ -996,6 +1017,7 @@ export default function GrafikTydzien({
           grafikWyjatki={grafikWyjatki}
           sortBy={sortBy}
           monthPrefix={monthPrefix}
+          trybDnia={trybDnia}
           mode={mode}
           onCellClick={(user, dateStr, shift, oferta) =>
             openCell(user, dateStr, shift, lokal, oferta)

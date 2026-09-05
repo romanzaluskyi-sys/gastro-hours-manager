@@ -6,7 +6,15 @@
 // Zakres lokali bierzemy z górnego paska ManagerShell (selectedLokal) —
 // nie powtarzamy wyboru lokalu wewnątrz zakładki.
 import React, { useState } from "react";
-import { CalendarRange, CalendarDays, SlidersHorizontal, Eye, Pencil, Send } from "lucide-react";
+import {
+  CalendarRange,
+  CalendarDays,
+  CalendarCheck,
+  SlidersHorizontal,
+  Eye,
+  Pencil,
+  Send,
+} from "lucide-react";
 import GrafikWymagania from "./GrafikWymagania";
 import GrafikTydzien from "./GrafikTydzien";
 import GrafikMiesiac from "./GrafikMiesiac";
@@ -46,6 +54,9 @@ export default function Grafik({
 }) {
   const [view, setView] = useState("tydzien");
   const [weekStart, setWeekStart] = useState(() => mondayOf(toLocalYMD(new Date())));
+  // Widok dnia ma własną kotwicę: przeskakiwanie tydzień <-> dzień nie może
+  // gubić daty, na którą kierownik właśnie patrzy.
+  const [dayStart, setDayStart] = useState(() => toLocalYMD(new Date()));
   const [sortBy, setSortBy] = useState("stanowisko");
   const [lokalOverride, setLokalOverride] = useState(null);
   const [mode, setMode] = useState("podglad");
@@ -150,7 +161,23 @@ export default function Grafik({
           </button>
           <button
             onClick={() => {
-              setMonth(addDaysYMD(weekStart, 3).slice(0, 7));
+              // wejście w dzień z tygodnia: zostań w oglądanym tygodniu
+              if (view === "tydzien" && (dayStart < weekStart || dayStart > addDaysYMD(weekStart, 6))) {
+                setDayStart(weekStart);
+              }
+              setView("dzien");
+            }}
+            className={view === "dzien" ? btnPrimaryCls : btnSecondaryCls}
+          >
+            <CalendarCheck size={15} className="inline -mt-0.5 mr-1" /> Dzień
+          </button>
+        </div>
+        <div className="flex gap-2 ml-3">
+          <button
+            onClick={() => {
+              setMonth(
+                (view === "dzien" ? dayStart : addDaysYMD(weekStart, 3)).slice(0, 7)
+              );
               setView("miesiac");
             }}
             className={view === "miesiac" ? btnPrimaryCls : btnSecondaryCls}
@@ -164,7 +191,7 @@ export default function Grafik({
             <SlidersHorizontal size={15} className="inline -mt-0.5 mr-1" /> Konfiguracja
           </button>
         </div>
-        {view === "tydzien" && (
+        {(view === "tydzien" || view === "dzien") && (
           <div className="flex gap-2 ml-2">
             <button
               onClick={() => setMode("podglad")}
@@ -180,7 +207,7 @@ export default function Grafik({
             </button>
           </div>
         )}
-        {view === "tydzien" && (
+        {(view === "tydzien" || view === "dzien") && (
           <button
             onClick={handlePublish}
             disabled={publishing || niewyslane === 0}
@@ -244,7 +271,7 @@ export default function Grafik({
           currentUser={currentUser}
           showMsg={showMsg}
         />
-      ) : view === "tydzien" ? (
+      ) : view === "tydzien" || view === "dzien" ? (
         <GrafikTydzien
           lokaleNames={lokaleNames}
           allLokaleNames={wszystkieLokaleNames}
@@ -258,8 +285,9 @@ export default function Grafik({
           staffingRules={staffingRules}
           staffingRuleSets={staffingRuleSets}
           grafikWyjatki={grafikWyjatki}
-          weekStart={weekStart}
-          setWeekStart={setWeekStart}
+          weekStart={view === "dzien" ? dayStart : weekStart}
+          setWeekStart={view === "dzien" ? setDayStart : setWeekStart}
+          trybDnia={view === "dzien"}
           sortBy={sortBy}
           setSortBy={setSortBy}
           mode={mode}

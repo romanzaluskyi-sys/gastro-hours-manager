@@ -23,6 +23,14 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.24.0",
+    date: "2026-09-05",
+    items: [
+      "Tablet Służbowy: zielone 'o HH:MM' przy osobie oczekiwanej wg grafiku, uczciwy licznik (na zmianie / jeszcze nie odbiło / zakończyło) i lista posortowana wg grafiku.",
+      "Nowy widok 'Dzień' w Grafiku — jedna kolumna zamiast siedmiu, do szybkich poprawek z telefonu.",
+    ],
+  },
+  {
     version: "0.23.0",
     date: "2026-09-04",
     items: [
