@@ -23,6 +23,7 @@ import {
   Palmtree,
 } from "lucide-react";
 import { pageTitleCls, cardCls, btnPrimaryCls, btnSecondaryCls, statLabelCls } from "./designTokens";
+import { BLOKI_PRACOWNIKA, blokiLokalu } from "../../utils/grafik";
 
 const roleLabel = (role) =>
   ({
@@ -65,6 +66,7 @@ export default function Pracownicy({
   showMsg,
 }) {
   const [view, setView] = useState("aktywni"); // "aktywni" | "archiwum" | "lokale" | "stanowiska"
+
   const [urlopFrom, setUrlopFrom] = useState("");
   const [urlopTo, setUrlopTo] = useState("");
   const [urlopSaving, setUrlopSaving] = useState(false);
@@ -151,6 +153,10 @@ export default function Pracownicy({
   const wszystkieNazwyStanowisk = [
     ...new Set(activeStanowiska.map((s) => s.name)),
   ].sort((a, b) => a.localeCompare(b, "pl"));
+
+  // Brak wartości = wszystko dostępne, więc w formularzu startujemy z pełnym
+  // zestawem i kierownik odejmuje, zamiast zaznaczać od zera.
+  const blokiEdytowane = editingDict ? blokiLokalu(editingDict) : [];
 
   const list = view === "aktywni" ? visibleUsers : archivedUsers;
 
@@ -265,6 +271,42 @@ export default function Pracownicy({
                           </option>
                         ))}
                       </select>
+                    </div>
+                  )}
+                  {view === "lokale" && (
+                    <div className="p-3 bg-[#F1F1EE] border-[2px] border-[#171714] rounded">
+                      <label className="text-xs font-bold text-[#171714] block">
+                        Co pracownik widzi na swoim telefonie
+                      </label>
+                      <p className="text-[11px] text-[#6E6E66] mt-0.5 mb-2">
+                        Dotyczy prywatnych telefonów pracowników tego lokalu.
+                        Tablet Służbowy zawsze ma wszystko. Dostęp na telefonie
+                        ma tylko osoba z ustawionym PIN-em blokady i e-mailem.
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {BLOKI_PRACOWNIKA.map((b) => {
+                          const wybrane = blokiEdytowane.includes(b.key);
+                          return (
+                            <button
+                              key={b.key}
+                              type="button"
+                              onClick={() => {
+                                const next = wybrane
+                                  ? blokiEdytowane.filter((x) => x !== b.key)
+                                  : [...blokiEdytowane, b.key];
+                                setEditingDict({ ...editingDict, dostepne_bloki: next });
+                              }}
+                              className={`px-2.5 py-1 rounded border-[2px] text-[13px] font-bold text-left ${
+                                wybrane
+                                  ? "bg-[#171714] text-white border-[#171714]"
+                                  : "bg-white text-[#171714] border-[#B7B6AE]"
+                              }`}
+                            >
+                              {b.label}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
                   {view === "lokale" && (
@@ -502,18 +544,48 @@ export default function Pracownicy({
                     </div>
                   </div>
                 ) : (
-                  <div>
-                    <label className="text-xs font-bold text-[#6E6E66]">
-                      PIN blokady na kiosku (4 cyfry, opcjonalnie)
-                    </label>
-                    <input
-                      type="text"
-                      value={editingUser.kiosk_pin || ""}
-                      onChange={(e) => setEditingUser({ ...editingUser, kiosk_pin: e.target.value })}
-                      maxLength="4"
-                      placeholder="brak — kiosk nie pyta o PIN"
-                      className="w-full p-2 border-[2px] border-[#171714] rounded"
-                    />
+                  <div className="p-3 bg-[#F1F1EE] border-[2px] border-[#171714] rounded">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs font-bold text-[#171714]">
+                          PIN blokady (4 cyfry)
+                        </label>
+                        <input
+                          type="text"
+                          value={editingUser.kiosk_pin || ""}
+                          onChange={(e) =>
+                            setEditingUser({ ...editingUser, kiosk_pin: e.target.value })
+                          }
+                          maxLength="4"
+                          placeholder="brak — kiosk nie pyta o PIN"
+                          className="w-full p-2 border-[2px] border-[#171714] rounded"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-[#171714]">
+                          Email (do logowania na własnym telefonie)
+                        </label>
+                        <input
+                          type="email"
+                          value={editingUser.email || ""}
+                          onChange={(e) =>
+                            setEditingUser({ ...editingUser, email: e.target.value })
+                          }
+                          placeholder="opcjonalnie"
+                          className="w-full p-2 border-[2px] border-[#171714] rounded"
+                        />
+                      </div>
+                    </div>
+                    {/* Dostęp z prywatnego telefonu wymaga OBU pól naraz —
+                        mówimy o tym wprost, bo samo wpisanie jednego z nich
+                        nie daje nic i wyglądałoby na awarię. */}
+                    <p className="text-[11px] text-[#6E6E66] mt-2">
+                      {editingUser.kiosk_pin && editingUser.email
+                        ? "Ta osoba może zalogować się na swoim telefonie: tym e-mailem i PIN-em blokady. Zakres widocznych bloków ustawiasz w Pracownicy → Lokale."
+                        : editingUser.kiosk_pin || editingUser.email
+                        ? "Do logowania na własnym telefonie potrzebne są OBA pola — PIN blokady i e-mail. Na razie działa tylko Tablet Służbowy."
+                        : "Bez PIN-u i e-maila pracownik korzysta wyłącznie z Tabletu Służbowego."}
+                    </p>
                   </div>
                 )}
 

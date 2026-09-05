@@ -23,6 +23,65 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.26.3",
+    date: "2026-09-05",
+    items: [
+      "Wyłączone 'Wpisy' ukrywają też kończenie zmiany — pracownik kończy ją wtedy na Tablecie Służbowym.",
+      "Przy zmianie mniej niż 12 h przed startem widać 'za późno na giełdę' zamiast pustego miejsca.",
+    ],
+  },
+  {
+    version: "0.26.2",
+    date: "2026-09-05",
+    items: [
+      "E-mail konta otwartego nie kasuje się już przy zapisie — bez tego nie dało się nadać dostępu z prywatnego telefonu.",
+      "Logowanie nie rozróżnia wielkości liter ani spacji w e-mailu.",
+    ],
+  },
+  {
+    version: "0.26.1",
+    date: "2026-09-05",
+    items: [
+      "Liczba godzin w stałej kolumnie, różnica plan/fakt na lewo od niej (Raporty i koszty, Rejestr Godzin).",
+      "Pole e-mail w karcie pracownika z kontem otwartym — potrzebne, żeby nadać dostęp z prywatnego telefonu.",
+    ],
+  },
+  {
+    version: "0.26.0",
+    date: "2026-09-05",
+    items: [
+      "Pracownik z PIN-em blokady i e-mailem może wejść na swój Tablet Służbowy z prywatnego telefonu — tym samym PIN-em co na tablecie.",
+      "W Pracownicy → Lokale wybierasz raz dla całego lokalu, które bloki widzi pracownik na swoim telefonie (Wpisy, Raport, Grafik, Zadania, Wiadomości, Zgłoś, Wolne).",
+      "Sam Tablet Służbowy zostaje bez zmian — zawsze ma pełny zestaw.",
+    ],
+  },
+  {
+    version: "0.25.2",
+    date: "2026-09-05",
+    items: [
+      "Wszystkie liczby na Pulpicie w jednym rzędzie — szeroki kafelek godzin stał się zwykłym.",
+      "W Raportach i kosztach znacznik różnicy plan/fakt przy konkretnym dniu, jak w Rejestrze Godzin.",
+      "Dzień tygodnia i data powtórzone w stopce siatki grafiku.",
+    ],
+  },
+  {
+    version: "0.25.1",
+    date: "2026-09-05",
+    items: [
+      "Zmiany pracownika z wyłączonym kontem nie liczą się już jako obsada — dzień pokazuje brak, a osoba zostaje widoczna z podpisem 'KONTO WYŁĄCZONE', żeby dało się je przepisać.",
+      "Archiwizacja pracownika pyta o jego przyszłe zmiany i zdejmuje je z grafiku.",
+    ],
+  },
+  {
+    version: "0.25.0",
+    date: "2026-09-05",
+    items: [
+      "Plan vs fakt: kafelek 'Wczoraj' na Pulpicie, różnica za okres i filtr 'Tylko różnice' w Rejestrze Godzin, różnica miesiąca i per pracownik w Raportach.",
+      "Porównujemy sumy dnia, nie pojedyncze zmiany — wymiany między pracownikami bez systemu nie psują wtedy liczb.",
+      "Liczymy tylko dni zamknięte (do wczoraj) i pomijamy różnice poniżej 15 minut.",
+    ],
+  },
+  {
     version: "0.24.0",
     date: "2026-09-05",
     items: [

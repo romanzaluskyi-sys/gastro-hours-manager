@@ -32,6 +32,7 @@ import {
   acceptSwap,
   activeSwapFor,
   canOfferSwap,
+  hoursUntilStart,
   offersForUser,
   claimedByUser,
   STATUS_LABEL,
@@ -66,13 +67,25 @@ import {
 // Grafik dostał własną, stałą zakładkę zamiast wiersza w "Więcej" — to
 // rzecz oglądana codziennie, a "Więcej" jest szufladą na rzeczy rzadkie
 // (decyzja właściciela, patrz docs/GRAFIK.md, Runda 5).
+// `blok` wskazuje klucz z lokale.dostepne_bloki, który włącza tę zakładkę.
+// Pulpit i Więcej nie mają bloku — zawsze są (Więcej trzyma m.in. wylogowanie).
 export const TABS = [
   { key: "PULPIT", label: "Pulpit", Icon: Home },
-  { key: "ZMIANA", label: "Zmiana", Icon: Clock },
-  { key: "GRAFIK", label: "Grafik", Icon: CalendarDays },
-  { key: "RAPORT", label: "Raport", Icon: FileText },
-  { key: "ZADANIA", label: "Zadania", Icon: ClipboardCheck },
+  { key: "ZMIANA", label: "Zmiana", Icon: Clock, blok: "WPISY" },
+  { key: "GRAFIK", label: "Grafik", Icon: CalendarDays, blok: "GRAFIK" },
+  { key: "RAPORT", label: "Raport", Icon: FileText, blok: "RAPORT" },
+  { key: "ZADANIA", label: "Zadania", Icon: ClipboardCheck, blok: "ZADANIA" },
   { key: "WIECEJ", label: "Więcej", Icon: MoreHorizontal },
+];
+
+export const BLOKI_WSZYSTKIE = [
+  "WPISY",
+  "RAPORT",
+  "GRAFIK",
+  "ZADANIA",
+  "WIADOMOSCI",
+  "ZGLOS_PROBLEM",
+  "WOLNE",
 ];
 
 export const fmtHHMM = (d) =>
@@ -173,6 +186,7 @@ export const Shell = ({
   unreadCount,
   taskBadgeCount = 0,
   grafikBadgeCount = 0,
+  bloki = BLOKI_WSZYSTKIE,
   personName = null,
   title,
   showPill = false,
@@ -183,6 +197,9 @@ export const Shell = ({
   const activeTabKey = ["WIECEJ", "WIADOMOSCI", "ZGLOS"].includes(screen)
     ? "WIECEJ"
     : screen;
+  // Prywatny telefon pokazuje tylko bloki włączone dla lokalu; Tablet
+  // Służbowy dostaje pełną listę i nic nie traci (patrz KioskDashboard).
+  const widoczneTaby = TABS.filter((t) => !t.blok || bloki.includes(t.blok));
   return (
     <div className="h-screen bg-white flex flex-col items-center overflow-hidden">
       <div className="w-full max-w-md bg-white h-full flex flex-col shadow-lg overflow-hidden">
@@ -213,7 +230,7 @@ export const Shell = ({
             <span className="flex-shrink-0 bg-[#FAEAE6] text-[#8A3A2B] text-[13px] font-semibold px-3.5 py-2 rounded">
               na zmianie
             </span>
-          ) : showBell ? (
+          ) : showBell && bloki.includes("WIADOMOSCI") ? (
             <button
               onClick={() => setScreen("WIADOMOSCI")}
               className="relative border-2 border-[#B7B6AE] rounded w-11 h-11 flex items-center justify-center text-[#171714] flex-shrink-0"
@@ -232,7 +249,7 @@ export const Shell = ({
         </main>
         {footer}
         <nav className="flex border-t-[1.5px] border-[#B7B6AE] bg-white flex-shrink-0">
-          {TABS.map(({ key, label, Icon }) => {
+          {widoczneTaby.map(({ key, label, Icon }) => {
             const active = activeTabKey === key;
             return (
               <button
@@ -305,6 +322,7 @@ export const EmployeeSessionScreens = ({
   planShifts,
   shiftSwaps,
   setShiftSwaps,
+  bloki = BLOKI_WSZYSTKIE,
   onBack,
   onLogout,
   deviceNote = null,
@@ -601,8 +619,19 @@ export const EmployeeSessionScreens = ({
     }
   }, [screen]);
 
+  // "Popraw zmianę" wymaga RAPORTU — bez listy swoich zmian pracownik nie
+  // widzi, co właściwie poprawia (ustalenie właściciela).
+  const dostepneTypyZgloszen = [
+    { key: "correction", label: "Popraw zmianę", blok: "RAPORT" },
+    { key: "absence", label: "Wolne / urlop", blok: "WOLNE" },
+    { key: "problem", label: "Zgłoś problem", blok: "ZGLOS_PROBLEM" },
+  ].filter((t) => bloki.includes(t.blok));
+
   const openZgloszenie = (shiftId) => {
     setZgPrefillShiftId(shiftId || null);
+    if (!dostepneTypyZgloszen.some((t) => t.key === zgType)) {
+      setZgType(dostepneTypyZgloszen[0]?.key || "problem");
+    }
     setScreen("ZGLOS");
   };
 
@@ -992,6 +1021,7 @@ export const EmployeeSessionScreens = ({
           {openShift.lokal} · {openShift.stanowisko}
         </div>
         {planowanyKoniec &&
+          bloki.includes("GRAFIK") &&
           (() => {
             const zostaloMs = planowanyKoniec - now;
             const po = zostaloMs < 0;
@@ -1057,21 +1087,33 @@ export const EmployeeSessionScreens = ({
         )}
         <div className="mb-4" />
         <div className="flex-1" />
-        <button
-          onClick={() => handleCloseShift(null)}
-          disabled={saving}
-          className={ctaPrimaryCls}
-        >
-          Zakończ zmianę o {fmtHHMM(now)}
-        </button>
-        <button className={ctaSecondaryCls}>
-          Wybierz inną godzinę
-          <input
-            type="time"
-            onChange={(e) => e.target.value && handleCloseShift(e.target.value)}
-            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-          />
-        </button>
+        {/* Wyłączone "Wpisy" zabierają całą obsługę zmiany, także jej
+            zakończenie — inaczej pracownik mógłby zamknąć zmianę z telefonu
+            mimo że lokal tego nie udostępnia. Zmianę kończy wtedy na
+            Tablecie Służbowym. */}
+        {bloki.includes("WPISY") ? (
+          <>
+            <button
+              onClick={() => handleCloseShift(null)}
+              disabled={saving}
+              className={ctaPrimaryCls}
+            >
+              Zakończ zmianę o {fmtHHMM(now)}
+            </button>
+            <button className={ctaSecondaryCls}>
+              Wybierz inną godzinę
+              <input
+                type="time"
+                onChange={(e) => e.target.value && handleCloseShift(e.target.value)}
+                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+              />
+            </button>
+          </>
+        ) : (
+          <p className={helperTextCls}>
+            Zmianę kończysz na Tablecie Służbowym w lokalu.
+          </p>
+        )}
       </>
     );
   };
@@ -1303,6 +1345,7 @@ export const EmployeeSessionScreens = ({
         unreadCount={unreadCount}
         taskBadgeCount={taskBadgeCount}
         grafikBadgeCount={grafikBadgeCount}
+        bloki={bloki}
         personName={onBack ? employee.name : null}
         title={employee.name}
         showPill={!!openShift}
@@ -1325,6 +1368,8 @@ export const EmployeeSessionScreens = ({
             <div className="text-sm text-[#6E6E66] mt-0.5 mb-7">
               {employee.default_lokal} · {employee.default_stanowisko}
             </div>
+            {bloki.includes("GRAFIK") && (
+              <>
             <div className={sectionLabelCls}>Twoja zmiana dziś</div>
             <div className={ruleStrongCls} />
             {mojeDzis.length > 0 ? (
@@ -1362,6 +1407,8 @@ export const EmployeeSessionScreens = ({
                 Nie masz jeszcze wpisanych zmian w grafiku.
               </div>
             )}
+              </>
+            )}
             {myChecklistOwn.length > 0 && (
               <>
                 <div className="flex items-baseline justify-between mt-6">
@@ -1376,6 +1423,7 @@ export const EmployeeSessionScreens = ({
               </>
             )}
             <div className="flex-1" />
+            {bloki.includes("WPISY") && (
             <button
               onClick={() => {
                 // Bez tego, jeśli pracownik wcześniej dziś zamknął zmianę,
@@ -1389,6 +1437,7 @@ export const EmployeeSessionScreens = ({
             >
               <Clock size={19} /> Rozpocznij zmianę
             </button>
+            )}
           </>
         )}
       </Shell>
@@ -1407,6 +1456,7 @@ export const EmployeeSessionScreens = ({
         unreadCount={unreadCount}
         taskBadgeCount={taskBadgeCount}
         grafikBadgeCount={grafikBadgeCount}
+        bloki={bloki}
         personName={onBack ? employee.name : null}
         title={employee.name}
         showPill={!!openShift}
@@ -1504,6 +1554,17 @@ export const EmployeeSessionScreens = ({
                           na giełdę
                         </button>
                       )}
+                      {/* Brak przycisku wygląda jak awaria, jeśli nie wiadomo
+                          dlaczego go nie ma — mówimy wprost, że minął limit
+                          12 h. Dla zmian już rozpoczętych nic nie piszemy,
+                          tam to oczywiste. */}
+                      {!oferta &&
+                        !canOfferSwap(s) &&
+                        hoursUntilStart(s) > 0 && (
+                          <span className="ml-auto text-[11px] text-[#8F8E86]">
+                            za późno na giełdę
+                          </span>
+                        )}
                     </div>
                     <div className="text-[13px] text-[#6E6E66] mt-0.5">
                       {s.stanowisko} · {s.lokal}
@@ -1635,6 +1696,7 @@ export const EmployeeSessionScreens = ({
         unreadCount={unreadCount}
         taskBadgeCount={taskBadgeCount}
         grafikBadgeCount={grafikBadgeCount}
+        bloki={bloki}
         personName={onBack ? employee.name : null}
         title="Grafik"
       >
@@ -1771,6 +1833,7 @@ export const EmployeeSessionScreens = ({
         unreadCount={unreadCount}
         taskBadgeCount={taskBadgeCount}
         grafikBadgeCount={grafikBadgeCount}
+        bloki={bloki}
         personName={onBack ? employee.name : null}
         title="Raport"
         footer={
@@ -1920,6 +1983,7 @@ export const EmployeeSessionScreens = ({
         unreadCount={unreadCount}
         taskBadgeCount={taskBadgeCount}
         grafikBadgeCount={grafikBadgeCount}
+        bloki={bloki}
         personName={onBack ? employee.name : null}
         title="Zadania"
       >
@@ -1985,15 +2049,19 @@ export const EmployeeSessionScreens = ({
         unreadCount={unreadCount}
         taskBadgeCount={taskBadgeCount}
         grafikBadgeCount={grafikBadgeCount}
+        bloki={bloki}
         personName={onBack ? employee.name : null}
         title="Więcej"
       >
+        {dostepneTypyZgloszen.length > 0 && (
         <button onClick={() => openZgloszenie(null)} className={menuRowCls}>
           <Flag size={21} className="text-[#171714] flex-shrink-0" />
           <span className="flex-1 text-base font-semibold text-[#171714]">
             Zgłoś
           </span>
         </button>
+        )}
+        {bloki.includes("WIADOMOSCI") && (
         <button onClick={() => setScreen("WIADOMOSCI")} className={menuRowCls}>
           <Bell size={21} className="text-[#171714] flex-shrink-0" />
           <span className="flex-1 text-base font-semibold text-[#171714]">
@@ -2005,6 +2073,7 @@ export const EmployeeSessionScreens = ({
             </span>
           )}
         </button>
+        )}
         {onBack && (
           <button onClick={onBack} className={menuRowCls}>
             <ChevronLeft
@@ -2058,6 +2127,7 @@ export const EmployeeSessionScreens = ({
         unreadCount={unreadCount}
         taskBadgeCount={taskBadgeCount}
         grafikBadgeCount={grafikBadgeCount}
+        bloki={bloki}
         personName={onBack ? employee.name : null}
         title="Wiadomości"
         showBell={false}
@@ -2109,6 +2179,7 @@ export const EmployeeSessionScreens = ({
         unreadCount={unreadCount}
         taskBadgeCount={taskBadgeCount}
         grafikBadgeCount={grafikBadgeCount}
+        bloki={bloki}
         personName={onBack ? employee.name : null}
         title={
           zgType === "correction"
@@ -2119,34 +2190,27 @@ export const EmployeeSessionScreens = ({
         }
       >
         {!zgSent && (
-          <div className="grid grid-cols-3 gap-2">
-            <button
-              type="button"
-              onClick={() => setZgType("correction")}
-              className={checkboxRowCls(zgType === "correction")}
-            >
-              <span className="text-[13.5px] font-semibold text-[#171714]">
-                Popraw zmianę
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setZgType("absence")}
-              className={checkboxRowCls(zgType === "absence")}
-            >
-              <span className="text-[13.5px] font-semibold text-[#171714]">
-                Wolne / urlop
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setZgType("problem")}
-              className={checkboxRowCls(zgType === "problem")}
-            >
-              <span className="text-[13.5px] font-semibold text-[#171714]">
-                Zgłoś problem
-              </span>
-            </button>
+          <div
+            className={`grid gap-2 ${
+              dostepneTypyZgloszen.length === 1
+                ? "grid-cols-1"
+                : dostepneTypyZgloszen.length === 2
+                ? "grid-cols-2"
+                : "grid-cols-3"
+            }`}
+          >
+            {dostepneTypyZgloszen.map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setZgType(t.key)}
+                className={checkboxRowCls(zgType === t.key)}
+              >
+                <span className="text-[13.5px] font-semibold text-[#171714]">
+                  {t.label}
+                </span>
+              </button>
+            ))}
           </div>
         )}
 

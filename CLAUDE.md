@@ -73,6 +73,9 @@ api/                         — root-level, POZA src/ — funkcje Vercel Cron
                                  patrz Roadmap punkt 1 i sekcja "Cron" wyżej
 vercel.json                  — harmonogram crona
 CHANGELOG.md                 — historia wersji, patrz "Wersjonowanie i CHANGELOG" niżej
+docs/GRAFIK.md               — pełna specyfikacja Grafiku z uzasadnieniami decyzji właściciela
+docs/sql/                    — migracje do wklejenia w Supabase SQL Editor (po jednej naraz!)
+scripts/import-grafik.py     — import grafiku z arkusza Google (domyślnie SUCHY przebieg)
 public/
   version.json                — { "version": "X.Y.Z" }, czytany przez
                                  UpdateBanner.tsx — patrz "Wersjonowanie i
@@ -204,11 +207,49 @@ nieprawidłowy JSON) — naprawione.
 | `manager_lokalu` | manager_dashboard | dostęp tylko do przypisanych lokali (`allowed_lokale`) |
 | `kiosk` | open_dashboard ("Tablet Służbowy", renderowany przez `KioskDashboard.tsx`) | wspólne urządzenie w lokalu — pracownik wybiera siebie RAZ z listy (nie przy każdej akcji, patrz niżej) |
 | `closed` | closed_dashboard (renderowany przez `PersonalDashboard.tsx`) | osobisty telefon pracownika, zalogowany jako on sam |
-| `open` | closed_dashboard (renderowany przez `PersonalDashboard.tsx`) | wariant "otwartego konta" (mniej używany) |
+| `open` | open_dashboard na Tablecie Służbowym, a od 0.26.0 także closed_dashboard na PRYWATNYM telefonie | pracownik kiosku; na własnym telefonie tylko gdy ma `kiosk_pin` **i** `email` — patrz "Prywatny telefon pracownika" niżej |
 
-Login: `Email konta` + `PIN` (6 cyfr). Kioski mają zapisane dane logowania
-w przeglądarce telefonu służbowego (autouzupełnianie) + skrót na ekranie
-głównym — pracownik nic nie wpisuje ręcznie.
+⚠️ W bazie istnieje też rola `manager` (obok `manager_lokalu`) — trafia do
+manager_dashboard tak samo, ale nie jest nigdzie indziej opisana. Nie
+zakładaj, że role to zamknięty zbiór z tej tabeli; sprawdź `select distinct
+role from users`, jeśli coś na tym zależy.
+
+Login: `Email konta` + `PIN` (6 cyfr). **Wyjątek: rola `open` loguje się
+e-mailem i swoim 4-cyfrowym `kiosk_pin`**, nie kolumną `pin` (której to
+konto w ogóle nie używa) — patrz `LoginScreen.tsx`. E-mail porównywany jest
+bez rozróżniania wielkości liter i bez spacji po obu stronach; pusty e-mail
+albo pusty PIN są odrzucane PRZED wyszukiwaniem (inaczej pusty e-mail
+zrównałby się z pustymi e-mailami kont otwartych sprzed 0.26.2).
+
+Kioski mają zapisane dane logowania w przeglądarce telefonu służbowego
+(autouzupełnianie) + skrót na ekranie głównym — pracownik nic nie wpisuje
+ręcznie.
+
+### Prywatny telefon pracownika — od 0.26.0
+
+Te same ekrany co Tablet Służbowy, bez wyboru osoby (konto to już jedna
+konkretna osoba). Dwie rzeczy decydują o tym, co pracownik widzi:
+
+1. **Czy w ogóle ma dostęp** — tylko gdy kierownik nada mu `kiosk_pin` ORAZ
+   `email` (oba w karcie pracownika). Brak któregokolwiek = brak dostępu i
+   nic się dla tej osoby nie zmienia.
+2. **Które bloki widzi** — `lokale.dostepne_bloki`, ustawiane RAZ NA LOKAL
+   (Pracownicy → Lokale), nie per pracownik (świadoma decyzja właściciela).
+   Klucze: `WPISY`, `RAPORT`, `GRAFIK`, `ZADANIA`, `WIADOMOSCI`,
+   `ZGLOS_PROBLEM`, `WOLNE`. "Popraw zmianę" NIE ma własnego klucza — chodzi
+   z `RAPORT`, bo bez listy swoich zmian nie ma czego poprawiać.
+
+Wyłączony blok znika w całości, nie tylko jako zakładka: bez `WPISY` nie ma
+ani zakładki Zmiana, ani przycisku "Rozpocznij zmianę", ani **kończenia
+zmiany** (pracownik kończy ją wtedy na tablecie); bez `GRAFIK` Pulpit nie
+pokazuje najbliższej zmiany ani licznika do końca zmiany.
+
+⚠️ `dostepne_bloki = NULL` znaczy "wszystko dostępne" (tak wyglądają lokale
+sprzed tej funkcji), a `''` znaczy "nic" — to NIE to samo, patrz
+`blokiLokalu` w `utils/grafik.ts`.
+
+**Tablet Służbowy zawsze dostaje pełny zestaw** (`BLOKI_WSZYSTKIE`) — stoi w
+lokalu pod fizyczną kontrolą i to jest jego zabezpieczenie.
 
 ### Zakładki na osobistym koncie i kiosku — `employeeSessionShared.tsx` (redesign 2026-08-31)
 
@@ -686,6 +727,10 @@ zakresem — wymaga Grafiku, którego nie ma.
   ```sql
   alter table lokale add column miasto text;
   ```
+  `dostepne_bloki` (text, nullable, lista kluczy po przecinku — NIE tablica
+  Postgresa) — które bloki widzi pracownik tego lokalu na PRYWATNYM
+  telefonie, patrz "Prywatny telefon pracownika" wyżej. Dodane 0.26.0,
+  migracja: [`docs/sql/grafik-05-dostep-pracownika.sql`](docs/sql/grafik-05-dostep-pracownika.sql).
 - **stanowiska** — `id, name, lokal_name, archived, skrot, kolor`. `skrot`
   (text, nullable, ustawiany ręcznie w Pracownicy → Stanowiska) — zastępuje
   auto-generowany `getShort(name)` tam, gdzie jest ustawiony
@@ -1028,6 +1073,27 @@ wzorzec co `shift_edits`/`tasks`) — błąd tu nie blokuje reszty apki.
     cichym błędem — poprawione na zwykły string) — sprawdź
     `information_schema.columns`, jeśli cokolwiek na tym zależy.
 
+14. `handleSaveUser` czyścił `email` i `pin` dla KAŻDEGO konta roli `open`
+    (`dataToSave.email = ""`) — reguła z czasów, gdy takie konto w ogóle nie
+    logowało się do apki. Po dodaniu dostępu z prywatnego telefonu (0.26.0)
+    oznaczało to, że e-mail znikał przy każdym zapisie karty, dostępu nie
+    dawało się nadać, a logowanie mówiło "nie ma takiego użytkownika".
+    Naprawione w 0.26.2: czyścimy tylko `pin` (konto otwarte loguje się
+    `kiosk_pin`), e-mail zostaje i jest normalizowany do małych liter bez
+    spacji. ⚠️ Przy okazji: porównywanie znormalizowanych e-maili wymaga
+    odrzucenia PUSTEGO e-maila PRZED wyszukiwaniem — wszystkie konta otwarte
+    mają w bazie `email = ''` po starym zapisie, więc pusty input pasowałby
+    do nich wszystkich.
+15. Publikacja grafiku była zawężona do lokali WIDOCZNYCH w siatce
+    (`lokaleNames`), a zmianę można wpisać z siatki jednego lokalu do
+    drugiego (kafelek "stanowisko · lokal"). Taka zmiana nigdy nie dawała
+    się wysłać: zostawała wersją roboczą — niewidoczną dla pracownika i, bo
+    nic jej nie oznaczało, także dla kierownika. Naprawione: publikacja
+    obejmuje wszystkie lokale kierownika od dziś w przód, a niewysłane
+    wiersze mają kropkę w komórce i licznik przy nazwie lokalu. Jeśli
+    dokładasz kolejny widok grafiku, licz niewysłane po `allLokaleNames`, a
+    nie po tym, co akurat widać.
+
 ## Google Apps Script (`Odbior_Danych.gs`)
 
 Funkcje: `doGet` (health-check, zwraca `SCRIPT_VERSION` — podbijaj tę
@@ -1224,7 +1290,55 @@ uzasadnieniami. Poniżej tylko to, o co najłatwiej się potknąć:
   (domyślnie suchy przebieg). URP z zerem godzin w dzień roboczy to NIE
   urlop, tylko niedostępność bez godzin — ustalenie właściciela.
 
-### 5a. Grafik — świadomie NIE zrobione
+### 5a. Grafik — co doszło po pierwszym wydaniu (0.24.0–0.26.3)
+
+- **Widok "Dzień"** obok "Tydzień" (`trybDnia` w `GrafikTydzien.tsx`) — ta
+  sama siatka z jedną kolumną, do poprawek z telefonu. `Tydzień`/`Dzień`
+  stoją parą, `Miesiąc`/`Konfiguracja` osobno.
+- **Publikacja wysyła WSZYSTKO od dziś w przód, ze wszystkich lokali
+  kierownika** (`publishGrafik`, wcześniej `publishWeek`). Wysyłka per
+  oglądany tydzień była nie do utrzymania: zmiana wpisana z siatki jednego
+  lokalu do drugiego nie dawała się wysłać i po cichu zostawała wersją
+  roboczą. Niewysłane wiersze mają kropkę w siatce i licznik przy lokalu.
+- **Usunięcie wysłanej zmiany to `deleted_at`**, nie DELETE — znika z
+  widoków od razu, liczy się jako niewysłana i kasuje dopiero przy
+  publikacji, która informuje o tym pracownika. Zmiana nigdy niewysłana
+  kasuje się od razu. Migracja:
+  [`docs/sql/grafik-04-usuwanie.sql`](docs/sql/grafik-04-usuwanie.sql).
+- **Wolne/urlop wprost z grafiku** — link w modalu zmiany, gdy pracownika
+  długo nie ma i nie zgłosi tego sam (`addNiedostepnoscDirectly` obok
+  istniejącego `addUrlopDirectly` w `utils/absences.ts`).
+- **Zmiany osoby z wyłączonym kontem NIE liczą się jako obsada**
+  (`__nieaktywny`, ustawiane raz w `Grafik.tsx`). Taka osoba zostaje
+  widoczna w siatce z podpisem "KONTO WYŁĄCZONE" i przekreślonymi zmianami
+  — inaczej po jej odejściu zmiany znikały z widoku, ale nadal wypełniały
+  obsadę i dzień kłamał, że jest pokryty. Archiwizacja pracownika pyta o
+  jego przyszłe zmiany i zdejmuje je (`futureShiftsOfUser`).
+- **Tablet Służbowy zna grafik**: zielone "o HH:MM" przy osobie oczekiwanej
+  dziś, licznik "na zmianie / wg grafiku jeszcze nie odbiło / zakończyło",
+  lista posortowana wg grafiku, koperta przy nieprzeczytanej wiadomości.
+  Powiadomienia są per WYBRANY pracownik — wcześniej urządzenie pokazywało
+  worek wiadomości wszystkich i pierwsza osoba oznaczała cudze jako
+  przeczytane.
+
+### 5b. Plan vs fakt — od 0.25.0
+
+`grafik_shifts` (plan) kontra `shifts` (fakt). Całość w `utils/grafik.ts`
+(`buildPlanFactMap`, `sumujPlanFakt`, `PLAN_FAKT_PROG_H`), pokazywana na
+Pulpicie (kafelek "Wczoraj"), w Rejestrze Godzin (kafelek za okres, znacznik
+przy dniu, filtr "Tylko różnice") i w Raportach i kosztach (miesiąc,
+procent, per pracownik i per dzień).
+
+Trzy decyzje, których nie zmieniaj bez rozmowy z właścicielem:
+- **Porównujemy sumy w obrębie (osoba, dzień)**, NIE parujemy zmiana do
+  zmiany. Ludzie wymieniają się między sobą bez systemu — parowanie
+  pojedynczych wpisów daje wtedy bzdury, suma dnia jest odporna.
+- **Tylko dni zamknięte** (do wczoraj włącznie). Plan na cały miesiąc
+  kontra fakt za pięć dni pokazywał "−82%" i nie znaczył nic.
+- **To sygnał, nie zarzut.** Świadomie NIE wykrywamy "nie stawił się" ani
+  "pracował poza grafikiem" — rozbieżności są normalne i tak ma zostać.
+
+### 5c. Grafik — świadomie NIE zrobione
 - Drugi wariant druku miesiąca (tabela pracownicy × dni) — odłożony.
 - Potwierdzenia odczytu grafiku przez pracownika ("przeczytało 12 z 14").
 - Etat jako reguła (dziś pokazujemy tylko różnicę godzin przy zamianie,

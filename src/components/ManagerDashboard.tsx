@@ -37,6 +37,7 @@ import RaportyIKoszty from "./manager/RaportyIKoszty";
 import Przewodnik from "./manager/Przewodnik";
 import Grafik from "./manager/Grafik";
 import { resolveSwap } from "../utils/swaps";
+import { futureShiftsOfUser } from "../utils/grafik";
 
 // ==========================================
 // KIEROWNIK DASHBOARD
@@ -488,8 +489,17 @@ const ManagerDashboard = ({
     try {
       const dataToSave = { ...editingUser };
       if (dataToSave.role === "open") {
-        dataToSave.email = "";
+        // E-mail ZOSTAJE: razem z kiosk_pin daje pracownikowi dostęp do jego
+        // ekranów z prywatnego telefonu. Czyścimy tylko `pin` — sześciocyfrowy
+        // PIN logowania, którego konto otwarte nie używa (loguje się PIN-em
+        // blokady, patrz LoginScreen).
         dataToSave.pin = "";
+      }
+      // Logowanie porównuje e-mail dosłownie, a klawiatura telefonu lubi
+      // dopisać spację i wielką literę — normalizujemy przy zapisie, żeby
+      // "nie ma takiego użytkownika" nie brało się z niewidocznej różnicy.
+      if (typeof dataToSave.email === "string") {
+        dataToSave.email = dataToSave.email.trim().toLowerCase();
       }
       // Puste "" z <input type="date"> Postgres odrzuca jako nieprawidłową
       // datę (kolumna date, nullable) — trzeba jawnie zamienić na null.
@@ -540,13 +550,57 @@ const ManagerDashboard = ({
   };
 
   const handleArchiveEntity = async (table, id, isArchiving) => {
+    // Archiwizacja pracownika nie może po cichu zostawić jego zmian w
+    // grafiku: liczyłyby się jako obsada, a nikt by na nie nie przyszedł.
+    // Pytamy wprost, ile ich jest, i pozwalamy je od razu zdjąć.
+    let zmianyDoZdjecia = [];
+    if (table === "users" && isArchiving) {
+      const user = users.find((u) => u.id === id);
+      zmianyDoZdjecia = futureShiftsOfUser(
+        planShifts,
+        user,
+        toLocalYMD(new Date())
+      );
+    }
     if (
       !window.confirm(
-        isArchiving ? "Zarchiwizować ten element?" : "Przywrócić z archiwum?"
+        isArchiving
+          ? zmianyDoZdjecia.length > 0
+            ? `Zarchiwizować? ${
+                zmianyDoZdjecia[0].user_name
+              } ma jeszcze ${zmianyDoZdjecia.length} zmian w grafiku od dziś — zostaną zdjęte, a dni pokażą brak obsady.`
+            : "Zarchiwizować ten element?"
+          : "Przywrócić z archiwum?"
       )
     )
       return;
     try {
+      // Zdjęcie zmian TĄ SAMĄ zasadą co ręczne usuwanie: wysłane zostają z
+      // deleted_at (pracownicy dowiedzą się przy najbliższej wysyłce),
+      // niewysłane znikają od razu.
+      if (zmianyDoZdjecia.length > 0) {
+        const teraz = new Date().toISOString();
+        const poZmianie = [];
+        for (const zm of zmianyDoZdjecia) {
+          if (zm.published_at) {
+            poZmianie.push(
+              await api.patch("grafik_shifts", zm.id, {
+                deleted_at: teraz,
+                updated_at: teraz,
+              })
+            );
+          } else {
+            await api.delete("grafik_shifts", zm.id);
+          }
+        }
+        const zdjete = new Set(zmianyDoZdjecia.map((z) => String(z.id)));
+        const mapa = new Map(poZmianie.map((z) => [String(z.id), z]));
+        setPlanShifts(
+          (planShifts || [])
+            .filter((z) => !zdjete.has(String(z.id)) || mapa.has(String(z.id)))
+            .map((z) => mapa.get(String(z.id)) || z)
+        );
+      }
       const res = await api.patch(table, id, { archived: isArchiving });
       if (table === "users")
         setUsers(users.map((u) => (u.id === id ? res : u)));
@@ -555,7 +609,11 @@ const ManagerDashboard = ({
       if (table === "stanowiska")
         setStanowiska(stanowiska.map((s) => (s.id === id ? res : s)));
       showMsg(
-        isArchiving ? "Przeniesiono do archiwum" : "Przywrócono z archiwum"
+        isArchiving
+          ? zmianyDoZdjecia.length > 0
+            ? `Przeniesiono do archiwum i zdjęto ${zmianyDoZdjecia.length} zmian z grafiku.`
+            : "Przeniesiono do archiwum"
+          : "Przywrócono z archiwum"
       );
     } catch (err) {
       showMsg("Błąd archiwizacji", "error");
@@ -588,6 +646,12 @@ const ManagerDashboard = ({
         const payload = {
           name: editingDict.name,
           miasto: editingDict.miasto || null,
+          // Lista kluczy po przecinku, jak allowed_lokale. NULL nie jest tym
+          // samym co pusty string: NULL = wszystko dostępne (tak zachowują
+          // się lokale sprzed tej funkcji), "" = nic nie jest dostępne.
+          dostepne_bloki: Array.isArray(editingDict.dostepne_bloki)
+            ? editingDict.dostepne_bloki.join(",")
+            : editingDict.dostepne_bloki ?? null,
         };
         if (editingDict.id) {
           const l = await api.patch("lokale", editingDict.id, payload);
@@ -1059,6 +1123,7 @@ const ManagerDashboard = ({
             onEditShift={openEditShift}
             selectedUserId={reportUserId}
             setSelectedUserId={setReportUserId}
+            planShifts={planShifts}
           />
         )}
 
@@ -1364,6 +1429,7 @@ const ManagerDashboard = ({
             onEditShift={openEditShift}
             onNewShift={openNewShift}
             onNameClick={goToEmployeeReport}
+            planShifts={planShifts}
           />
         )}
 

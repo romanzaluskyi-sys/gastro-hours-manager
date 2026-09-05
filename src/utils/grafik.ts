@@ -253,14 +253,20 @@ export const checkDayCoverage = (
   dateStr
 ) => {
   const rulesForDay = getRulesForDate({ rules, ruleSets, wyjatki }, lokal, dateStr);
+  // Zmiany osób z wyłączonym kontem NIE liczą się jako obsada — ktoś, kto
+  // odszedł, na tę zmianę nie przyjdzie, a policzenie jej jako pokrytej
+  // ukrywałoby prawdziwą dziurę w grafiku. Wiersze zostają widoczne (patrz
+  // GrafikTydzien), żeby dało się je przepisać albo usunąć.
   const shiftsOnDay = (planShifts || [])
-    .filter((s) => s.lokal === lokal)
+    .filter((s) => s.lokal === lokal && !s.__nieaktywny)
     .map((s) => ({ ...s, __segments: shiftSegmentsOnDate(s, dateStr) }))
     .filter((s) => s.__segments.length > 0);
 
   const gaps = coverageGaps(rulesForDay, shiftsOnDay);
   const gapMinutes = gaps.reduce((sum, g) => sum + g.minutes * g.missing, 0);
-  const own = (planShifts || []).filter((s) => s.lokal === lokal && s.date === dateStr);
+  const own = (planShifts || []).filter(
+    (s) => s.lokal === lokal && s.date === dateStr && !s.__nieaktywny
+  );
 
   return {
     date: dateStr,
@@ -332,10 +338,100 @@ export const factWithoutPlan = (factShifts, planShifts, lokal, dateStr) =>
         )
     );
 
+// --- PLAN vs FAKT -------------------------------------------------------
+// Porównujemy SUMY GODZIN w obrębie (osoba, dzień), a nie parujemy zmiana do
+// zmiany. Powód jest praktyczny: ludzie wymieniają się między sobą bez
+// systemu, ktoś wychodzi wcześniej i przychodzi zmiennik — parowanie
+// pojedynczych wpisów dawałoby wtedy bzdury, a suma dnia jest odporna na to
+// wszystko. Rozbieżność NIE jest tu traktowana jak wykroczenie: to sygnał
+// dla kierownika, nie oskarżenie (ustalenie właściciela).
+
+// Poniżej tej wartości nie ma o czym mówić — kilkanaście minut to naturalny
+// rozrzut odbić, nie zjawisko do analizy.
+export const PLAN_FAKT_PROG_H = 0.25;
+
+const kluczOsoby = (x) => String(x.user_id || x.user_name || "");
+
+export const planHoursOnDay = (planShifts, userKey, dateStr) =>
+  (planShifts || [])
+    .filter((s) => !s.deleted_at && s.date === dateStr && kluczOsoby(s) === userKey)
+    .reduce((sum, s) => sum + shiftHours(s), 0);
+
+export const factHoursOnDay = (factShifts, userKey, dateStr) =>
+  (factShifts || [])
+    .filter(
+      (s) =>
+        !s.is_urlop &&
+        s.end_time &&
+        s.start_time &&
+        toLocalYMD(s.start_time) === dateStr &&
+        kluczOsoby(s) === userKey
+    )
+    .reduce((sum, s) => sum + (s.end_time - s.start_time) / 3600000, 0);
+
+// Mapa "osoba|dzień" -> { planH, faktH, diff } dla zakresu dat. Buduje się z
+// obu stron naraz, więc łapie też dni, w których był plan bez faktu i fakt
+// bez planu — obie sytuacje są dozwolone i nie są tu wyróżniane.
+export const buildPlanFactMap = ({ planShifts, factShifts, from, to, lokalOk }) => {
+  const mapa = new Map();
+  const dodaj = (userKey, userName, dateStr) => {
+    const k = `${userKey}|${dateStr}`;
+    if (!mapa.has(k)) {
+      mapa.set(k, { userKey, userName, date: dateStr, planH: 0, faktH: 0 });
+    }
+    return mapa.get(k);
+  };
+  (planShifts || []).forEach((s) => {
+    if (s.deleted_at) return;
+    if (from && s.date < from) return;
+    if (to && s.date > to) return;
+    if (lokalOk && !lokalOk(s.lokal)) return;
+    dodaj(kluczOsoby(s), s.user_name, s.date).planH += shiftHours(s);
+  });
+  (factShifts || []).forEach((s) => {
+    if (s.is_urlop || !s.start_time || !s.end_time) return;
+    const dateStr = toLocalYMD(s.start_time);
+    if (from && dateStr < from) return;
+    if (to && dateStr > to) return;
+    if (lokalOk && !lokalOk(s.lokal)) return;
+    dodaj(kluczOsoby(s), s.user_name, dateStr).faktH +=
+      (s.end_time - s.start_time) / 3600000;
+  });
+  mapa.forEach((v) => {
+    v.diff = v.faktH - v.planH;
+  });
+  return mapa;
+};
+
+export const sumujPlanFakt = (mapa) => {
+  let planH = 0;
+  let faktH = 0;
+  let rozbieznosci = 0;
+  mapa.forEach((v) => {
+    planH += v.planH;
+    faktH += v.faktH;
+    if (Math.abs(v.diff) >= PLAN_FAKT_PROG_H) rozbieznosci += 1;
+  });
+  return { planH, faktH, diff: faktH - planH, rozbieznosci, dni: mapa.size };
+};
+
 // --- PUBLIKACJA ---------------------------------------------------------
 // Zmiana jest "niewysłana", gdy nigdy nie została opublikowana albo została
 // zmieniona po ostatniej publikacji. Nie ma osobnej tabeli publikacji —
 // wystarczą dwa znaczniki czasu na samym wierszu.
+// Zmiany zaplanowane od danego dnia w przód dla osoby z wyłączonym kontem —
+// używane przy archiwizacji pracownika, żeby kierownik wiedział, co zostaje
+// w grafiku po jego odejściu.
+export const futureShiftsOfUser = (planShifts, user, fromDate) =>
+  (planShifts || []).filter(
+    (s) =>
+      !s.deleted_at &&
+      s.date >= fromDate &&
+      (s.user_id && user?.id
+        ? String(s.user_id) === String(user.id)
+        : s.user_name === user?.name)
+  );
+
 export const isUnpublished = (planShift) =>
   !planShift.published_at ||
   new Date(planShift.updated_at) > new Date(planShift.published_at);
@@ -562,6 +658,38 @@ export const nextShiftFrom = (planShifts, user, fromDate) =>
         ? trimTime(a.start_time).localeCompare(trimTime(b.start_time))
         : a.date.localeCompare(b.date)
     )[0] || null;
+
+// --- DOSTĘPNE BLOKI (prywatny telefon) ---------------------------------
+// Kierownik ustawia to raz na LOKAL, nie na osobę. Prywatny telefon jest
+// kopią Tabletu Służbowego bez wyboru pracownika — więc te same klucze
+// sterują tym, co widać na obu, i to samo ustawienie chowa np. przycisk
+// "Rozpocznij zmianę" razem z zakładką Zmiana.
+export const BLOKI_PRACOWNIKA = [
+  { key: "WPISY", label: "Wpisy (rozpoczynanie i kończenie zmiany)" },
+  { key: "RAPORT", label: "Raport godzin (razem z „Popraw zmianę”)" },
+  { key: "GRAFIK", label: "Grafik" },
+  { key: "ZADANIA", label: "Zadania" },
+  { key: "WIADOMOSCI", label: "Wiadomości" },
+  { key: "ZGLOS_PROBLEM", label: "Zgłoś problem" },
+  { key: "WOLNE", label: "Wniosek o wolne / urlop" },
+];
+
+// Brak wartości = wszystko dostępne. Dzięki temu istniejące lokale nic nie
+// tracą po migracji, a kierownik zaczyna od pełnego zestawu i odejmuje.
+export const blokiLokalu = (lokalRow) => {
+  const raw = lokalRow?.dostepne_bloki;
+  // NULL = nigdy nie ustawiano, więc wszystko dostępne (tak działają lokale
+  // sprzed tej funkcji). Pusty string to co innego: kierownik świadomie
+  // odznaczył wszystko i pracownik ma widzieć tylko Pulpit i Więcej.
+  if (raw == null) return BLOKI_PRACOWNIKA.map((b) => b.key);
+  if (raw === "") return [];
+  return String(raw)
+    .split(",")
+    .map((x) => x.trim())
+    .filter(Boolean);
+};
+
+export const maBlok = (lokalRow, key) => blokiLokalu(lokalRow).includes(key);
 
 // --- STANOWISKA PRACOWNIKA ---------------------------------------------
 // `allowed_stanowiska` jest tekstem rozdzielonym przecinkami, dokładnie jak

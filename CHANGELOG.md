@@ -5,6 +5,101 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.26.3 — 2026-09-05
+
+- **Wyłączone "Wpisy" zabierają też kończenie zmiany.** Ukryty był tylko
+  przycisk rozpoczęcia, więc osoba z trwającą zmianą mogła ją mimo wszystko
+  zamknąć z telefonu. Teraz w tym miejscu jest zdanie: zmianę kończysz na
+  Tablecie Służbowym.
+- Przy zmianie, której nie da się już wystawić na giełdę (mniej niż 12 h do
+  startu), widać **"za późno na giełdę"** zamiast pustego miejsca po
+  przycisku. Sam brak przycisku wyglądał jak awaria.
+
+## 0.26.2 — 2026-09-05
+
+- **E-mail konta otwartego już się nie kasuje przy zapisie.** Zapis czyścił
+  to pole dla wszystkich kont kiosku — reguła z czasów, gdy takie konto nie
+  logowało się w ogóle — więc dostępu z prywatnego telefonu nie dało się
+  nadać i logowanie mówiło "nie ma takiego użytkownika".
+- E-mail jest przy zapisie sprowadzany do małych liter i bez spacji, a
+  logowanie porównuje go tak samo. Klawiatura telefonu sama podnosi pierwszą
+  literę i to wystarczało, żeby logowanie nie działało bez widocznego powodu.
+
+## 0.26.1 — 2026-09-05
+
+- W Raportach i kosztach oraz w Rejestrze Godzin **liczba godzin stoi w
+  stałej kolumnie**, a różnica plan/fakt jest na lewo od niej. Wcześniej
+  odznaka różnicy wchodziła za godziny i wiersze przestawały się zgadzać w
+  pionie.
+- W karcie pracownika z kontem otwartym (kiosk) doszło **pole e-mail** obok
+  PIN-u blokady — bez niego nie dało się nadać dostępu z prywatnego
+  telefonu. Pod spodem widać wprost, czy dana osoba ten dostęp już ma.
+
+## 0.26.0 — 2026-09-05
+
+- **Tablet Służbowy na prywatnym telefonie pracownika.** To ten sam ekran co
+  na tablecie, bez wyboru osoby — konto jest już konkretną osobą.
+  - Dostęp ma **tylko pracownik z ustawionym PIN-em blokady i e-mailem**.
+    Loguje się tym samym PIN-em co na tablecie. Kto nie ma PIN-u, nie ma
+    dostępu — nic się dla niego nie zmienia.
+  - Kierownik wybiera **raz na lokal** (Pracownicy → Lokale), które bloki są
+    dostępne: Wpisy, Raport, Grafik, Zadania, Wiadomości, Zgłoś problem,
+    Wniosek o wolne. "Popraw zmianę" chodzi razem z Raportem — bez listy
+    swoich zmian nie ma czego poprawiać.
+  - Wyłączony blok znika w całości: bez **Wpisów** nie ma zakładki Zmiana ani
+    przycisku "Rozpocznij zmianę", bez **Grafiku** nie ma na Pulpicie
+    najbliższej zmiany ani licznika do końca zmiany.
+  - **Tablet Służbowy zostaje bez zmian** — stoi w lokalu, pod fizyczną
+    kontrolą, i ma zawsze pełny zestaw.
+- Lokale sprzed tej zmiany mają wszystko włączone; nikt nic nie traci.
+
+## 0.25.2 — 2026-09-05
+
+- Pulpit: szeroki kafelek "Godziny — ten miesiąc vs poprzedni" zmienił się w
+  zwykły ("Godziny w miesiącu", z procentem względem poprzedniego miesiąca),
+  więc wszystkie liczby stoją teraz w jednym rzędzie.
+- W Raportach i kosztach przy liście zmian pracownika widać **znacznik
+  różnicy na konkretnym dniu** — ten sam co w Rejestrze Godzin — obok
+  podsumowania, ile komuś wyszło ponad grafik albo poniżej.
+- W stopce siatki grafiku powtórzony **dzień tygodnia i data** przy sumie
+  osób i godzin: przy kilkunastu pracownikach nagłówek jest już poza
+  ekranem i nie było wiadomo, którego dnia dotyczy suma.
+
+## 0.25.1 — 2026-09-05
+
+- **Zmiany osoby z wyłączonym kontem nie udają już obsady.** Gdy pracownik
+  odchodzi, jego zmiany zostawały w grafiku: znikały z siatki (bo znikał
+  cały wiersz), ale nadal liczyły się jako obsadzone — kierownik widział
+  "wszystko pokryte", choć na te zmiany nikt nie miał przyjść.
+  - Taka osoba **zostaje widoczna w siatce**, dopóki wiszą jej zmiany, z
+    podpisem "KONTO WYŁĄCZONE" i przekreślonymi zmianami — da się je komuś
+    przepisać albo usunąć.
+  - Jej zmiany **nie liczą się do obsady** ani do sum dnia, więc dzień
+    uczciwie pokazuje brak.
+  - Przy archiwizacji pracownika kierownik dostaje pytanie: *"ma jeszcze N
+    zmian w grafiku od dziś — zostaną zdjęte"*. Zdjęcie działa tą samą
+    zasadą co ręczne usuwanie: wysłane czekają na wysyłkę grafiku,
+    niewysłane znikają od razu.
+  - W widoku miesiąca i na wydruku takie zmiany są przekreślone.
+
+## 0.25.0 — 2026-09-05
+
+- **Plan vs fakt — ile naprawdę wyszło godzin względem grafiku.**
+  - Na **Pulpicie** nowy kafelek "Wczoraj — plan vs fakt": plan, fakt i
+    różnica na plus lub minus.
+  - W **Rejestrze Godzin** kafelek "Wpisy otwarte" zastąpiony różnicą
+    plan/fakt za okres, przy wierszu widać różnicę dnia, a przycisk
+    **"Tylko różnice"** zawęża listę do dni, w których coś się rozjechało.
+  - W **Raportach i kosztach** różnica za miesiąc (z procentem) oraz przy
+    karcie pracownika, ile wyszło mu ponad grafik albo poniżej.
+- Porównujemy **sumy godzin w obrębie (osoba, dzień)**, nie parujemy zmiany
+  jedna do jednej — ludzie wymieniają się między sobą bez systemu i tylko
+  suma dnia jest na to odporna. Rozbieżność to sygnał dla kierownika, nie
+  zarzut wobec pracownika.
+- Liczymy tylko **dni zamknięte** (do wczoraj włącznie). Plan na cały miesiąc
+  zestawiony z faktem za kilka dni pokazywałby "−80%" i nie znaczyłby nic.
+- Różnice poniżej 15 minut są pomijane — to naturalny rozrzut odbić.
+
 ## 0.24.0 — 2026-09-05
 
 - **Tablet Służbowy pokazuje, o której kto ma być.** Przy osobie, która

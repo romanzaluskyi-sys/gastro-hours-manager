@@ -229,7 +229,14 @@ export default function GrafikMiesiac({
                       return (
                         <div
                           key={s.id}
-                          className="gp-entry flex items-center gap-1 text-[11px] leading-tight whitespace-nowrap overflow-hidden"
+                          className={`gp-entry flex items-center gap-1 text-[11px] leading-tight whitespace-nowrap overflow-hidden ${
+                            s.__nieaktywny ? "line-through text-[#8A3A2B]" : ""
+                          }`}
+                          title={
+                            s.__nieaktywny
+                              ? "Konto pracownika wyłączone — ta zmiana nie jest obsadzona"
+                              : ""
+                          }
                         >
                           <span
                             className="gp-skrot px-1 rounded text-[9px] font-extrabold flex-shrink-0"
