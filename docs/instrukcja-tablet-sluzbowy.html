@@ -1,0 +1,652 @@
+<title>Tablet Służbowy — instrukcja</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+  :root {
+    --paper: #FBFAF7;
+    --surface: #F1F1EE;
+    --rule: #B7B6AE;
+    --rule-soft: #DEDDD7;
+    --ink: #171714;
+    --muted: #6E6E66;
+    --accent: #DE3A22;
+    --accent-soft: #FBEAE6;
+    --num: #C9C7BE;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #191815;
+      --surface: #232220;
+      --rule: #45433C;
+      --rule-soft: #302E2A;
+      --ink: #EDEBE4;
+      --muted: #A2A099;
+      --accent: #FF6B4F;
+      --accent-soft: #35211C;
+      --num: #46443D;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #191815;
+    --surface: #232220;
+    --rule: #45433C;
+    --rule-soft: #302E2A;
+    --ink: #EDEBE4;
+    --muted: #A2A099;
+    --accent: #FF6B4F;
+    --accent-soft: #35211C;
+    --num: #46443D;
+  }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+    font-size: 17px;
+    line-height: 1.62;
+    -webkit-text-size-adjust: 100%;
+  }
+  .sheet {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 48px 28px 96px;
+  }
+
+  /* ---------- nagłówek dokumentu ---------- */
+  .doc-head { border-bottom: 3px solid var(--ink); padding-bottom: 22px; }
+  .eyebrow {
+    font-family: Archivo, sans-serif; font-weight: 700; font-size: 11.5px;
+    letter-spacing: .16em; text-transform: uppercase; color: var(--muted);
+  }
+  h1 {
+    font-family: Archivo, sans-serif; font-weight: 800;
+    font-size: clamp(34px, 6vw, 50px); line-height: 1.04; margin: 10px 0 0;
+    letter-spacing: -.02em; text-wrap: balance;
+  }
+  .lead { color: var(--muted); max-width: 62ch; margin-top: 12px; }
+
+  /* ---------- legenda czerwieni ---------- */
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 14px 26px; align-items: baseline;
+    background: var(--surface); border: 2px solid var(--rule);
+    border-radius: 4px; padding: 16px 18px; margin-top: 26px;
+  }
+  .legend p { margin: 0; max-width: 46ch; }
+
+  /* ---------- spis treści ---------- */
+  nav.toc { margin-top: 34px; }
+  nav.toc ol { list-style: none; margin: 12px 0 0; padding: 0;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 2px 24px; }
+  nav.toc a { color: inherit; text-decoration: none;
+    display: flex; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--rule-soft); }
+  nav.toc a:hover, nav.toc a:focus-visible { color: var(--accent); }
+  nav.toc .n { font-family: Archivo, sans-serif; font-weight: 800; color: var(--num); font-variant-numeric: tabular-nums; }
+
+  /* ---------- sekcje ---------- */
+  section { margin-top: 52px; }
+  .sec-head { display: flex; gap: 18px; align-items: flex-start; border-bottom: 2.5px solid var(--ink); padding-bottom: 10px; }
+  .sec-head .n {
+    font-family: Archivo, sans-serif; font-weight: 800; font-size: 40px; line-height: .95;
+    color: var(--num); font-variant-numeric: tabular-nums; flex-shrink: 0; width: 52px;
+  }
+  h2 { font-family: Archivo, sans-serif; font-weight: 800; font-size: 27px;
+       line-height: 1.15; margin: 4px 0 0; letter-spacing: -.01em; text-wrap: balance; }
+  .sec-head .sub { color: var(--muted); font-size: 15px; margin-top: 3px; }
+  section > * + * { margin-top: 16px; }
+  h3 { font-family: Archivo, sans-serif; font-weight: 700; font-size: 18.5px;
+       margin: 30px 0 0; }
+  p { margin: 0; max-width: 68ch; }
+  .body { padding-left: 70px; }
+  @media (max-width: 620px) { .body { padding-left: 0; } .sec-head .n { width: 40px; font-size: 32px; } }
+
+  /* ---------- kroki ---------- */
+  ol.steps { margin: 0; padding-left: 26px; max-width: 68ch; }
+  ol.steps > li { margin-top: 10px; padding-left: 6px; }
+  ol.steps > li::marker { font-family: Archivo, sans-serif; font-weight: 700; color: var(--accent); }
+  ul.plain { margin: 0; padding-left: 22px; max-width: 68ch; }
+  ul.plain > li { margin-top: 8px; }
+  ul.plain > li::marker { color: var(--rule); }
+
+  /* ---------- nazwa przycisku: CZERWONA ---------- */
+  .b {
+    font-family: Archivo, sans-serif; font-weight: 700;
+    color: var(--accent); white-space: nowrap;
+  }
+
+  /* ---------- efekt / skutek ---------- */
+  .out {
+    border-left: 4px solid var(--accent); background: var(--accent-soft);
+    padding: 12px 16px; border-radius: 0 3px 3px 0; max-width: 68ch;
+  }
+  .out .lbl { font-family: Archivo, sans-serif; font-weight: 700; font-size: 11.5px;
+    letter-spacing: .14em; text-transform: uppercase; display: block; margin-bottom: 2px; }
+  .note {
+    border: 2px dashed var(--rule); border-radius: 4px; padding: 12px 16px; max-width: 68ch;
+    color: var(--muted); font-size: 15.5px;
+  }
+  .note strong { color: var(--ink); }
+
+  /* ---------- oznaczenia na liście osób (prawdziwe kolory z aplikacji) ---------- */
+  .marks { list-style: none; margin: 0; padding: 0; max-width: 68ch;
+           display: grid; gap: 10px; }
+  .marks li { display: grid; grid-template-columns: 132px 1fr; gap: 14px; align-items: start;
+              border-bottom: 1px solid var(--rule-soft); padding-bottom: 10px; }
+  @media (max-width: 560px) { .marks li { grid-template-columns: 1fr; gap: 4px; } }
+  .chip {
+    display: inline-block; font-family: Archivo, sans-serif; font-weight: 700;
+    font-size: 12.5px; padding: 4px 9px; border-radius: 4px; white-space: nowrap;
+  }
+  /* pary tło+tekst przeniesione 1:1 z ekranu — czytelne na każdym tle */
+  .chip-teraz { background: #FAEAE6; color: #8A3A2B; }
+  .chip-koniec { background: #EAEAE5; color: #4A4A43; }
+  .chip-plan  { background: #E4F3E0; color: #2F5E2A; }
+  .chip-gielda{ background: #FDF3D4; color: #6B5310; border: 1.5px solid #171714; }
+  .chip-mail  { background: #FFFFFF; color: #8A3A2B; border: 1.5px solid #B7B6AE; }
+  .chip-pin   { background: #FFFFFF; color: #171714; border: 1.5px solid #B7B6AE; }
+
+  table { border-collapse: collapse; width: 100%; max-width: 68ch; font-size: 16px; }
+  th, td { text-align: left; padding: 9px 12px 9px 0; border-bottom: 1px solid var(--rule-soft); vertical-align: top; }
+  th { font-family: Archivo, sans-serif; font-weight: 700; font-size: 12px;
+       letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  .tabular { font-variant-numeric: tabular-nums; }
+
+  footer { margin-top: 64px; border-top: 2.5px solid var(--ink); padding-top: 14px;
+           color: var(--muted); font-size: 14.5px; display: flex; flex-wrap: wrap;
+           gap: 8px 24px; justify-content: space-between; }
+
+  a { color: var(--accent); }
+  :focus-visible { outline: 2.5px solid var(--accent); outline-offset: 2px; }
+
+  @media print {
+    @page { size: A4; margin: 16mm 15mm; }
+    body { background: #fff; color: #171714; font-size: 11.5pt; line-height: 1.5; }
+    .sheet { padding: 0; max-width: none; }
+    .b { color: #DE3A22 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .out, .chip, .legend { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    section { page-break-inside: avoid; margin-top: 26px; }
+    nav.toc { page-break-after: always; }
+    .body { padding-left: 54px; }
+  }
+</style>
+
+<div class="sheet">
+
+  <header class="doc-head">
+    <div class="eyebrow">Instrukcja dla pracownika · wersja aplikacji 0.26.3</div>
+    <h1>Tablet Służbowy</h1>
+    <p class="lead">Jak odbić zmianę, sprawdzić grafik, odhaczyć zadania i zgłosić sprawę
+      do kierownika — krok po kroku, na wspólnym tablecie w lokalu.</p>
+  </header>
+
+  <div class="legend">
+    <p><span class="b">Nazwy przycisków są czerwone.</span> Wszystko, co w tej instrukcji
+      napisane jest na czerwono, znajdziesz na ekranie tabletu dokładnie w takim brzmieniu —
+      wystarczy nacisnąć.</p>
+  </div>
+
+  <nav class="toc" aria-label="Spis treści">
+    <div class="eyebrow">Spis treści</div>
+    <ol>
+      <li><a href="#s1"><span class="n">1</span> Wybór pracownika i oznaczenia</a></li>
+      <li><a href="#s2"><span class="n">2</span> Pulpit</a></li>
+      <li><a href="#s3"><span class="n">3</span> Zapis godzin — dwie metody</a></li>
+      <li><a href="#s4"><span class="n">4</span> Grafik i giełda zmian</a></li>
+      <li><a href="#s5"><span class="n">5</span> Raport</a></li>
+      <li><a href="#s6"><span class="n">6</span> Zadania</a></li>
+      <li><a href="#s7"><span class="n">7</span> Więcej → Zgłoś</a></li>
+      <li><a href="#s8"><span class="n">8</span> Wiadomości</a></li>
+    </ol>
+  </nav>
+
+  <!-- ============ 1 ============ -->
+  <section id="s1">
+    <div class="sec-head">
+      <span class="n">1</span>
+      <div>
+        <h2>Wybór pracownika i oznaczenia</h2>
+        <div class="sub">Pierwszy ekran — <em>Wybierz siebie</em></div>
+      </div>
+    </div>
+    <div class="body">
+      <p>Tablet jest zalogowany na stałe dla całego lokalu. Nie logujesz się swoim
+        e-mailem — po prostu naciskasz swoje imię na liście. Po skończonej pracy wracasz
+        do listy przyciskiem <span class="b">&lt; Zmień</span> w lewym górnym rogu, żeby
+        tablet był gotowy dla następnej osoby.</p>
+
+      <p>Nad listą widzisz podsumowanie dnia, np. <em>„2 na zmianie · 3 wg grafiku jeszcze
+        nie odbiło · 1 zakończyło”</em>. Lista jest posortowana w tej samej kolejności:
+        najpierw osoby, które teraz pracują, potem oczekiwane wg grafiku (wcześniejsza
+        godzina wyżej), potem te, które już skończyły, a na końcu osoby mające dziś wolne.</p>
+
+      <h3>Co znaczą oznaczenia przy imieniu</h3>
+      <ul class="marks">
+        <li>
+          <span class="chip chip-teraz">od 08:00</span>
+          <span><strong>Ta osoba jest teraz na zmianie</strong> — odbiła start o tej
+            godzinie i nie zakończyła jeszcze pracy.</span>
+        </li>
+        <li>
+          <span class="chip chip-plan">o 09:00</span>
+          <span><strong>Wg grafiku ma dziś przyjść o tej godzinie, ale jeszcze nie
+            odbiła startu.</strong> To przypomnienie: naciśnij swoje imię i rozpocznij
+            zmianę.</span>
+        </li>
+        <li>
+          <span class="chip chip-koniec">7,5 godz.</span>
+          <span><strong>Ta osoba ma już dziś zapisaną i zakończoną zmianę</strong> —
+            liczba to suma godzin zapisanych dzisiaj.</span>
+        </li>
+        <li>
+          <span>Brak oznaczenia</span>
+          <span>Osoba nie ma dziś zmiany w grafiku i nic dziś nie odbijała.</span>
+        </li>
+        <li>
+          <span class="chip chip-mail">✉ Czeka wiadomość</span>
+          <span><strong>Nieprzeczytana wiadomość od kierownika.</strong> Wejdź na swoje
+            imię i otwórz <span class="b">Wiadomości</span> — patrz punkt 8.</span>
+        </li>
+        <li>
+          <span class="chip chip-gielda">⇄ Giełda: propozycja</span>
+          <span><strong>Cały kafelek jest żółty</strong> — ktoś wystawił zmianę, którą
+            <em>Ty</em> możesz wziąć. Szczegóły w punkcie 4.</span>
+        </li>
+        <li>
+          <span class="chip chip-pin">🔒 kłódka</span>
+          <span>Profil zabezpieczony PIN-em. Po naciśnięciu imienia wpisz swoje
+            <strong>4 cyfry</strong> na klawiaturze. Pomyłka = ekran pokazuje
+            „Niepoprawny PIN, spróbuj ponownie” i możesz wpisać jeszcze raz.</span>
+        </li>
+      </ul>
+
+      <div class="note"><strong>Nie naciskaj</strong> <span class="b">Wyloguj</span> na
+        tablecie (jest w zakładce <span class="b">Więcej</span>). To urządzenie ma zostać
+        zalogowane na stałe — po wylogowaniu trzeba wpisywać dane kiosku od nowa.</div>
+    </div>
+  </section>
+
+  <!-- ============ 2 ============ -->
+  <section id="s2">
+    <div class="sec-head">
+      <span class="n">2</span>
+      <div>
+        <h2>Pulpit</h2>
+        <div class="sub">Twój ekran startowy po wybraniu imienia</div>
+      </div>
+    </div>
+    <div class="body">
+      <h3>Zanim rozpoczniesz zmianę</h3>
+      <ul class="plain">
+        <li><strong>Twoja zmiana dziś</strong> — godziny z grafiku wysłanego przez
+          kierownika. Jeśli dziś nie pracujesz, zobaczysz kafelek
+          <strong>Następna zmiana</strong> (np. „jutro · 09:00 – 17:00”); naciśnięcie go
+          przenosi do zakładki <span class="b">Grafik</span>.</li>
+        <li><strong>Zadania dziś</strong> — lista do odhaczenia, jeśli kierownik coś
+          wyznaczył (punkt 6).</li>
+        <li>Na dole duży czerwony przycisk <span class="b">Rozpocznij zmianę</span>.</li>
+      </ul>
+
+      <h3>Kiedy zmiana trwa</h3>
+      <p>Pulpit zamienia się w licznik pracy:</p>
+      <ul class="plain">
+        <li><strong>Pracujesz od 08:00</strong> i pod spodem dużymi cyframi
+          <strong>ile już pracujesz</strong>, np. „3 godz. 12 min”. Liczy się na żywo.</li>
+        <li><strong>Do końca zmiany</strong> — ile zostało do godziny z grafiku. Gdy
+          przekroczysz planowany koniec, ramka robi się czerwona i napis zmienia się na
+          <strong>Po planowanym końcu</strong>.</li>
+        <li><strong>Zadania na zmianę</strong> — pasek postępu i lista do odhaczenia.</li>
+        <li>W nagłówku ekranu widnieje różowa plakietka <strong>na zmianie</strong>.</li>
+      </ul>
+      <p>Zmianę kończysz stąd (albo z zakładki <span class="b">Zmiana</span>) przyciskiem
+        <span class="b">Zakończ zmianę o 17:04</span> — na przycisku jest zawsze aktualna
+        godzina. Jeśli chcesz wpisać inną godzinę zakończenia, naciśnij
+        <span class="b">Wybierz inną godzinę</span> i wybierz ją z zegara.</p>
+      <div class="out">
+        <span class="lbl">Efekt</span>
+        Godziny trafiają od razu do Twojego <span class="b">Raportu</span> i do panelu
+        kierownika. Niedokończone zadania <strong>nie blokują</strong> zakończenia zmiany.
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 3 ============ -->
+  <section id="s3">
+    <div class="sec-head">
+      <span class="n">3</span>
+      <div>
+        <h2>Zapis godzin — dwie metody</h2>
+        <div class="sub">Zakładka <em>Zmiana</em> na dolnym pasku</div>
+      </div>
+    </div>
+    <div class="body">
+      <p>Na górze formularza wybierasz <strong>Lokal</strong> i <strong>Stanowisko</strong>
+        (są już wypełnione Twoimi domyślnymi — zmień tylko, jeśli dziś pracujesz gdzie
+        indziej). Data jest zawsze dzisiejsza.</p>
+
+      <h3>Metoda 1 — odbijam start, koniec zapiszę później</h3>
+      <ol class="steps">
+        <li>Sprawdź <strong>Lokal</strong> i <strong>Stanowisko</strong>.</li>
+        <li>Pole <strong>Rozpoczęcie</strong> pokazuje aktualną godzinę („teraz · zmień”).
+          Jeśli zaczęłaś/zacząłeś wcześniej, naciśnij to pole i wybierz właściwą godzinę.</li>
+        <li>Naciśnij <span class="b">Rozpocznij zmianę</span>.</li>
+        <li>Po pracy wróć na tablet, naciśnij swoje imię i użyj
+          <span class="b">Zakończ zmianę o …</span>.</li>
+      </ol>
+      <div class="out"><span class="lbl">Efekt</span>
+        Zmiana jest otwarta — w Raporcie widnieje jako <strong>Trwa</strong>, a na liście
+        osób masz różową plakietkę „od 08:00”. Godziny policzą się po zakończeniu.</div>
+
+      <h3>Metoda 2 — zapisuję całą zmianę naraz</h3>
+      <ol class="steps">
+        <li>Zaznacz kwadrat <span class="b">Znam godzinę zakończenia</span>.</li>
+        <li>Ustaw <strong>Rozpoczęcie</strong> i <strong>Zakończenie</strong>.
+          Pod spodem od razu pokaże się <strong>Razem</strong>, np. „8,0 godz.”.</li>
+        <li>Naciśnij <span class="b">Zapisz całą zmianę</span>.</li>
+      </ol>
+      <div class="out"><span class="lbl">Efekt</span>
+        Zmiana jest od razu zamknięta i policzona. Zobaczysz ekran
+        <strong>Zmiana zapisana</strong> z sumą godzin na dziś.</div>
+
+      <h3>Po zapisaniu zmiany</h3>
+      <p>Na ekranie podsumowania masz do wyboru:
+        <span class="b">Rozpocznij kolejną zmianę</span> (gdy wracasz jeszcze dziś),
+        <span class="b">Zobacz swoje godziny</span> (przechodzi do Raportu) oraz
+        <span class="b">Wróć do listy osób</span>.</p>
+
+      <div class="note">Aplikacja <strong>nie pozwoli</strong> zapisać zmiany, która
+        nachodzi na już zapisaną (pokaże komunikat z godzinami tej pierwszej). Jeśli to
+        pomyłka w danych, popraw ją przez <span class="b">Zgłoś</span> →
+        <span class="b">Popraw zmianę</span> — punkt 7.</div>
+    </div>
+  </section>
+
+  <!-- ============ 4 ============ -->
+  <section id="s4">
+    <div class="sec-head">
+      <span class="n">4</span>
+      <div>
+        <h2>Grafik i giełda zmian</h2>
+        <div class="sub">Zakładka <em>Grafik</em> — widzisz tylko grafik wysłany przez kierownika</div>
+      </div>
+    </div>
+    <div class="body">
+      <p>U góry trzy przyciski przełączające widok:</p>
+      <table>
+        <tr><th>Przycisk</th><th>Co pokazuje</th></tr>
+        <tr><td><span class="b">Ten tydzień</span></td>
+            <td>Bieżący tydzień, dzień po dniu (poniedziałek – niedziela). Dzisiejszy dzień
+              ma czerwoną plakietkę <strong>DZIŚ</strong>.</td></tr>
+        <tr><td><span class="b">Następny</span></td>
+            <td>Ten sam widok dla kolejnego tygodnia — do sprawdzenia, kiedy pracujesz
+              w przyszłym tygodniu.</td></tr>
+        <tr><td><span class="b">Miesiąc</span></td>
+            <td>Lista wszystkich Twoich zmian w bieżącym miesiącu plus podsumowanie
+              u góry, np. <span class="tabular">„18 zmian · 144 h”</span>.</td></tr>
+      </table>
+
+      <h3>Jak czytać dzień</h3>
+      <ul class="plain">
+        <li><strong>Twoja zmiana</strong> — w grubej ramce: skrót stanowiska, godziny,
+          lokal. Jeśli pracujesz poza swoim lokalem, obok jest plakietka
+          <strong>INNY LOKAL</strong>.</li>
+        <li><strong>Z tobą:</strong> — kto jeszcze pracuje tego dnia na tej zmianie.</li>
+        <li><strong>Wolne</strong> — nie masz tego dnia zmiany. <strong>URP · Urlop</strong>
+          lub <strong>NIE · Zgłoszona niedostępność</strong> — masz zatwierdzone wolne.</li>
+        <li>Przycisk <span class="b">Pokaż wszystkich w lokalu</span> dopisuje też osoby
+          pracujące w dni, w które Ty masz wolne (z powrotem:
+          <span class="b">Pokaż tylko moje</span>).</li>
+      </ul>
+
+      <h3>Wystawienie swojej zmiany na giełdę</h3>
+      <p>Gdy nie możesz przyjść, nie musisz szukać zastępstwa przez telefon — wystaw zmianę
+        na giełdę.</p>
+      <ol class="steps">
+        <li>Znajdź swoją zmianę w <span class="b">Ten tydzień</span> lub
+          <span class="b">Następny</span>.</li>
+        <li>Naciśnij mały przycisk <span class="b">na giełdę</span> obok godzin.</li>
+        <li>Potwierdź przyciskiem <span class="b">Wystaw na giełdę</span>
+          (albo wycofaj się przez <span class="b">Anuluj</span>).</li>
+      </ol>
+      <div class="out"><span class="lbl">Efekt</span>
+        Twoja zmiana ma teraz <strong>żółte tło</strong> i status
+        <strong>Na giełdzie</strong>. Dopóki nikt jej nie wziął, możesz ją zabrać z powrotem
+        przyciskiem <span class="b">Wycofaj</span>. Gdy ktoś się zgłosi, status zmienia się
+        na <strong>Czeka na kierownika</strong> (tło niebieskie) i widnieje imię osoby,
+        która ją przejmuje.</div>
+      <div class="note">Zmianę można wystawić <strong>najpóźniej 12 godzin przed jej
+        rozpoczęciem</strong>. Później zamiast przycisku pojawia się napis
+        <em>„za późno na giełdę”</em> — wtedy zgłoś sprawę kierownikowi.
+        <strong>Zamianę zawsze zatwierdza kierownik.</strong></div>
+
+      <h3>Wzięcie cudzej zmiany</h3>
+      <p>Zmianę z giełdy widzą tylko osoby, które <strong>mogą ją wziąć</strong>: mają to
+        stanowisko przypisane w swojej karcie, są tego dnia wolne i nie mają zatwierdzonego
+        urlopu. Taka osoba pozna to po dwóch znakach:</p>
+      <ul class="plain">
+        <li>Na ekranie <strong>Wybierz siebie</strong> jej kafelek jest
+          <span class="chip chip-gielda">żółty</span> z opisem
+          <em>„⇄ Giełda: propozycja jutro · 09:00 – 17:00”</em>.</li>
+        <li>W zakładce <span class="b">Grafik</span>, <strong>na dole tygodnia</strong>,
+          jest <span class="chip chip-plan">zielony</span> blok
+          <strong>Giełda — możesz wziąć</strong> z datą, godzinami, lokalem i imieniem
+          osoby, która zmianę oddaje.</li>
+      </ul>
+      <ol class="steps">
+        <li>Naciśnij <span class="b">Wezmę tę zmianę</span> w zielonym bloku.</li>
+      </ol>
+      <div class="out"><span class="lbl">Efekt</span>
+        Pod danym dniem pojawia się wpis <em>„Zgłosiłeś(-aś) się po tę zmianę — czeka na
+        zgodę kierownika”</em>. Po zatwierdzeniu przez kierownika zmiana przechodzi do
+        Twojego grafiku, a Ty dostajesz wiadomość (punkt 8).</div>
+
+      <p>Na dole zakładki jest też skrót <span class="b">Wniosek o wolne</span> —
+        prowadzi do formularza opisanego w punkcie 7.2.</p>
+    </div>
+  </section>
+
+  <!-- ============ 5 ============ -->
+  <section id="s5">
+    <div class="sec-head">
+      <span class="n">5</span>
+      <div>
+        <h2>Raport</h2>
+        <div class="sub">Twoje przepracowane godziny miesiąc po miesiącu</div>
+      </div>
+    </div>
+    <div class="body">
+      <ol class="steps">
+        <li>Wejdź w zakładkę <span class="b">Raport</span>.</li>
+        <li>Z dwóch list u góry wybierz <strong>miesiąc</strong> i <strong>rok</strong>.</li>
+        <li>Poniżej masz wszystkie swoje zmiany: data z dniem tygodnia, skrót stanowiska,
+          godziny <em>od – do</em> i liczba godzin.</li>
+      </ol>
+      <ul class="plain">
+        <li>Na samym dole, w czarnej ramce, jest <strong>suma godzin</strong> za wybrany
+          miesiąc. Jeśli miałaś/miałeś urlop, obok pokazuje się rozbicie:
+          <em>„urlop 24,0 h · bez urlopu 152,0 h”</em>.</li>
+        <li>Zmiana trwająca ma zamiast godziny zakończenia czerwony napis
+          <strong>Trwa</strong>.</li>
+        <li>Dni urlopu mają skrót <strong>URL</strong> i słowo <strong>Urlop</strong>
+          zamiast godzin (liczą się po 8 godzin za każdy dzień roboczy).</li>
+      </ul>
+
+      <h3>Chorągiewka = poprawa godzin</h3>
+      <p>Przy każdym wierszu, po prawej stronie, jest mały przycisk z
+        <span class="b">chorągiewką ⚑</span>.</p>
+      <ol class="steps">
+        <li>Naciśnij <span class="b">⚑</span> przy zmianie, która ma złe godziny.</li>
+        <li>Otworzy się formularz <span class="b">Popraw zmianę</span> — już wypełniony
+          danymi tej zmiany.</li>
+        <li>Popraw, co trzeba, i naciśnij <span class="b">Wyślij poprawkę</span>
+          (szczegóły w punkcie 7.1).</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ============ 6 ============ -->
+  <section id="s6">
+    <div class="sec-head">
+      <span class="n">6</span>
+      <div>
+        <h2>Zadania</h2>
+        <div class="sub">Checklista na dziś — jeśli kierownik coś wyznaczył</div>
+      </div>
+    </div>
+    <div class="body">
+      <p>Te same zadania widzisz w trzech miejscach: na <span class="b">Pulpicie</span>,
+        w trakcie zmiany jako <strong>Zadania na zmianę</strong> oraz w zakładce
+        <span class="b">Zadania</span>. Czerwona liczba na ikonie zakładki mówi, ile
+        zostało do zrobienia.</p>
+
+      <h3>Jak odhaczyć wykonanie</h3>
+      <ol class="steps">
+        <li>Naciśnij wiersz zadania — kwadracik po lewej zapełnia się na czerwono.</li>
+        <li>Tytuł zostaje <s>przekreślony</s>, a pod nim pojawia się
+          <strong>kto i o której</strong> zadanie wykonał.</li>
+        <li>Pomyłka? Naciśnij wiersz jeszcze raz — odznaczenie zniknie.</li>
+      </ol>
+      <div class="out"><span class="lbl">Efekt</span>
+        Kierownik widzi wykonanie od razu w swoim panelu. <strong>Zadanie odhacza się raz
+        dla całego lokalu</strong> — jeśli zrobiła je koleżanka, u Ciebie też jest
+        odhaczone. Nie robicie tego samego dwa razy.</div>
+
+      <h3>Oznaczenia przy zadaniu</h3>
+      <ul class="plain">
+        <li><span class="b">Ważne</span> (czerwony napis) — zadanie o wysokim priorytecie,
+          jest na górze listy.</li>
+        <li><em>do 12:00</em> — termin, do którego zadanie ma być zrobione.</li>
+        <li>Szara plakietka z prawej: dla kogo jest zadanie
+          (np. <em>kuchnia</em> albo <em>wszyscy</em>), a przy zadaniach cyklicznych
+          postęp cyklu, np. <span class="tabular">„2/3 dni”</span>.</li>
+      </ul>
+      <p>Na ekranie <span class="b">Zadania</span> masz jeszcze dwa przełączniki:
+        <span class="b">Twoje stanowisko</span> (domyślnie — Twoje zadania i te dla
+        wszystkich) oraz <span class="b">Wszystkie</span> (wszystkie zadania lokalu na
+        dziś). U góry widnieje też Twój wynik: <em>„Ostatnie 7 dni: 24 z 27 zadań”</em>.</p>
+      <div class="note">Niewykonane zadania <strong>nie blokują</strong> zakończenia zmiany —
+        zobaczysz tylko przypomnienie, ile zostało.</div>
+    </div>
+  </section>
+
+  <!-- ============ 7 ============ -->
+  <section id="s7">
+    <div class="sec-head">
+      <span class="n">7</span>
+      <div>
+        <h2>Więcej → Zgłoś</h2>
+        <div class="sub">Trzy rodzaje spraw do kierownika w jednym miejscu</div>
+      </div>
+    </div>
+    <div class="body">
+      <p>Naciśnij zakładkę <span class="b">Więcej</span>, a potem
+        <span class="b">Zgłoś</span>. U góry wybierasz jeden z trzech kafelków:
+        <span class="b">Popraw zmianę</span>, <span class="b">Wolne / urlop</span>,
+        <span class="b">Zgłoś problem</span>.</p>
+
+      <h3>7.1 &nbsp;Popraw zmianę</h3>
+      <p>Używasz jej, gdy zapisane godziny nie zgadzają się z rzeczywistością albo gdy
+        w ogóle zapomniałaś/eś odbić.</p>
+      <ol class="steps">
+        <li>W polu <strong>Która zmiana</strong> wybierz zmianę z listy (ostatnie zmiany
+          z datą i godzinami) <em>albo</em> pozycję
+          <span class="b">Zapomniałem/łam odbić</span>, jeśli zmiany w ogóle nie ma
+          w systemie.</li>
+        <li>Pod spodem, w ramce <strong>Obecnie zapisane</strong>, widzisz to, co jest
+          w systemie teraz — punkt odniesienia. (Przy „Zapomniałem/łam odbić” tej ramki
+          nie ma, bo nie ma czego porównywać.)</li>
+        <li>Wpisz <strong>poprawne dane</strong>: Lokal, Stanowisko, Data,
+          <strong>Rozpoczęcie</strong> i <strong>Zakończenie</strong>.</li>
+        <li>W <strong>Komentarz (opcjonalnie)</strong> możesz dopisać wyjaśnienie,
+          np. „wyszłam o 20:30, nie zdążyłam odbić”.</li>
+        <li>Naciśnij <span class="b">Wyślij poprawkę</span>.</li>
+      </ol>
+      <div class="out"><span class="lbl">Efekt</span>
+        Zgłoszenie trafia do kierownika. Gdy je <strong>zatwierdzi</strong>, godziny
+        zmieniają się w Twoim <span class="b">Raporcie</span>. Kierownik może też wpisać
+        własne wartości i dopisać powód — odpowiedź w każdym przypadku dostaniesz
+        w <span class="b">Wiadomościach</span>.</div>
+
+      <h3>7.2 &nbsp;Wolne / urlop</h3>
+      <p>Tu zgłaszasz dni, w które <strong>nie możesz pracować</strong>, oraz wnioskujesz
+        o urlop. Najlepiej <strong>zanim kierownik ułoży grafik na kolejny miesiąc</strong>
+        — wtedy od razu Cię w te dni nie wpisze.</p>
+      <ol class="steps">
+        <li>Wybierz rodzaj: <span class="b">Urlop</span> (płatny, dla osób, którym
+          przysługuje) albo <span class="b">Niedostępność</span> (sama informacja, że
+          wtedy nie możesz pracować — bez godzin).</li>
+        <li>Przy <span class="b">Niedostępności</span> masz dwie możliwości: wpisz
+          <strong>Jeden dzień</strong> <em>albo</em> zakres <strong>Od</strong> –
+          <strong>Do</strong>. Przy <span class="b">Urlopie</span> zawsze podajesz zakres
+          <strong>Od – Do</strong>.</li>
+        <li>Możesz dopisać <strong>Komentarz</strong>, np. „wyjazd rodzinny”.</li>
+        <li>Naciśnij <span class="b">Wyślij wniosek</span>.</li>
+      </ol>
+      <div class="out"><span class="lbl">Efekt</span>
+        Kierownik dostaje powiadomienie i zatwierdza albo odrzuca wniosek. Po
+        <strong>zatwierdzeniu</strong> te dni są dla Ciebie zajęte — nie zostaniesz w nie
+        wpisana/wpisany do grafiku, a w zakładce <span class="b">Grafik</span> zobaczysz
+        przy nich <strong>URP · Urlop</strong> lub <strong>NIE · Zgłoszona
+        niedostępność</strong>. Zatwierdzony <strong>urlop</strong> dolicza się dodatkowo
+        do godzin w <span class="b">Raporcie</span>: po 8 godzin za każdy dzień roboczy
+        (soboty i niedziele się nie liczą). Niedostępność nie daje żadnych godzin.</div>
+
+      <h3>7.3 &nbsp;Zgłoś problem</h3>
+      <p>Dowolna sprawa dla kierownika: coś się zepsuło, czegoś brakuje, zdarzył się
+        jakiś incydent, chcesz coś zgłosić lub złożyć skargę.</p>
+      <ol class="steps">
+        <li>W polu <strong>Kto zgłasza</strong> zostaw swoje imię <em>albo</em> wybierz
+          <span class="b">Zgłoś anonimowo</span> — wtedy kierownik zobaczy treść
+          <strong>bez Twojego imienia</strong>.</li>
+        <li><strong>Która zmiana (opcjonalnie)</strong> — wskaż zmianę, której sprawa
+          dotyczy, albo zostaw <span class="b">Bez konkretnej zmiany</span>.</li>
+        <li>W polu <strong>Opis</strong> napisz, co się stało
+          (np. „zepsuta zmywarka, brak rękawic”).</li>
+        <li>Naciśnij <span class="b">Wyślij zgłoszenie</span>.</li>
+      </ol>
+      <div class="out"><span class="lbl">Efekt</span>
+        Zgłoszenie pojawia się u kierownika w panelu. Odpowiedź przyjdzie do
+        <span class="b">Wiadomości</span> — także wtedy, gdy zgłaszasz anonimowo,
+        odpowiedź trafi do Ciebie.</div>
+    </div>
+  </section>
+
+  <!-- ============ 8 ============ -->
+  <section id="s8">
+    <div class="sec-head">
+      <span class="n">8</span>
+      <div>
+        <h2>Wiadomości</h2>
+        <div class="sub">Wszystko, co dotyczy Ciebie, w jednym miejscu</div>
+      </div>
+    </div>
+    <div class="body">
+      <p>Wejście: zakładka <span class="b">Więcej</span> →
+        <span class="b">Wiadomości</span>, albo <span class="b">dzwonek</span> w prawym
+        górnym rogu ekranu. Czerwona liczba przy dzwonku i przy zakładce
+        <span class="b">Więcej</span> pokazuje, ile masz nieprzeczytanych.</p>
+      <p>Tu przychodzą m.in.:</p>
+      <ul class="plain">
+        <li>informacja, że kierownik <strong>wysłał lub zmienił grafik</strong>,</li>
+        <li><strong>zatwierdzenie albo odrzucenie</strong> wniosku o urlop / niedostępność,</li>
+        <li>odpowiedź na <strong>poprawkę godzin</strong> — co dokładnie zostało wpisane
+          i dlaczego,</li>
+        <li>informacja o <strong>ręcznej zmianie lub usunięciu</strong> Twojej zmiany
+          przez kierownika,</li>
+        <li>przypomnienia o <strong>terminach</strong> — książeczka sanepidowska, umowa,</li>
+        <li>rozstrzygnięcia dotyczące <strong>giełdy zmian</strong>.</li>
+      </ul>
+      <div class="out"><span class="lbl">Jak czytać</span>
+        Wiadomość <strong>nieprzeczytana</strong> ma czerwony pasek z lewej strony;
+        przeczytana — szary. Samo wejście na ekran oznacza wszystkie jako przeczytane,
+        więc licznik znika. Wiadomości zostają na liście — możesz do nich wrócić.</div>
+      <div class="note">Na tablecie każdy widzi <strong>tylko swoje</strong> wiadomości —
+        te przypisane do wybranego imienia. Dlatego na liście osób obok imienia pojawia
+        się <strong>koperta</strong>, gdy ktoś ma coś nieprzeczytanego.</div>
+    </div>
+  </section>
+
+  <footer>
+    <span>Tablet Służbowy · instrukcja dla pracownika</span>
+    <span class="tabular">Wersja aplikacji 0.26.3</span>
+  </footer>
+</div>
