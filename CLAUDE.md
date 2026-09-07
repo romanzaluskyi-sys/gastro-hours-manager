@@ -497,10 +497,15 @@ nigdy nie pokazujemy błędu użytkownikowi.
 
 ## Karta dnia / Dziennik ("Puls") — dodane 2026-09-07
 
-Zakładka **Karta dnia** w Panelu Kierownika
+Zakładka **Puls** w Panelu Kierownika (klucz `tab === "puls"`)
 ([`manager/KartaDnia.tsx`](src/components/manager/KartaDnia.tsx)), cała
 arytmetyka w [`utils/dziennik.ts`](src/utils/dziennik.ts) — komponent tylko
-rysuje, nie licz nic w JSX.
+rysuje, nie licz nic w JSX. Na Pulpicie ([`PulpitHome.tsx`](src/components/manager/PulpitHome.tsx))
+stoi pasek "wczoraj — dzień niezamknięty" (`stanKartDnia`), który przez
+`goToPuls` w ManagerDashboard otwiera od razu właściwy lokal i dzień
+(`initialLokal`/`initialDate`). Pulpit jest ekranem, na który kierownik i tak
+wchodzi codziennie — bez tego paska zamykanie dnia zależałoby od tego, czy
+ktoś sobie o zakładce przypomni.
 
 **Zasada, z której wynika reszta: karta musi się zamykać w 60–90 sekund.**
 Jeśli wypełnianie zacznie zajmować dłużej, ludzie zaczną klikać karty wstecz

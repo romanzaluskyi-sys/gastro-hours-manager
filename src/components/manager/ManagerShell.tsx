@@ -33,7 +33,7 @@ import WeatherBadge from "../WeatherBadge";
 
 export const NAV_ITEMS = [
   { key: "pulpit", label: "Pulpit", shortLabel: "Pulpit", Icon: Home },
-  { key: "karta_dnia", label: "Karta dnia", shortLabel: "Dzień", Icon: BookOpen },
+  { key: "puls", label: "Puls", shortLabel: "Puls", Icon: BookOpen },
   {
     key: "zatwierdzanie",
     label: "Zatwierdzanie zmian",

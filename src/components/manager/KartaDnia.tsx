@@ -81,10 +81,14 @@ export default function KartaDnia({
   dayLogTemplates,
   weatherForecasts,
   showMsg,
+  // Ustawiane, gdy kierownik przyszedł tu z paska "dzień niezamknięty"
+  // na Pulpicie — otwieramy dokładnie ten lokal i ten dzień.
+  initialLokal,
+  initialDate,
 }) {
   const dzis = toLocalYMD(new Date());
   // Domyślnie wczoraj: dzień zamyka się po jego zakończeniu, a nie w trakcie.
-  const [data, setData] = useState(przesun(dzis, -1));
+  const [data, setData] = useState(initialDate || przesun(dzis, -1));
 
   // availableLokaleForManager to wiersze tabeli `lokale`, NIE nazwy, a
   // selectedLokal przy "Cała sieć" ma wartość "ALL" — ta sama konwencja co
@@ -95,7 +99,7 @@ export default function KartaDnia({
     selectedLokal && selectedLokal !== "ALL" && lokaleNames.includes(selectedLokal)
       ? selectedLokal
       : null;
-  const [lokalWybrany, setLokalWybrany] = useState("");
+  const [lokalWybrany, setLokalWybrany] = useState(initialLokal || "");
   // Gdy górny pasek stoi na "Cała sieć", karta pokazuje pierwszy dostępny
   // lokal, dopóki kierownik sam nie wybierze innego.
   const lokal = konkretny || lokalWybrany || lokaleNames[0] || "";

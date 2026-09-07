@@ -7,10 +7,12 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
 ## 0.29.0 — 2026-09-07
 
-- **Nowa zakładka "Karta dnia"** w Panelu Kierownika. Dzień zamyka się w
-  minutę: godziny, koszt pracy, obsada, zadania i pogoda są policzone z góry,
-  ręcznie wpisuje się tylko utarg, temperatury, dostawę i notatkę dla
+- **Nowa zakładka "Puls"** w Panelu Kierownika — karta dnia. Dzień zamyka się
+  w minutę: godziny, koszt pracy, obsada, zadania i pogoda są policzone z
+  góry, ręcznie wpisuje się tylko utarg, temperatury, dostawę i notatkę dla
   następnej zmiany.
+- **Na Pulpicie widać, że wczorajszy dzień nie został zamknięty** — pasek z
+  nazwami lokali i przyciskiem, który otwiera od razu właściwą kartę.
 - Karta liczy **średni paragon** i **udział kosztu pracy w utargu** — liczbę,
   po której widać, czy dzień się opłacił.
 - **Temperatura poza normą świeci na czerwono** zamiast leżeć w tabeli jako

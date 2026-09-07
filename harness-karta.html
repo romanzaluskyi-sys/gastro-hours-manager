@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>Render karty dnia</title>
 <style>
   body { font: 14px system-ui, sans-serif; background: #F1F1EE; margin: 0; }
@@ -28,7 +29,8 @@ window.addEventListener("unhandledrejection", (ev) => pokazBlad(ev.reason));
 
 // Zaślepki dla pakietów z node_modules — tu nie ma bundlera, więc "react"
 // i "lucide-react" trzeba podstawić ręcznie.
-const IKONY = ["ChevronLeft","ChevronRight","Lock","CheckCircle2","AlertTriangle","Plus"];
+const IKONY = ["ChevronLeft","ChevronRight","Lock","CheckCircle2","AlertTriangle","Plus",
+               "ArrowRight","Palmtree","ArrowLeftRight"];
 const stub = (kod) => URL.createObjectURL(new Blob([kod], { type: "text/javascript" }));
 const PAKIETY = {
   react: stub(`const R = window.React;
@@ -125,8 +127,27 @@ const g = (h) => { const d = new Date(wczoraj + "T00:00:00"); d.setHours(h); ret
       showMsg: (m) => console.log("showMsg:", m),
     };
 
+    // Pulpit dostaje te same dane — chodzi o pasek "dzień niezamknięty",
+    // który stąd prowadzi do karty.
+    const Pulpit = (await import(await zaladuj("/src/components/manager/PulpitHome"))).default;
+    const propsPulpitu = {
+      users: props.users, shifts: props.shifts, issues: [], tasks: props.tasks,
+      taskCompletions: [], absences: [], shiftSwaps: [], planShifts: props.planShifts,
+      matchesFilter: () => true,
+      setActiveTab: (k) => console.log("setActiveTab", k),
+      dayLogs: props.dayLogs,
+      availableLokaleForManager: props.availableLokaleForManager,
+      onOpenPuls: (l, d) => console.log("onOpenPuls", l, d),
+    };
+
     ReactDOM.createRoot(document.getElementById("app")).render(
-      React.createElement(KartaDnia, props)
+      React.createElement(
+        "div",
+        null,
+        React.createElement(Pulpit, propsPulpitu),
+        React.createElement("hr", { style: { margin: "32px 0", border: "0", borderTop: "2px dashed #B7B6AE" } }),
+        React.createElement(KartaDnia, { ...props, initialLokal: "Ceglana", initialDate: wczoraj })
+      )
     );
     setTimeout(() => {
       if (status.className !== "zle") status.textContent = "wyrenderowane bez wyjątku";

@@ -50,7 +50,7 @@ import { futureShiftsOfUser } from "../utils/grafik";
 // zniknęły kiedyś Powiadomienia). Lista trzyma to w jednym miejscu.
 const TABY_Z_WLASNYM_WIDOKIEM = [
   "pulpit",
-  "karta_dnia",
+  "puls",
   "grafik",
   "moja_praca",
   "godziny",
@@ -113,6 +113,14 @@ const ManagerDashboard = ({
   const [reportUserId, setReportUserId] = useState(null);
   // Imię pracownika w Rejestr Godzin/Aktywni prowadzi tu — patrz onNameClick
   // przekazywane do tych komponentów.
+  // Skok z paska "dzień niezamknięty" na Pulpicie prosto do właściwej karty —
+  // ten sam wzorzec co goToEmployeeReport niżej.
+  const [pulsCel, setPulsCel] = useState(null);
+  const goToPuls = (lokal, date) => {
+    setPulsCel({ lokal, date });
+    setTab("puls");
+  };
+
   const goToEmployeeReport = (userId) => {
     setReportUserId(userId);
     setTab("raporty");
@@ -1141,6 +1149,9 @@ const ManagerDashboard = ({
             setActiveTab={setTab}
             shiftSwaps={shiftSwaps}
             planShifts={planShifts}
+            dayLogs={dayLogs}
+            availableLokaleForManager={availableLokaleForManager}
+            onOpenPuls={goToPuls}
           />
         )}
         {tab === "raporty" && (
@@ -1172,7 +1183,7 @@ const ManagerDashboard = ({
           />
         )}
 
-        {tab === "karta_dnia" && (
+        {tab === "puls" && (
           <KartaDnia
             currentUser={currentUser}
             selectedLokal={selectedLokal}
@@ -1193,6 +1204,8 @@ const ManagerDashboard = ({
             dayLogTemplates={dayLogTemplates}
             weatherForecasts={weatherForecasts}
             showMsg={showMsg}
+            initialLokal={pulsCel && pulsCel.lokal}
+            initialDate={pulsCel && pulsCel.date}
           />
         )}
 

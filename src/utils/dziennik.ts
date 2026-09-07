@@ -195,6 +195,19 @@ export const autoPodsumowanie = ({
   };
 };
 
+// Stan zamknięcia dnia w każdym z lokali — do paska na Pulpicie. Kierownik
+// ma zobaczyć zaległość od razu po wejściu do panelu, a nie dopiero wtedy,
+// gdy sam sobie przypomni o zakładce.
+export const stanKartDnia = ({ dayLogs, lokaleNames, dateStr }) =>
+  (lokaleNames || []).map((lokal) => {
+    const karta = znajdzKarte(dayLogs, lokal, dateStr);
+    return {
+      lokal,
+      karta,
+      zamkniety: !!karta && karta.status === "zamkniety",
+    };
+  });
+
 export const sredniCzek = (obrot, paragony) => {
   const o = Number(obrot);
   const p = Number(paragony);

@@ -24,6 +24,7 @@ import {
   sumujPlanFakt,
   PLAN_FAKT_PROG_H,
 } from "../../utils/grafik";
+import { stanKartDnia, toLocalYMD as ymdDziennika } from "../../utils/dziennik";
 
 const ProgressRing = ({ pct, size = 36, stroke = 5 }) => {
   const r = (size - stroke) / 2;
@@ -83,6 +84,9 @@ export default function PulpitHome({
   setActiveTab,
   shiftSwaps = [],
   planShifts = [],
+  dayLogs = [],
+  availableLokaleForManager = [],
+  onOpenPuls,
 }) {
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -291,6 +295,18 @@ export default function PulpitHome({
     };
   });
 
+  // Pasek zaległych kart dnia. Domyślnie patrzymy na wczoraj — dzień zamyka
+  // się po jego zakończeniu, więc "dziś" jeszcze nie ma czego zamykać.
+  const wczorajStr = ymdDziennika(new Date(Date.now() - 86400000));
+  const kartyWczoraj = stanKartDnia({
+    dayLogs,
+    lokaleNames: (availableLokaleForManager || [])
+      .map((l) => l.name)
+      .filter((n) => matchesFilter(n)),
+    dateStr: wczorajStr,
+  });
+  const niezamkniete = kartyWczoraj.filter((k) => !k.zamkniety);
+
   return (
     <div className="max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
@@ -381,6 +397,28 @@ export default function PulpitHome({
           </p>
         </div>
       </div>
+
+      {niezamkniete.length > 0 && (
+        <div className="bg-white rounded-xl border-[2px] border-[#171714] p-4 mb-6 flex flex-wrap items-center gap-x-6 gap-y-3">
+          <div>
+            <p className={statLabelCls}>Wczoraj — dzień niezamknięty</p>
+            <p className="text-[14px] text-[#6E6E66] mt-0.5">
+              {niezamkniete.map((k) => k.lokal).join(", ")} · utarg i wpisy jeszcze
+              nie potwierdzone
+            </p>
+          </div>
+          <button
+            className="ml-auto bg-[#DE3A22] text-white font-['Archivo'] font-bold text-sm px-4 py-2.5 rounded hover:opacity-90"
+            onClick={() =>
+              onOpenPuls
+                ? onOpenPuls(niezamkniete[0].lokal, wczorajStr)
+                : setActiveTab("puls")
+            }
+          >
+            Zamknij dzień
+          </button>
+        </div>
+      )}
 
       <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
         <div className={sectionCardCls}>
