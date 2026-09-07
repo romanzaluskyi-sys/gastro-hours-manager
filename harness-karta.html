@@ -80,8 +80,15 @@ const g = (h) => { const d = new Date(wczoraj + "T00:00:00"); d.setHours(h); ret
 
     const props = {
       currentUser: { name: "Roman", role: "admin" },
-      selectedLokal: "Bułka i Jacek",
-      availableLokaleForManager: ["Bułka i Jacek", "Ceglana"],
+      // UWAGA: dokładnie taki kształt, jaki podaje ManagerDashboard —
+      // availableLokaleForManager to WIERSZE tabeli lokale, a selectedLokal
+      // przy "Cała sieć" to "ALL". Pierwsza wersja harnessu podawała tu listę
+      // nazw i dlatego przepuściła biały ekran na produkcji.
+      selectedLokal: "ALL",
+      availableLokaleForManager: [
+        { id: "l1", name: "Bułka i Jacek", miasto: "Koszalin", archived: false },
+        { id: "l2", name: "Ceglana", miasto: "Koszalin", archived: false },
+      ],
       lokale: [{ name: "Bułka i Jacek", miasto: "Koszalin" }, { name: "Ceglana", miasto: "Koszalin" }],
       shifts: [
         { lokal: "Bułka i Jacek", user_name: "Ala", start_time: g(8), end_time: g(16) },

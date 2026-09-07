@@ -86,11 +86,19 @@ export default function KartaDnia({
   // Domyślnie wczoraj: dzień zamyka się po jego zakończeniu, a nie w trakcie.
   const [data, setData] = useState(przesun(dzis, -1));
 
-  const lokaleNames = availableLokaleForManager || [];
+  // availableLokaleForManager to wiersze tabeli `lokale`, NIE nazwy, a
+  // selectedLokal przy "Cała sieć" ma wartość "ALL" — ta sama konwencja co
+  // w Grafik.tsx. Wzięcie tego za listę stringów dawało obiekt w JSX i biały
+  // ekran zamiast zakładki.
+  const lokaleNames = (availableLokaleForManager || []).map((l) => l.name);
   const konkretny =
-    selectedLokal && lokaleNames.includes(selectedLokal) ? selectedLokal : null;
-  const [lokalWybrany, setLokalWybrany] = useState(konkretny || lokaleNames[0] || "");
-  const lokal = konkretny || lokalWybrany;
+    selectedLokal && selectedLokal !== "ALL" && lokaleNames.includes(selectedLokal)
+      ? selectedLokal
+      : null;
+  const [lokalWybrany, setLokalWybrany] = useState("");
+  // Gdy górny pasek stoi na "Cała sieć", karta pokazuje pierwszy dostępny
+  // lokal, dopóki kierownik sam nie wybierze innego.
+  const lokal = konkretny || lokalWybrany || lokaleNames[0] || "";
 
   const [zapisuje, setZapisuje] = useState(false);
   const [pokazTrafnosc, setPokazTrafnosc] = useState(false);
