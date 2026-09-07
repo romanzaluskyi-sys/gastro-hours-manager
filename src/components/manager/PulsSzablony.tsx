@@ -8,6 +8,7 @@
 // mierzy się wszędzie to samo — lodówka, zamrażarka, dostawa, wydanie — więc
 // nowy lokal ma być gotowy na dwa kliknięcia, a nie na kwadrans wpisywania.
 import React, { useState } from "react";
+import { api } from "../../api/supabase";
 import { Plus, Trash2, ArrowLeft } from "lucide-react";
 import {
   sectionCardCls,
@@ -55,7 +56,21 @@ export default function PulsSzablony({
   const [edytowany, setEdytowany] = useState(null);
   const [zapisuje, setZapisuje] = useState(false);
 
-  const moje = (dayLogTemplates || [])
+  // Ten ekran trzyma własną listę i po każdym zapisie czyta ją z bazy.
+  // Wcześniej polegał wyłącznie na setterze podanym z góry przez cztery
+  // poziomy propsów — a wtedy jedno zgubione po drodze ogniwo wywracało
+  // zapis, mimo że wiersz był już w bazie. Stan rodzica aktualizujemy
+  // dodatkowo, żeby karta dnia od razu zobaczyła nowe wpisy; gdy settera
+  // nie ma, konfiguracja i tak działa.
+  const [szablony, setSzablony] = useState(dayLogTemplates || []);
+  const odswiez = async () => {
+    const wiersze = await api.get("day_log_templates");
+    const lista = Array.isArray(wiersze) ? wiersze : [];
+    setSzablony(lista);
+    if (typeof setDayLogTemplates === "function") setDayLogTemplates(lista);
+  };
+
+  const moje = (szablony || [])
     .filter((s) => s.lokal === lokal && !s.archived)
     .sort((a, b) => (a.kolejnosc || 0) - (b.kolejnosc || 0));
   const mamKlucz = (k) => moje.some((s) => s.klucz === k);
@@ -67,9 +82,10 @@ export default function PulsSzablony({
       await zapiszSzablon({
         szablon: { ...wzor, kolejnosc: moje.length },
         lokal,
-        templates: dayLogTemplates,
-        setTemplates: setDayLogTemplates,
+        templates: szablony,
+        setTemplates: setSzablony,
       });
+      await odswiez();
       showMsg(`Dodano: ${wzor.nazwa}`, "success");
     } catch (e) {
       showMsg(e.message || "Błąd zapisu szablonu", "error");
@@ -95,9 +111,10 @@ export default function PulsSzablony({
       await zapiszSzablon({
         szablon: { ...edytowany, pola },
         lokal,
-        templates: dayLogTemplates,
-        setTemplates: setDayLogTemplates,
+        templates: szablony,
+        setTemplates: setSzablony,
       });
+      await odswiez();
       setEdytowany(null);
       showMsg("Zapisano", "success");
     } catch (e) {
@@ -110,9 +127,10 @@ export default function PulsSzablony({
     try {
       await archiwizujSzablon({
         szablon: s,
-        templates: dayLogTemplates,
-        setTemplates: setDayLogTemplates,
+        templates: szablony,
+        setTemplates: setSzablony,
       });
+      await odswiez();
       showMsg("Usunięto z listy", "success");
     } catch (e) {
       showMsg(e.message || "Błąd", "error");
