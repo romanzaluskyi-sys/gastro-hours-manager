@@ -495,6 +495,60 @@ default_lokal"). Brak `miasto` dla lokalu albo błąd sieci = cichy fallback
 na "--°C" (`WeatherBadge`) — to dekoracja paska, nie coś krytycznego, więc
 nigdy nie pokazujemy błędu użytkownikowi.
 
+## Karta dnia / Dziennik ("Puls") — dodane 2026-09-07
+
+Zakładka **Karta dnia** w Panelu Kierownika
+([`manager/KartaDnia.tsx`](src/components/manager/KartaDnia.tsx)), cała
+arytmetyka w [`utils/dziennik.ts`](src/utils/dziennik.ts) — komponent tylko
+rysuje, nie licz nic w JSX.
+
+**Zasada, z której wynika reszta: karta musi się zamykać w 60–90 sekund.**
+Jeśli wypełnianie zacznie zajmować dłużej, ludzie zaczną klikać karty wstecz
+i zmyślać, a wtedy analityka z Etapu E stoi na wymyślonych danych. Dlatego
+trzy warstwy: (1) policzone automatycznie i tylko pokazane — godziny fakt vs
+plan, koszt pracy, dziury/nadmiary obsady, % zadań, faktyczne otwarcie i
+zamknięcie z odbić, pogoda; (2) ręczne minimum — utarg, paragony,
+temperatury, dostawa, notatka dla następnej zmiany, tagi; (3) opis zdarzenia
+tylko gdy coś się wydarzyło.
+
+Warstwa (1) NIE jest przechowywana w bazie — liczy się w locie z `shifts`,
+`grafik_shifts`, `tasks`, `staffing_rules`. Dzięki temu karta sprzed pół roku
+pokazuje te same liczby co dziś, nawet jeśli nikt jej nie zamknął.
+
+Trzy odstępstwa od konwencji projektu, każde świadome:
+- **`day_logs` ma wymuszoną unikalność `(lokal, date)`** — reszta tabel jej
+  nie ma. Dwie karty na jeden dzień to dwa utargi i fałszywy labour cost.
+- **`jsonb`** w `day_log_entries.payload` i `day_log_templates.pola` — sushi
+  mierzy co innego niż kawiarnia, a w modelu silo każda nowa kolumna to
+  migracja we wszystkich bazach klientów. Nowy typ wpisu ma być konfiguracją.
+- **Poprawka wpisu to NOWY wiersz** z `corrected_from`, nigdy update na
+  miejscu (`poprawWpis`). Zapis HACCP, który da się cicho przepisać dzień
+  później, nie jest dowodem niczego. `wpisyDlaDnia` pokazuje tylko wersje,
+  do których nikt się nie odwołał jako do poprzedniej.
+
+Przypomnienia o wpisach liczy `isTaskDueOn`/`parseDaysOfWeek` z
+`utils/tasks.ts` — `day_log_templates.pora` i `days_of_week` mają ten sam
+słownik co `tasks`. **Nie pisz drugiego planisty.** ⚠️ `parseDaysOfWeek`
+zwraca `null`, a nie pustą tablicę, gdy dni nie ustawiono — i to znaczy
+"codziennie", nie "nigdy" (na tym wywrócił się pierwszy szkic
+`szablonyNaDzien`).
+
+### Sprawdziany bez Node — `harness-*.html`
+
+W tym środowisku nie ma Node ani npm, więc `npm run build` i testy jednostkowe
+odpadają. Zamiast tego dwa pliki w katalogu głównym, uruchamiane przez
+`python3 -m http.server` i otwierane w przeglądarce:
+- `harness-dziennik.html` — ładuje `utils/dziennik.ts` (razem z całym
+  łańcuchem `grafik.ts`/`tasks.ts`/`api/*`) przez Babel standalone i sprawdza
+  arytmetyka na ręcznie policzonych przykładach;
+- `harness-karta.html` — renderuje `KartaDnia.tsx` w Reakcie z CDN, z
+  zaślepkami na `react` i `lucide-react`, na sztucznych propsach.
+
+To jedyna działająca tu forma weryfikacji i to ona wyłapała błąd
+`parseDaysOfWeek` opisany wyżej. Pliki są poza `src/` i `public/`, więc build
+CRA ich nie widzi. Jeśli dokładasz logikę do dziennika, dopisz do nich
+przypadek zamiast zgadywać.
+
 ### Archiwum prognoz — dodane 2026-09-07
 
 `weather_forecasts` (migracja `0013`) trzyma, co prognoza mówiła o danym dniu

@@ -5,6 +5,22 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.29.0 — 2026-09-07
+
+- **Nowa zakładka "Karta dnia"** w Panelu Kierownika. Dzień zamyka się w
+  minutę: godziny, koszt pracy, obsada, zadania i pogoda są policzone z góry,
+  ręcznie wpisuje się tylko utarg, temperatury, dostawę i notatkę dla
+  następnej zmiany.
+- Karta liczy **średni paragon** i **udział kosztu pracy w utargu** — liczbę,
+  po której widać, czy dzień się opłacił.
+- **Temperatura poza normą świeci na czerwono** zamiast leżeć w tabeli jako
+  zwykła liczba. Poprawka wpisu nie kasuje poprzedniej wersji, tylko dopisuje
+  nową — tego wymaga dokumentacja HACCP.
+- **Aplikacja zapamiętuje, co prognoza mówiła 3, 7 i 14 dni wcześniej**, i
+  pokazuje, o ile się pomyliła. Po kilku tygodniach widać wprost, na ile dni
+  naprzód warto układać obsadę pod pogodę.
+- Anonimowe zgłoszenie znów da się wysłać — wcześniej znikało bez śladu.
+
 ## 0.28.0 — 2026-09-05
 
 - **Ostrzeżenia o obsadzie widać wprost w siatce Grafiku**, bez najeżdżania

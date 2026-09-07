@@ -23,6 +23,17 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.29.0",
+    date: "2026-09-07",
+    items: [
+      "Nowa zakładka \"Karta dnia\" — godziny, koszt, obsada, zadania i pogoda policzone z góry; ręcznie wpisujesz utarg, temperatury, dostawę i notatkę dla następnej zmiany.",
+      "Karta liczy średni paragon i udział kosztu pracy w utargu.",
+      "Temperatura poza normą świeci na czerwono; poprawka wpisu dopisuje nową wersję zamiast kasować starą (wymóg HACCP).",
+      "Aplikacja zapamiętuje, co prognoza mówiła 3, 7 i 14 dni wcześniej, i pokazuje, o ile się pomyliła.",
+      "Anonimowe zgłoszenie znów da się wysłać.",
+    ],
+  },
+  {
     version: "0.28.0",
     date: "2026-09-05",
     items: [

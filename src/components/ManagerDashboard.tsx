@@ -25,6 +25,7 @@ import { resolveAbsenceRequest, addUrlopDirectly, deleteAbsence } from "../utils
 import NotificationsPanel from "./NotificationsPanel";
 import ZatwierdzanieZmian from "./manager/ZatwierdzanieZmian";
 import ZadaniaISprzatanie from "./manager/ZadaniaISprzatanie";
+import KartaDnia from "./manager/KartaDnia";
 import ManagerShell, { NAV_ITEMS } from "./manager/ManagerShell";
 import PulpitHome from "./manager/PulpitHome";
 import WBudowie from "./manager/WBudowie";
@@ -42,6 +43,27 @@ import { futureShiftsOfUser } from "../utils/grafik";
 // ==========================================
 // KIEROWNIK DASHBOARD
 // ==========================================
+// Zakładki, które mają już własny komponent w manager/. Reszta dostaje
+// WBudowie. Wcześniej był tu łańcuch `tab !== "..." && tab !== "..."` —
+// dopisanie zakładki i zapomnienie o dopisaniu jej tam dawało dokładnie ten
+// błąd, przed którym ostrzega CLAUDE.md: zakładka bez żywego bloku (tak
+// zniknęły kiedyś Powiadomienia). Lista trzyma to w jednym miejscu.
+const TABY_Z_WLASNYM_WIDOKIEM = [
+  "pulpit",
+  "karta_dnia",
+  "grafik",
+  "moja_praca",
+  "godziny",
+  "zatwierdzanie",
+  "aktywni",
+  "zgloszenia",
+  "pracownicy",
+  "raporty",
+  "przewodnik",
+  "powiadomienia",
+  "zadania",
+];
+
 const ManagerDashboard = ({
   currentUser,
   setCurrentView,
@@ -63,6 +85,12 @@ const ManagerDashboard = ({
   setTasks,
   taskCompletions,
   setTaskCompletions,
+  dayLogs,
+  setDayLogs,
+  dayLogEntries,
+  setDayLogEntries,
+  dayLogTemplates,
+  weatherForecasts,
   absences,
   setAbsences,
   planShifts,
@@ -1144,6 +1172,30 @@ const ManagerDashboard = ({
           />
         )}
 
+        {tab === "karta_dnia" && (
+          <KartaDnia
+            currentUser={currentUser}
+            selectedLokal={selectedLokal}
+            availableLokaleForManager={availableLokaleForManager}
+            lokale={lokale}
+            shifts={shifts}
+            planShifts={planShifts}
+            users={users}
+            tasks={tasks}
+            taskCompletions={taskCompletions}
+            staffingRules={staffingRules}
+            staffingRuleSets={staffingRuleSets}
+            grafikWyjatki={grafikWyjatki}
+            dayLogs={dayLogs}
+            setDayLogs={setDayLogs}
+            dayLogEntries={dayLogEntries}
+            setDayLogEntries={setDayLogEntries}
+            dayLogTemplates={dayLogTemplates}
+            weatherForecasts={weatherForecasts}
+            showMsg={showMsg}
+          />
+        )}
+
         {tab === "grafik" && (
           <Grafik
             currentUser={currentUser}
@@ -1172,18 +1224,7 @@ const ManagerDashboard = ({
           />
         )}
 
-        {tab !== "pulpit" &&
-          tab !== "grafik" &&
-          tab !== "moja_praca" &&
-          tab !== "godziny" &&
-          tab !== "zatwierdzanie" &&
-          tab !== "aktywni" &&
-          tab !== "zgloszenia" &&
-          tab !== "pracownicy" &&
-          tab !== "raporty" &&
-          tab !== "przewodnik" &&
-          tab !== "powiadomienia" &&
-          tab !== "zadania" && (
+        {!TABY_Z_WLASNYM_WIDOKIEM.includes(tab) && (
           <WBudowie
             label={wBudowieLabel}
             hasOldContent={tabsWithOldContent.includes(tab)}

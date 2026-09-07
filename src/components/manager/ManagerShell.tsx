@@ -25,6 +25,7 @@ import {
   LogOut,
   MoreHorizontal,
   User,
+  BookOpen,
 } from "lucide-react";
 import { shellSidebarCls, shellNavBtnCls, shellBadgeCls, lokalTabCls } from "./designTokens";
 import { APP_VERSION } from "../../config";
@@ -32,6 +33,7 @@ import WeatherBadge from "../WeatherBadge";
 
 export const NAV_ITEMS = [
   { key: "pulpit", label: "Pulpit", shortLabel: "Pulpit", Icon: Home },
+  { key: "karta_dnia", label: "Karta dnia", shortLabel: "Dzień", Icon: BookOpen },
   {
     key: "zatwierdzanie",
     label: "Zatwierdzanie zmian",
