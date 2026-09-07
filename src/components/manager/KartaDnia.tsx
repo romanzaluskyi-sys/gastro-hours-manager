@@ -33,6 +33,7 @@ import {
   COLORS,
 } from "./designTokens";
 import PulsSzablony from "./PulsSzablony";
+import { api } from "../../api/supabase";
 import { describeWeatherCode } from "../../utils/weather";
 import { getDayOfWeek } from "../../utils/format";
 import {
@@ -115,7 +116,41 @@ export default function KartaDnia({
   // ten sam układ co Konfiguracja w Grafiku.
   const [widok, setWidok] = useState("karta");
 
-  const karta = znajdzKarte(dayLogs, lokal, data);
+  // Puls czyta i zapisuje własne dane. Propsy z App są tylko pierwszym,
+  // natychmiastowym stanem (żeby ekran nie mrugał w oczekiwaniu na fetch) —
+  // po każdym zapisie źródłem prawdy jest baza. Wcześniej ekran polegał na
+  // setterach podanych przez cztery poziomy propsów: zapis się udawał, ale
+  // wynik nigdzie nie było widać, bo aktualizacja stanu rodzica przepadała.
+  // Stan rodzica aktualizujemy nadal, gdy setter dojechał — wtedy Pulpit od
+  // razu wie, że dzień zamknięto.
+  const [kartyLokalne, setKartyLokalne] = useState(null);
+  const [wpisyLokalne, setWpisyLokalne] = useState(null);
+  const [szablonyLokalne, setSzablonyLokalne] = useState(null);
+  const karty = kartyLokalne || dayLogs || [];
+  const wpisyWszystkie = wpisyLokalne || dayLogEntries || [];
+  const szablonyWszystkie = szablonyLokalne || dayLogTemplates || [];
+
+  const sync = (setter, lista) => {
+    if (typeof setter === "function") setter(lista);
+  };
+  const odswiezDziennik = async () => {
+    // Ten sam zakres co w App.tsx — karta patrzy tylko wstecz, więc nie ma
+    // powodu ściągać całej historii.
+    const od = przesun(dzis, -120);
+    const [k, w, s] = await Promise.all([
+      api.get("day_logs", `date=gte.${od}`),
+      api.get("day_log_entries", `date=gte.${od}`),
+      api.get("day_log_templates"),
+    ]);
+    setKartyLokalne(Array.isArray(k) ? k : []);
+    setWpisyLokalne(Array.isArray(w) ? w : []);
+    setSzablonyLokalne(Array.isArray(s) ? s : []);
+    sync(setDayLogs, k);
+    sync(setDayLogEntries, w);
+    sync(setDayLogTemplates, s);
+  };
+
+  const karta = znajdzKarte(karty, lokal, data);
   const zamkniety = karta && karta.status === "zamkniety";
 
   // Pola formularza trzymamy lokalnie, żeby wpisywanie nie strzelało zapisem
@@ -155,8 +190,8 @@ export default function KartaDnia({
     [weatherForecasts, miasto, dzis]
   );
 
-  const szablony = szablonyNaDzien(dayLogTemplates, lokal, data);
-  const wpisy = wpisyDlaDnia(dayLogEntries, lokal, data);
+  const szablony = szablonyNaDzien(szablonyWszystkie, lokal, data);
+  const wpisy = wpisyDlaDnia(wpisyWszystkie, lokal, data);
   const wpisDlaSzablonu = (klucz) => wpisy.find((w) => w.template_key === klucz);
 
   const czek = sredniCzek(pole("obrot"), pole("liczba_paragonow"));
@@ -184,11 +219,12 @@ export default function KartaDnia({
         lokal,
         dateStr: data,
         pola: polaDoZapisu(),
-        dayLogs,
-        setDayLogs,
+        dayLogs: karty,
+        setDayLogs: setKartyLokalne,
       };
       if (zamykamy) await zamknijDzien({ ...wspolne, kto: currentUser.name });
       else await zapiszKarte(wspolne);
+      await odswiezDziennik();
       setForm({});
       showMsg(zamykamy ? "Dzień zamknięty" : "Zapisano", "success");
     } catch (e) {
@@ -207,9 +243,10 @@ export default function KartaDnia({
         templateKey,
         payload,
         kto: currentUser.name,
-        entries: dayLogEntries,
-        setEntries: setDayLogEntries,
+        entries: wpisyWszystkie,
+        setEntries: setWpisyLokalne,
       });
+      await odswiezDziennik();
       setNowyWpis(null);
       showMsg("Zapisano wpis", "success");
     } catch (e) {
@@ -232,8 +269,11 @@ export default function KartaDnia({
         lokal={lokal}
         lokaleNames={lokaleNames}
         onZmienLokal={setLokalWybrany}
-        dayLogTemplates={dayLogTemplates}
-        setDayLogTemplates={setDayLogTemplates}
+        dayLogTemplates={szablonyWszystkie}
+        onZmiana={(lista) => {
+          setSzablonyLokalne(lista);
+          sync(setDayLogTemplates, lista);
+        }}
         onWroc={() => setWidok("karta")}
         showMsg={showMsg}
       />
@@ -644,7 +684,19 @@ function ModalWpisu({ szablon, typ, onClose, onSave }) {
   const [wartosci, setWartosci] = useState({});
   const [zapisuje, setZapisuje] = useState(false);
 
+  // Pola tak/nie są zawsze "odpowiedziane" — niezaznaczone znaczy "nie", i to
+  // jest sensowny zapis. Reszta musi mieć wartość: temperatura, której nikt nie
+  // zmierzył, zapisana jako pusta, to wpis gorszy niż jego brak — liczy się
+  // jako wykonany i zafałszowuje cały dziennik.
+  const brakujace = szablon
+    ? pola.filter((p) => p.typ !== "bool" && !String(wartosci[p.klucz] ?? "").trim())
+    : String(wartosci.opis || "").trim()
+    ? []
+    : [{ label: "opis" }];
+  const kompletny = !brakujace.length;
+
   const zapisz = async () => {
+    if (!kompletny) return;
     setZapisuje(true);
     if (szablon) await onSave(szablon.typ, szablon.klucz, wartosci);
     else await onSave(typ || "inne", null, { opis: wartosci.opis || "" });
@@ -698,11 +750,20 @@ function ModalWpisu({ szablon, typ, onClose, onSave }) {
               />
             </div>
           )}
-          <div className="flex gap-2 justify-end pt-1">
+          <div className="flex flex-wrap gap-2 justify-end items-center pt-1">
+            {!kompletny && (
+              <span className="text-[13px] text-[#6E6E66] mr-auto">
+                Wypełnij: {brakujace.map((p) => p.label).join(", ")}
+              </span>
+            )}
             <button className={btnSecondaryCls} onClick={onClose}>
               Anuluj
             </button>
-            <button className={btnPrimaryCls} disabled={zapisuje} onClick={zapisz}>
+            <button
+              className={btnPrimaryCls}
+              disabled={zapisuje || !kompletny}
+              onClick={zapisz}
+            >
               Zapisz
             </button>
           </div>

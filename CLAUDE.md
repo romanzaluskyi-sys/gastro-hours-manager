@@ -538,6 +538,17 @@ zwraca `null`, a nie pustą tablicę, gdy dni nie ustawiono — i to znaczy
 "codziennie", nie "nigdy" (na tym wywrócił się pierwszy szkic
 `szablonyNaDzien`).
 
+⚠️ **Zakładka Puls czyta i zapisuje własne dane** (`odswiezDziennik` w
+`KartaDnia.tsx`, `odswiez` w `PulsSzablony.tsx`). Propsy `dayLogs`/
+`dayLogEntries`/`dayLogTemplates` z `App.tsx` są tylko pierwszym stanem, żeby
+ekran nie mrugał w oczekiwaniu na fetch; po każdym zapisie źródłem prawdy jest
+baza, a stan rodzica aktualizujemy best-effort (`sync()`), gdy setter dojechał.
+Powód nie jest kosmetyczny: w produkcji `setDayLogTemplates` okazywał się
+`undefined` mimo że w źródle jest przekazany na każdym z czterech poziomów —
+zapis się udawał, a wynik nie pojawiał się nigdzie poza ekranem konfiguracji.
+Dopóki nie wiadomo, gdzie ten props ginie, **nie opieraj nowych zapisów w tym
+module na setterach z App** — trzymaj stan lokalnie i odświeżaj z bazy.
+
 **Konfiguracja wpisów** — [`manager/PulsSzablony.tsx`](src/components/manager/PulsSzablony.tsx),
 osobny widok wewnątrz zakładki Puls (przycisk "Konfiguracja", ten sam układ co
 Konfiguracja w Grafiku). `SZABLONY_STARTOWE` w `utils/dziennik.ts` to zestaw

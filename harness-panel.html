@@ -47,7 +47,11 @@ const API_STUB = stub(`
     get: async (tabela) => (window.__tabele[tabela] || []).slice(),
     post: async (tabela, dane) => {
       window.__zapisy.push([tabela, dane]);
-      const wiersz = { id: "fake-" + (window.__zapisy.length), ...dane };
+      // Postgres dokłada domyślne znaczniki czasu — bez nich ekrany renderują
+      // "Invalid Date" i wygląda to na błąd aplikacji, którym nie jest.
+      const teraz = new Date().toISOString();
+      const wiersz = { id: "fake-" + (window.__zapisy.length), created_at: teraz,
+        recorded_at: teraz, completed_at: teraz, ...dane };
       (window.__tabele[tabela] = window.__tabele[tabela] || []).push(wiersz);
       return wiersz;
     },

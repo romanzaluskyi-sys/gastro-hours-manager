@@ -25,6 +25,9 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
   nazwa, rodzaj, pora dnia, dni tygodnia i pola do wypełnienia. Sześć typowych
   wpisów — lodówka, zamrażarka, przyjęcie dostawy, temperatura wydania, olej,
   sprzątanie końcowe — dodaje się jednym kliknięciem, z gotowymi normami.
+- **Pustego wpisu nie da się zapisać** — temperatura, której nikt nie zmierzył,
+  liczyłaby się jako wykonana i zafałszowała cały dziennik. Pola tak/nie są
+  wyjątkiem: niezaznaczone znaczy „nie” i to też jest odpowiedź.
 - Anonimowe zgłoszenie znów da się wysłać — wcześniej znikało bez śladu.
 
 ## 0.28.0 — 2026-09-05

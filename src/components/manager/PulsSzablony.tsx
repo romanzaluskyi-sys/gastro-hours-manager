@@ -49,25 +49,23 @@ export default function PulsSzablony({
   lokaleNames,
   onZmienLokal,
   dayLogTemplates,
-  setDayLogTemplates,
+  onZmiana,
   onWroc,
   showMsg,
 }) {
   const [edytowany, setEdytowany] = useState(null);
   const [zapisuje, setZapisuje] = useState(false);
 
-  // Ten ekran trzyma własną listę i po każdym zapisie czyta ją z bazy.
-  // Wcześniej polegał wyłącznie na setterze podanym z góry przez cztery
-  // poziomy propsów — a wtedy jedno zgubione po drodze ogniwo wywracało
-  // zapis, mimo że wiersz był już w bazie. Stan rodzica aktualizujemy
-  // dodatkowo, żeby karta dnia od razu zobaczyła nowe wpisy; gdy settera
-  // nie ma, konfiguracja i tak działa.
+  // Ten ekran trzyma własną listę i po każdym zapisie czyta ją z bazy, a
+  // wynik oddaje rodzicowi jednym krokiem (onZmiana) — nie przez setter
+  // wleczony z App przez cztery poziomy propsów. Tamten wariant potrafił
+  // zapisać wiersz i nie pokazać go nigdzie poza tym ekranem.
   const [szablony, setSzablony] = useState(dayLogTemplates || []);
   const odswiez = async () => {
     const wiersze = await api.get("day_log_templates");
     const lista = Array.isArray(wiersze) ? wiersze : [];
     setSzablony(lista);
-    if (typeof setDayLogTemplates === "function") setDayLogTemplates(lista);
+    if (typeof onZmiana === "function") onZmiana(lista);
   };
 
   const moje = (szablony || [])
