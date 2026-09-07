@@ -112,7 +112,12 @@ export const pozaNorma = (szablon, payload) =>
 // ujemna, gdy zdefiniowano tylko górną granicę.
 export const opisNormy = (pole) => {
   const j = pole.jednostka || "";
-  if (pole.min != null && pole.max != null) return `${pole.min}–${pole.max}${j}`;
+  // Przy wartościach ujemnych "-25–-18" jest nieczytelne — myślnik zlewa się
+  // z minusem. Wtedy piszemy słowami.
+  if (pole.min != null && pole.max != null)
+    return pole.min < 0 || pole.max < 0
+      ? `od ${pole.min}${j} do ${pole.max}${j}`
+      : `${pole.min}–${pole.max}${j}`;
   if (pole.max != null) return `do ${pole.max}${j}`;
   if (pole.min != null) return `od ${pole.min}${j}`;
   return "";

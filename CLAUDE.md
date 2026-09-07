@@ -558,16 +558,13 @@ zwraca `null`, a nie pustą tablicę, gdy dni nie ustawiono — i to znaczy
 "codziennie", nie "nigdy" (na tym wywrócił się pierwszy szkic
 `szablonyNaDzien`).
 
-⚠️ **Zakładka Puls czyta i zapisuje własne dane** (`odswiezDziennik` w
-`KartaDnia.tsx`, `odswiez` w `PulsSzablony.tsx`). Propsy `dayLogs`/
-`dayLogEntries`/`dayLogTemplates` z `App.tsx` są tylko pierwszym stanem, żeby
-ekran nie mrugał w oczekiwaniu na fetch; po każdym zapisie źródłem prawdy jest
-baza, a stan rodzica aktualizujemy best-effort (`sync()`), gdy setter dojechał.
-Powód nie jest kosmetyczny: w produkcji `setDayLogTemplates` okazywał się
-`undefined` mimo że w źródle jest przekazany na każdym z czterech poziomów —
-zapis się udawał, a wynik nie pojawiał się nigdzie poza ekranem konfiguracji.
-Dopóki nie wiadomo, gdzie ten props ginie, **nie opieraj nowych zapisów w tym
-module na setterach z App** — trzymaj stan lokalnie i odświeżaj z bazy.
+⚠️ **Zakładka Puls czyta i zapisuje własne dane** (`odswiez` w `Puls.tsx`).
+Propsy `dayLogs`/`dayLogEntries`/`dayLogTemplates` z `App.tsx` są tylko
+pierwszym stanem, żeby ekran nie mrugał w oczekiwaniu na fetch; po każdym
+zapisie źródłem prawdy jest baza, a stan rodzica aktualizujemy best-effort
+(`sync()`), gdy setter faktycznie dojechał. To zostaje mimo naprawy opisanej
+niżej: ekran, który po zapisie czyta z bazy, jest odporny na całą tę klasę
+błędów, a kosztuje jeden fetch.
 
 **Konfiguracja wpisów** — [`manager/PulsSzablony.tsx`](src/components/manager/PulsSzablony.tsx),
 osobny widok wewnątrz zakładki Puls (przycisk "Konfiguracja", ten sam układ co
@@ -592,6 +589,10 @@ odpadają. Zamiast tego dwa pliki w katalogu głównym, uruchamiane przez
   z CDN, z zaślepkami na `react` i `lucide-react`. ⚠️ Używa PRAWDZIWEGO klucza
   Supabase: renderowanie nic nie zapisuje, ale kliknięcie czegoś, co woła
   `api.post`, zapisze wiersz do produkcyjnej bazy;
+- `harness-app.html` — montuje PRAWDZIWY `App.tsx` z podstawioną sesją i atrapą
+  Supabase, w której dane już są, i sprawdza, czy propsy z App docierają do
+  zakładek. Jedyny sprawdzian, który łapie props wstawiony do złego elementu
+  (patrz błąd #16);
 - `harness-panel.html` — montuje CAŁY `ManagerDashboard` z propsami takimi,
   jakie podaje `App.tsx`, z PODMIENIONYM `api/supabase` (nic nie leci do sieci,
   można klikać wszystko). To jedyny sprawdzian, który łapie propsy gubione
@@ -1226,6 +1227,22 @@ wzorzec co `shift_edits`/`tasks`) — błąd tu nie blokuje reszty apki.
     wiersze mają kropkę w komórce i licznik przy nazwie lokalu. Jeśli
     dokładasz kolejny widok grafiku, licz niewysłane po `allLokaleNames`, a
     nie po tym, co akurat widać.
+
+16. **W `App.tsx` kilka dashboardów ma niemal identyczne listy propsów** —
+    `<PersonalDashboard>`, `<KioskDashboard>` i `<ManagerDashboard>` przekazują
+    te same nazwy w tej samej kolejności (`tasks`, `taskCompletions`,
+    `setTaskCompletions`, `absences`, `planShifts`…). Wstawianie nowych propsów
+    przez wyszukanie takiego fragmentu trafia w PIERWSZE wystąpienie, czyli w
+    dashboard pracownika, a nie w ten, o który chodziło. Tak właśnie cała grupa
+    propsów dziennika (`dayLogs`, `dayLogEntries`, `dayLogTemplates` i ich
+    settery) wylądowała w `<PersonalDashboard>`, który ich nie przyjmuje.
+    Objawy były mylące i wyglądały na trzy różne błędy: pusty ekran
+    konfiguracji po odświeżeniu, zapis, po którym nic się nie pokazuje, i
+    zminifikowane `i is not a function` przy zapisie (bo brakowało też
+    settera). **Dodając props do dashboardu, sprawdź numer linii elementu**
+    (`grep -n "<ManagerDashboard" src/App.tsx`), nie samo sąsiedztwo nazw.
+    Wykrył to dopiero `harness-app.html`, który montuje App i porównuje, co z
+    niego wychodzi z tym, co dociera do zakładki.
 
 ## Google Apps Script (`Odbior_Danych.gs`)
 

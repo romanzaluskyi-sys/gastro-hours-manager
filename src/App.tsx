@@ -297,13 +297,6 @@ export default function App() {
           tasks={tasks}
           taskCompletions={taskCompletions}
           setTaskCompletions={setTaskCompletions}
-          dayLogs={dayLogs}
-          setDayLogs={setDayLogs}
-          dayLogEntries={dayLogEntries}
-          setDayLogEntries={setDayLogEntries}
-          dayLogTemplates={dayLogTemplates}
-          setDayLogTemplates={setDayLogTemplates}
-          weatherForecasts={weatherForecasts}
           absences={absences}
           setAbsences={setAbsences}
           planShifts={planShifts}
@@ -358,6 +351,13 @@ export default function App() {
           setTasks={setTasks}
           taskCompletions={taskCompletions}
           setTaskCompletions={setTaskCompletions}
+          dayLogs={dayLogs}
+          setDayLogs={setDayLogs}
+          dayLogEntries={dayLogEntries}
+          setDayLogEntries={setDayLogEntries}
+          dayLogTemplates={dayLogTemplates}
+          setDayLogTemplates={setDayLogTemplates}
+          weatherForecasts={weatherForecasts}
           absences={absences}
           setAbsences={setAbsences}
           planShifts={planShifts}
