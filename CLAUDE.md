@@ -495,6 +495,28 @@ default_lokal"). Brak `miasto` dla lokalu albo błąd sieci = cichy fallback
 na "--°C" (`WeatherBadge`) — to dekoracja paska, nie coś krytycznego, więc
 nigdy nie pokazujemy błędu użytkownikowi.
 
+### Archiwum prognoz — dodane 2026-09-07
+
+`weather_forecasts` (migracja `0013`) trzyma, co prognoza mówiła o danym dniu
+N dni wcześniej. Jeden wiersz = (miasto, target_date, horizon_days), gdzie
+`horizon_days = 0` to STAN FAKTYCZNY — dzięki temu trafność liczy się przez
+porównanie wierszy w obrębie jednego dnia, bez osobnej tabeli na wyniki.
+Klucz to miasto, nie lokal (trzy lokale dzielą Koszalin).
+
+Po co: kierownik planuje obsadę z wyprzedzeniem i musi wiedzieć, na ile dni
+naprzód prognoza jest jeszcze warta zaufania. Pierwszy pomiar (Koszalin,
+30 dni, wrzesień 2026): błąd temperatury rośnie z 0,4 °C przy 1 dniu do
+2,0 °C przy 7; trafność deszczu trzyma się ~75% do szóstego dnia i spada do
+60% na siódmym, przy 23% fałszywych alarmów.
+
+⚠️ **Horyzont 8–14 dni powstaje WYŁĄCZNIE z codziennego crona**
+`api/cron/capture-weather.js`. Open-Meteo pozwala sięgnąć po dawne przebiegi
+modelu najwyżej 7 dni wstecz (previous-runs API), więc każdy dzień, w którym
+cron nie zadziała, jest dla dłuższych horyzontów stracony bezpowrotnie — nie
+da się tego nadrobić później. `scripts/backfill-pogoda.py` uzupełnia tylko
+horyzonty 1–7 i pisze z `ignore-duplicates`, żeby nie nadpisywać tego, co
+zebrał cron.
+
 ## Zadania i sprzątanie (Roadmap p.2) — zaimplementowane 2026-09-02..04
 
 Zbudowane w trzech rundach: pierwsza wersja (schemat + panel kierownika +
