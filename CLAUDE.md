@@ -74,7 +74,9 @@ api/                         — root-level, POZA src/ — funkcje Vercel Cron
 vercel.json                  — harmonogram crona
 CHANGELOG.md                 — historia wersji, patrz "Wersjonowanie i CHANGELOG" niżej
 docs/GRAFIK.md               — pełna specyfikacja Grafiku z uzasadnieniami decyzji właściciela
-docs/sql/                    — migracje do wklejenia w Supabase SQL Editor (po jednej naraz!)
+docs/sql/migrations/          — migracje, stosowane przez scripts/migrate.py (NIE ręcznie w SQL Editor)
+docs/sql/tools/               — zapytania pomocnicze (zrzut schematu, weryfikacja Grafiku)
+scripts/migrate.py            — runner migracji, domyślnie SUCHY przebieg
 scripts/import-grafik.py     — import grafiku z arkusza Google (domyślnie SUCHY przebieg)
 public/
   version.json                — { "version": "X.Y.Z" }, czytany przez
@@ -730,7 +732,7 @@ zakresem — wymaga Grafiku, którego nie ma.
   `dostepne_bloki` (text, nullable, lista kluczy po przecinku — NIE tablica
   Postgresa) — które bloki widzi pracownik tego lokalu na PRYWATNYM
   telefonie, patrz "Prywatny telefon pracownika" wyżej. Dodane 0.26.0,
-  migracja: [`docs/sql/grafik-05-dostep-pracownika.sql`](docs/sql/grafik-05-dostep-pracownika.sql).
+  migracja: [`docs/sql/migrations/0009_grafik_dostep_pracownika.sql`](docs/sql/migrations/0009_grafik_dostep_pracownika.sql).
 - **stanowiska** — `id, name, lokal_name, archived, skrot, kolor`. `skrot`
   (text, nullable, ustawiany ręcznie w Pracownicy → Stanowiska) — zastępuje
   auto-generowany `getShort(name)` tam, gdzie jest ustawiony
@@ -1304,7 +1306,7 @@ uzasadnieniami. Poniżej tylko to, o co najłatwiej się potknąć:
   widoków od razu, liczy się jako niewysłana i kasuje dopiero przy
   publikacji, która informuje o tym pracownika. Zmiana nigdy niewysłana
   kasuje się od razu. Migracja:
-  [`docs/sql/grafik-04-usuwanie.sql`](docs/sql/grafik-04-usuwanie.sql).
+  [`docs/sql/migrations/0008_grafik_usuwanie.sql`](docs/sql/migrations/0008_grafik_usuwanie.sql).
 - **Wolne/urlop wprost z grafiku** — link w modalu zmiany, gdy pracownika
   długo nie ma i nie zgłosi tego sam (`addNiedostepnoscDirectly` obok
   istniejącego `addUrlopDirectly` w `utils/absences.ts`).
