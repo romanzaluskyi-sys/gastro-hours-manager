@@ -538,6 +538,17 @@ zwraca `null`, a nie pustą tablicę, gdy dni nie ustawiono — i to znaczy
 "codziennie", nie "nigdy" (na tym wywrócił się pierwszy szkic
 `szablonyNaDzien`).
 
+**Konfiguracja wpisów** — [`manager/PulsSzablony.tsx`](src/components/manager/PulsSzablony.tsx),
+osobny widok wewnątrz zakładki Puls (przycisk "Konfiguracja", ten sam układ co
+Konfiguracja w Grafiku). `SZABLONY_STARTOWE` w `utils/dziennik.ts` to zestaw
+sześciu typowych wpisów HACCP z gotowymi normami — nowy lokal ma być gotowy na
+dwa kliknięcia, bo w gastronomii mierzy się wszędzie to samo, a kwadrans
+wpisywania per lokal to dokładnie ta praca, która rozciąga wdrożenie u klienta.
+Klucz pola powstaje z etykiety (`slugKlucza`), kierownik go nie widzi. Typy pól:
+liczba, tekst, tak/nie — normy (`min`/`max`) dotyczą tylko liczb. Szablon się
+**archiwizuje, nie kasuje**: wpisy z poprzednich miesięcy odwołują się do niego
+przez `template_key` i muszą mieć skąd wziąć nazwę i normy.
+
 ### Sprawdziany bez Node — `harness-*.html`
 
 W tym środowisku nie ma Node ani npm, więc `npm run build` i testy jednostkowe

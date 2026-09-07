@@ -16,6 +16,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   Plus,
+  SlidersHorizontal,
 } from "lucide-react";
 import {
   cardCls,
@@ -31,6 +32,7 @@ import {
   lokalTabCls,
   COLORS,
 } from "./designTokens";
+import PulsSzablony from "./PulsSzablony";
 import { describeWeatherCode } from "../../utils/weather";
 import { getDayOfWeek } from "../../utils/format";
 import {
@@ -48,6 +50,7 @@ import {
   zapiszWpis,
   trafnoscPrognozy,
   prognozaNaDzien,
+  wartoscPola,
   toLocalYMD,
 } from "../../utils/dziennik";
 
@@ -79,6 +82,7 @@ export default function KartaDnia({
   dayLogEntries,
   setDayLogEntries,
   dayLogTemplates,
+  setDayLogTemplates,
   weatherForecasts,
   showMsg,
   // Ustawiane, gdy kierownik przyszedł tu z paska "dzień niezamknięty"
@@ -107,6 +111,9 @@ export default function KartaDnia({
   const [zapisuje, setZapisuje] = useState(false);
   const [pokazTrafnosc, setPokazTrafnosc] = useState(false);
   const [nowyWpis, setNowyWpis] = useState(null); // { szablon } | { typ }
+  // Konfiguracja wpisów siedzi w tej samej zakładce, osobnym ekranem —
+  // ten sam układ co Konfiguracja w Grafiku.
+  const [widok, setWidok] = useState("karta");
 
   const karta = znajdzKarte(dayLogs, lokal, data);
   const zamkniety = karta && karta.status === "zamkniety";
@@ -219,6 +226,20 @@ export default function KartaDnia({
     );
   }
 
+  if (widok === "konfiguracja") {
+    return (
+      <PulsSzablony
+        lokal={lokal}
+        lokaleNames={lokaleNames}
+        onZmienLokal={setLokalWybrany}
+        dayLogTemplates={dayLogTemplates}
+        setDayLogTemplates={setDayLogTemplates}
+        onWroc={() => setWidok("karta")}
+        showMsg={showMsg}
+      />
+    );
+  }
+
   const pogodaOpis = fakt ? describeWeatherCode(fakt.kod) : null;
 
   return (
@@ -248,6 +269,10 @@ export default function KartaDnia({
           </button>
           <button className={btnSecondaryCls} onClick={() => setData(przesun(dzis, -1))}>
             Wczoraj
+          </button>
+          <button className={btnSecondaryCls} onClick={() => setWidok("konfiguracja")}>
+            <SlidersHorizontal size={15} className="inline -mt-0.5 mr-1" />
+            Konfiguracja
           </button>
         </div>
       </div>
@@ -526,7 +551,7 @@ export default function KartaDnia({
                     style={{ color: alarm ? COLORS.accent : COLORS.ink }}
                   >
                     {polaSzablonu(s)
-                      .map((p) => `${wpis.payload[p.klucz] ?? "—"}${p.jednostka || ""}`)
+                      .map((p) => wartoscPola(p, wpis.payload))
                       .join(" / ")}
                   </div>
                   {alarm ? (
@@ -639,13 +664,27 @@ function ModalWpisu({ szablon, typ, onClose, onSave }) {
                   {p.jednostka ? ` (${p.jednostka})` : ""}
                   {opisNormy(p) ? ` · norma ${opisNormy(p)}` : ""}
                 </label>
-                <input
-                  type={p.typ === "number" ? "number" : "text"}
-                  step="any"
-                  className={inputCls}
-                  value={wartosci[p.klucz] ?? ""}
-                  onChange={(e) => setWartosci({ ...wartosci, [p.klucz]: e.target.value })}
-                />
+                {p.typ === "bool" ? (
+                  <label className="flex items-center gap-2 text-[15px] pt-1">
+                    <input
+                      type="checkbox"
+                      className="w-5 h-5"
+                      checked={wartosci[p.klucz] === true}
+                      onChange={(e) =>
+                        setWartosci({ ...wartosci, [p.klucz]: e.target.checked })
+                      }
+                    />
+                    tak
+                  </label>
+                ) : (
+                  <input
+                    type={p.typ === "number" ? "number" : "text"}
+                    step="any"
+                    className={inputCls}
+                    value={wartosci[p.klucz] ?? ""}
+                    onChange={(e) => setWartosci({ ...wartosci, [p.klucz]: e.target.value })}
+                  />
+                )}
               </div>
             ))
           ) : (

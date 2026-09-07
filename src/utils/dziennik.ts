@@ -97,6 +97,122 @@ export const opisNormy = (pole) => {
   return "";
 };
 
+// --- SZABLONY WPISÓW ----------------------------------------------------
+
+export const TYPY_POLA = [
+  { key: "number", label: "Liczba" },
+  { key: "text", label: "Tekst" },
+  { key: "bool", label: "Tak / nie" },
+];
+
+// Gotowy zestaw startowy. Wpisanie sześciu pozycji ręcznie dla każdego lokalu
+// to dokładnie ta praca, przez którą wdrożenie u nowego klienta rozciąga się
+// z dwudziestu minut na godzinę — a zestaw jest w gastronomii ten sam.
+// Kierownik dokłada własne pozycje, gdy potrzebuje czegoś specyficznego.
+export const SZABLONY_STARTOWE = [
+  {
+    klucz: "lodowka",
+    nazwa: "Lodówka kuchnia",
+    typ: "temperatura",
+    pora: "poranne",
+    pola: [{ klucz: "temperatura", label: "Temperatura", typ: "number", jednostka: "°C", min: 0, max: 5 }],
+  },
+  {
+    klucz: "zamrazarka",
+    nazwa: "Zamrażarka",
+    typ: "temperatura",
+    pora: "poranne",
+    pola: [{ klucz: "temperatura", label: "Temperatura", typ: "number", jednostka: "°C", min: -25, max: -18 }],
+  },
+  {
+    klucz: "dostawa",
+    nazwa: "Przyjęcie dostawy",
+    typ: "dostawa",
+    pora: "ogolne",
+    pola: [
+      { klucz: "dostawca", label: "Dostawca", typ: "text" },
+      { klucz: "temperatura", label: "Temperatura towaru", typ: "number", jednostka: "°C", max: 4 },
+      { klucz: "uwagi", label: "Stan towaru", typ: "text" },
+    ],
+  },
+  {
+    klucz: "wydanie",
+    nazwa: "Temperatura wydania",
+    typ: "temperatura",
+    pora: "obiadowe",
+    pola: [{ klucz: "temperatura", label: "Temperatura", typ: "number", jednostka: "°C", min: 63 }],
+  },
+  {
+    klucz: "olej",
+    nazwa: "Olej we frytkownicy",
+    typ: "sprzatanie",
+    pora: "wieczorne",
+    pola: [
+      { klucz: "wymieniony", label: "Wymieniony", typ: "bool" },
+      { klucz: "uwagi", label: "Uwagi", typ: "text" },
+    ],
+  },
+  {
+    klucz: "sprzatanie_koncowe",
+    nazwa: "Sprzątanie końcowe",
+    typ: "sprzatanie",
+    pora: "wieczorne",
+    pola: [
+      { klucz: "wykonane", label: "Wykonane", typ: "bool" },
+      { klucz: "uwagi", label: "Uwagi", typ: "text" },
+    ],
+  },
+];
+
+// Klucz pola robimy z etykiety, żeby kierownik nigdy go nie widział ani nie
+// wymyślał. Musi być stabilny — po nim czytamy wartości z payloadu.
+export const slugKlucza = (tekst) => {
+  const zamiany = { ą: "a", ć: "c", ę: "e", ł: "l", ń: "n", ó: "o", ś: "s", ź: "z", ż: "z" };
+  return (tekst || "")
+    .toLowerCase()
+    .replace(/[ąćęłńóśźż]/g, (z) => zamiany[z])
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 40) || "pole";
+};
+
+export const zapiszSzablon = async ({ szablon, lokal, templates, setTemplates }) => {
+  const dane = {
+    lokal,
+    klucz: szablon.klucz || slugKlucza(szablon.nazwa),
+    nazwa: szablon.nazwa,
+    typ: szablon.typ || "inne",
+    pora: szablon.pora || "ogolne",
+    days_of_week: szablon.days_of_week || null,
+    wymagany: szablon.wymagany !== false,
+    pola: szablon.pola || [],
+    kolejnosc: szablon.kolejnosc ?? (templates || []).length,
+  };
+  if (szablon.id) {
+    const zapisany = await api.patch("day_log_templates", szablon.id, dane);
+    setTemplates((templates || []).map((s) => (s.id === szablon.id ? zapisany : s)));
+    return zapisany;
+  }
+  const zapisany = await api.post("day_log_templates", dane);
+  setTemplates([...(templates || []), zapisany]);
+  return zapisany;
+};
+
+// Archiwizujemy, nie kasujemy — wpisy z poprzednich miesięcy odwołują się do
+// szablonu przez template_key i muszą dalej mieć skąd wziąć nazwę i normy.
+export const archiwizujSzablon = async ({ szablon, templates, setTemplates }) => {
+  const zapisany = await api.patch("day_log_templates", szablon.id, { archived: true });
+  setTemplates((templates || []).map((s) => (s.id === szablon.id ? zapisany : s)));
+  return zapisany;
+};
+
+export const wartoscPola = (pole, payload) => {
+  const v = payload ? payload[pole.klucz] : undefined;
+  if (v === "" || v == null) return "—";
+  if (pole.typ === "bool") return v === true || v === "true" ? "tak" : "nie";
+  return `${v}${pole.jednostka || ""}`;
+};
+
 // --- AUTOMATYCZNE PODSUMOWANIE DNIA -------------------------------------
 // Nic tu nie jest przechowywane w bazie: liczymy w locie z tego, co i tak już
 // mamy. Dzięki temu karta sprzed pół roku pokazuje te same liczby co dziś,

@@ -21,6 +21,10 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 - **Aplikacja zapamiętuje, co prognoza mówiła 3, 7 i 14 dni wcześniej**, i
   pokazuje, o ile się pomyliła. Po kilku tygodniach widać wprost, na ile dni
   naprzód warto układać obsadę pod pogodę.
+- **Sam ustawiasz, co trzeba wpisywać w danym lokalu** (Puls → Konfiguracja):
+  nazwa, rodzaj, pora dnia, dni tygodnia i pola do wypełnienia. Sześć typowych
+  wpisów — lodówka, zamrażarka, przyjęcie dostawy, temperatura wydania, olej,
+  sprzątanie końcowe — dodaje się jednym kliknięciem, z gotowymi normami.
 - Anonimowe zgłoszenie znów da się wysłać — wcześniej znikało bez śladu.
 
 ## 0.28.0 — 2026-09-05

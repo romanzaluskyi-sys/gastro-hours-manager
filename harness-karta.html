@@ -1,4 +1,8 @@
 <meta charset="utf-8">
+<!-- ⚠️ Ten harness używa PRAWDZIWEGO klucza Supabase z src/config.ts. Renderowanie
+     niczego nie zapisuje, ale przyciski, które wołają api.post (np. "Szybki start"
+     w konfiguracji wpisów albo "Zamknij dzień"), zapiszą wiersz do produkcyjnej bazy.
+     Klikaj tu tylko to, co czyta. -->
 <title>Render karty dnia</title>
 <style>
   body { font: 14px system-ui, sans-serif; background: #F1F1EE; margin: 0; }
@@ -30,7 +34,8 @@ window.addEventListener("unhandledrejection", (ev) => pokazBlad(ev.reason));
 // Zaślepki dla pakietów z node_modules — tu nie ma bundlera, więc "react"
 // i "lucide-react" trzeba podstawić ręcznie.
 const IKONY = ["ChevronLeft","ChevronRight","Lock","CheckCircle2","AlertTriangle","Plus",
-               "ArrowRight","Palmtree","ArrowLeftRight"];
+               "ArrowRight","Palmtree","ArrowLeftRight",
+               "SlidersHorizontal","Trash2","ArrowLeft"];
 const stub = (kod) => URL.createObjectURL(new Blob([kod], { type: "text/javascript" }));
 const PAKIETY = {
   react: stub(`const R = window.React;
@@ -110,6 +115,7 @@ const g = (h) => { const d = new Date(wczoraj + "T00:00:00"); d.setHours(h); ret
           payload: { t: 12 }, recorded_by: "Ala", recorded_at: new Date().toISOString() },
       ],
       setDayLogEntries: () => {},
+      setDayLogTemplates: () => {},
       dayLogTemplates: [
         { id: "s1", lokal: "Bułka i Jacek", klucz: "temp_lodowka", nazwa: "Lodówka kuchnia",
           typ: "temperatura", archived: false, kolejnosc: 1,

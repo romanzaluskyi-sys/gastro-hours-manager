@@ -31,6 +31,7 @@ const CHANGELOG = [
       "Karta liczy średni paragon i udział kosztu pracy w utargu.",
       "Temperatura poza normą świeci na czerwono; poprawka wpisu dopisuje nową wersję zamiast kasować starą (wymóg HACCP).",
       "Aplikacja zapamiętuje, co prognoza mówiła 3, 7 i 14 dni wcześniej, i pokazuje, o ile się pomyliła.",
+      "W Puls → Konfiguracja ustawiasz, co trzeba wpisywać w lokalu; sześć typowych wpisów (lodówka, zamrażarka, dostawa, wydanie, olej, sprzątanie) dodaje się jednym kliknięciem.",
       "Anonimowe zgłoszenie znów da się wysłać.",
     ],
   },

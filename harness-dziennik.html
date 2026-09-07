@@ -140,6 +140,29 @@ const sprawdz = (nazwa, warunek, szczegol = "") => {
     sprawdz("po korekcie widać tylko nową wersję",
       widoczne.length === 1 && widoczne[0].id === "b", JSON.stringify(widoczne.map((w) => w.id)));
 
+    // --- szablony wpisów ---
+    sprawdz("slug z polskich znaków", D.slugKlucza("Lodówka w barze") === "lodowka_w_barze",
+      D.slugKlucza("Lodówka w barze"));
+    sprawdz("slug bez ogonków na końcach", D.slugKlucza("  Temperatura wydania — gorące  ") === "temperatura_wydania_gorace",
+      D.slugKlucza("  Temperatura wydania — gorące  "));
+    sprawdz("slug nigdy nie jest pusty", D.slugKlucza("???") === "pole", D.slugKlucza("???"));
+    sprawdz("zestaw startowy ma unikalne klucze",
+      new Set(D.SZABLONY_STARTOWE.map((s) => s.klucz)).size === D.SZABLONY_STARTOWE.length);
+    sprawdz("każdy szablon startowy ma pola z kluczem i etykietą",
+      D.SZABLONY_STARTOWE.every((s) => s.pola.length && s.pola.every((p) => p.klucz && p.label)));
+    sprawdz("normy zamrażarki są ujemne i sensowne",
+      D.SZABLONY_STARTOWE.find((s) => s.klucz === "zamrazarka").pola[0].max === -18);
+    sprawdz("wartość tak/nie czytelna", D.wartoscPola({ klucz: "w", typ: "bool" }, { w: true }) === "tak"
+      && D.wartoscPola({ klucz: "w", typ: "bool" }, { w: false }) === "nie");
+    sprawdz("brak wartości to kreska", D.wartoscPola({ klucz: "w", typ: "number" }, {}) === "—");
+    sprawdz("liczba z jednostką", D.wartoscPola({ klucz: "t", typ: "number", jednostka: "°C" }, { t: 3 }) === "3°C");
+    sprawdz("pole tak/nie nigdy nie alarmuje o normie",
+      D.pozaNorma({ pola: [{ klucz: "w", typ: "bool" }] }, { w: false }) === false);
+    sprawdz("opis normy: tylko górna granica",
+      D.opisNormy({ max: 4, jednostka: "°C" }) === "do 4°C", D.opisNormy({ max: 4, jednostka: "°C" }));
+    sprawdz("opis normy: obie granice",
+      D.opisNormy({ min: 0, max: 5, jednostka: "°C" }) === "0–5°C");
+
     log("");
     log(`ZDANYCH ${zdanych}, OBLANYCH ${oblanych}`, oblanych ? "zle" : "ok");
   } catch (e) {

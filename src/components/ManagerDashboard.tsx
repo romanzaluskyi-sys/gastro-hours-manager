@@ -90,6 +90,7 @@ const ManagerDashboard = ({
   dayLogEntries,
   setDayLogEntries,
   dayLogTemplates,
+  setDayLogTemplates,
   weatherForecasts,
   absences,
   setAbsences,
@@ -1202,6 +1203,7 @@ const ManagerDashboard = ({
             dayLogEntries={dayLogEntries}
             setDayLogEntries={setDayLogEntries}
             dayLogTemplates={dayLogTemplates}
+            setDayLogTemplates={setDayLogTemplates}
             weatherForecasts={weatherForecasts}
             showMsg={showMsg}
             initialLokal={pulsCel && pulsCel.lokal}

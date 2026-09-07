@@ -302,6 +302,7 @@ export default function App() {
           dayLogEntries={dayLogEntries}
           setDayLogEntries={setDayLogEntries}
           dayLogTemplates={dayLogTemplates}
+          setDayLogTemplates={setDayLogTemplates}
           weatherForecasts={weatherForecasts}
           absences={absences}
           setAbsences={setAbsences}
