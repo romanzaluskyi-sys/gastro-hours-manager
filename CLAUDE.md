@@ -557,8 +557,16 @@ odpadają. Zamiast tego dwa pliki w katalogu głównym, uruchamiane przez
 - `harness-dziennik.html` — ładuje `utils/dziennik.ts` (razem z całym
   łańcuchem `grafik.ts`/`tasks.ts`/`api/*`) przez Babel standalone i sprawdza
   arytmetyka na ręcznie policzonych przykładach;
-- `harness-karta.html` — renderuje `KartaDnia.tsx` w Reakcie z CDN, z
-  zaślepkami na `react` i `lucide-react`, na sztucznych propsach.
+- `harness-karta.html` — renderuje `KartaDnia.tsx` i `PulpitHome.tsx` w Reakcie
+  z CDN, z zaślepkami na `react` i `lucide-react`. ⚠️ Używa PRAWDZIWEGO klucza
+  Supabase: renderowanie nic nie zapisuje, ale kliknięcie czegoś, co woła
+  `api.post`, zapisze wiersz do produkcyjnej bazy;
+- `harness-panel.html` — montuje CAŁY `ManagerDashboard` z propsami takimi,
+  jakie podaje `App.tsx`, z PODMIENIONYM `api/supabase` (nic nie leci do sieci,
+  można klikać wszystko). To jedyny sprawdzian, który łapie propsy gubione
+  między poziomami — dwa pozostałe renderują komponenty w izolacji i taki błąd
+  przepuszczą. Lista ikon lucide jest w nim wygenerowana ze wszystkich importów
+  w `src/`, więc obejmuje każdy komponent panelu.
 
 To jedyna działająca tu forma weryfikacji i to ona wyłapała błąd
 `parseDaysOfWeek` opisany wyżej. Pliki są poza `src/` i `public/`, więc build
