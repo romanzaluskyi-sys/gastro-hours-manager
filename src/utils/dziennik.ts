@@ -20,6 +20,21 @@ import {
 } from "./grafik";
 import { isTaskDueOn, findSharedCompletion, parseDaysOfWeek } from "./tasks";
 
+// Każda z tych funkcji dostaje stan i jego setter z góry, przez cztery
+// poziomy propsów (App -> ManagerDashboard -> KartaDnia -> PulsSzablony).
+// Gubiony po drodze setter daje w zminifikowanej produkcji komunikat w
+// rodzaju "i is not a function (in 'i([...s||[],r])')", z którego nikt —
+// łącznie z nami — nie odczyta, o co chodzi. Stąd ta straż: zamiast tego
+// pada zdanie mówiące wprost, którego propsa brakuje.
+const wymagajSettera = (fn, nazwaPropsa) => {
+  if (typeof fn !== "function") {
+    throw new Error(
+      `Zapis nie doszedł do skutku: brakuje propsa ${nazwaPropsa}. ` +
+        "Dane NIE zostały zapisane — zgłoś to, to błąd w aplikacji, nie w Twoich danych."
+    );
+  }
+};
+
 export const PORY = [
   { key: "poranne", label: "Rano" },
   { key: "obiadowe", label: "Popołudnie" },
@@ -177,6 +192,7 @@ export const slugKlucza = (tekst) => {
 };
 
 export const zapiszSzablon = async ({ szablon, lokal, templates, setTemplates }) => {
+  wymagajSettera(setTemplates, "setDayLogTemplates");
   const dane = {
     lokal,
     klucz: szablon.klucz || slugKlucza(szablon.nazwa),
@@ -201,6 +217,7 @@ export const zapiszSzablon = async ({ szablon, lokal, templates, setTemplates })
 // Archiwizujemy, nie kasujemy — wpisy z poprzednich miesięcy odwołują się do
 // szablonu przez template_key i muszą dalej mieć skąd wziąć nazwę i normy.
 export const archiwizujSzablon = async ({ szablon, templates, setTemplates }) => {
+  wymagajSettera(setTemplates, "setDayLogTemplates");
   const zapisany = await api.patch("day_log_templates", szablon.id, { archived: true });
   setTemplates((templates || []).map((s) => (s.id === szablon.id ? zapisany : s)));
   return zapisany;
@@ -340,11 +357,13 @@ export const labourCostPct = (koszt, obrot) => {
 };
 
 // --- ZAPIS --------------------------------------------------------------
+
 // Świadomie bez upsertu: mamy karty załadowane w pamięci, więc wiemy, czy to
 // PATCH czy POST. Unikalny indeks (lokal, date) w bazie i tak łapie wyścig,
 // gdyby dwie osoby zamykały ten sam dzień równocześnie.
 
 export const zapiszKarte = async ({ karta, lokal, dateStr, pola, dayLogs, setDayLogs }) => {
+  wymagajSettera(setDayLogs, "setDayLogs");
   if (karta && karta.id) {
     const zapisana = await api.patch("day_logs", karta.id, pola);
     setDayLogs((dayLogs || []).map((k) => (k.id === karta.id ? zapisana : k)));
@@ -381,6 +400,7 @@ export const zapiszWpis = async ({
   entries,
   setEntries,
 }) => {
+  wymagajSettera(setEntries, "setDayLogEntries");
   const wpis = await api.post("day_log_entries", {
     lokal,
     date: dateStr,
@@ -398,6 +418,7 @@ export const zapiszWpis = async ({
 // miejscu. Zapis, który da się cicho przepisać dzień później, nie jest
 // dowodem niczego.
 export const poprawWpis = async ({ stary, payload, powod, kto, entries, setEntries }) => {
+  wymagajSettera(setEntries, "setDayLogEntries");
   const wpis = await api.post("day_log_entries", {
     lokal: stary.lokal,
     date: stary.date,
