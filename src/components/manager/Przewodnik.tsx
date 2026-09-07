@@ -26,7 +26,10 @@ const CHANGELOG = [
     version: "0.29.0",
     date: "2026-09-07",
     items: [
-      "Nowa zakładka \"Puls\" — karta dnia. Godziny, koszt, obsada, zadania i pogoda policzone z góry; ręcznie wpisujesz utarg, temperatury, dostawę i notatkę dla następnej zmiany.",
+      "Nowa zakładka \"Puls\" w czterech widokach: lista dni, karta dnia, raport tygodnia, konfiguracja wpisów.",
+      "Karta dnia: godziny, koszt i zadania policzone z góry; utarg i wpisy obok siebie, każdy blok z własnym Zapisz, które nie zamyka dnia. Zamknięty dzień można otworzyć ponownie.",
+      "Lista dni pokazuje utarg wobec zwykłego poziomu, koszt wobec planu, wykonanie i pogodę wobec zapowiedzi sprzed tygodnia.",
+      "Raport tygodnia sumuje siedem dni i pozwala cofnąć się do wcześniejszych tygodni.",
       "Na Pulpicie widać, że wczorajszy dzień nie został zamknięty — z przyciskiem prosto do właściwej karty.",
       "Karta liczy średni paragon i udział kosztu pracy w utargu.",
       "Temperatura poza normą świeci na czerwono; poprawka wpisu dopisuje nową wersję zamiast kasować starą (wymóg HACCP).",

@@ -497,10 +497,30 @@ nigdy nie pokazujemy błędu użytkownikowi.
 
 ## Karta dnia / Dziennik ("Puls") — dodane 2026-09-07
 
-Zakładka **Puls** w Panelu Kierownika (klucz `tab === "puls"`)
-([`manager/KartaDnia.tsx`](src/components/manager/KartaDnia.tsx)), cała
-arytmetyka w [`utils/dziennik.ts`](src/utils/dziennik.ts) — komponent tylko
-rysuje, nie licz nic w JSX. Na Pulpicie ([`PulpitHome.tsx`](src/components/manager/PulpitHome.tsx))
+Zakładka **Puls** w Panelu Kierownika (klucz `tab === "puls"`) — host
+[`manager/Puls.tsx`](src/components/manager/Puls.tsx) i cztery widoki:
+`PulsDni.tsx` (lista ostatnich dni), `KartaDnia.tsx` (jeden dzień),
+`PulsTydzien.tsx` (raport tygodnia), `PulsSzablony.tsx` (konfiguracja wpisów).
+Cała arytmetyka w [`utils/dziennik.ts`](src/utils/dziennik.ts) — komponenty
+tylko rysują, nie licz nic w JSX.
+
+**Puls.tsx jest właścicielem danych dziennika** i jedynym miejscem, które je
+odświeża (`odswiez`). Widoki dostają gotowe listy i settery lokalne przez
+`wspolne`. `przesun()` żyje w `utils/dziennik.ts`, nie w komponencie — inaczej
+`Puls` i `KartaDnia` importowałyby się nawzajem.
+
+**Raport tygodnia nie jest przechowywany.** Liczy się z tych samych wierszy
+(`wierszDnia`) co lista dni, więc nie może powiedzieć czegoś innego niż dni, z
+których powstał; zapisana kopia rozjechałaby się przy pierwszej korekcie
+utargu. "Historia raportów" to cofanie się o tydzień. Gdy dojdzie wysyłka
+mailem, zapisywać będziemy WYSYŁKI, nie treść.
+
+`prognozaUtargu()` to średnia z tego samego dnia tygodnia z ostatnich czterech
+takich dni — świadomie NIE model. Ma dać punkt odniesienia ("sobota wyszła
+wyżej niż zwykle"), a prawdziwe prognozowanie to Etap E.
+
+Kontrola obsady została z karty dnia **usunięta**: dla dnia, który już był, nie
+zmienia niczyjej decyzji. Jej miejsce zajął udział kosztu pracy w utargu. Na Pulpicie ([`PulpitHome.tsx`](src/components/manager/PulpitHome.tsx))
 stoi pasek "wczoraj — dzień niezamknięty" (`stanKartDnia`), który przez
 `goToPuls` w ManagerDashboard otwiera od razu właściwy lokal i dzień
 (`initialLokal`/`initialDate`). Pulpit jest ekranem, na który kierownik i tak

@@ -55,6 +55,12 @@ export const TYPY_WPISU = [
 // pytamy prognozę, nie o meteorologiczną dokładność.
 export const PROG_DESZCZU_MM = 1.0;
 
+export const przesun = (dateStr, delta) => {
+  const d = new Date(dateStr + "T00:00:00");
+  d.setDate(d.getDate() + delta);
+  return toLocalYMD(d);
+};
+
 export const znajdzKarte = (dayLogs, lokal, dateStr) =>
   (dayLogs || []).find((k) => k.lokal === lokal && k.date === dateStr) || null;
 
@@ -278,6 +284,12 @@ export const autoPodsumowanie = ({
     (s) => s.lokal === lokal && s.date === dateStr && !s.deleted_at
   );
   const godzinyPlan = plan.reduce((sum, s) => sum + shiftHours(s), 0);
+  // Koszt planowany liczymy z tych samych stawek co faktyczny — inaczej
+  // różnica plan/fakt mieszałaby dwie rzeczy naraz: inne godziny i inne stawki.
+  const kosztPlan = plan.reduce(
+    (sum, s) => sum + shiftHours(s) * (stawki[s.user_name] ?? 0),
+    0
+  );
 
   // Faktyczne otwarcie i zamknięcie — z odbić, nie z godzin otwarcia lokalu.
   // To jedna z niewielu rzeczy, których nie widać nigdzie indziej: czy dzień
@@ -317,6 +329,7 @@ export const autoPodsumowanie = ({
     godzinyFakt: Math.round(godzinyFakt * 10) / 10,
     godzinyPlan: Math.round(godzinyPlan * 10) / 10,
     koszt: Math.round(koszt),
+    kosztPlan: Math.round(kosztPlan),
     // Koszt bez tych osób jest zaniżony — mówimy o tym wprost zamiast liczyć
     // brak stawki jako zero (ta sama zasada co w Raportach i kosztach).
     bezStawki: [...bezStawki],
@@ -389,6 +402,21 @@ export const zamknijDzien = async ({ karta, lokal, dateStr, pola, kto, dayLogs, 
     },
   });
 
+// Zamknięty dzień trzeba dać się otworzyć. Zamknięcie to nie jest zapis
+// HACCP — te siedzą w day_log_entries i tam korekta zostawia ślad. Tu chodzi
+// tylko o to, czy karta jest już domknięta, a pomyłka w jednym kliknięciu nie
+// może blokować kierownika na zawsze.
+export const otworzPonownie = async ({ karta, dayLogs, setDayLogs }) => {
+  wymagajSettera(setDayLogs, "setDayLogs");
+  const zapisana = await api.patch("day_logs", karta.id, {
+    status: "otwarty",
+    closed_by: null,
+    closed_at: null,
+  });
+  setDayLogs((dayLogs || []).map((k) => (k.id === karta.id ? zapisana : k)));
+  return zapisana;
+};
+
 export const zapiszWpis = async ({
   lokal,
   dateStr,
@@ -432,6 +460,103 @@ export const poprawWpis = async ({ stary, payload, powod, kto, entries, setEntri
   });
   setEntries([...(entries || []), wpis]);
   return wpis;
+};
+
+// --- PROGNOZA UTARGU I ZESTAWIENIA ---------------------------------------
+
+// Najprostsza prognoza, jaka ma jakikolwiek sens: średnia z tego samego dnia
+// tygodnia w ostatnich czterech takich dniach. Świadomie NIE jest to model —
+// prawdziwe prognozowanie to Etap E i wymaga historii, której jeszcze nie ma.
+// Ta liczba ma tylko dać kierownikowi punkt odniesienia: "sobota wyszła wyżej
+// czy niżej niż zwykle". Zwraca null, dopóki nie ma z czego liczyć.
+export const PROGNOZA_MIN_DNI = 2;
+export const prognozaUtargu = (dayLogs, lokal, dateStr) => {
+  const dow = new Date(dateStr + "T00:00:00").getDay();
+  const wczesniej = (dayLogs || [])
+    .filter(
+      (k) =>
+        k.lokal === lokal &&
+        k.date < dateStr &&
+        k.obrot != null &&
+        Number(k.obrot) > 0 &&
+        new Date(k.date + "T00:00:00").getDay() === dow
+    )
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 4);
+  if (wczesniej.length < PROGNOZA_MIN_DNI) return null;
+  const suma = wczesniej.reduce((s, k) => s + Number(k.obrot), 0);
+  return {
+    kwota: Math.round(suma / wczesniej.length),
+    zIlu: wczesniej.length,
+  };
+};
+
+// Wiersz listy dni. Pomijamy kontrolę obsady — dla dnia, który już był, nie
+// zmienia decyzji kierownika, a liczy się najdrożej z całego podsumowania.
+export const wierszDnia = ({
+  shifts, planShifts, users, tasks, taskCompletions,
+  dayLogs, dayLogEntries, dayLogTemplates, weatherForecasts,
+  lokal, miasto, dateStr,
+}) => {
+  const auto = autoPodsumowanie({
+    shifts, planShifts, users, tasks, taskCompletions,
+    staffingRules: [], staffingRuleSets: [], grafikWyjatki: [],
+    lokal, dateStr,
+  });
+  const karta = znajdzKarte(dayLogs, lokal, dateStr);
+  const obrot = karta && karta.obrot != null ? Number(karta.obrot) : null;
+  const prognoza = prognozaUtargu(dayLogs, lokal, dateStr);
+  const szablony = szablonyNaDzien(dayLogTemplates, lokal, dateStr);
+  const wpisy = wpisyDlaDnia(dayLogEntries, lokal, dateStr);
+  return {
+    date: dateStr,
+    karta,
+    zamkniety: !!karta && karta.status === "zamkniety",
+    obrot,
+    prognozaUtargu: prognoza,
+    roznicaUtargu: obrot != null && prognoza ? obrot - prognoza.kwota : null,
+    koszt: auto.koszt,
+    kosztPlan: auto.kosztPlan,
+    roznicaKosztu: auto.koszt - auto.kosztPlan,
+    lcPct: labourCostPct(auto.koszt, obrot),
+    godziny: auto.godzinyFakt,
+    godzinyPlan: auto.godzinyPlan,
+    zadaniaZrobione: auto.zadaniaZrobione,
+    zadaniaRazem: auto.zadaniaRazem,
+    wpisyZrobione: szablony.filter((s) => wpisy.some((w) => w.template_key === s.klucz)).length,
+    wpisyRazem: szablony.length,
+    pogodaFakt: prognozaNaDzien(weatherForecasts, miasto, dateStr, 0),
+    pogodaZTygodnia: prognozaNaDzien(weatherForecasts, miasto, dateStr, 7),
+  };
+};
+
+// Tydzień to suma dni, nie osobny byt — raport liczymy z tych samych wierszy,
+// które widać na liście. Dzięki temu nie da się mieć raportu, który mówi co
+// innego niż dni, z których powstał.
+export const raportTygodnia = (wiersze) => {
+  const zUtargiem = wiersze.filter((w) => w.obrot != null);
+  const suma = (f) => wiersze.reduce((s, w) => s + (f(w) || 0), 0);
+  const obrot = zUtargiem.reduce((s, w) => s + w.obrot, 0);
+  const koszt = suma((w) => w.koszt);
+  const najlepszy = zUtargiem.slice().sort((a, b) => b.obrot - a.obrot)[0] || null;
+  const najslabszy = zUtargiem.slice().sort((a, b) => a.obrot - b.obrot)[0] || null;
+  return {
+    dni: wiersze.length,
+    dniZamkniete: wiersze.filter((w) => w.zamkniety).length,
+    dniZUtargiem: zUtargiem.length,
+    obrot,
+    koszt,
+    kosztPlan: suma((w) => w.kosztPlan),
+    godziny: Math.round(suma((w) => w.godziny) * 10) / 10,
+    godzinyPlan: Math.round(suma((w) => w.godzinyPlan) * 10) / 10,
+    lcPct: labourCostPct(koszt, obrot),
+    zadaniaZrobione: suma((w) => w.zadaniaZrobione),
+    zadaniaRazem: suma((w) => w.zadaniaRazem),
+    wpisyZrobione: suma((w) => w.wpisyZrobione),
+    wpisyRazem: suma((w) => w.wpisyRazem),
+    najlepszy,
+    najslabszy,
+  };
 };
 
 // --- TRAFNOŚĆ PROGNOZY --------------------------------------------------

@@ -7,10 +7,20 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
 ## 0.29.0 — 2026-09-07
 
-- **Nowa zakładka "Puls"** w Panelu Kierownika — karta dnia. Dzień zamyka się
-  w minutę: godziny, koszt pracy, obsada, zadania i pogoda są policzone z
-  góry, ręcznie wpisuje się tylko utarg, temperatury, dostawę i notatkę dla
-  następnej zmiany.
+- **Nowa zakładka "Puls"** w Panelu Kierownika, w czterech widokach: lista
+  ostatnich dni, karta jednego dnia, raport tygodnia i konfiguracja wpisów.
+- **Karta dnia** zamyka się w minutę: godziny, koszt pracy, zadania i pogoda są
+  policzone z góry, ręcznie wpisuje się tylko utarg, temperatury, dostawę i
+  notatkę dla następnej zmiany. Utarg i wpisy stoją obok siebie, każdy blok ma
+  własny przycisk **Zapisz, który NIE zamyka dnia** — można wpisać rano i
+  wrócić wieczorem. Zamknięty dzień da się **otworzyć ponownie**.
+- Górny pasek karty pokazuje teraz **różnice**: godziny i koszt pracy wobec
+  grafiku, a w miejscu kontroli obsady — duży **udział kosztu pracy w utargu**.
+- **Lista dni** pokazuje każdy dzień jednym rzutem oka: utarg wobec tego, co
+  zwykle wychodzi w ten dzień tygodnia, koszt pracy wobec planu, wykonanie
+  zadań i wpisów oraz pogodę wobec tego, co zapowiadano tydzień wcześniej.
+- **Raport tygodnia** sumuje siedem dni, wskazuje najmocniejszy i najsłabszy
+  dzień i pozwala cofnąć się do wcześniejszych tygodni.
 - **Na Pulpicie widać, że wczorajszy dzień nie został zamknięty** — pasek z
   nazwami lokali i przyciskiem, który otwiera od razu właściwą kartę.
 - Karta liczy **średni paragon** i **udział kosztu pracy w utargu** — liczbę,

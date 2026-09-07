@@ -25,7 +25,7 @@ import { resolveAbsenceRequest, addUrlopDirectly, deleteAbsence } from "../utils
 import NotificationsPanel from "./NotificationsPanel";
 import ZatwierdzanieZmian from "./manager/ZatwierdzanieZmian";
 import ZadaniaISprzatanie from "./manager/ZadaniaISprzatanie";
-import KartaDnia from "./manager/KartaDnia";
+import Puls from "./manager/Puls";
 import ManagerShell, { NAV_ITEMS } from "./manager/ManagerShell";
 import PulpitHome from "./manager/PulpitHome";
 import WBudowie from "./manager/WBudowie";
@@ -1185,7 +1185,7 @@ const ManagerDashboard = ({
         )}
 
         {tab === "puls" && (
-          <KartaDnia
+          <Puls
             currentUser={currentUser}
             selectedLokal={selectedLokal}
             availableLokaleForManager={availableLokaleForManager}
