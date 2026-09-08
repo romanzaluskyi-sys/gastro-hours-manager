@@ -609,6 +609,11 @@ innych lokali ani **kosztów pracy i stawek** — to nie jest informacja dla tej
 roli. Zamknięcie idzie do kierownika lokalu przez `createManagerNotification`,
 a `api/cron/check-puls.js` przypomina rano o dniu, którego nikt nie zamknął.
 Ekran pobiera własne dane, nie bierze ich propsami (patrz błąd #16).
+Przypomnienie stoi w dwóch miejscach — przy nazwisku na liście osób
+(`KioskDashboard.tsx`) i paskiem na Pulpicie
+([`PulsPrzypomnienie.tsx`](src/components/manager/PulsPrzypomnienie.tsx), który
+sam pobiera swój jeden wiersz i znika po zamknięciu dnia). Przypomnienie o
+zrobionej rzeczy uczy ludzi ignorować przypomnienia.
 
 ⚠️ **Zamkniętego dnia nie da się otworzyć.** Nie ma i nie ma być przycisku
 "otwórz ponownie": otwarcie pozwoliłoby zmienić liczby tak, jakby nigdy nie

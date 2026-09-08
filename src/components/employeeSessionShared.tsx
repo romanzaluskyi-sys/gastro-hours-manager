@@ -21,6 +21,7 @@ import { APP_VERSION } from "../config";
 import { findOverlappingShift, getTodaysShiftsForUser } from "../utils/shifts";
 import WeatherBadge from "./WeatherBadge";
 import PulsZmiany, { mozeZamykacPuls } from "./manager/PulsZmiany";
+import PulsPrzypomnienie from "./manager/PulsPrzypomnienie";
 import {
   getDayOfWeek,
   getMonthName,
@@ -1352,6 +1353,14 @@ export const EmployeeSessionScreens = ({
         title={employee.name}
         showPill={!!openShift}
       >
+        {/* Stoi nad wszystkim i w obu stanach Pulpitu — zamknięcie dnia jest
+            czynnością na koniec zmiany, więc musi być widoczne i wtedy, gdy
+            zmiana jeszcze trwa. */}
+        <PulsPrzypomnienie
+          employee={employee}
+          lokal={effectiveAssignment.lokal}
+          onOtworz={() => setScreen("PULS")}
+        />
         {openShift ? (
           renderShiftInProgress()
         ) : (

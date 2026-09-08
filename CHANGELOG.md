@@ -59,6 +59,10 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
   notatki, wpisy i zdarzenia. Bez historii, bez innych lokali i bez kosztów
   pracy. Po zamknięciu kierownik lokalu dostaje powiadomienie, a rano —
   przypomnienie o dniu, którego nikt nie zamknął.
+- Kierownik zmiany **widzi na tablecie, że to dziś on zamyka dzień** — przy
+  swoim nazwisku na liście osób i osobnym paskiem na Pulpicie, który znika po
+  zamknięciu. Prawo jest jednodniowe, więc bez przypomnienia łatwo je przegapić,
+  a przegapiony dzień wpisuje się nazajutrz z pamięci.
 - **Zamkniętego dnia nie da się już otworzyć** — jedyna droga to poprawka ze
   śladem. Otwarcie kasowałoby sens zamknięcia.
 - Anonimowe zgłoszenie znów da się wysłać — wcześniej znikało bez śladu.
