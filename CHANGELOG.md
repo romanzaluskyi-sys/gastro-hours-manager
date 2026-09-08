@@ -11,6 +11,8 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
   zapomniany tablet, nie nieobecność, a bez decyzji te godziny nie trafiają ani
   do raportu, ani na wypłatę. Kierownik dopisuje je jednym kliknięciem, poprawia
   godziny albo odrzuca. Rano pracownik i kierownik dostają o tym powiadomienie.
+  Pozycje widać też na Pulpicie, w „Wymaga Twojej decyzji” razem z korektami,
+  zamianami i wnioskami o wolne.
 - **Tablet pokazuje ludzi tam, gdzie stawia ich grafik.** Osoba wypożyczona do
   innego lokalu znajdzie się na jego tablecie i odbije zmianę bez chodzenia i
   telefonów. Zostaje też na liście swojego lokalu — plany się zmieniają.

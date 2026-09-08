@@ -6,7 +6,7 @@
 // pracowników w zestawieniu nie ma stawki ustawionej, pokazujemy to wprost
 // zamiast cichо zaniżać sumę.
 import React from "react";
-import { AlertTriangle, ArrowRight, Palmtree, ArrowLeftRight } from "lucide-react";
+import { AlertTriangle, ArrowRight, Palmtree, ArrowLeftRight, Clock } from "lucide-react";
 import {
   statTileCls,
   statLabelCls,
@@ -25,6 +25,7 @@ import {
   PLAN_FAKT_PROG_H,
 } from "../../utils/grafik";
 import { stanKartDnia, toLocalYMD as ymdDziennika } from "../../utils/dziennik";
+import { zmianyBezOdbicia } from "../../utils/odbicia";
 
 const ProgressRing = ({ pct, size = 36, stroke = 5 }) => {
   const r = (size - stroke) / 2;
@@ -196,7 +197,28 @@ export default function PulpitHome({
     })
   );
 
+  // Zmiany z grafiku bez odbicia to też decyzja kierownika i należą tu razem z
+  // resztą — inaczej kolejka na Pulpicie mówiłaby "0 do decyzji", a w zakładce
+  // czekałoby pięć pozycji.
+  const brakiOdbicia = zmianyBezOdbicia({
+    planShifts,
+    shifts,
+    users,
+    absences,
+    lokalOk: matchesFilter,
+  });
+
   const decisionItems = [
+    ...brakiOdbicia.map(({ plan, user }) => ({
+      kind: "odbicie",
+      key: `o-${plan.id}`,
+      // Pozycja "postarzeje się" od dnia zmiany, nie od chwili utworzenia
+      // wiersza w grafiku — inaczej zmiana wpisana miesiąc temu zawsze byłaby
+      // na górze listy, choć dotyczy wczoraj.
+      createdAt: `${plan.date}T23:59:59`,
+      name: user.name,
+      sub: `Brak odbicia · ${plan.lokal} · ${fmtPL(plan.date)}`,
+    })),
     ...pendingCorrections.map((r) => ({
       kind: "correction",
       key: `c-${r.iss.id}`,
@@ -391,9 +413,9 @@ export default function PulpitHome({
           <p className={statLabelCls}>Do decyzji</p>
           <p className={statValueCls}>{decisionItems.length}</p>
           <p className={statSubCls}>
-            {pendingCorrections.length} korekt, {pendingSwaps.length} zamian,{" "}
-            {pendingAbsences.length} wniosków o
-            wolne, {openProblems} zgłoszeń
+            {brakiOdbicia.length} bez odbicia, {pendingCorrections.length} korekt,{" "}
+            {pendingSwaps.length} zamian, {pendingAbsences.length} wniosków o wolne,{" "}
+            {openProblems} zgłoszeń
           </p>
         </div>
       </div>
@@ -441,6 +463,9 @@ export default function PulpitHome({
                 )}
                 {item.kind === "swap" && (
                   <ArrowLeftRight size={13} className="flex-shrink-0 text-[#6E6E66]" />
+                )}
+                {item.kind === "odbicie" && (
+                  <Clock size={13} className="flex-shrink-0 text-[#6E6E66]" />
                 )}
                 <div>
                   <p className="font-bold text-sm">{item.name}</p>
