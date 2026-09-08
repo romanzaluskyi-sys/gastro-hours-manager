@@ -59,12 +59,38 @@ const KioskDashboard = ({
   const allowed = currentUser.allowed_lokale
     ? currentUser.allowed_lokale.split(",").map((l) => l.trim())
     : [];
+  const dzisYMD = toLocalYMD(new Date());
+
+  // Kto ma się dziś pokazać na tym tablecie: przypisani do lokalu na stałe
+  // PLUS wypożyczeni — czyli ci, których grafik stawia dziś właśnie tutaj.
+  //
+  // ⚠️ DODAJEMY, nie przenosimy. Osoba wypożyczona zostaje też na liście
+  // swojego macierzystego lokalu, bo plany się zmieniają: gdyby grafik mówił
+  // "dziś w Ceglanej", a ona przyszła jednak do Bułki, przeniesienie sprawiłoby,
+  // że nie znajdzie siebie na tablecie i nie odbije zmiany wcale. Jeśli grafik
+  // stawia kogoś tego dnia w dwóch lokalach, pokaże się na obu tabletach — o to
+  // właśnie chodzi, żeby nie było chodzenia między lokalami ani telefonów
+  // "zapisz mi tam zmianę".
+  //
+  // Zmiana zapisze się na lokal TEGO tabletu, nie na lokal z grafiku: fakt ma
+  // mówić, gdzie człowiek naprawdę pracował.
+  const dzisWGrafiku = new Set(
+    (planShifts || [])
+      .filter(
+        (s) =>
+          s.published_at &&
+          !s.deleted_at &&
+          s.date === dzisYMD &&
+          allowed.includes(s.lokal)
+      )
+      .map((s) => String(s.user_id))
+  );
   const activeUsers = users.filter(
     (u) =>
       u.active &&
       !u.archived &&
       u.role === "open" &&
-      allowed.includes(u.default_lokal)
+      (allowed.includes(u.default_lokal) || dzisWGrafiku.has(String(u.id)))
   );
   // Powiadomienia WYBRANEGO pracownika, nie całego urządzenia. Wcześniej
   // kiosk pokazywał worek wiadomości wszystkich osób z lokalu, więc jedna
@@ -90,7 +116,6 @@ const KioskDashboard = ({
   // WG GRAFIKU — kto ma dziś wolne, nie jest nikomu potrzebny na liście
   // braków (wcześniej licznik brał wszystkich przypisanych do lokalu i
   // pokazywał nieprawdę).
-  const dzisYMD = toLocalYMD(new Date());
   const stanDnia = new Map(
     activeUsers.map((u) => {
       const otwarta = shifts.find((s) => s.user_id === u.id && !s.end_time);
