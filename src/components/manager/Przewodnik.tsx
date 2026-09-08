@@ -23,6 +23,16 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.30.0",
+    date: "2026-09-08",
+    items: [
+      "Nowa sekcja \"Był w grafiku, nie odbił\" w Zatwierdzaniu zmian — dopisujesz godziny jednym kliknięciem, poprawiasz albo odrzucasz.",
+      "Tablet Służbowy pokazuje też osoby, które grafik stawia dziś w tym lokalu, choć są przypisane gdzie indziej.",
+      "Przy archiwizacji pracownika możesz przepisać jego przyszłe zmiany na następcę.",
+      "Umowa bezterminowa i ostatni dzień pracy w karcie pracownika; po ostatnim dniu Grafik nie pozwoli wpisać zmiany.",
+    ],
+  },
+  {
     version: "0.29.0",
     date: "2026-09-07",
     items: [

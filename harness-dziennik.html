@@ -186,6 +186,102 @@ const sprawdz = (nazwa, warunek, szczegol = "") => {
     sprawdz("zwykły wtorek nie ma kontekstu",
       K.kontekstKrotko(K.kontekstDnia("2026-09-15", {})) === "");
 
+    // --- ostatni dzień pracy ---
+    const G = await import(await zaladuj("/src/utils/grafik"));
+    sprawdz("zmiana po ostatnim dniu jest blokowana",
+      G.poOstatnimDniu({ ostatni_dzien: "2026-09-30" }, "2026-10-01") === true);
+    sprawdz("zmiana w ostatnim dniu jest dozwolona",
+      G.poOstatnimDniu({ ostatni_dzien: "2026-09-30" }, "2026-09-30") === false);
+    sprawdz("bez ostatniego dnia nic nie blokujemy",
+      G.poOstatnimDniu({}, "2030-01-01") === false);
+    sprawdz("brak użytkownika nie wywraca sprawdzenia",
+      G.poOstatnimDniu(null, "2030-01-01") === false);
+
+    // --- przepisanie zmian z A na B ---
+    const zapisane = [];
+    const fakeApi = { patch: async (tab, id, dane) => { zapisane.push([tab, id, dane]); return { id, ...dane }; } };
+    const B = { id: "b", name: "Bogdan", ostatni_dzien: "2026-10-15" };
+    const zmiany = [
+      { id: "z1", date: "2026-10-01", start_time: "08:00", end_time: "16:00", lokal: "L" },
+      { id: "z2", date: "2026-10-05", start_time: "08:00", end_time: "16:00", lokal: "L" }, // B ma urlop
+      { id: "z3", date: "2026-10-20", start_time: "08:00", end_time: "16:00", lokal: "L" }, // po ostatnim dniu B
+      { id: "z4", date: "2026-10-02", start_time: "10:00", end_time: "18:00", lokal: "L" }, // kolizja
+    ];
+    const wynik = await G.przepiszZmiany({
+      zmiany,
+      doUzytkownika: B,
+      planShifts: [
+        { id: "x1", user_id: "b", user_name: "Bogdan", date: "2026-10-02",
+          start_time: "09:00", end_time: "17:00", lokal: "L" },
+      ],
+      absences: [
+        { status: "approved", user_id: "b", start_date: "2026-10-05", end_date: "2026-10-06", type: "urlop" },
+      ],
+      api: fakeApi,
+    });
+    sprawdz("przepisano tylko zmianę bez przeszkód", wynik.przepisane.length === 1,
+      JSON.stringify(wynik.przepisane.map((z) => z.id)));
+    sprawdz("pominięto trzy, każdą z własnym powodem",
+      wynik.pominiete.length === 3 &&
+      new Set(wynik.pominiete.map((x) => x.powod)).size === 3,
+      JSON.stringify(wynik.pominiete.map((x) => [x.zmiana.id, x.powod])));
+    sprawdz("przepisanie zmienia nazwisko i updated_at, nie rusza published_at",
+      zapisane.length === 1 &&
+      zapisane[0][2].user_name === "Bogdan" &&
+      !!zapisane[0][2].updated_at &&
+      !("published_at" in zapisane[0][2]),
+      JSON.stringify(zapisane));
+
+    // --- zmiany z grafiku bez odbicia ---
+    // UWAGA: wywołujemy tylko funkcję czytającą. rozliczBrakOdbicia pisze przez
+    // prawdziwe api (ten harness go nie podmienia) i zapisałoby do produkcji.
+    const O = await import(await zaladuj("/src/utils/odbicia"));
+    const dz = (n) => { const d = new Date("2026-09-20T00:00:00"); d.setDate(d.getDate() + n);
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
+    const A = { id: "a", name: "Ala" };
+    const opub = { published_at: "2026-09-01T00:00:00Z" };
+    const braki = O.zmianyBezOdbicia({
+      planShifts: [
+        { id: "g1", user_id: "a", date: dz(-3), lokal: "L", start_time: "08:00", end_time: "16:00", ...opub },
+        { id: "g2", user_id: "a", date: dz(-2), lokal: "L", start_time: "08:00", end_time: "16:00", ...opub }, // odbił
+        { id: "g3", user_id: "a", date: dz(-1), lokal: "L", start_time: "08:00", end_time: "16:00", ...opub, rozliczenie: "odrzucono" },
+        { id: "g4", user_id: "a", date: dz(0),  lokal: "L", start_time: "08:00", end_time: "16:00", ...opub }, // dziś
+        { id: "g5", user_id: "a", date: dz(-4), lokal: "L", start_time: "08:00", end_time: "16:00" },          // niewysłana
+        { id: "g6", user_id: "a", date: dz(-5), lokal: "L", start_time: "08:00", end_time: "16:00", ...opub, deleted_at: "x" },
+        { id: "g7", user_id: "a", date: dz(-6), lokal: "L", start_time: "08:00", end_time: "16:00", ...opub }, // urlop
+        { id: "g8", user_id: "a", date: dz(-40), lokal: "L", start_time: "08:00", end_time: "16:00", ...opub }, // poza oknem
+      ],
+      shifts: [{ user_id: "a", start_time: new Date(dz(-2) + "T09:00:00") }],
+      users: [A],
+      absences: [{ status: "approved", user_id: "a", start_date: dz(-6), end_date: dz(-6), type: "urlop" }],
+      dzis: dz(0),
+    });
+    sprawdz("do kolejki trafia tylko realny brak odbicia",
+      braki.map((b) => b.plan.id).join() === "g1",
+      JSON.stringify(braki.map((b) => b.plan.id)));
+    sprawdz("odbicie w innym lokalu też zamyka sprawę",
+      O.zmianyBezOdbicia({
+        planShifts: [{ id: "x", user_id: "a", date: dz(-3), lokal: "L", start_time: "08:00", end_time: "16:00", ...opub }],
+        shifts: [{ user_id: "a", lokal: "INNY", start_time: new Date(dz(-3) + "T09:00:00") }],
+        users: [A], absences: [], dzis: dz(0),
+      }).length === 0);
+    sprawdz("urlop nie liczy się jako odbicie",
+      O.zmianyBezOdbicia({
+        planShifts: [{ id: "x", user_id: "a", date: dz(-3), lokal: "L", start_time: "08:00", end_time: "16:00", ...opub }],
+        shifts: [{ user_id: "a", is_urlop: true, start_time: new Date(dz(-3) + "T09:00:00") }],
+        users: [A], absences: [], dzis: dz(0),
+      }).length === 1);
+    sprawdz("zarchiwizowany pracownik nie zaśmieca kolejki",
+      O.zmianyBezOdbicia({
+        planShifts: [{ id: "x", user_id: "a", date: dz(-3), lokal: "L", start_time: "08:00", end_time: "16:00", ...opub }],
+        shifts: [], users: [{ ...A, archived: true }], absences: [], dzis: dz(0),
+      }).length === 0);
+    sprawdz("filtr lokali kierownika działa",
+      O.zmianyBezOdbicia({
+        planShifts: [{ id: "x", user_id: "a", date: dz(-3), lokal: "OBCY", start_time: "08:00", end_time: "16:00", ...opub }],
+        shifts: [], users: [A], absences: [], dzis: dz(0), lokalOk: (l) => l === "L",
+      }).length === 0);
+
     log("");
     log(`ZDANYCH ${zdanych}, OBLANYCH ${oblanych}`, oblanych ? "zle" : "ok");
   } catch (e) {

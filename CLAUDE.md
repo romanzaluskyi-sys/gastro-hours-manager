@@ -187,6 +187,10 @@ src/
                                     przycisk publikacji
       GrafikTydzien.tsx             siatka tygodnia (jedna tabela na lokal)
       GrafikMiesiac.tsx             kalendarz miesiąca + druk A4 poziomo
+      ModalWpisu.tsx                jeden wpis dziennika — wspólny dla karty dnia
+                                    i ekranu kierownika zmiany, NIE duplikuj
+      PrzepiszZmianyModal.tsx       co ze zmianami odchodzącego pracownika:
+                                    przepisać na następcę albo zdjąć
       GrafikZmianaModal.tsx         modal przypisania zmiany + modal blokady
       GrafikWymagania.tsx           wymagania obsady, godziny otwarcia, wyjątki
       PulpitHome.tsx, RejestrGodzin.tsx, ZatwierdzanieZmian.tsx,
@@ -609,6 +613,12 @@ innych lokali ani **kosztów pracy i stawek** — to nie jest informacja dla tej
 roli. Zamknięcie idzie do kierownika lokalu przez `createManagerNotification`,
 a `api/cron/check-puls.js` przypomina rano o dniu, którego nikt nie zamknął.
 Ekran pobiera własne dane, nie bierze ich propsami (patrz błąd #16).
+Prawo nadaje się w DWÓCH miejscach — w karcie pracownika (`Pracownicy.tsx`) i
+w `Puls → Konfiguracja` (`PulsSzablony.tsx`, sekcja "Kto może zamykać dzień").
+To ta sama kolumna `users.puls_do`; drugie wejście istnieje, bo nadawanie na
+dziś to decyzja podejmowana co rano, a karta pracownika jest miejscem na rzeczy
+rzadkie — chodzenie tam po każdą zmianę było na tyle niewygodne, że prawa po
+prostu by nie nadawano.
 Przypomnienie stoi w dwóch miejscach — przy nazwisku na liście osób
 (`KioskDashboard.tsx`) i paskiem na Pulpicie
 ([`PulsPrzypomnienie.tsx`](src/components/manager/PulsPrzypomnienie.tsx), który
@@ -895,8 +905,14 @@ zakresem — wymaga Grafiku, którego nie ma.
   `notatki` (text, nullable), `notatki_updated_by`/`notatki_updated_at`
   (text/timestamptz, nullable — ustawiane w `handleSaveUser` TYLKO gdy
   `notatki` faktycznie się zmieniło względem tego, co jest w bazie, nie
-  przy każdym zapisie karty).
-- **lokale** — `id, name, archived, miasto`. `miasto` (text, nullable,
+  przy każdym zapisie karty). Od 2026-09-08: `puls_do` (date, nullable —
+  ostatni dzień, w którym ta osoba może zamknąć Puls, patrz "Kierownik
+  zmiany"), `umowa_bezterminowa` (bool, default false — wyklucza się z
+  `umowa_expiry`; `handleSaveUser` czyści termin przy zaznaczeniu),
+  `ostatni_dzien` (date, nullable — po tej dacie Grafik nie pozwoli wpisać
+  zmiany, `poOstatnimDniu()`). Migracje `0015`, `0016`.
+- **lokale** — `id, name, archived, miasto, dzien_wyplaty (int, nullable,
+  puste = 10 — dzień wypłaty pokazywany w kontekście dnia w Pulsie)`. `miasto` (text, nullable,
   ustawiane ręcznie w Pracownicy → Lokale) — miasto używane do pogody w
   pasku górnym Panelu Kierownika i na Pulpicie pracownika, patrz sekcja
   "Pogoda" niżej. Dodane 2026-09-03, wymaga ręcznej migracji w Supabase
@@ -1055,6 +1071,36 @@ zakresem — wymaga Grafiku, którego nie ma.
   alter table shifts add column absence_id text;
   ```
 
+- **day_logs** — karta dnia ("Puls"), patrz sekcja wyżej. `id (uuid), lokal,
+  date (date), obrot (numeric), liczba_paragonow (int), obrot_powod (text:
+  'pogoda'|'wydarzenie'|'akcja'|'personel'|'inne'), obrot_komentarz (text),
+  cos_nadzwyczajnego (bool), notatka, handover, tagi (lista po przecinku),
+  pogoda_temp (numeric), pogoda_kod (int), status ('otwarty'|'zamkniety'),
+  closed_by, closed_at, created_at`. ⚠️ **Jedyna w projekcie wymuszona
+  unikalność**: `(lokal, date)` — dwie karty na jeden dzień to dwa utargi i
+  fałszywy labour cost. Migracje `0010`, `0014`.
+- **day_log_entries** — wpisy dnia: `id (uuid), lokal, date, day_log_id (text,
+  luźne odwołanie), typ ('temperatura'|'dostawa'|'sprzatanie'|'incydent'|
+  'inne'|'korekta'), template_key (text), payload (jsonb), recorded_by,
+  recorded_at, corrected_from (uuid), corrected_reason, created_at`. ⚠️ Pierwszy
+  `jsonb` w projekcie — świadomie: co mierzy lokal, zależy od typu lokalu, a w
+  modelu silo każda nowa kolumna to migracja w bazach wszystkich klientów.
+  `typ='korekta'` to ślad poprawki zamkniętego dnia (payload: `pole`, `label`,
+  `stare`, `nowe`, `powod`), NIE zwykły wpis — `wpisyDlaDnia` go pomija.
+- **day_log_templates** — co trzeba wpisywać w tym lokalu: `id (uuid), lokal,
+  klucz (stabilny, z etykiety przez slugKlucza), nazwa, typ, pora
+  ('poranne'|'obiadowe'|'wieczorne'|'ogolne'), days_of_week (jak w tasks),
+  wymagany (bool), pola (jsonb: [{klucz,label,typ:'number'|'text'|'bool',
+  jednostka,min,max}]), kolejnosc (int), archived (bool), created_at`.
+  Szablon się ARCHIWIZUJE, nie kasuje — wpisy sprzed miesięcy odwołują się do
+  niego przez `template_key` i muszą mieć skąd wziąć nazwę i normy.
+- **weather_forecasts** — archiwum prognoz, patrz "Archiwum prognoz" wyżej.
+  `id (uuid), miasto, target_date (date), horizon_days (int, 0 = FAKT),
+  temp_max, temp_min, opady_mm (numeric), opady_prawdopodobienstwo (int),
+  kod (int), zrodlo ('forecast'|'previous_runs'), created_at`. Unikalność
+  `(miasto, target_date, horizon_days)` — duplikat zafałszowałby średni błąd,
+  a w nim leży cała wartość tej tabeli. Migracja `0013`.
+
 ## Urlopy i niedostępność — zaimplementowane 2026-09-03
 
 Pracownik może wysłać wniosek o wolne z zakładki **Zgłoś** (trzeci typ,
@@ -1138,6 +1184,43 @@ zarejestrowaniem godzin w trakcie urlopu), nie naprawiaj tego jako "bug".
 
 `App.tsx` ładuje `absences` jako osobny, nieblokujący fetch (ten sam
 wzorzec co `shift_edits`/`tasks`) — błąd tu nie blokuje reszty apki.
+
+## Zmiany z grafiku bez odbicia — dodane 2026-09-08
+
+[`utils/odbicia.ts`](src/utils/odbicia.ts) + sekcja w `ZatwierdzanieZmian.tsx`
++ `api/cron/check-odbicia.js`.
+
+Najczęstsza przyczyna braku odbicia to zapomniany tablet, nie nieobecność —
+człowiek przyszedł, przepracował swoje i wyszedł. Zostawione tak, dzień pokazuje
+minus kilka godzin, plan/fakt kłamie, a pracownik nie dostaje za tę zmianę
+pieniędzy. Stąd kolejka decyzji: dopisz jak w grafiku, popraw godziny, odrzuć.
+
+⚠️ **Nie zgadujemy i nie dopisujemy nic automatycznie** — to podpis kierownika
+pod czyjąś wypłatą. Cron tylko powiadamia (pracownika i kierownika), decyzję
+podejmuje człowiek.
+
+Szczegóły, które łatwo zepsuć:
+- Odbicie w INNYM lokalu zamyka sprawę. Człowiek gdzieś był, tylko nie tam,
+  gdzie planowano — to inna rzecz i nie należy do tej kolejki.
+- `is_urlop` nie liczy się jako odbicie (to zmaterializowany urlop, nie praca).
+- Rozliczona pozycja dostaje `grafik_shifts.rozliczenie` ('zapisano'/'odrzucono')
+  i nie wraca. Kolejka, która pokazuje w kółko to samo, przestaje być czytana.
+- Cron patrzy WYŁĄCZNIE na wczoraj — dzięki temu każda zmiana jest sprawdzana
+  dokładnie raz i nie trzeba niczego oznaczać przeciw dublowaniu powiadomień.
+- Okno kolejki to 14 dni (`OKNO_DNI`). Dalej nikt nie pamięta, czy tamtego
+  wtorku przyszedł, a zgadywanie jest gorsze niż brak.
+
+**Tablet a grafik:** `KioskDashboard` pokazuje przypisanych do lokalu PLUS tych,
+których opublikowany grafik stawia dziś tutaj. **Dodajemy, nie przenosimy** —
+plany się zmieniają, a osoba zdjęta z listy macierzystego lokalu nie odbiłaby
+zmiany wcale, gdyby jednak tam przyszła. Kto jest w grafiku w dwóch lokalach,
+pokaże się na obu tabletach.
+
+**Odejście pracownika:** `przepiszZmiany()` w `utils/grafik.ts` przenosi przyszłe
+zmiany na następcę. NIE dotyka `published_at`, więc wiersz liczy się jako
+niewysłany i przy najbliższej publikacji nowa osoba dowie się o swoich zmianach.
+Dni z wolnym, kolizją albo po `ostatni_dzien` są pomijane i zdejmowane — zmiana
+wpisana komuś niedostępnemu jest gorsza niż brak obsady, bo wygląda na pokrytą.
 
 ## Znane błędy — JUŻ NAPRAWIONE, nie wprowadzaj ponownie
 
@@ -1456,6 +1539,9 @@ dedykowana walidacja.
 — tam są wszystkie decyzje właściciela z sesji projektowej wraz z
 uzasadnieniami. Poniżej tylko to, o co najłatwiej się potknąć:
 
+- **`grafik_shifts.rozliczenie`** ('zapisano'|'odrzucono', + `rozliczenie_przez`,
+  `rozliczenie_at`) — co kierownik zrobił ze zmianą, której nikt nie odbił.
+  Patrz "Zmiany z grafiku bez odbicia" niżej. Migracja `0016`.
 - **Plan i fakt to dwie różne tabele.** `grafik_shifts` = plan (kto ma
   pracować), `shifts` = fakt (odbicia). Grafik NIGDY nie pisze do `shifts`
   poza materializacją urlopu.

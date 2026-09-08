@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/check-puls",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/check-odbicia",
+      "schedule": "0 8 * * *"
     }
   ]
 }

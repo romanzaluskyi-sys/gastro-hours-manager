@@ -38,6 +38,7 @@ import {
   mondayOf,
   findOverlappingPlanShift,
   findBlockingAbsence,
+  poOstatnimDniu,
   buildCopyFromPreviousWeek,
   storedStanowiskaArr,
   isUnpublished,
@@ -826,6 +827,18 @@ export default function GrafikTydzien({
   // zmiana tego samego dnia są DOZWOLONE — patrz docs/GRAFIK.md.
   const handleSave = async (data) => {
     const user = (users || []).find((u) => String(u.id) === String(data.user_id));
+    // Znany ostatni dzień pracy jest twardszy niż wolne: po nim tej osoby po
+    // prostu nie będzie. Sprawdzamy to pierwsze, żeby komunikat mówił o
+    // odejściu, a nie o urlopie, który akurat też wypada w tym terminie.
+    if (poOstatnimDniu(user, data.date)) {
+      setBlokada({
+        userName: data.user_name,
+        tekst: `${data.user_name} kończy pracę ${user.ostatni_dzien} — ta zmiana wypada później.`,
+        podpowiedz:
+          "Jeśli data odejścia się zmieniła, popraw ją w karcie pracownika (Pracownicy).",
+      });
+      return false;
+    }
     const wolne = user ? findBlockingAbsence(absences, user, data.date) : null;
     if (wolne) {
       setBlokada({

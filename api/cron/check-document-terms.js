@@ -161,11 +161,18 @@ module.exports = async function handler(req, res) {
   try {
     const allUsers = await getUsers();
     const activeUsers = (Array.isArray(allUsers) ? allUsers : []).filter(
-      (u) => u.active && !u.archived
+      (u) =>
+        u.active &&
+        !u.archived &&
+        // Kto ma znany ostatni dzień pracy i już go minął, nie potrzebuje
+        // przypomnień o dokumentach — a kierownik nie potrzebuje ich o nim.
+        !(u.ostatni_dzien && u.ostatni_dzien < todayStr)
     );
 
     for (const user of activeUsers) {
       for (const term of DOCUMENT_TERMS) {
+        // Umowa bezterminowa nie ma o czym przypominać.
+        if (term.key === "umowa" && user.umowa_bezterminowa) continue;
         const expiryStr = user[term.dateCol];
         if (!expiryStr) continue;
 
