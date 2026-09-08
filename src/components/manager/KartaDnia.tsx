@@ -22,6 +22,8 @@ import {
   Plus,
   Users,
   Save,
+  Pencil,
+  Cloud,
 } from "lucide-react";
 import {
   cardCls,
@@ -56,7 +58,14 @@ import {
   prognozaNaDzien,
   wartoscPola,
   przesun,
+  POWODY_UTARGU,
+  POLA_KOREKTY,
+  KATEGORIE_ZDARZENIA,
+  korektyDnia,
+  poprawZamknietyDzien,
 } from "../../utils/dziennik";
+import { kontekstDnia, kontekstKrotko } from "../../utils/kalendarz";
+import ZdarzenieModal from "./ZdarzenieModal";
 
 const inputCls =
   "w-full border-[2px] border-[#171714] rounded px-3 py-2 text-[15px] bg-white disabled:bg-[#F1F1EE] disabled:text-[#6E6E66]";
@@ -66,7 +75,7 @@ const znak = (n, j = "") =>
   n == null ? "" : `${n > 0 ? "+" : n < 0 ? "−" : ""}${Math.abs(Math.round(n * 10) / 10)}${j}`;
 
 export default function KartaDnia({
-  currentUser, lokal, miasto, dzis,
+  currentUser, lokal, lokalRow, miasto, dzis,
   shifts, planShifts, users, tasks, taskCompletions,
   staffingRules, staffingRuleSets, grafikWyjatki,
   karty, wpisy: wszystkieWpisy, szablony: wszystkieSzablony, weatherForecasts,
@@ -75,7 +84,9 @@ export default function KartaDnia({
 }) {
   const [zapisuje, setZapisuje] = useState(false);
   const [pokazTrafnosc, setPokazTrafnosc] = useState(false);
-  const [nowyWpis, setNowyWpis] = useState(null); // { szablon } | { typ }
+  const [nowyWpis, setNowyWpis] = useState(null); // { szablon }
+  const [zdarzenie, setZdarzenie] = useState(false);
+  const [korekta, setKorekta] = useState(null); // { pole }
 
   const karta = znajdzKarte(karty, lokal, data);
   const zamkniety = karta && karta.status === "zamkniety";
@@ -122,6 +133,8 @@ export default function KartaDnia({
     obrot: pole("obrot") === "" ? null : Number(pole("obrot")),
     liczba_paragonow:
       pole("liczba_paragonow") === "" ? null : Number(pole("liczba_paragonow")),
+    obrot_powod: pole("obrot_powod") || null,
+    obrot_komentarz: pole("obrot_komentarz") || null,
     notatka: pole("notatka") || null,
     handover: pole("handover") || null,
     tagi: pole("tagi") || null,
@@ -176,6 +189,9 @@ export default function KartaDnia({
     }
   };
 
+  const kontekst = kontekstDnia(data, { dzienWyplaty: lokalRow && lokalRow.dzien_wyplaty });
+  const kontekstTekst = kontekstKrotko(kontekst);
+  const korekty = korektyDnia(wszystkieWpisy, lokal, data);
   const pogodaOpis = fakt ? describeWeatherCode(fakt.kod) : null;
 
   return (
@@ -217,7 +233,14 @@ export default function KartaDnia({
         )}
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {kontekstTekst && (
+        <div className="text-[13px] text-[#6E6E66] -mt-1">
+          <span className="font-bold text-[#171714]">{kontekstTekst}</span> — warto o tym
+          pamiętać przy porównywaniu tego dnia z innymi.
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
         <div className={statTileCls}>
           <div className={statLabelCls}>Godziny</div>
           <div className={statValueCls}>{auto.godzinyFakt}</div>
@@ -279,88 +302,65 @@ export default function KartaDnia({
             {auto.zamkniecie ? ` · zamknięcie ${auto.zamkniecie}` : ""}
           </div>
         </div>
+        <div className={statTileCls}>
+          <div className={statLabelCls}>Pogoda</div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-[20px]">{pogodaOpis ? pogodaOpis.icon : "—"}</span>
+            <span className={statValueCls}>
+              {fakt && fakt.temp_max != null ? `${Math.round(fakt.temp_max)}°` : "—"}
+            </span>
+          </div>
+          {/* Horyzont 14 dni zbieramy dalej (cron), ale w karcie go nie ma:
+              przy tej trafności to szum, a miejsce w kafelku jest drogie. */}
+          <div className={statSubCls}>
+            {[3, 7]
+              .map((h) => {
+                const pr = prognozaNaDzien(weatherForecasts, miasto, data, h);
+                if (!pr || pr.temp_max == null || !fakt || fakt.temp_max == null) return null;
+                return `${h} dni: ${znak(Number(pr.temp_max) - Number(fakt.temp_max), "°")}`;
+              })
+              .filter(Boolean)
+              .join(" · ") || (miasto ? "brak prognoz" : "brak miasta")}
+          </div>
+          {trafnosc.length > 0 && (
+            <button
+              className="text-[12px] underline text-[#6E6E66] mt-1"
+              onClick={() => setPokazTrafnosc(!pokazTrafnosc)}
+            >
+              {pokazTrafnosc ? "Ukryj trafność" : "Ile warta jest prognoza?"}
+            </button>
+          )}
+        </div>
       </div>
 
-      {miasto && (
+      {pokazTrafnosc && trafnosc.length > 0 && (
         <div className={cardCls}>
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-            <div className="flex items-center gap-2">
-              <span className="text-[22px]">{pogodaOpis ? pogodaOpis.icon : "—"}</span>
-              <div>
-                <div className="font-['Archivo'] font-bold text-[15px]">
-                  {fakt ? `${Math.round(fakt.temp_max)}°C` : "brak danych"}
-                  {fakt && fakt.opady_mm != null ? ` · ${fakt.opady_mm} mm` : ""}
-                </div>
-                <div className="text-[12px] text-[#6E6E66]">
-                  {miasto}
-                  {pogodaOpis ? ` · ${pogodaOpis.label}` : ""}
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-4 text-[13px]">
-              {[3, 7, 14].map((h) => {
-                const p = prognozaNaDzien(weatherForecasts, miasto, data, h);
-                const roznica =
-                  p && fakt && p.temp_max != null && fakt.temp_max != null
-                    ? Number(p.temp_max) - Number(fakt.temp_max)
-                    : null;
-                return (
-                  <div key={h}>
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-[#8F8E86]">
-                      {h} dni wcześniej
-                    </div>
-                    <div className="font-['Archivo'] font-bold">
-                      {p ? `${Math.round(p.temp_max)}°C` : "—"}
-                      {roznica != null && (
-                        <span
-                          className="ml-1 text-[12px]"
-                          style={{ color: Math.abs(roznica) >= 2 ? COLORS.accent : COLORS.muted }}
-                        >
-                          {znak(roznica, "")}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            {trafnosc.length > 0 && (
-              <button
-                className="ml-auto text-[13px] underline text-[#6E6E66]"
-                onClick={() => setPokazTrafnosc(!pokazTrafnosc)}
-              >
-                {pokazTrafnosc ? "Ukryj" : "Ile warta jest prognoza?"}
-              </button>
-            )}
-          </div>
-          {pokazTrafnosc && (
-            <div className="mt-3 pt-3 border-t-[2px] border-[#171714] overflow-x-auto">
-              <table className="w-full text-[13px] min-w-[420px]">
-                <thead>
-                  <tr className="text-left text-[10px] uppercase tracking-wider text-[#8F8E86]">
-                    <th className="pb-1.5">Wyprzedzenie</th>
-                    <th className="pb-1.5">Błąd temp.</th>
-                    <th className="pb-1.5">Deszcz trafiony</th>
-                    <th className="pb-1.5">Fałszywy alarm</th>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px] min-w-[420px]">
+              <thead>
+                <tr className="text-left text-[10px] uppercase tracking-wider text-[#8F8E86]">
+                  <th className="pb-1.5">Wyprzedzenie</th>
+                  <th className="pb-1.5">Błąd temp.</th>
+                  <th className="pb-1.5">Deszcz trafiony</th>
+                  <th className="pb-1.5">Fałszywy alarm</th>
+                </tr>
+              </thead>
+              <tbody>
+                {trafnosc.map((tr) => (
+                  <tr key={tr.horyzont} className="border-t border-[#E7E7E2]">
+                    <td className="py-1.5 font-bold">{tr.horyzont} dni</td>
+                    <td>{tr.bladTemp != null ? `${tr.bladTemp} °C` : "—"}</td>
+                    <td>{tr.deszczTrafiony != null ? `${tr.deszczTrafiony}%` : "—"}</td>
+                    <td>{tr.falszywyAlarm != null ? `${tr.falszywyAlarm}%` : "—"}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {trafnosc.map((t) => (
-                    <tr key={t.horyzont} className="border-t border-[#E7E7E2]">
-                      <td className="py-1.5 font-bold">{t.horyzont} dni</td>
-                      <td>{t.bladTemp != null ? `${t.bladTemp} °C` : "—"}</td>
-                      <td>{t.deszczTrafiony != null ? `${t.deszczTrafiony}%` : "—"}</td>
-                      <td>{t.falszywyAlarm != null ? `${t.falszywyAlarm}%` : "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <p className="text-[12px] text-[#6E6E66] mt-2">
-                Ostatnie 90 dni, {miasto}. Im dalej w prawo, tym mniej sensu ma układanie
-                obsady „bo zapowiadali deszcz”.
-              </p>
-            </div>
-          )}
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-[12px] text-[#6E6E66] mt-2">
+            Ostatnie 90 dni, {miasto}. Im dalej w prawo, tym mniej sensu ma układanie
+            obsady „bo zapowiadali deszcz”.
+          </p>
         </div>
       )}
 
@@ -368,14 +368,24 @@ export default function KartaDnia({
         <div className={sectionCardCls}>
           <div className={sectionHeaderCls}>
             <span>Utarg i notatki</span>
-            <button
-              className="text-[13px] font-normal underline text-[#6E6E66] disabled:opacity-40"
-              disabled={zapisuje || zamkniety}
-              onClick={() => zapisz(false)}
-            >
-              <Save size={13} className="inline -mt-0.5 mr-1" />
-              Zapisz
-            </button>
+            {zamkniety ? (
+              <button
+                className="text-[13px] font-normal underline text-[#6E6E66]"
+                onClick={() => setKorekta({ pole: "obrot" })}
+              >
+                <Pencil size={13} className="inline -mt-0.5 mr-1" />
+                Popraw dane
+              </button>
+            ) : (
+              <button
+                className="text-[13px] font-normal underline text-[#6E6E66] disabled:opacity-40"
+                disabled={zapisuje}
+                onClick={() => zapisz(false)}
+              >
+                <Save size={13} className="inline -mt-0.5 mr-1" />
+                Zapisz
+              </button>
+            )}
           </div>
           <div className="p-4 grid md:grid-cols-2 gap-4">
             <div>
@@ -414,6 +424,34 @@ export default function KartaDnia({
               <div className="text-[12px] text-[#6E6E66] mt-1">
                 {czek != null ? `średni paragon ${czek} zł` : "średni paragon policzy się sam"}
               </div>
+            </div>
+            {/* Powód pytamy zawsze, ale podpowiadamy dopiero przy odchyleniu —
+                przy zwykłym dniu nie ma czego tłumaczyć i pole tylko przeszkadza. */}
+            <div>
+              <label className={labelCls}>Powód odchylenia</label>
+              <select
+                className={inputCls}
+                disabled={zamkniety}
+                value={pole("obrot_powod")}
+                onChange={(e) => ustaw("obrot_powod", e.target.value)}
+              >
+                <option value="">— nie dotyczy —</option>
+                {POWODY_UTARGU.map((x) => (
+                  <option key={x.key} value={x.key}>
+                    {x.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>Komentarz do utargu</label>
+              <input
+                className={inputCls}
+                disabled={zamkniety}
+                placeholder="co konkretnie się stało"
+                value={pole("obrot_komentarz")}
+                onChange={(e) => ustaw("obrot_komentarz", e.target.value)}
+              />
             </div>
             <div className="md:col-span-2">
               <label className={labelCls}>Notatka dla następnej zmiany</label>
@@ -530,7 +568,7 @@ export default function KartaDnia({
             <button
               className={btnSecondaryCls}
               disabled={zamkniety}
-              onClick={() => setNowyWpis({ typ: "incydent" })}
+              onClick={() => setZdarzenie(true)}
             >
               <AlertTriangle size={14} className="inline mr-1" />
               Zgłoś zdarzenie
@@ -544,19 +582,82 @@ export default function KartaDnia({
           <div className={sectionHeaderCls}>Zdarzenia</div>
           {wpisy
             .filter((w) => !w.template_key)
-            .map((w) => (
-              <div
-                key={w.id}
-                className="px-4 py-3 border-b-[2px] border-[#171714] last:border-b-0"
-              >
-                <div className="text-[15px]">{w.payload?.opis || "(bez opisu)"}</div>
-                <div className="text-[12px] text-[#8F8E86]">
-                  {w.typ} · {w.recorded_by} ·{" "}
-                  {new Date(w.recorded_at).toLocaleString("pl-PL")}
-                  {w.corrected_from ? " · korekta wcześniejszego wpisu" : ""}
+            .map((w) => {
+              const pl = w.payload || {};
+              const kat = (KATEGORIE_ZDARZENIA.find((k) => k.key === pl.kategoria) || {}).label;
+              return (
+                <div
+                  key={w.id}
+                  className="px-4 py-3 border-b-[2px] border-[#171714] last:border-b-0"
+                >
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                    {kat && (
+                      <span className="text-[11px] font-bold uppercase tracking-wider bg-[#F1F1EE] border border-[#B7B6AE] rounded px-2 py-0.5">
+                        {kat}
+                      </span>
+                    )}
+                    {pl.status === "eskalacja" && (
+                      <span
+                        className="text-[11px] font-bold uppercase tracking-wider rounded px-2 py-0.5 text-white"
+                        style={{ backgroundColor: COLORS.accent }}
+                      >
+                        do eskalacji
+                      </span>
+                    )}
+                    {pl.wymaga_prowadzenia && (
+                      <span className="text-[11px] font-bold uppercase tracking-wider border-[2px] rounded px-2 py-0.5" style={{ borderColor: COLORS.accent, color: COLORS.accent }}>
+                        w toku
+                      </span>
+                    )}
+                    {pl.czas && <span className="text-[12px] text-[#6E6E66]">{pl.czas}</span>}
+                    {pl.miejsce && <span className="text-[12px] text-[#6E6E66]">· {pl.miejsce}</span>}
+                  </div>
+                  <div className="text-[15px]">{pl.opis || "(bez opisu)"}</div>
+                  {pl.dzialania && (
+                    <div className="text-[13px] text-[#6E6E66] mt-1">
+                      Zrobiono: {pl.dzialania}
+                    </div>
+                  )}
+                  {(pl.personel || pl.gosc) && (
+                    <div className="text-[13px] text-[#6E6E66]">
+                      Udział: {[pl.personel, pl.gosc].filter(Boolean).join(", ")}
+                    </div>
+                  )}
+                  {pl.wplyw_typ && (
+                    <div className="text-[13px] text-[#6E6E66]">
+                      Skutek finansowy: {pl.wplyw_typ}
+                      {pl.wplyw_kwota != null ? ` · ${pl.wplyw_kwota} zł` : ""}
+                    </div>
+                  )}
+                  {pl.dowod && (
+                    <div className="text-[13px] text-[#6E6E66]">Dowód: {pl.dowod}</div>
+                  )}
+                  <div className="text-[12px] text-[#8F8E86] mt-1">
+                    {w.recorded_by} · {new Date(w.recorded_at).toLocaleString("pl-PL")}
+                  </div>
                 </div>
+              );
+            })}
+        </div>
+      )}
+
+      {/* Historia poprawek zamkniętego dnia. Stoi osobno i zawsze, bo jej sens
+          polega właśnie na tym, że nie da się jej pominąć ani nadpisać. */}
+      {korekty.length > 0 && (
+        <div className={sectionCardCls}>
+          <div className={sectionHeaderCls}>Poprawki po zamknięciu</div>
+          {korekty.map((k) => (
+            <div key={k.id} className="px-4 py-3 border-b-[2px] border-[#171714] last:border-b-0">
+              <div className="text-[15px]">
+                <b>{k.payload?.label}</b>: {String(k.payload?.stare ?? "—")} →{" "}
+                <b>{String(k.payload?.nowe ?? "—")}</b>
               </div>
-            ))}
+              <div className="text-[13px] text-[#6E6E66]">{k.payload?.powod}</div>
+              <div className="text-[12px] text-[#8F8E86]">
+                {k.recorded_by} · {new Date(k.recorded_at).toLocaleString("pl-PL")}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
@@ -602,9 +703,41 @@ export default function KartaDnia({
       {nowyWpis && (
         <ModalWpisu
           szablon={nowyWpis.szablon}
-          typ={nowyWpis.typ}
           onClose={() => setNowyWpis(null)}
           onSave={dodajWpis}
+        />
+      )}
+
+      {zdarzenie && (
+        <ZdarzenieModal
+          dateStr={data}
+          osobyNaZmianie={auto.osoby}
+          onClose={() => setZdarzenie(false)}
+          onSave={async (typ, klucz, payload) => {
+            await dodajWpis(typ, klucz, payload);
+            setZdarzenie(false);
+          }}
+        />
+      )}
+
+      {korekta && (
+        <ModalKorekty
+          karta={karta}
+          onClose={() => setKorekta(null)}
+          onSave={async (pole, nowaWartosc, powod) => {
+            try {
+              await poprawZamknietyDzien({
+                karta, pole, nowaWartosc, powod, kto: currentUser.name,
+                dayLogs: karty, setDayLogs: setKarty,
+                entries: wszystkieWpisy, setEntries: setWpisy,
+              });
+              await odswiez();
+              setKorekta(null);
+              showMsg("Poprawka zapisana", "success");
+            } catch (e) {
+              showMsg(e.message || "Błąd zapisu poprawki", "error");
+            }
+          }}
         />
       )}
     </div>
@@ -613,36 +746,32 @@ export default function KartaDnia({
 
 // Jeden modal obsługuje i wpis z szablonu, i wolne zdarzenie — z punktu
 // widzenia użytkownika to ta sama czynność.
-function ModalWpisu({ szablon, typ, onClose, onSave }) {
-  const pola = szablon ? polaSzablonu(szablon) : [];
+function ModalWpisu({ szablon, onClose, onSave }) {
+  const pola = polaSzablonu(szablon);
   const [wartosci, setWartosci] = useState({});
   const [zapisuje, setZapisuje] = useState(false);
 
   // Pola tak/nie są zawsze "odpowiedziane" — niezaznaczone znaczy "nie".
   // Reszta musi mieć wartość: temperatura, której nikt nie zmierzył, zapisana
   // jako pusta, jest gorsza niż jej brak, bo liczy się jako wykonana.
-  const brakujace = szablon
-    ? pola.filter((p) => p.typ !== "bool" && !String(wartosci[p.klucz] ?? "").trim())
-    : String(wartosci.opis || "").trim()
-    ? []
-    : [{ label: "opis" }];
+  const brakujace = pola.filter(
+    (p) => p.typ !== "bool" && !String(wartosci[p.klucz] ?? "").trim()
+  );
   const kompletny = !brakujace.length;
 
   const zapisz = async () => {
     if (!kompletny) return;
     setZapisuje(true);
-    if (szablon) await onSave(szablon.typ, szablon.klucz, wartosci);
-    else await onSave(typ || "inne", null, { opis: wartosci.opis || "" });
+    await onSave(szablon.typ, szablon.klucz, wartosci);
     setZapisuje(false);
   };
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-xl border-[2.5px] border-[#171714] w-full max-w-[460px]">
-        <div className={sectionHeaderCls}>{szablon ? szablon.nazwa : "Zdarzenie"}</div>
+        <div className={sectionHeaderCls}>{szablon.nazwa}</div>
         <div className="p-4 flex flex-col gap-3">
-          {szablon ? (
-            pola.map((p) => (
+          {pola.map((p) => (
               <div key={p.klucz}>
                 <label className={labelCls}>
                   {p.label}
@@ -671,18 +800,7 @@ function ModalWpisu({ szablon, typ, onClose, onSave }) {
                   />
                 )}
               </div>
-            ))
-          ) : (
-            <div>
-              <label className={labelCls}>Co się wydarzyło</label>
-              <textarea
-                rows={3}
-                className={inputCls}
-                value={wartosci.opis ?? ""}
-                onChange={(e) => setWartosci({ ...wartosci, opis: e.target.value })}
-              />
-            </div>
-          )}
+          ))}
           <div className="flex flex-wrap gap-2 justify-end items-center pt-1">
             {!kompletny && (
               <span className="text-[13px] text-[#6E6E66] mr-auto">
@@ -698,6 +816,94 @@ function ModalWpisu({ szablon, typ, onClose, onSave }) {
               onClick={zapisz}
             >
               Zapisz
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Poprawka zamkniętego dnia. Osobny ekran, nie edycja w miejscu: stara
+// wartość, nowa i powód zostają w dzienniku na zawsze. Bez tego liczba sprzed
+// miesiąca nic nie znaczy — nie wiadomo, czy tak było, czy ktoś ją podmienił.
+function ModalKorekty({ karta, onClose, onSave }) {
+  const [pole, setPole] = useState("obrot");
+  const [wartosc, setWartosc] = useState("");
+  const [powod, setPowod] = useState("");
+  const [zapisuje, setZapisuje] = useState(false);
+
+  const definicja = POLA_KOREKTY.find((p) => p.klucz === pole) || POLA_KOREKTY[0];
+  const stare = karta ? karta[pole] : null;
+  const kompletny = String(wartosc).trim() !== "" && powod.trim().length >= 3;
+
+  const zapisz = async () => {
+    if (!kompletny) return;
+    setZapisuje(true);
+    await onSave(pole, definicja.typ === "number" ? Number(wartosc) : wartosc, powod.trim());
+    setZapisuje(false);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-xl border-[2.5px] border-[#171714] w-full max-w-[520px]">
+        <div className={sectionHeaderCls}>Poprawka zamkniętego dnia</div>
+        <div className="p-4 flex flex-col gap-3">
+          <div>
+            <label className={labelCls}>Co poprawiamy</label>
+            <select
+              className={inputCls}
+              value={pole}
+              onChange={(e) => {
+                setPole(e.target.value);
+                setWartosc("");
+              }}
+            >
+              {POLA_KOREKTY.map((p) => (
+                <option key={p.klucz} value={p.klucz}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="grid md:grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Było</label>
+              <div className="border-[2px] border-[#B7B6AE] rounded px-3 py-2 text-[15px] bg-[#F1F1EE] text-[#6E6E66]">
+                {stare == null || stare === "" ? "—" : String(stare)}
+              </div>
+            </div>
+            <div>
+              <label className={labelCls}>Ma być</label>
+              <input
+                type={definicja.typ === "number" ? "number" : "text"}
+                className={inputCls}
+                value={wartosc}
+                onChange={(e) => setWartosc(e.target.value)}
+              />
+            </div>
+          </div>
+          <div>
+            <label className={labelCls}>Dlaczego</label>
+            <textarea
+              rows={2}
+              className={inputCls}
+              placeholder="np. pomyłka przy przepisywaniu z kasy"
+              value={powod}
+              onChange={(e) => setPowod(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-wrap gap-2 justify-end items-center">
+            {!kompletny && (
+              <span className="text-[13px] text-[#6E6E66] mr-auto">
+                Podaj nową wartość i powód — bez powodu poprawka nic nie wyjaśnia.
+              </span>
+            )}
+            <button className={btnSecondaryCls} onClick={onClose}>
+              Anuluj
+            </button>
+            <button className={btnPrimaryCls} disabled={zapisuje || !kompletny} onClick={zapisz}>
+              Zapisz poprawkę
             </button>
           </div>
         </div>

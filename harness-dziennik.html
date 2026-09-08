@@ -163,6 +163,29 @@ const sprawdz = (nazwa, warunek, szczegol = "") => {
     sprawdz("opis normy: obie granice",
       D.opisNormy({ min: 0, max: 5, jednostka: "°C" }) === "0–5°C");
 
+    // --- kalendarz ---
+    const K = await import(await zaladuj("/src/utils/kalendarz"));
+    const ymdD = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+    sprawdz("Wielkanoc 2026 = 5 kwietnia", ymdD(K.wielkanoc(2026)) === "2026-04-05", ymdD(K.wielkanoc(2026)));
+    sprawdz("Wielkanoc 2027 = 28 marca", ymdD(K.wielkanoc(2027)) === "2027-03-28", ymdD(K.wielkanoc(2027)));
+    sprawdz("Wielkanoc 2024 = 31 marca", ymdD(K.wielkanoc(2024)) === "2024-03-31", ymdD(K.wielkanoc(2024)));
+    sprawdz("Boże Ciało 2026 = 4 czerwca (Wielkanoc + 60)",
+      K.swietaRoku(2026)["2026-06-04"] === "Boże Ciało", JSON.stringify(K.swietaRoku(2026)["2026-06-04"]));
+    sprawdz("11 listopada to święto", K.swietaRoku(2026)["2026-11-11"] === "Święto Niepodległości");
+    sprawdz("tłusty czwartek 2026 = 12 lutego",
+      K.dniHandloweRoku(2026)["2026-02-12"] === "Tłusty czwartek",
+      JSON.stringify(Object.entries(K.dniHandloweRoku(2026)).find(([,v])=>v==="Tłusty czwartek")));
+    sprawdz("dzień wypłaty domyślnie 10.",
+      K.kontekstDnia("2026-09-10", {}).some((x) => x.typ === "wyplata"));
+    sprawdz("dzień wypłaty da się przestawić",
+      K.kontekstDnia("2026-09-05", { dzienWyplaty: 5 }).some((x) => x.typ === "wyplata"));
+    sprawdz("31 grudnia to dzień handlowy i zarazem przed Nowym Rokiem",
+      K.kontekstKrotko(K.kontekstDnia("2026-12-31", {})).includes("Sylwester") &&
+      K.kontekstKrotko(K.kontekstDnia("2026-12-31", {})).includes("Nowy Rok"),
+      K.kontekstKrotko(K.kontekstDnia("2026-12-31", {})));
+    sprawdz("zwykły wtorek nie ma kontekstu",
+      K.kontekstKrotko(K.kontekstDnia("2026-09-15", {})) === "");
+
     log("");
     log(`ZDANYCH ${zdanych}, OBLANYCH ${oblanych}`, oblanych ? "zle" : "ok");
   } catch (e) {

@@ -66,7 +66,7 @@ export const znajdzKarte = (dayLogs, lokal, dateStr) =>
 
 export const wpisyDlaDnia = (entries, lokal, dateStr) =>
   (entries || [])
-    .filter((w) => w.lokal === lokal && w.date === dateStr)
+    .filter((w) => w.lokal === lokal && w.date === dateStr && w.typ !== "korekta")
     // Korekta to nowy wiersz wskazujący na stary (HACCP — zapisu nie wolno
     // cicho nadpisać). W widoku pokazujemy tylko wersje aktualne, czyli te,
     // do których nikt się nie odwołał jako do poprzedniej.
@@ -239,6 +239,72 @@ export const wartoscPola = (pole, payload) => {
   if (v === "" || v == null) return "—";
   if (pole.typ === "bool") return v === true || v === "true" ? "tak" : "nie";
   return `${v}${pole.jednostka || ""}`;
+};
+
+// Zamknięta lista — po powodach będziemy filtrować i liczyć, więc wolny tekst
+// (który i tak jest obok, w komentarzu) nie może być jedynym nośnikiem.
+export const POWODY_UTARGU = [
+  { key: "pogoda", label: "Pogoda" },
+  { key: "wydarzenie", label: "Wydarzenie / święto" },
+  { key: "akcja", label: "Akcja, promocja" },
+  { key: "personel", label: "Personel" },
+  { key: "inne", label: "Inne" },
+];
+
+export const KATEGORIE_ZDARZENIA = [
+  { key: "skarga_goscia", label: "Skarga gościa" },
+  { key: "konflikt", label: "Konflikt personelu" },
+  { key: "wypadek", label: "Wypadek lub uraz" },
+  { key: "bezpieczenstwo_zywnosci", label: "Bezpieczeństwo żywności" },
+  { key: "kradziez", label: "Kradzież lub niedobór" },
+  { key: "awaria", label: "Awaria sprzętu" },
+  { key: "kontrola", label: "Kontrola urzędowa" },
+  { key: "inne", label: "Inne" },
+];
+
+// --- KOREKTY ZAMKNIĘTEGO DNIA -------------------------------------------
+// Zamkniętego dnia nie edytujemy w miejscu. Poprawka to osobny zapis: stara
+// wartość, nowa i powód. Bez tego "utarg 4800" po tygodniu nie znaczy nic —
+// nie wiadomo, czy tak było, czy ktoś to potem podmienił.
+export const POLA_KOREKTY = [
+  { klucz: "obrot", label: "Utarg brutto", typ: "number" },
+  { klucz: "liczba_paragonow", label: "Liczba paragonów", typ: "number" },
+  { klucz: "obrot_powod", label: "Powód odchylenia", typ: "text" },
+  { klucz: "obrot_komentarz", label: "Komentarz do utargu", typ: "text" },
+  { klucz: "handover", label: "Notatka dla następnej zmiany", typ: "text" },
+  { klucz: "tagi", label: "Tagi dnia", typ: "text" },
+  { klucz: "notatka", label: "Opis zdarzenia nadzwyczajnego", typ: "text" },
+];
+
+export const korektyDnia = (entries, lokal, dateStr) =>
+  (entries || [])
+    .filter((w) => w.lokal === lokal && w.date === dateStr && w.typ === "korekta")
+    .sort((a, b) => String(b.recorded_at).localeCompare(String(a.recorded_at)));
+
+export const poprawZamknietyDzien = async ({
+  karta, pole, nowaWartosc, powod, kto,
+  dayLogs, setDayLogs, entries, setEntries,
+}) => {
+  wymagajSettera(setDayLogs, "setDayLogs");
+  wymagajSettera(setEntries, "setDayLogEntries");
+  const opis = (POLA_KOREKTY.find((p) => p.klucz === pole) || {}).label || pole;
+  const stare = karta[pole] ?? null;
+
+  // Ślad idzie PIERWSZY. Gdyby zapis liczby się udał, a ślad nie, zostałaby
+  // po cichu zmieniona wartość bez wyjaśnienia — czyli dokładnie to, przed
+  // czym ta funkcja ma chronić.
+  const wpis = await api.post("day_log_entries", {
+    lokal: karta.lokal,
+    date: karta.date,
+    day_log_id: String(karta.id),
+    typ: "korekta",
+    payload: { pole, label: opis, stare, nowe: nowaWartosc, powod },
+    recorded_by: kto,
+  });
+  const zapisana = await api.patch("day_logs", karta.id, { [pole]: nowaWartosc });
+  setEntries([...(entries || []), wpis]);
+  setDayLogs((dayLogs || []).map((k) => (k.id === karta.id ? zapisana : k)));
+  return zapisana;
 };
 
 // --- AUTOMATYCZNE PODSUMOWANIE DNIA -------------------------------------

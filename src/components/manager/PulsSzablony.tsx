@@ -9,7 +9,7 @@
 // nowy lokal ma być gotowy na dwa kliknięcia, a nie na kwadrans wpisywania.
 import React, { useState } from "react";
 import { api } from "../../api/supabase";
-import { Plus, Trash2, ArrowLeft } from "lucide-react";
+import { Plus, Trash2, ArrowLeft, Copy } from "lucide-react";
 import {
   sectionCardCls,
   sectionHeaderCls,
@@ -224,6 +224,25 @@ export default function PulsSzablony({
             </div>
             <button className={btnSecondaryCls} onClick={() => setEdytowany(s)}>
               Zmień
+            </button>
+            {/* Lokale mają po kilka lodówek o tych samych normach — kopia z
+                gotowymi polami oszczędza wpisywanie tego samego po raz piąty.
+                Bez id i klucza, więc zapisze się jako nowa pozycja. */}
+            <button
+              className={btnSecondaryCls}
+              title="Kopiuj wpis"
+              onClick={() =>
+                setEdytowany({
+                  ...s,
+                  id: undefined,
+                  klucz: undefined,
+                  nazwa: `${s.nazwa} (kopia)`,
+                  pola: polaSzablonu(s).map((x) => ({ ...x })),
+                  kolejnosc: moje.length,
+                })
+              }
+            >
+              <Copy size={14} />
             </button>
             <button
               className="text-[#DE3A22] px-2"

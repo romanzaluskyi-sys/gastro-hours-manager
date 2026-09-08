@@ -577,6 +577,28 @@ liczba, tekst, tak/nie — normy (`min`/`max`) dotyczą tylko liczb. Szablon si�
 **archiwizuje, nie kasuje**: wpisy z poprzednich miesięcy odwołują się do niego
 przez `template_key` i muszą mieć skąd wziąć nazwę i normy.
 
+**Kontekst kalendarzowy** — [`utils/kalendarz.ts`](src/utils/kalendarz.ts).
+Święta liczymy, nie pobieramy: stałe daty plus pochodne od Wielkanocy
+(algorytm Meeus/Jones/Butcher), więc działa dla dowolnego roku bez API i bez
+tabeli, którą ktoś musiałby uzupełniać co grudzień. Osobno `dniHandloweRoku`
+— Walentynki, tłusty czwartek, Wigilia, Sylwester: nie są wolne, ale w
+gastronomii zmieniają salę bardziej niż niejedno święto. Dzień wypłaty siedzi
+w `lokale.dzien_wyplaty` (puste = 10). Lokalne wydarzenia to osobny moduł
+(Roadmap p.3), jeszcze go nie ma.
+
+**Zdarzenia** ([`manager/ZdarzenieModal.tsx`](src/components/manager/ZdarzenieModal.tsx))
+— pełny formularz zamiast jednego pola „co się wydarzyło”, którego nie
+wypełniał nikt. Wymagane są tylko kategoria i opis: formularz, którego nie da
+się zamknąć bez kompletu, kończy tak samo jak poprzedni, czyli pusty. ⚠️ Pole
+gościa jest świadomie bez danych osobowych — „gość przy stoliku 4” wystarcza
+do wyjaśnienia sprawy, a nazwisko byłoby przetwarzaniem bez podstawy.
+
+**Zamkniętego dnia NIE edytujemy w miejscu.** `poprawZamknietyDzien()`
+zapisuje najpierw ślad (`day_log_entries`, `typ='korekta'`, payload ze starą
+i nową wartością oraz powodem), dopiero potem zmienia `day_logs`. Kolejność
+jest celowa: gdyby ślad padł po zmianie liczby, zostałaby po cichu podmieniona
+wartość bez wyjaśnienia — dokładnie to, przed czym ta funkcja chroni.
+
 ### Sprawdziany bez Node — `harness-*.html`
 
 W tym środowisku nie ma Node ani npm, więc `npm run build` i testy jednostkowe

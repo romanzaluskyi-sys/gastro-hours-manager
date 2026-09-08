@@ -12,6 +12,7 @@ import { COLORS, sectionCardCls, sectionHeaderCls, btnSecondaryCls } from "./des
 import { describeWeatherCode } from "../../utils/weather";
 import { getDayOfWeek } from "../../utils/format";
 import { wierszDnia, przesun } from "../../utils/dziennik";
+import { kontekstDnia, kontekstKrotko } from "../../utils/kalendarz";
 
 const KROK_DNI = 14;
 
@@ -47,7 +48,7 @@ const Pole = ({ Icon, etykieta, wartosc, pod, kolorPod }) => (
 export default function PulsDni({
   lokal, miasto, dzis,
   shifts, planShifts, users, tasks, taskCompletions,
-  karty, wpisy, szablony, weatherForecasts,
+  karty, wpisy, szablony, weatherForecasts, lokalRow,
   onOtworzDzien,
 }) {
   const [ile, setIle] = useState(KROK_DNI);
@@ -94,6 +95,17 @@ export default function PulsDni({
               <div className="text-[12px] text-[#6E6E66]">
                 {getDayOfWeek(new Date(w.date + "T00:00:00"))}
               </div>
+              {/* Święto albo dzień wypłaty tłumaczy nietypowy utarg zanim
+                  ktokolwiek zacznie szukać wyjaśnień gdzie indziej. */}
+              {kontekstKrotko(
+                kontekstDnia(w.date, { dzienWyplaty: lokalRow && lokalRow.dzien_wyplaty })
+              ) && (
+                <div className="text-[11px] font-bold mt-0.5" style={{ color: COLORS.accentSoftText }}>
+                  {kontekstKrotko(
+                    kontekstDnia(w.date, { dzienWyplaty: lokalRow && lokalRow.dzien_wyplaty })
+                  )}
+                </div>
+              )}
               {w.zamkniety ? (
                 <div className="text-[11px] text-[#2C6A4F] mt-1 flex items-center gap-1">
                   <Lock size={11} /> zamknięty

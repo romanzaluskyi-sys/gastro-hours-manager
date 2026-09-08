@@ -38,6 +38,21 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 - **Pustego wpisu nie da się zapisać** — temperatura, której nikt nie zmierzył,
   liczyłaby się jako wykonana i zafałszowała cały dziennik. Pola tak/nie są
   wyjątkiem: niezaznaczone znaczy „nie” i to też jest odpowiedź.
+- **Karta dnia zna kalendarz**: święta, dni przed świętami, Walentynki, tłusty
+  czwartek, Sylwester i dzień wypłaty podpisują się same przy dacie — bo to one
+  najczęściej tłumaczą nietypowy utarg. Dzień wypłaty ustawiasz per lokal.
+- **Do utargu dochodzi powód i komentarz** (pogoda / wydarzenie / akcja /
+  personel / inne), żeby po miesiącu dało się odróżnić słabą sobotę od soboty
+  z awarią pieca.
+- **Pogoda zmieściła się w jeden kafelek**, z odchyleniem prognozy sprzed 3 i 7
+  dni. Czternastu dni już nie pokazujemy — przy tej trafności to szum.
+- **Zgłoszenie zdarzenia ma teraz formularz**: kategoria, godzina i miejsce,
+  uczestnicy, opis, co zrobiono, skutek finansowy, status i znacznik „wymaga
+  dalszego prowadzenia”. Danych osobowych gościa świadomie nie zapisujemy.
+- **Zamkniętego dnia nie da się po cichu zmienić.** Poprawka to osobny wpis:
+  stara wartość, nowa i powód, widoczne w karcie na zawsze.
+- W konfiguracji wpisów doszedł **przycisk kopiowania** — przy pięciu lodówkach
+  o tych samych normach to różnica między minutą a kwadransem.
 - Anonimowe zgłoszenie znów da się wysłać — wcześniej znikało bez śladu.
 
 ## 0.28.0 — 2026-09-05

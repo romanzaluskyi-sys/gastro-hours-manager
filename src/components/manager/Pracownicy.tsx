@@ -323,6 +323,27 @@ export default function Pracownicy({
                         placeholder="np. Koszalin"
                         className="w-full p-2 border-[2px] border-[#171714] rounded"
                       />
+                      {/* Dzień wypłaty zmienia ruch w gastronomii na tyle, że
+                          Puls pokazuje go przy dniu — inaczej nietypowy utarg
+                          wygląda na zagadkę. Puste = 10. */}
+                      <label className="text-xs font-bold text-[#6E6E66] mt-3 block">
+                        Dzień wypłaty (dzień miesiąca)
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="31"
+                        value={editingDict.dzien_wyplaty ?? ""}
+                        onChange={(e) =>
+                          setEditingDict({
+                            ...editingDict,
+                            dzien_wyplaty:
+                              e.target.value === "" ? null : Number(e.target.value),
+                          })
+                        }
+                        placeholder="10"
+                        className="w-full p-2 border-[2px] border-[#171714] rounded"
+                      />
                     </div>
                   )}
                   {view === "stanowiska" && (
@@ -409,7 +430,8 @@ export default function Pracownicy({
                   )}
                   {view === "lokale" && (
                     <p className="text-xs text-[#6E6E66]">
-                      Miasto: {item.miasto || "— nie ustawiono"}
+                      Miasto: {item.miasto || "— nie ustawiono"} · wypłata{" "}
+                      {item.dzien_wyplaty || 10}.
                     </p>
                   )}
                 </div>

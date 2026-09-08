@@ -31,6 +31,8 @@ wykonalne.
 | `0010` | Dziennik dnia ("Puls") | nowe |
 | `0011` | wyrównanie RLS na pięciu najstarszych tabelach | nowe |
 | `0012` | naprawa anonimowych zgłoszeń (`issues.user_name` NOT NULL) | nowe |
+| `0013` | archiwum prognoz pogody (`weather_forecasts`) | nowe |
+| `0014` | powód i komentarz do utargu, dzień wypłaty lokalu | nowe |
 
 `0001`–`0004` odtworzono ze zrzutu prawdziwej bazy
 (`docs/sql/tools/zrzut-schematu.sql`, 2026-09-07), a nie z opisu w

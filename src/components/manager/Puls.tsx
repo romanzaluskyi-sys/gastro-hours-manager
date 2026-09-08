@@ -63,7 +63,8 @@ export default function Puls({
       : null;
   const [lokalWybrany, setLokalWybrany] = useState(initialLokal || "");
   const lokal = konkretny || lokalWybrany || lokaleNames[0] || "";
-  const miasto = (lokale || []).find((l) => l.name === lokal)?.miasto || "";
+  const lokalRow = (lokale || []).find((l) => l.name === lokal) || null;
+  const miasto = (lokalRow && lokalRow.miasto) || "";
 
   const [kartyLokalne, setKartyLokalne] = useState(null);
   const [wpisyLokalne, setWpisyLokalne] = useState(null);
@@ -97,7 +98,7 @@ export default function Puls({
   };
 
   const wspolne = {
-    currentUser, lokal, miasto, dzis,
+    currentUser, lokal, lokalRow, miasto, dzis,
     shifts, planShifts, users, tasks, taskCompletions,
     staffingRules, staffingRuleSets, grafikWyjatki,
     karty, wpisy, szablony, weatherForecasts,
