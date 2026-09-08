@@ -527,6 +527,13 @@ export const findOverlappingPlanShift = (planShifts, candidate) => {
 
 // Zatwierdzony wniosek o wolne obowiązujący danego dnia — urlop albo
 // zgłoszona niedostępność. Oczekujące i odrzucone niczego nie blokują.
+// Osoba z ustawionym ostatnim dniem pracy nie może dostać zmiany po tej dacie.
+// To nie jest to samo co wyłączone konto: człowiek jeszcze pracuje, tylko
+// wiadomo, do kiedy — i grafik ma o tym wiedzieć wcześniej niż kierownik,
+// który dopiero po fakcie zauważa, że wpisał kogoś na przyszły miesiąc.
+export const poOstatnimDniu = (user, dateStr) =>
+  !!(user && user.ostatni_dzien && dateStr > user.ostatni_dzien);
+
 export const findBlockingAbsence = (absences, user, dateStr) =>
   (absences || []).find(
     (a) =>

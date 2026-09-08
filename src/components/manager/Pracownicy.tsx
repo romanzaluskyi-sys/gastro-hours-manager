@@ -38,7 +38,9 @@ const missingTerms = (u) => {
   const missing = [];
   if (u.role !== "kiosk") {
     if (!u.sanepid_expiry) missing.push("sanepid");
-    if (!u.umowa_expiry) missing.push("umowa");
+    // Umowa bezterminowa nie ma terminu, bo go nie ma — to co innego niż
+    // termin, którego nikt nie wpisał, i nie może świecić tym samym ostrzeżeniem.
+    if (!u.umowa_expiry && !u.umowa_bezterminowa) missing.push("umowa");
   }
   return missing;
 };
@@ -828,19 +830,66 @@ export default function Pracownicy({
                       <label className="text-xs font-bold text-[#6E6E66]">Termin umowy</label>
                       <input
                         type="date"
+                        disabled={!!editingUser.umowa_bezterminowa}
                         value={editingUser.umowa_expiry || ""}
                         onChange={(e) =>
                           setEditingUser({ ...editingUser, umowa_expiry: e.target.value })
                         }
-                        className={`w-full p-2 border-[2px] rounded ${
-                          showTermWarnings && !editingUser.umowa_expiry
+                        className={`w-full p-2 border-[2px] rounded disabled:bg-[#F1F1EE] disabled:text-[#8F8E86] ${
+                          showTermWarnings &&
+                          !editingUser.umowa_expiry &&
+                          !editingUser.umowa_bezterminowa
                             ? "border-[#DE3A22] bg-[#FAEAE6]"
                             : "border-[#171714]"
                         }`}
                       />
-                      {showTermWarnings && !editingUser.umowa_expiry && (
-                        <p className="text-xs text-[#DE3A22] mt-1">
-                          Brak terminu — przypomnienia wyłączone
+                      <label className="flex items-center gap-2 text-sm mt-2">
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4"
+                          checked={!!editingUser.umowa_bezterminowa}
+                          onChange={(e) =>
+                            setEditingUser({
+                              ...editingUser,
+                              umowa_bezterminowa: e.target.checked,
+                              // Termin i "bezterminowa" wykluczają się — trzymanie
+                              // starej daty obok zaznaczonego pola prosi się o to,
+                              // żeby ktoś kiedyś zaczął jej ufać.
+                              umowa_expiry: e.target.checked ? null : editingUser.umowa_expiry,
+                            })
+                          }
+                        />
+                        umowa bezterminowa
+                      </label>
+                      {showTermWarnings &&
+                        !editingUser.umowa_expiry &&
+                        !editingUser.umowa_bezterminowa && (
+                          <p className="text-xs text-[#DE3A22] mt-1">
+                            Brak terminu — przypomnienia wyłączone
+                          </p>
+                        )}
+                    </div>
+                    <div className="md:col-span-2">
+                      {/* Znany ostatni dzień pracy. Grafik po tej dacie nie da
+                          wpisać zmiany, a przypomnienia o umowie milkną — nie ma
+                          sensu gonić kogoś, kto i tak odchodzi. */}
+                      <label className="text-xs font-bold text-[#6E6E66]">
+                        Ostatni dzień pracy (jeśli znany)
+                      </label>
+                      <input
+                        type="date"
+                        value={editingUser.ostatni_dzien || ""}
+                        onChange={(e) =>
+                          setEditingUser({
+                            ...editingUser,
+                            ostatni_dzien: e.target.value || null,
+                          })
+                        }
+                        className="w-full p-2 border-[2px] border-[#171714] rounded"
+                      />
+                      {editingUser.ostatni_dzien && (
+                        <p className="text-xs text-[#6E6E66] mt-1">
+                          Po tej dacie Grafik nie pozwoli wpisać tej osobie zmiany.
                         </p>
                       )}
                     </div>

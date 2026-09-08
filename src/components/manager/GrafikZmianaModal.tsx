@@ -17,6 +17,7 @@ import {
   getRulesForDate,
   knowsStanowisko,
   findBlockingAbsence,
+  poOstatnimDniu,
   allowedStanowiskaArr,
 } from "../../utils/grafik";
 
@@ -229,6 +230,7 @@ export default function GrafikZmianaModal({
   const paryPozostale = wszystkieParty.filter((p) => !wKarcie(p)).sort(sortujPary);
   const obceStanowisko = user && stanowisko && !knowsStanowisko(user, stanowisko);
   const wolneUzytkownika = user ? findBlockingAbsence(absences, user, date) : null;
+  const poOdejsciu = poOstatnimDniu(user, date);
 
   const zapisz = async (dodajNastepna) => {
     if (!user || !stanowisko || !start || !end) return;
@@ -315,6 +317,7 @@ export default function GrafikZmianaModal({
             <div className="flex flex-wrap gap-1.5 mt-1">
               {kandydaci.map((u) => {
                 const zajety = findBlockingAbsence(absences, u, date);
+                const odchodzi = poOstatnimDniu(u, date);
                 const wybrany = String(u.id) === String(userId);
                 const umie = !stanowisko || knowsStanowisko(u, stanowisko);
                 return (
@@ -332,9 +335,11 @@ export default function GrafikZmianaModal({
                       wybrany
                         ? "bg-[#171714] text-white border-[#171714]"
                         : "bg-white text-[#171714] border-[#B7B6AE] hover:border-[#171714]"
-                    } ${zajety || !umie ? "opacity-50" : ""}`}
+                    } ${zajety || odchodzi || !umie ? "opacity-50" : ""}`}
                     title={
-                      zajety
+                      odchodzi
+                        ? `Ostatni dzień pracy: ${u.ostatni_dzien}`
+                        : zajety
                         ? zajety.type === "urlop"
                           ? "Ma urlop tego dnia"
                           : "Zgłosił brak dostępności"

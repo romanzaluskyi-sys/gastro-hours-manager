@@ -186,6 +186,17 @@ const sprawdz = (nazwa, warunek, szczegol = "") => {
     sprawdz("zwykły wtorek nie ma kontekstu",
       K.kontekstKrotko(K.kontekstDnia("2026-09-15", {})) === "");
 
+    // --- ostatni dzień pracy ---
+    const G = await import(await zaladuj("/src/utils/grafik"));
+    sprawdz("zmiana po ostatnim dniu jest blokowana",
+      G.poOstatnimDniu({ ostatni_dzien: "2026-09-30" }, "2026-10-01") === true);
+    sprawdz("zmiana w ostatnim dniu jest dozwolona",
+      G.poOstatnimDniu({ ostatni_dzien: "2026-09-30" }, "2026-09-30") === false);
+    sprawdz("bez ostatniego dnia nic nie blokujemy",
+      G.poOstatnimDniu({}, "2030-01-01") === false);
+    sprawdz("brak użytkownika nie wywraca sprawdzenia",
+      G.poOstatnimDniu(null, "2030-01-01") === false);
+
     log("");
     log(`ZDANYCH ${zdanych}, OBLANYCH ${oblanych}`, oblanych ? "zle" : "ok");
   } catch (e) {

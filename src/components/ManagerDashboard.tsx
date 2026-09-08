@@ -543,6 +543,8 @@ const ManagerDashboard = ({
       if (!dataToSave.sanepid_expiry) dataToSave.sanepid_expiry = null;
       if (!dataToSave.umowa_expiry) dataToSave.umowa_expiry = null;
       if (!dataToSave.puls_do) dataToSave.puls_do = null;
+      if (!dataToSave.ostatni_dzien) dataToSave.ostatni_dzien = null;
+      if (dataToSave.umowa_bezterminowa) dataToSave.umowa_expiry = null;
       // To samo dla stawka (numeric) — pusty string zamiast liczby.
       dataToSave.stawka =
         dataToSave.stawka === "" || dataToSave.stawka == null
