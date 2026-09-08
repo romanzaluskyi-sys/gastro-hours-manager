@@ -187,6 +187,10 @@ src/
                                     przycisk publikacji
       GrafikTydzien.tsx             siatka tygodnia (jedna tabela na lokal)
       GrafikMiesiac.tsx             kalendarz miesiąca + druk A4 poziomo
+      ModalWpisu.tsx                jeden wpis dziennika — wspólny dla karty dnia
+                                    i ekranu kierownika zmiany, NIE duplikuj
+      PrzepiszZmianyModal.tsx       co ze zmianami odchodzącego pracownika:
+                                    przepisać na następcę albo zdjąć
       GrafikZmianaModal.tsx         modal przypisania zmiany + modal blokady
       GrafikWymagania.tsx           wymagania obsady, godziny otwarcia, wyjątki
       PulpitHome.tsx, RejestrGodzin.tsx, ZatwierdzanieZmian.tsx,
@@ -901,8 +905,14 @@ zakresem — wymaga Grafiku, którego nie ma.
   `notatki` (text, nullable), `notatki_updated_by`/`notatki_updated_at`
   (text/timestamptz, nullable — ustawiane w `handleSaveUser` TYLKO gdy
   `notatki` faktycznie się zmieniło względem tego, co jest w bazie, nie
-  przy każdym zapisie karty).
-- **lokale** — `id, name, archived, miasto`. `miasto` (text, nullable,
+  przy każdym zapisie karty). Od 2026-09-08: `puls_do` (date, nullable —
+  ostatni dzień, w którym ta osoba może zamknąć Puls, patrz "Kierownik
+  zmiany"), `umowa_bezterminowa` (bool, default false — wyklucza się z
+  `umowa_expiry`; `handleSaveUser` czyści termin przy zaznaczeniu),
+  `ostatni_dzien` (date, nullable — po tej dacie Grafik nie pozwoli wpisać
+  zmiany, `poOstatnimDniu()`). Migracje `0015`, `0016`.
+- **lokale** — `id, name, archived, miasto, dzien_wyplaty (int, nullable,
+  puste = 10 — dzień wypłaty pokazywany w kontekście dnia w Pulsie)`. `miasto` (text, nullable,
   ustawiane ręcznie w Pracownicy → Lokale) — miasto używane do pogody w
   pasku górnym Panelu Kierownika i na Pulpicie pracownika, patrz sekcja
   "Pogoda" niżej. Dodane 2026-09-03, wymaga ręcznej migracji w Supabase
@@ -1060,6 +1070,36 @@ zakresem — wymaga Grafiku, którego nie ma.
   alter table shifts add column is_urlop boolean not null default false;
   alter table shifts add column absence_id text;
   ```
+
+- **day_logs** — karta dnia ("Puls"), patrz sekcja wyżej. `id (uuid), lokal,
+  date (date), obrot (numeric), liczba_paragonow (int), obrot_powod (text:
+  'pogoda'|'wydarzenie'|'akcja'|'personel'|'inne'), obrot_komentarz (text),
+  cos_nadzwyczajnego (bool), notatka, handover, tagi (lista po przecinku),
+  pogoda_temp (numeric), pogoda_kod (int), status ('otwarty'|'zamkniety'),
+  closed_by, closed_at, created_at`. ⚠️ **Jedyna w projekcie wymuszona
+  unikalność**: `(lokal, date)` — dwie karty na jeden dzień to dwa utargi i
+  fałszywy labour cost. Migracje `0010`, `0014`.
+- **day_log_entries** — wpisy dnia: `id (uuid), lokal, date, day_log_id (text,
+  luźne odwołanie), typ ('temperatura'|'dostawa'|'sprzatanie'|'incydent'|
+  'inne'|'korekta'), template_key (text), payload (jsonb), recorded_by,
+  recorded_at, corrected_from (uuid), corrected_reason, created_at`. ⚠️ Pierwszy
+  `jsonb` w projekcie — świadomie: co mierzy lokal, zależy od typu lokalu, a w
+  modelu silo każda nowa kolumna to migracja w bazach wszystkich klientów.
+  `typ='korekta'` to ślad poprawki zamkniętego dnia (payload: `pole`, `label`,
+  `stare`, `nowe`, `powod`), NIE zwykły wpis — `wpisyDlaDnia` go pomija.
+- **day_log_templates** — co trzeba wpisywać w tym lokalu: `id (uuid), lokal,
+  klucz (stabilny, z etykiety przez slugKlucza), nazwa, typ, pora
+  ('poranne'|'obiadowe'|'wieczorne'|'ogolne'), days_of_week (jak w tasks),
+  wymagany (bool), pola (jsonb: [{klucz,label,typ:'number'|'text'|'bool',
+  jednostka,min,max}]), kolejnosc (int), archived (bool), created_at`.
+  Szablon się ARCHIWIZUJE, nie kasuje — wpisy sprzed miesięcy odwołują się do
+  niego przez `template_key` i muszą mieć skąd wziąć nazwę i normy.
+- **weather_forecasts** — archiwum prognoz, patrz "Archiwum prognoz" wyżej.
+  `id (uuid), miasto, target_date (date), horizon_days (int, 0 = FAKT),
+  temp_max, temp_min, opady_mm (numeric), opady_prawdopodobienstwo (int),
+  kod (int), zrodlo ('forecast'|'previous_runs'), created_at`. Unikalność
+  `(miasto, target_date, horizon_days)` — duplikat zafałszowałby średni błąd,
+  a w nim leży cała wartość tej tabeli. Migracja `0013`.
 
 ## Urlopy i niedostępność — zaimplementowane 2026-09-03
 
@@ -1499,6 +1539,9 @@ dedykowana walidacja.
 — tam są wszystkie decyzje właściciela z sesji projektowej wraz z
 uzasadnieniami. Poniżej tylko to, o co najłatwiej się potknąć:
 
+- **`grafik_shifts.rozliczenie`** ('zapisano'|'odrzucono', + `rozliczenie_przez`,
+  `rozliczenie_at`) — co kierownik zrobił ze zmianą, której nikt nie odbił.
+  Patrz "Zmiany z grafiku bez odbicia" niżej. Migracja `0016`.
 - **Plan i fakt to dwie różne tabele.** `grafik_shifts` = plan (kto ma
   pracować), `shifts` = fakt (odbicia). Grafik NIGDY nie pisze do `shifts`
   poza materializacją urlopu.
