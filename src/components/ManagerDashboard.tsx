@@ -38,7 +38,12 @@ import RaportyIKoszty from "./manager/RaportyIKoszty";
 import Przewodnik from "./manager/Przewodnik";
 import Grafik from "./manager/Grafik";
 import { resolveSwap } from "../utils/swaps";
-import { futureShiftsOfUser } from "../utils/grafik";
+import {
+  futureShiftsOfUser,
+  przepiszZmiany,
+  poOstatnimDniu,
+} from "../utils/grafik";
+import PrzepiszZmianyModal from "./manager/PrzepiszZmianyModal";
 
 // ==========================================
 // KIEROWNIK DASHBOARD
@@ -117,6 +122,9 @@ const ManagerDashboard = ({
   // Skok z paska "dzień niezamknięty" na Pulpicie prosto do właściwej karty —
   // ten sam wzorzec co goToEmployeeReport niżej.
   const [pulsCel, setPulsCel] = useState(null);
+  // Archiwizacja pracownika z przyszłymi zmianami — wybór, co z nimi zrobić.
+  const [zmianyOdchodzacego, setZmianyOdchodzacego] = useState(null);
+  const [przepisuje, setPrzepisuje] = useState(false);
   const goToPuls = (lokal, date) => {
     setPulsCel({ lokal, date });
     setTab("puls");
@@ -589,58 +597,53 @@ const ManagerDashboard = ({
     }
   };
 
+  // Zdjęcie zmian TĄ SAMĄ zasadą co ręczne usuwanie: wysłane zostają z
+  // deleted_at (pracownicy dowiedzą się przy najbliższej wysyłce), niewysłane
+  // znikają od razu.
+  const zdejmijZmiany = async (zmianyDoZdjecia) => {
+    const teraz = new Date().toISOString();
+    const poZmianie = [];
+    for (const zm of zmianyDoZdjecia) {
+      if (zm.published_at) {
+        poZmianie.push(
+          await api.patch("grafik_shifts", zm.id, {
+            deleted_at: teraz,
+            updated_at: teraz,
+          })
+        );
+      } else {
+        await api.delete("grafik_shifts", zm.id);
+      }
+    }
+    const zdjete = new Set(zmianyDoZdjecia.map((z) => String(z.id)));
+    const mapa = new Map(poZmianie.map((z) => [String(z.id), z]));
+    setPlanShifts(
+      (planShifts || [])
+        .filter((z) => !zdjete.has(String(z.id)) || mapa.has(String(z.id)))
+        .map((z) => mapa.get(String(z.id)) || z)
+    );
+  };
+
   const handleArchiveEntity = async (table, id, isArchiving) => {
     // Archiwizacja pracownika nie może po cichu zostawić jego zmian w
     // grafiku: liczyłyby się jako obsada, a nikt by na nie nie przyszedł.
-    // Pytamy wprost, ile ich jest, i pozwalamy je od razu zdjąć.
-    let zmianyDoZdjecia = [];
+    // Przy odejściu prawie zawsze ktoś wchodzi na to miejsce, więc zamiast
+    // pytać tylko "zdjąć?", dajemy też przepisanie na następcę.
     if (table === "users" && isArchiving) {
       const user = users.find((u) => u.id === id);
-      zmianyDoZdjecia = futureShiftsOfUser(
-        planShifts,
-        user,
-        toLocalYMD(new Date())
-      );
+      const zmiany = futureShiftsOfUser(planShifts, user, toLocalYMD(new Date()));
+      if (zmiany.length > 0) {
+        setZmianyOdchodzacego({ user, zmiany });
+        return;
+      }
     }
     if (
       !window.confirm(
-        isArchiving
-          ? zmianyDoZdjecia.length > 0
-            ? `Zarchiwizować? ${
-                zmianyDoZdjecia[0].user_name
-              } ma jeszcze ${zmianyDoZdjecia.length} zmian w grafiku od dziś — zostaną zdjęte, a dni pokażą brak obsady.`
-            : "Zarchiwizować ten element?"
-          : "Przywrócić z archiwum?"
+        isArchiving ? "Zarchiwizować ten element?" : "Przywrócić z archiwum?"
       )
     )
       return;
     try {
-      // Zdjęcie zmian TĄ SAMĄ zasadą co ręczne usuwanie: wysłane zostają z
-      // deleted_at (pracownicy dowiedzą się przy najbliższej wysyłce),
-      // niewysłane znikają od razu.
-      if (zmianyDoZdjecia.length > 0) {
-        const teraz = new Date().toISOString();
-        const poZmianie = [];
-        for (const zm of zmianyDoZdjecia) {
-          if (zm.published_at) {
-            poZmianie.push(
-              await api.patch("grafik_shifts", zm.id, {
-                deleted_at: teraz,
-                updated_at: teraz,
-              })
-            );
-          } else {
-            await api.delete("grafik_shifts", zm.id);
-          }
-        }
-        const zdjete = new Set(zmianyDoZdjecia.map((z) => String(z.id)));
-        const mapa = new Map(poZmianie.map((z) => [String(z.id), z]));
-        setPlanShifts(
-          (planShifts || [])
-            .filter((z) => !zdjete.has(String(z.id)) || mapa.has(String(z.id)))
-            .map((z) => mapa.get(String(z.id)) || z)
-        );
-      }
       const res = await api.patch(table, id, { archived: isArchiving });
       if (table === "users")
         setUsers(users.map((u) => (u.id === id ? res : u)));
@@ -648,16 +651,55 @@ const ManagerDashboard = ({
         setLokale(lokale.map((l) => (l.id === id ? res : l)));
       if (table === "stanowiska")
         setStanowiska(stanowiska.map((s) => (s.id === id ? res : s)));
-      showMsg(
-        isArchiving
-          ? zmianyDoZdjecia.length > 0
-            ? `Przeniesiono do archiwum i zdjęto ${zmianyDoZdjecia.length} zmian z grafiku.`
-            : "Przeniesiono do archiwum"
-          : "Przywrócono z archiwum"
-      );
+      showMsg(isArchiving ? "Przeniesiono do archiwum" : "Przywrócono z archiwum");
     } catch (err) {
       showMsg("Błąd archiwizacji", "error");
     }
+  };
+
+  // Decyzja z modala "co ze zmianami odchodzącego" — przepisać na następcę
+  // albo zdjąć. W obu wypadkach kończymy archiwizacją, bo po to kierownik tu
+  // wszedł; przerwanie w połowie zostawiłoby konto czynne, a grafik ruszony.
+  const dokonczArchiwizacje = async (naKogo) => {
+    const { user, zmiany } = zmianyOdchodzacego;
+    setPrzepisuje(true);
+    try {
+      let podsumowanie = "";
+      if (naKogo) {
+        const nastepca = users.find((u) => String(u.id) === String(naKogo));
+        const { przepisane, pominiete } = await przepiszZmiany({
+          zmiany,
+          doUzytkownika: nastepca,
+          planShifts,
+          absences,
+          api,
+        });
+        const mapa = new Map(przepisane.map((z) => [String(z.id), z]));
+        setPlanShifts(
+          (planShifts || []).map((z) => mapa.get(String(z.id)) || z)
+        );
+        // Pominięte zostają na odchodzącym — zdejmujemy je, żeby nie udawały
+        // obsady po jego odejściu.
+        if (pominiete.length > 0) await zdejmijZmiany(pominiete.map((x) => x.zmiana));
+        podsumowanie =
+          `Przepisano ${przepisane.length} zmian na ${nastepca.name}.` +
+          (pominiete.length > 0
+            ? ` ${pominiete.length} pominięto (${[
+                ...new Set(pominiete.map((x) => x.powod)),
+              ].join(", ")}) i zdjęto z grafiku.`
+            : "");
+      } else {
+        await zdejmijZmiany(zmiany);
+        podsumowanie = `Zdjęto ${zmiany.length} zmian z grafiku.`;
+      }
+      const res = await api.patch("users", user.id, { archived: true });
+      setUsers(users.map((u) => (u.id === user.id ? res : u)));
+      setZmianyOdchodzacego(null);
+      showMsg(`Przeniesiono do archiwum. ${podsumowanie}`);
+    } catch (err) {
+      showMsg(err.message || "Błąd archiwizacji", "error");
+    }
+    setPrzepisuje(false);
   };
 
   const handlePermanentDelete = async (table, id) => {
@@ -1239,6 +1281,24 @@ const ManagerDashboard = ({
             grafikWyjatki={grafikWyjatki}
             setGrafikWyjatki={setGrafikWyjatki}
             showMsg={showMsg}
+          />
+        )}
+
+        {zmianyOdchodzacego && (
+          <PrzepiszZmianyModal
+            odchodzacy={zmianyOdchodzacego.user}
+            zmiany={zmianyOdchodzacego.zmiany}
+            pracuje={przepisuje}
+            kandydaci={visibleUsers.filter(
+              (u) =>
+                u.active &&
+                u.role !== "kiosk" &&
+                String(u.id) !== String(zmianyOdchodzacego.user.id) &&
+                !poOstatnimDniu(u, toLocalYMD(new Date()))
+            )}
+            onPrzepisz={(naKogo) => dokonczArchiwizacje(naKogo)}
+            onZdejmij={() => dokonczArchiwizacje(null)}
+            onClose={() => setZmianyOdchodzacego(null)}
           />
         )}
 

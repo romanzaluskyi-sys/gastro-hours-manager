@@ -197,6 +197,41 @@ const sprawdz = (nazwa, warunek, szczegol = "") => {
     sprawdz("brak użytkownika nie wywraca sprawdzenia",
       G.poOstatnimDniu(null, "2030-01-01") === false);
 
+    // --- przepisanie zmian z A na B ---
+    const zapisane = [];
+    const fakeApi = { patch: async (tab, id, dane) => { zapisane.push([tab, id, dane]); return { id, ...dane }; } };
+    const B = { id: "b", name: "Bogdan", ostatni_dzien: "2026-10-15" };
+    const zmiany = [
+      { id: "z1", date: "2026-10-01", start_time: "08:00", end_time: "16:00", lokal: "L" },
+      { id: "z2", date: "2026-10-05", start_time: "08:00", end_time: "16:00", lokal: "L" }, // B ma urlop
+      { id: "z3", date: "2026-10-20", start_time: "08:00", end_time: "16:00", lokal: "L" }, // po ostatnim dniu B
+      { id: "z4", date: "2026-10-02", start_time: "10:00", end_time: "18:00", lokal: "L" }, // kolizja
+    ];
+    const wynik = await G.przepiszZmiany({
+      zmiany,
+      doUzytkownika: B,
+      planShifts: [
+        { id: "x1", user_id: "b", user_name: "Bogdan", date: "2026-10-02",
+          start_time: "09:00", end_time: "17:00", lokal: "L" },
+      ],
+      absences: [
+        { status: "approved", user_id: "b", start_date: "2026-10-05", end_date: "2026-10-06", type: "urlop" },
+      ],
+      api: fakeApi,
+    });
+    sprawdz("przepisano tylko zmianę bez przeszkód", wynik.przepisane.length === 1,
+      JSON.stringify(wynik.przepisane.map((z) => z.id)));
+    sprawdz("pominięto trzy, każdą z własnym powodem",
+      wynik.pominiete.length === 3 &&
+      new Set(wynik.pominiete.map((x) => x.powod)).size === 3,
+      JSON.stringify(wynik.pominiete.map((x) => [x.zmiana.id, x.powod])));
+    sprawdz("przepisanie zmienia nazwisko i updated_at, nie rusza published_at",
+      zapisane.length === 1 &&
+      zapisane[0][2].user_name === "Bogdan" &&
+      !!zapisane[0][2].updated_at &&
+      !("published_at" in zapisane[0][2]),
+      JSON.stringify(zapisane));
+
     log("");
     log(`ZDANYCH ${zdanych}, OBLANYCH ${oblanych}`, oblanych ? "zle" : "ok");
   } catch (e) {

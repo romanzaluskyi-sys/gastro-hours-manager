@@ -543,6 +543,58 @@ export const findBlockingAbsence = (absences, user, dateStr) =>
       (a.user_id ? String(a.user_id) === String(user.id) : a.user_name === user.name)
   ) || null;
 
+// Przepisanie zmian z jednej osoby na drugą — sytuacja "A odchodzi, B wchodzi
+// na jego miejsce". Bez tego kierownik przepisuje kilkanaście pozycji ręcznie,
+// a przy takiej robocie zawsze któraś zostaje na starym nazwisku.
+//
+// NIE dotykamy published_at: zmieniony wiersz ma updated_at nowsze niż
+// published_at, więc od razu liczy się jako niewysłany (isUnpublished) i przy
+// najbliższej publikacji pracownik dowie się o swoich nowych zmianach.
+//
+// Pomijamy dni, w których nowa osoba nie może pracować — cudza zmiana wpisana
+// komuś na urlop albo na kolidującą godzinę byłaby gorsza niż brak obsady, bo
+// wyglądałaby na pokrytą.
+export const przepiszZmiany = async ({
+  zmiany,
+  doUzytkownika,
+  planShifts,
+  absences,
+  api,
+}) => {
+  const przepisane = [];
+  const pominiete = [];
+  const teraz = new Date().toISOString();
+
+  for (const zm of zmiany || []) {
+    const powod = poOstatnimDniu(doUzytkownika, zm.date)
+      ? "kończy pracę wcześniej"
+      : findBlockingAbsence(absences, doUzytkownika, zm.date)
+      ? "ma tego dnia wolne"
+      : findOverlappingPlanShift(planShifts, {
+          user_id: doUzytkownika.id,
+          user_name: doUzytkownika.name,
+          date: zm.date,
+          start_time: zm.start_time,
+          end_time: zm.end_time,
+          excludeId: zm.id,
+        })
+      ? "ma już zmianę w tych godzinach"
+      : null;
+    if (powod) {
+      pominiete.push({ zmiana: zm, powod });
+      continue;
+    }
+    przepisane.push(
+      await api.patch("grafik_shifts", zm.id, {
+        user_id: doUzytkownika.id,
+        user_name: doUzytkownika.name,
+        updated_at: teraz,
+      })
+    );
+  }
+  return { przepisane, pominiete };
+};
+
 // Godziny podpowiadane w modalu wpisywania zmiany — bierzemy je z wymagań
 // obsady, a nie z osobnego pola na stanowisku, żeby nie mieć dwóch źródeł
 // prawdy, które z czasem się rozjadą. Przy kilku przedziałach wygrywa
