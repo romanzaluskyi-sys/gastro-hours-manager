@@ -1,0 +1,198 @@
+<meta charset="utf-8">
+<title>Sprawdzian dziennika</title>
+<style>
+  body { font: 14px/1.6 ui-monospace, Menlo, monospace; padding: 24px; background: #FBFAF9; color: #17120F; }
+  h1 { font: 700 18px/1.2 system-ui, sans-serif; }
+  .ok { color: #2C6A4F; } .zle { color: #DE3A22; font-weight: 700; }
+  pre { background: #F1EEEB; padding: 10px; overflow-x: auto; }
+</style>
+<h1>Sprawdzian utils/dziennik.ts</h1>
+<div id="out">ładowanie…</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js"></script>
+<script>
+const out = document.getElementById("out");
+const log = (txt, cls = "") => {
+  const d = document.createElement("div");
+  d.className = cls; d.textContent = txt; out.appendChild(d);
+};
+
+// Mały loader ES-modułów: pobiera plik, transpiluje Babelem (te pliki mają
+// @ts-nocheck i są w praktyce zwykłym JS), przepisuje ścieżki importów na
+// blob-URL-e już załadowanych modułów i importuje.
+const cache = new Map();
+async function zaladuj(sciezka) {
+  if (cache.has(sciezka)) return cache.get(sciezka);
+  const p = new Promise(async (resolve, reject) => {
+    try {
+      let kod = null;
+      for (const ext of [".ts", ".tsx", ""]) {
+        const r = await fetch(sciezka + ext + "?cb=" + Date.now());
+        if (r.ok) { kod = await r.text(); break; }
+      }
+      if (kod === null) throw new Error("nie znaleziono " + sciezka);
+
+      const specyfikatory = [...kod.matchAll(/from\s+"(\.[^"]+)"/g)].map((m) => m[1]);
+      const baza = sciezka.slice(0, sciezka.lastIndexOf("/"));
+      const mapa = {};
+      for (const s of specyfikatory) {
+        const url = new URL(baza + "/" + s, location.origin).pathname;
+        mapa[s] = await zaladuj(url);
+      }
+      kod = kod.replace(/from\s+"(\.[^"]+)"/g, (m, s) => `from "${mapa[s]}"`);
+      const js = Babel.transform(kod, { presets: [["typescript", { allExtensions: true, isTSX: true }]] }).code;
+      resolve(URL.createObjectURL(new Blob([js], { type: "text/javascript" })));
+    } catch (e) { reject(e); }
+  });
+  cache.set(sciezka, p);
+  return p;
+}
+
+let zdanych = 0, oblanych = 0;
+const sprawdz = (nazwa, warunek, szczegol = "") => {
+  if (warunek) { zdanych++; log("  OK   " + nazwa, "ok"); }
+  else { oblanych++; log("  ŹLE  " + nazwa + (szczegol ? " — " + szczegol : ""), "zle"); }
+};
+
+(async () => {
+  try {
+    out.textContent = "";
+    const D = await import(await zaladuj("/src/utils/dziennik"));
+    log("moduł załadowany razem z grafik.ts, tasks.ts, api/*", "ok");
+    log("");
+
+    // --- średni paragon i udział kosztu pracy ---
+    sprawdz("średni paragon 4800/120 = 40", D.sredniCzek(4800, 120) === 40);
+    sprawdz("brak utargu -> null", D.sredniCzek(0, 120) === null);
+    sprawdz("labour cost 1500/5000 = 30%", D.labourCostPct(1500, 5000) === 30);
+    sprawdz("labour cost bez utargu -> null", D.labourCostPct(1500, 0) === null);
+
+    // --- trafność prognozy: dane ułożone tak, żeby wynik był policzalny ręcznie ---
+    const F = [
+      // dzień 1: fakt 20 °C i 5 mm deszczu
+      { miasto: "X", target_date: "2026-09-01", horizon_days: 0, temp_max: 20, opady_mm: 5 },
+      { miasto: "X", target_date: "2026-09-01", horizon_days: 3, temp_max: 22, opady_mm: 3 }, // trafiony deszcz, błąd 2
+      { miasto: "X", target_date: "2026-09-01", horizon_days: 7, temp_max: 20, opady_mm: 0 }, // przegapiony, błąd 0
+      // dzień 2: fakt 15 °C i sucho
+      { miasto: "X", target_date: "2026-09-02", horizon_days: 0, temp_max: 15, opady_mm: 0 },
+      { miasto: "X", target_date: "2026-09-02", horizon_days: 3, temp_max: 19, opady_mm: 0 }, // trafiony, błąd 4
+      { miasto: "X", target_date: "2026-09-02", horizon_days: 7, temp_max: 15, opady_mm: 8 }, // fałszywy alarm, błąd 0
+      // inne miasto — nie może wpaść do wyniku
+      { miasto: "Y", target_date: "2026-09-01", horizon_days: 3, temp_max: 99, opady_mm: 99 },
+    ];
+    const t = D.trafnoscPrognozy(F, "X");
+    const h3 = t.find((x) => x.horyzont === 3);
+    const h7 = t.find((x) => x.horyzont === 7);
+    sprawdz("dwa horyzonty, posortowane", t.length === 2 && t[0].horyzont === 3, JSON.stringify(t.map(x=>x.horyzont)));
+    sprawdz("h3: średni błąd temp = (2+4)/2 = 3", h3.bladTemp === 3, "jest " + h3.bladTemp);
+    sprawdz("h3: deszcz trafiony 2/2 = 100%", h3.deszczTrafiony === 100, "jest " + h3.deszczTrafiony);
+    sprawdz("h7: błąd temp = 0", h7.bladTemp === 0, "jest " + h7.bladTemp);
+    sprawdz("h7: trafiony 0%, alarm 50%, przegapiony 50%",
+      h7.deszczTrafiony === 0 && h7.falszywyAlarm === 50 && h7.przegapiony === 50,
+      JSON.stringify(h7));
+    sprawdz("obce miasto pominięte", !t.some((x) => x.bladTemp > 50));
+    sprawdz("bez faktu (horizon 0) nie liczymy nic",
+      D.trafnoscPrognozy(F.filter((f) => f.horizon_days !== 0), "X").length === 0);
+
+    // --- podsumowanie dnia ---
+    const dzien = "2026-09-01";
+    const g = (h, m = 0) => new Date(2026, 8, 1, h, m);
+    const auto = D.autoPodsumowanie({
+      shifts: [
+        { lokal: "L", user_name: "Ala", start_time: g(8), end_time: g(16) },   // 8 h
+        { lokal: "L", user_name: "Bo", start_time: g(10), end_time: g(14) },   // 4 h
+        { lokal: "L", user_name: "Cyd", start_time: g(9), end_time: null },    // trwa
+        { lokal: "L", user_name: "D", start_time: g(9), end_time: g(17), is_urlop: true }, // urlop
+        { lokal: "INNY", user_name: "E", start_time: g(9), end_time: g(17) },  // inny lokal
+      ],
+      planShifts: [{ lokal: "L", date: dzien, start_time: "08:00", end_time: "16:00" }],
+      users: [{ name: "Ala", stawka: 30 }, { name: "Bo", stawka: "" }],
+      tasks: [], taskCompletions: [], staffingRules: [], staffingRuleSets: [],
+      grafikWyjatki: [], lokal: "L", dateStr: dzien,
+    });
+    sprawdz("godziny faktyczne 8 + 4 = 12 (urlop i obcy lokal poza)", auto.godzinyFakt === 12, "jest " + auto.godzinyFakt);
+    sprawdz("godziny wg grafiku = 8", auto.godzinyPlan === 8, "jest " + auto.godzinyPlan);
+    sprawdz("koszt tylko z osób ze stawką: 8 × 30 = 240", auto.koszt === 240, "jest " + auto.koszt);
+    sprawdz("Bo trafia na listę bez stawki", auto.bezStawki.join() === "Bo", JSON.stringify(auto.bezStawki));
+    sprawdz("trwająca zmiana wykryta", auto.trwajace.join() === "Cyd");
+    sprawdz("otwarcie 08:00, zamknięcie 16:00", auto.otwarcie === "08:00" && auto.zamkniecie === "16:00",
+      auto.otwarcie + "–" + auto.zamkniecie);
+
+    // --- szablony i normy ---
+    const szablon = { lokal: "L", klucz: "temp", nazwa: "Lodówka", typ: "temperatura", archived: false,
+      days_of_week: "2", pola: [{ klucz: "t", label: "Temp", typ: "number", min: 0, max: 5 }] };
+    sprawdz("szablon widoczny we wtorek (2026-09-01 to wtorek)",
+      D.szablonyNaDzien([szablon], "L", "2026-09-01").length === 1);
+    sprawdz("szablon niewidoczny w środę",
+      D.szablonyNaDzien([szablon], "L", "2026-09-02").length === 0);
+    sprawdz("szablon bez dni tygodnia = codziennie, nie nigdy",
+      D.szablonyNaDzien([{ ...szablon, days_of_week: null }], "L", "2026-09-02").length === 1);
+    sprawdz("12 °C poza normą 0–5", D.pozaNorma(szablon, { t: 12 }) === true);
+    sprawdz("4 °C w normie", D.pozaNorma(szablon, { t: 4 }) === false);
+    sprawdz("puste pole nie alarmuje", D.pozaNorma(szablon, { t: "" }) === false);
+
+    // --- korekta wpisu chowa wersję poprzednią ---
+    const wpisy = [
+      { id: "a", lokal: "L", date: dzien, recorded_at: "2026-09-01T10:00:00Z", payload: {} },
+      { id: "b", lokal: "L", date: dzien, recorded_at: "2026-09-01T11:00:00Z", corrected_from: "a", payload: {} },
+    ];
+    const widoczne = D.wpisyDlaDnia(wpisy, "L", dzien);
+    sprawdz("po korekcie widać tylko nową wersję",
+      widoczne.length === 1 && widoczne[0].id === "b", JSON.stringify(widoczne.map((w) => w.id)));
+
+    // --- szablony wpisów ---
+    sprawdz("slug z polskich znaków", D.slugKlucza("Lodówka w barze") === "lodowka_w_barze",
+      D.slugKlucza("Lodówka w barze"));
+    sprawdz("slug bez ogonków na końcach", D.slugKlucza("  Temperatura wydania — gorące  ") === "temperatura_wydania_gorace",
+      D.slugKlucza("  Temperatura wydania — gorące  "));
+    sprawdz("slug nigdy nie jest pusty", D.slugKlucza("???") === "pole", D.slugKlucza("???"));
+    sprawdz("zestaw startowy ma unikalne klucze",
+      new Set(D.SZABLONY_STARTOWE.map((s) => s.klucz)).size === D.SZABLONY_STARTOWE.length);
+    sprawdz("każdy szablon startowy ma pola z kluczem i etykietą",
+      D.SZABLONY_STARTOWE.every((s) => s.pola.length && s.pola.every((p) => p.klucz && p.label)));
+    sprawdz("normy zamrażarki są ujemne i sensowne",
+      D.SZABLONY_STARTOWE.find((s) => s.klucz === "zamrazarka").pola[0].max === -18);
+    sprawdz("wartość tak/nie czytelna", D.wartoscPola({ klucz: "w", typ: "bool" }, { w: true }) === "tak"
+      && D.wartoscPola({ klucz: "w", typ: "bool" }, { w: false }) === "nie");
+    sprawdz("brak wartości to kreska", D.wartoscPola({ klucz: "w", typ: "number" }, {}) === "—");
+    sprawdz("liczba z jednostką", D.wartoscPola({ klucz: "t", typ: "number", jednostka: "°C" }, { t: 3 }) === "3°C");
+    sprawdz("pole tak/nie nigdy nie alarmuje o normie",
+      D.pozaNorma({ pola: [{ klucz: "w", typ: "bool" }] }, { w: false }) === false);
+    sprawdz("opis normy: tylko górna granica",
+      D.opisNormy({ max: 4, jednostka: "°C" }) === "do 4°C", D.opisNormy({ max: 4, jednostka: "°C" }));
+    sprawdz("opis normy: obie granice",
+      D.opisNormy({ min: 0, max: 5, jednostka: "°C" }) === "0–5°C");
+
+    // --- kalendarz ---
+    const K = await import(await zaladuj("/src/utils/kalendarz"));
+    const ymdD = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+    sprawdz("Wielkanoc 2026 = 5 kwietnia", ymdD(K.wielkanoc(2026)) === "2026-04-05", ymdD(K.wielkanoc(2026)));
+    sprawdz("Wielkanoc 2027 = 28 marca", ymdD(K.wielkanoc(2027)) === "2027-03-28", ymdD(K.wielkanoc(2027)));
+    sprawdz("Wielkanoc 2024 = 31 marca", ymdD(K.wielkanoc(2024)) === "2024-03-31", ymdD(K.wielkanoc(2024)));
+    sprawdz("Boże Ciało 2026 = 4 czerwca (Wielkanoc + 60)",
+      K.swietaRoku(2026)["2026-06-04"] === "Boże Ciało", JSON.stringify(K.swietaRoku(2026)["2026-06-04"]));
+    sprawdz("11 listopada to święto", K.swietaRoku(2026)["2026-11-11"] === "Święto Niepodległości");
+    sprawdz("tłusty czwartek 2026 = 12 lutego",
+      K.dniHandloweRoku(2026)["2026-02-12"] === "Tłusty czwartek",
+      JSON.stringify(Object.entries(K.dniHandloweRoku(2026)).find(([,v])=>v==="Tłusty czwartek")));
+    sprawdz("dzień wypłaty domyślnie 10.",
+      K.kontekstDnia("2026-09-10", {}).some((x) => x.typ === "wyplata"));
+    sprawdz("dzień wypłaty da się przestawić",
+      K.kontekstDnia("2026-09-05", { dzienWyplaty: 5 }).some((x) => x.typ === "wyplata"));
+    sprawdz("31 grudnia to dzień handlowy i zarazem przed Nowym Rokiem",
+      K.kontekstKrotko(K.kontekstDnia("2026-12-31", {})).includes("Sylwester") &&
+      K.kontekstKrotko(K.kontekstDnia("2026-12-31", {})).includes("Nowy Rok"),
+      K.kontekstKrotko(K.kontekstDnia("2026-12-31", {})));
+    sprawdz("zwykły wtorek nie ma kontekstu",
+      K.kontekstKrotko(K.kontekstDnia("2026-09-15", {})) === "");
+
+    log("");
+    log(`ZDANYCH ${zdanych}, OBLANYCH ${oblanych}`, oblanych ? "zle" : "ok");
+  } catch (e) {
+    log("WYJĄTEK: " + (e && e.message), "zle");
+    const pre = document.createElement("pre");
+    pre.textContent = (e && e.stack) || String(e);
+    out.appendChild(pre);
+  }
+})();
+</script>

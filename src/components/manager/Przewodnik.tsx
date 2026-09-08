@@ -23,6 +23,28 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.29.0",
+    date: "2026-09-07",
+    items: [
+      "Nowa zakładka \"Puls\" w czterech widokach: lista dni, karta dnia, raport tygodnia, konfiguracja wpisów.",
+      "Karta dnia: godziny, koszt i zadania policzone z góry; utarg i wpisy obok siebie, każdy blok z własnym Zapisz, które nie zamyka dnia. Zamknięty dzień można otworzyć ponownie.",
+      "Lista dni pokazuje utarg wobec zwykłego poziomu, koszt wobec planu, wykonanie i pogodę wobec zapowiedzi sprzed tygodnia.",
+      "Raport tygodnia sumuje siedem dni i pozwala cofnąć się do wcześniejszych tygodni.",
+      "Na Pulpicie widać, że wczorajszy dzień nie został zamknięty — z przyciskiem prosto do właściwej karty.",
+      "Karta liczy średni paragon i udział kosztu pracy w utargu.",
+      "Temperatura poza normą świeci na czerwono; poprawka wpisu dopisuje nową wersję zamiast kasować starą (wymóg HACCP).",
+      "Aplikacja zapamiętuje, co prognoza mówiła 3, 7 i 14 dni wcześniej, i pokazuje, o ile się pomyliła.",
+      "W Puls → Konfiguracja ustawiasz, co trzeba wpisywać w lokalu; sześć typowych wpisów (lodówka, zamrażarka, dostawa, wydanie, olej, sprzątanie) dodaje się jednym kliknięciem.",
+      "Karta dnia podpisuje święta, dni przed świętami i dzień wypłaty — to one zwykle tłumaczą nietypowy utarg.",
+      "Do utargu dopisujesz powód (pogoda/wydarzenie/akcja/personel) i komentarz.",
+      "Zgłoszenie zdarzenia ma pełny formularz: kategoria, uczestnicy, co zrobiono, skutek finansowy, status.",
+      "Zamkniętego dnia nie da się po cichu zmienić — poprawka zapisuje starą wartość, nową i powód.",
+      "Dzień może zamknąć kierownik zmiany — prawo nadajesz w karcie pracownika do konkretnego dnia i wygasa samo. Dostaje wtedy na tablecie ekran z utargiem i wpisami, bez kosztów i bez historii.",
+      "Kierownik lokalu dostaje powiadomienie po zamknięciu i przypomnienie rano, gdy dnia nikt nie zamknął.",
+      "Anonimowe zgłoszenie znów da się wysłać.",
+    ],
+  },
+  {
     version: "0.28.0",
     date: "2026-09-05",
     items: [

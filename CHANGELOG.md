@@ -5,6 +5,68 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.29.0 — 2026-09-07
+
+- **Nowa zakładka "Puls"** w Panelu Kierownika, w czterech widokach: lista
+  ostatnich dni, karta jednego dnia, raport tygodnia i konfiguracja wpisów.
+- **Karta dnia** zamyka się w minutę: godziny, koszt pracy, zadania i pogoda są
+  policzone z góry, ręcznie wpisuje się tylko utarg, temperatury, dostawę i
+  notatkę dla następnej zmiany. Utarg i wpisy stoją obok siebie, każdy blok ma
+  własny przycisk **Zapisz, który NIE zamyka dnia** — można wpisać rano i
+  wrócić wieczorem. Zamknięty dzień da się **otworzyć ponownie**.
+- Górny pasek karty pokazuje teraz **różnice**: godziny i koszt pracy wobec
+  grafiku, a w miejscu kontroli obsady — duży **udział kosztu pracy w utargu**.
+- **Lista dni** pokazuje każdy dzień jednym rzutem oka: utarg wobec tego, co
+  zwykle wychodzi w ten dzień tygodnia, koszt pracy wobec planu, wykonanie
+  zadań i wpisów oraz pogodę wobec tego, co zapowiadano tydzień wcześniej.
+- **Raport tygodnia** sumuje siedem dni, wskazuje najmocniejszy i najsłabszy
+  dzień i pozwala cofnąć się do wcześniejszych tygodni.
+- **Na Pulpicie widać, że wczorajszy dzień nie został zamknięty** — pasek z
+  nazwami lokali i przyciskiem, który otwiera od razu właściwą kartę.
+- Karta liczy **średni paragon** i **udział kosztu pracy w utargu** — liczbę,
+  po której widać, czy dzień się opłacił.
+- **Temperatura poza normą świeci na czerwono** zamiast leżeć w tabeli jako
+  zwykła liczba. Poprawka wpisu nie kasuje poprzedniej wersji, tylko dopisuje
+  nową — tego wymaga dokumentacja HACCP.
+- **Aplikacja zapamiętuje, co prognoza mówiła 3, 7 i 14 dni wcześniej**, i
+  pokazuje, o ile się pomyliła. Po kilku tygodniach widać wprost, na ile dni
+  naprzód warto układać obsadę pod pogodę.
+- **Sam ustawiasz, co trzeba wpisywać w danym lokalu** (Puls → Konfiguracja):
+  nazwa, rodzaj, pora dnia, dni tygodnia i pola do wypełnienia. Sześć typowych
+  wpisów — lodówka, zamrażarka, przyjęcie dostawy, temperatura wydania, olej,
+  sprzątanie końcowe — dodaje się jednym kliknięciem, z gotowymi normami.
+- **Pustego wpisu nie da się zapisać** — temperatura, której nikt nie zmierzył,
+  liczyłaby się jako wykonana i zafałszowała cały dziennik. Pola tak/nie są
+  wyjątkiem: niezaznaczone znaczy „nie” i to też jest odpowiedź.
+- **Karta dnia zna kalendarz**: święta, dni przed świętami, Walentynki, tłusty
+  czwartek, Sylwester i dzień wypłaty podpisują się same przy dacie — bo to one
+  najczęściej tłumaczą nietypowy utarg. Dzień wypłaty ustawiasz per lokal.
+- **Do utargu dochodzi powód i komentarz** (pogoda / wydarzenie / akcja /
+  personel / inne), żeby po miesiącu dało się odróżnić słabą sobotę od soboty
+  z awarią pieca.
+- **Pogoda zmieściła się w jeden kafelek**, z odchyleniem prognozy sprzed 3 i 7
+  dni. Czternastu dni już nie pokazujemy — przy tej trafności to szum.
+- **Zgłoszenie zdarzenia ma teraz formularz**: kategoria, godzina i miejsce,
+  uczestnicy, opis, co zrobiono, skutek finansowy, status i znacznik „wymaga
+  dalszego prowadzenia”. Danych osobowych gościa świadomie nie zapisujemy.
+- **Zamkniętego dnia nie da się po cichu zmienić.** Poprawka to osobny wpis:
+  stara wartość, nowa i powód, widoczne w karcie na zawsze.
+- W konfiguracji wpisów doszedł **przycisk kopiowania** — przy pięciu lodówkach
+  o tych samych normach to różnica między minutą a kwadransem.
+- **Dzień może zamknąć kierownik zmiany**, gdy kierownika lokalu nie ma na
+  miejscu. W karcie pracownika nadajesz mu prawo **do konkretnego dnia** — samo
+  wygasa. Na Tablecie Służbowym dostaje wtedy ekran „Zamknięcie dnia”: utarg,
+  notatki, wpisy i zdarzenia. Bez historii, bez innych lokali i bez kosztów
+  pracy. Po zamknięciu kierownik lokalu dostaje powiadomienie, a rano —
+  przypomnienie o dniu, którego nikt nie zamknął.
+- Kierownik zmiany **widzi na tablecie, że to dziś on zamyka dzień** — przy
+  swoim nazwisku na liście osób i osobnym paskiem na Pulpicie, który znika po
+  zamknięciu. Prawo jest jednodniowe, więc bez przypomnienia łatwo je przegapić,
+  a przegapiony dzień wpisuje się nazajutrz z pamięci.
+- **Zamkniętego dnia nie da się już otworzyć** — jedyna droga to poprawka ze
+  śladem. Otwarcie kasowałoby sens zamknięcia.
+- Anonimowe zgłoszenie znów da się wysłać — wcześniej znikało bez śladu.
+
 ## 0.28.0 — 2026-09-05
 
 - **Ostrzeżenia o obsadzie widać wprost w siatce Grafiku**, bez najeżdżania

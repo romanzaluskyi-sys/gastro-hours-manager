@@ -25,6 +25,7 @@ import { resolveAbsenceRequest, addUrlopDirectly, deleteAbsence } from "../utils
 import NotificationsPanel from "./NotificationsPanel";
 import ZatwierdzanieZmian from "./manager/ZatwierdzanieZmian";
 import ZadaniaISprzatanie from "./manager/ZadaniaISprzatanie";
+import Puls from "./manager/Puls";
 import ManagerShell, { NAV_ITEMS } from "./manager/ManagerShell";
 import PulpitHome from "./manager/PulpitHome";
 import WBudowie from "./manager/WBudowie";
@@ -42,6 +43,27 @@ import { futureShiftsOfUser } from "../utils/grafik";
 // ==========================================
 // KIEROWNIK DASHBOARD
 // ==========================================
+// Zakładki, które mają już własny komponent w manager/. Reszta dostaje
+// WBudowie. Wcześniej był tu łańcuch `tab !== "..." && tab !== "..."` —
+// dopisanie zakładki i zapomnienie o dopisaniu jej tam dawało dokładnie ten
+// błąd, przed którym ostrzega CLAUDE.md: zakładka bez żywego bloku (tak
+// zniknęły kiedyś Powiadomienia). Lista trzyma to w jednym miejscu.
+const TABY_Z_WLASNYM_WIDOKIEM = [
+  "pulpit",
+  "puls",
+  "grafik",
+  "moja_praca",
+  "godziny",
+  "zatwierdzanie",
+  "aktywni",
+  "zgloszenia",
+  "pracownicy",
+  "raporty",
+  "przewodnik",
+  "powiadomienia",
+  "zadania",
+];
+
 const ManagerDashboard = ({
   currentUser,
   setCurrentView,
@@ -63,6 +85,13 @@ const ManagerDashboard = ({
   setTasks,
   taskCompletions,
   setTaskCompletions,
+  dayLogs,
+  setDayLogs,
+  dayLogEntries,
+  setDayLogEntries,
+  dayLogTemplates,
+  setDayLogTemplates,
+  weatherForecasts,
   absences,
   setAbsences,
   planShifts,
@@ -85,6 +114,14 @@ const ManagerDashboard = ({
   const [reportUserId, setReportUserId] = useState(null);
   // Imię pracownika w Rejestr Godzin/Aktywni prowadzi tu — patrz onNameClick
   // przekazywane do tych komponentów.
+  // Skok z paska "dzień niezamknięty" na Pulpicie prosto do właściwej karty —
+  // ten sam wzorzec co goToEmployeeReport niżej.
+  const [pulsCel, setPulsCel] = useState(null);
+  const goToPuls = (lokal, date) => {
+    setPulsCel({ lokal, date });
+    setTab("puls");
+  };
+
   const goToEmployeeReport = (userId) => {
     setReportUserId(userId);
     setTab("raporty");
@@ -505,6 +542,7 @@ const ManagerDashboard = ({
       // datę (kolumna date, nullable) — trzeba jawnie zamienić na null.
       if (!dataToSave.sanepid_expiry) dataToSave.sanepid_expiry = null;
       if (!dataToSave.umowa_expiry) dataToSave.umowa_expiry = null;
+      if (!dataToSave.puls_do) dataToSave.puls_do = null;
       // To samo dla stawka (numeric) — pusty string zamiast liczby.
       dataToSave.stawka =
         dataToSave.stawka === "" || dataToSave.stawka == null
@@ -1113,6 +1151,9 @@ const ManagerDashboard = ({
             setActiveTab={setTab}
             shiftSwaps={shiftSwaps}
             planShifts={planShifts}
+            dayLogs={dayLogs}
+            availableLokaleForManager={availableLokaleForManager}
+            onOpenPuls={goToPuls}
           />
         )}
         {tab === "raporty" && (
@@ -1144,6 +1185,33 @@ const ManagerDashboard = ({
           />
         )}
 
+        {tab === "puls" && (
+          <Puls
+            currentUser={currentUser}
+            selectedLokal={selectedLokal}
+            availableLokaleForManager={availableLokaleForManager}
+            lokale={lokale}
+            shifts={shifts}
+            planShifts={planShifts}
+            users={users}
+            tasks={tasks}
+            taskCompletions={taskCompletions}
+            staffingRules={staffingRules}
+            staffingRuleSets={staffingRuleSets}
+            grafikWyjatki={grafikWyjatki}
+            dayLogs={dayLogs}
+            setDayLogs={setDayLogs}
+            dayLogEntries={dayLogEntries}
+            setDayLogEntries={setDayLogEntries}
+            dayLogTemplates={dayLogTemplates}
+            setDayLogTemplates={setDayLogTemplates}
+            weatherForecasts={weatherForecasts}
+            showMsg={showMsg}
+            initialLokal={pulsCel && pulsCel.lokal}
+            initialDate={pulsCel && pulsCel.date}
+          />
+        )}
+
         {tab === "grafik" && (
           <Grafik
             currentUser={currentUser}
@@ -1172,18 +1240,7 @@ const ManagerDashboard = ({
           />
         )}
 
-        {tab !== "pulpit" &&
-          tab !== "grafik" &&
-          tab !== "moja_praca" &&
-          tab !== "godziny" &&
-          tab !== "zatwierdzanie" &&
-          tab !== "aktywni" &&
-          tab !== "zgloszenia" &&
-          tab !== "pracownicy" &&
-          tab !== "raporty" &&
-          tab !== "przewodnik" &&
-          tab !== "powiadomienia" &&
-          tab !== "zadania" && (
+        {!TABY_Z_WLASNYM_WIDOKIEM.includes(tab) && (
           <WBudowie
             label={wBudowieLabel}
             hasOldContent={tabsWithOldContent.includes(tab)}

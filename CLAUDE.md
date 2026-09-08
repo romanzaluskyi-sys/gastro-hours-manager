@@ -74,7 +74,9 @@ api/                         — root-level, POZA src/ — funkcje Vercel Cron
 vercel.json                  — harmonogram crona
 CHANGELOG.md                 — historia wersji, patrz "Wersjonowanie i CHANGELOG" niżej
 docs/GRAFIK.md               — pełna specyfikacja Grafiku z uzasadnieniami decyzji właściciela
-docs/sql/                    — migracje do wklejenia w Supabase SQL Editor (po jednej naraz!)
+docs/sql/migrations/          — migracje, stosowane przez scripts/migrate.py (NIE ręcznie w SQL Editor)
+docs/sql/tools/               — zapytania pomocnicze (zrzut schematu, weryfikacja Grafiku)
+scripts/migrate.py            — runner migracji, domyślnie SUCHY przebieg
 scripts/import-grafik.py     — import grafiku z arkusza Google (domyślnie SUCHY przebieg)
 public/
   version.json                — { "version": "X.Y.Z" }, czytany przez
@@ -493,6 +495,181 @@ default_lokal"). Brak `miasto` dla lokalu albo błąd sieci = cichy fallback
 na "--°C" (`WeatherBadge`) — to dekoracja paska, nie coś krytycznego, więc
 nigdy nie pokazujemy błędu użytkownikowi.
 
+## Karta dnia / Dziennik ("Puls") — dodane 2026-09-07
+
+Zakładka **Puls** w Panelu Kierownika (klucz `tab === "puls"`) — host
+[`manager/Puls.tsx`](src/components/manager/Puls.tsx) i cztery widoki:
+`PulsDni.tsx` (lista ostatnich dni), `KartaDnia.tsx` (jeden dzień),
+`PulsTydzien.tsx` (raport tygodnia), `PulsSzablony.tsx` (konfiguracja wpisów).
+Cała arytmetyka w [`utils/dziennik.ts`](src/utils/dziennik.ts) — komponenty
+tylko rysują, nie licz nic w JSX.
+
+**Puls.tsx jest właścicielem danych dziennika** i jedynym miejscem, które je
+odświeża (`odswiez`). Widoki dostają gotowe listy i settery lokalne przez
+`wspolne`. `przesun()` żyje w `utils/dziennik.ts`, nie w komponencie — inaczej
+`Puls` i `KartaDnia` importowałyby się nawzajem.
+
+**Raport tygodnia nie jest przechowywany.** Liczy się z tych samych wierszy
+(`wierszDnia`) co lista dni, więc nie może powiedzieć czegoś innego niż dni, z
+których powstał; zapisana kopia rozjechałaby się przy pierwszej korekcie
+utargu. "Historia raportów" to cofanie się o tydzień. Gdy dojdzie wysyłka
+mailem, zapisywać będziemy WYSYŁKI, nie treść.
+
+`prognozaUtargu()` to średnia z tego samego dnia tygodnia z ostatnich czterech
+takich dni — świadomie NIE model. Ma dać punkt odniesienia ("sobota wyszła
+wyżej niż zwykle"), a prawdziwe prognozowanie to Etap E.
+
+Kontrola obsady została z karty dnia **usunięta**: dla dnia, który już był, nie
+zmienia niczyjej decyzji. Jej miejsce zajął udział kosztu pracy w utargu. Na Pulpicie ([`PulpitHome.tsx`](src/components/manager/PulpitHome.tsx))
+stoi pasek "wczoraj — dzień niezamknięty" (`stanKartDnia`), który przez
+`goToPuls` w ManagerDashboard otwiera od razu właściwy lokal i dzień
+(`initialLokal`/`initialDate`). Pulpit jest ekranem, na który kierownik i tak
+wchodzi codziennie — bez tego paska zamykanie dnia zależałoby od tego, czy
+ktoś sobie o zakładce przypomni.
+
+**Zasada, z której wynika reszta: karta musi się zamykać w 60–90 sekund.**
+Jeśli wypełnianie zacznie zajmować dłużej, ludzie zaczną klikać karty wstecz
+i zmyślać, a wtedy analityka z Etapu E stoi na wymyślonych danych. Dlatego
+trzy warstwy: (1) policzone automatycznie i tylko pokazane — godziny fakt vs
+plan, koszt pracy, dziury/nadmiary obsady, % zadań, faktyczne otwarcie i
+zamknięcie z odbić, pogoda; (2) ręczne minimum — utarg, paragony,
+temperatury, dostawa, notatka dla następnej zmiany, tagi; (3) opis zdarzenia
+tylko gdy coś się wydarzyło.
+
+Warstwa (1) NIE jest przechowywana w bazie — liczy się w locie z `shifts`,
+`grafik_shifts`, `tasks`, `staffing_rules`. Dzięki temu karta sprzed pół roku
+pokazuje te same liczby co dziś, nawet jeśli nikt jej nie zamknął.
+
+Trzy odstępstwa od konwencji projektu, każde świadome:
+- **`day_logs` ma wymuszoną unikalność `(lokal, date)`** — reszta tabel jej
+  nie ma. Dwie karty na jeden dzień to dwa utargi i fałszywy labour cost.
+- **`jsonb`** w `day_log_entries.payload` i `day_log_templates.pola` — sushi
+  mierzy co innego niż kawiarnia, a w modelu silo każda nowa kolumna to
+  migracja we wszystkich bazach klientów. Nowy typ wpisu ma być konfiguracją.
+- **Poprawka wpisu to NOWY wiersz** z `corrected_from`, nigdy update na
+  miejscu (`poprawWpis`). Zapis HACCP, który da się cicho przepisać dzień
+  później, nie jest dowodem niczego. `wpisyDlaDnia` pokazuje tylko wersje,
+  do których nikt się nie odwołał jako do poprzedniej.
+
+Przypomnienia o wpisach liczy `isTaskDueOn`/`parseDaysOfWeek` z
+`utils/tasks.ts` — `day_log_templates.pora` i `days_of_week` mają ten sam
+słownik co `tasks`. **Nie pisz drugiego planisty.** ⚠️ `parseDaysOfWeek`
+zwraca `null`, a nie pustą tablicę, gdy dni nie ustawiono — i to znaczy
+"codziennie", nie "nigdy" (na tym wywrócił się pierwszy szkic
+`szablonyNaDzien`).
+
+⚠️ **Zakładka Puls czyta i zapisuje własne dane** (`odswiez` w `Puls.tsx`).
+Propsy `dayLogs`/`dayLogEntries`/`dayLogTemplates` z `App.tsx` są tylko
+pierwszym stanem, żeby ekran nie mrugał w oczekiwaniu na fetch; po każdym
+zapisie źródłem prawdy jest baza, a stan rodzica aktualizujemy best-effort
+(`sync()`), gdy setter faktycznie dojechał. To zostaje mimo naprawy opisanej
+niżej: ekran, który po zapisie czyta z bazy, jest odporny na całą tę klasę
+błędów, a kosztuje jeden fetch.
+
+**Konfiguracja wpisów** — [`manager/PulsSzablony.tsx`](src/components/manager/PulsSzablony.tsx),
+osobny widok wewnątrz zakładki Puls (przycisk "Konfiguracja", ten sam układ co
+Konfiguracja w Grafiku). `SZABLONY_STARTOWE` w `utils/dziennik.ts` to zestaw
+sześciu typowych wpisów HACCP z gotowymi normami — nowy lokal ma być gotowy na
+dwa kliknięcia, bo w gastronomii mierzy się wszędzie to samo, a kwadrans
+wpisywania per lokal to dokładnie ta praca, która rozciąga wdrożenie u klienta.
+Klucz pola powstaje z etykiety (`slugKlucza`), kierownik go nie widzi. Typy pól:
+liczba, tekst, tak/nie — normy (`min`/`max`) dotyczą tylko liczb. Szablon się
+**archiwizuje, nie kasuje**: wpisy z poprzednich miesięcy odwołują się do niego
+przez `template_key` i muszą mieć skąd wziąć nazwę i normy.
+
+**Kontekst kalendarzowy** — [`utils/kalendarz.ts`](src/utils/kalendarz.ts).
+Święta liczymy, nie pobieramy: stałe daty plus pochodne od Wielkanocy
+(algorytm Meeus/Jones/Butcher), więc działa dla dowolnego roku bez API i bez
+tabeli, którą ktoś musiałby uzupełniać co grudzień. Osobno `dniHandloweRoku`
+— Walentynki, tłusty czwartek, Wigilia, Sylwester: nie są wolne, ale w
+gastronomii zmieniają salę bardziej niż niejedno święto. Dzień wypłaty siedzi
+w `lokale.dzien_wyplaty` (puste = 10). Lokalne wydarzenia to osobny moduł
+(Roadmap p.3), jeszcze go nie ma.
+
+**Zdarzenia** ([`manager/ZdarzenieModal.tsx`](src/components/manager/ZdarzenieModal.tsx))
+— pełny formularz zamiast jednego pola „co się wydarzyło”, którego nie
+wypełniał nikt. Wymagane są tylko kategoria i opis: formularz, którego nie da
+się zamknąć bez kompletu, kończy tak samo jak poprzedni, czyli pusty. ⚠️ Pole
+gościa jest świadomie bez danych osobowych — „gość przy stoliku 4” wystarcza
+do wyjaśnienia sprawy, a nazwisko byłoby przetwarzaniem bez podstawy.
+
+**Zamkniętego dnia NIE edytujemy w miejscu.** `poprawZamknietyDzien()`
+zapisuje najpierw ślad (`day_log_entries`, `typ='korekta'`, payload ze starą
+i nową wartością oraz powodem), dopiero potem zmienia `day_logs`. Kolejność
+jest celowa: gdyby ślad padł po zmianie liczby, zostałaby po cichu podmieniona
+wartość bez wyjaśnienia — dokładnie to, przed czym ta funkcja chroni.
+
+**Kierownik zmiany** — [`manager/PulsZmiany.tsx`](src/components/manager/PulsZmiany.tsx),
+wpięte w `employeeSessionShared.tsx` jako ekran `PULS` (wiersz w "Więcej").
+Zamiast nowej roli — **prawo na czas**: `users.puls_do` to ostatni dzień, w
+którym ta osoba może zamknąć Puls swojego lokalu z Tabletu Służbowego
+(`mozeZamykacPuls`). Wygasa samo; uprawnień, które trzeba pamiętać odebrać,
+nikt nie odbiera. Ekran świadomie NIE pokazuje warstwy automatycznej, historii,
+innych lokali ani **kosztów pracy i stawek** — to nie jest informacja dla tej
+roli. Zamknięcie idzie do kierownika lokalu przez `createManagerNotification`,
+a `api/cron/check-puls.js` przypomina rano o dniu, którego nikt nie zamknął.
+Ekran pobiera własne dane, nie bierze ich propsami (patrz błąd #16).
+Przypomnienie stoi w dwóch miejscach — przy nazwisku na liście osób
+(`KioskDashboard.tsx`) i paskiem na Pulpicie
+([`PulsPrzypomnienie.tsx`](src/components/manager/PulsPrzypomnienie.tsx), który
+sam pobiera swój jeden wiersz i znika po zamknięciu dnia). Przypomnienie o
+zrobionej rzeczy uczy ludzi ignorować przypomnienia.
+
+⚠️ **Zamkniętego dnia nie da się otworzyć.** Nie ma i nie ma być przycisku
+"otwórz ponownie": otwarcie pozwoliłoby zmienić liczby tak, jakby nigdy nie
+były inne, czyli skasowałoby sens zamknięcia. Jedyna droga to
+`poprawZamknietyDzien()`, która zostawia ślad.
+
+### Sprawdziany bez Node — `harness-*.html`
+
+W tym środowisku nie ma Node ani npm, więc `npm run build` i testy jednostkowe
+odpadają. Zamiast tego dwa pliki w katalogu głównym, uruchamiane przez
+`python3 -m http.server` i otwierane w przeglądarce:
+- `harness-dziennik.html` — ładuje `utils/dziennik.ts` (razem z całym
+  łańcuchem `grafik.ts`/`tasks.ts`/`api/*`) przez Babel standalone i sprawdza
+  arytmetyka na ręcznie policzonych przykładach;
+- `harness-karta.html` — renderuje `KartaDnia.tsx` i `PulpitHome.tsx` w Reakcie
+  z CDN, z zaślepkami na `react` i `lucide-react`. ⚠️ Używa PRAWDZIWEGO klucza
+  Supabase: renderowanie nic nie zapisuje, ale kliknięcie czegoś, co woła
+  `api.post`, zapisze wiersz do produkcyjnej bazy;
+- `harness-app.html` — montuje PRAWDZIWY `App.tsx` z podstawioną sesją i atrapą
+  Supabase, w której dane już są, i sprawdza, czy propsy z App docierają do
+  zakładek. Jedyny sprawdzian, który łapie props wstawiony do złego elementu
+  (patrz błąd #16);
+- `harness-panel.html` — montuje CAŁY `ManagerDashboard` z propsami takimi,
+  jakie podaje `App.tsx`, z PODMIENIONYM `api/supabase` (nic nie leci do sieci,
+  można klikać wszystko). To jedyny sprawdzian, który łapie propsy gubione
+  między poziomami — dwa pozostałe renderują komponenty w izolacji i taki błąd
+  przepuszczą. Lista ikon lucide jest w nim wygenerowana ze wszystkich importów
+  w `src/`, więc obejmuje każdy komponent panelu.
+
+To jedyna działająca tu forma weryfikacji i to ona wyłapała błąd
+`parseDaysOfWeek` opisany wyżej. Pliki są poza `src/` i `public/`, więc build
+CRA ich nie widzi. Jeśli dokładasz logikę do dziennika, dopisz do nich
+przypadek zamiast zgadywać.
+
+### Archiwum prognoz — dodane 2026-09-07
+
+`weather_forecasts` (migracja `0013`) trzyma, co prognoza mówiła o danym dniu
+N dni wcześniej. Jeden wiersz = (miasto, target_date, horizon_days), gdzie
+`horizon_days = 0` to STAN FAKTYCZNY — dzięki temu trafność liczy się przez
+porównanie wierszy w obrębie jednego dnia, bez osobnej tabeli na wyniki.
+Klucz to miasto, nie lokal (trzy lokale dzielą Koszalin).
+
+Po co: kierownik planuje obsadę z wyprzedzeniem i musi wiedzieć, na ile dni
+naprzód prognoza jest jeszcze warta zaufania. Pierwszy pomiar (Koszalin,
+30 dni, wrzesień 2026): błąd temperatury rośnie z 0,4 °C przy 1 dniu do
+2,0 °C przy 7; trafność deszczu trzyma się ~75% do szóstego dnia i spada do
+60% na siódmym, przy 23% fałszywych alarmów.
+
+⚠️ **Horyzont 8–14 dni powstaje WYŁĄCZNIE z codziennego crona**
+`api/cron/capture-weather.js`. Open-Meteo pozwala sięgnąć po dawne przebiegi
+modelu najwyżej 7 dni wstecz (previous-runs API), więc każdy dzień, w którym
+cron nie zadziała, jest dla dłuższych horyzontów stracony bezpowrotnie — nie
+da się tego nadrobić później. `scripts/backfill-pogoda.py` uzupełnia tylko
+horyzonty 1–7 i pisze z `ignore-duplicates`, żeby nie nadpisywać tego, co
+zebrał cron.
+
 ## Zadania i sprzątanie (Roadmap p.2) — zaimplementowane 2026-09-02..04
 
 Zbudowane w trzech rundach: pierwsza wersja (schemat + panel kierownika +
@@ -730,7 +907,7 @@ zakresem — wymaga Grafiku, którego nie ma.
   `dostepne_bloki` (text, nullable, lista kluczy po przecinku — NIE tablica
   Postgresa) — które bloki widzi pracownik tego lokalu na PRYWATNYM
   telefonie, patrz "Prywatny telefon pracownika" wyżej. Dodane 0.26.0,
-  migracja: [`docs/sql/grafik-05-dostep-pracownika.sql`](docs/sql/grafik-05-dostep-pracownika.sql).
+  migracja: [`docs/sql/migrations/0009_grafik_dostep_pracownika.sql`](docs/sql/migrations/0009_grafik_dostep_pracownika.sql).
 - **stanowiska** — `id, name, lokal_name, archived, skrot, kolor`. `skrot`
   (text, nullable, ustawiany ręcznie w Pracownicy → Stanowiska) — zastępuje
   auto-generowany `getShort(name)` tam, gdzie jest ustawiony
@@ -1094,6 +1271,22 @@ wzorzec co `shift_edits`/`tasks`) — błąd tu nie blokuje reszty apki.
     dokładasz kolejny widok grafiku, licz niewysłane po `allLokaleNames`, a
     nie po tym, co akurat widać.
 
+16. **W `App.tsx` kilka dashboardów ma niemal identyczne listy propsów** —
+    `<PersonalDashboard>`, `<KioskDashboard>` i `<ManagerDashboard>` przekazują
+    te same nazwy w tej samej kolejności (`tasks`, `taskCompletions`,
+    `setTaskCompletions`, `absences`, `planShifts`…). Wstawianie nowych propsów
+    przez wyszukanie takiego fragmentu trafia w PIERWSZE wystąpienie, czyli w
+    dashboard pracownika, a nie w ten, o który chodziło. Tak właśnie cała grupa
+    propsów dziennika (`dayLogs`, `dayLogEntries`, `dayLogTemplates` i ich
+    settery) wylądowała w `<PersonalDashboard>`, który ich nie przyjmuje.
+    Objawy były mylące i wyglądały na trzy różne błędy: pusty ekran
+    konfiguracji po odświeżeniu, zapis, po którym nic się nie pokazuje, i
+    zminifikowane `i is not a function` przy zapisie (bo brakowało też
+    settera). **Dodając props do dashboardu, sprawdź numer linii elementu**
+    (`grep -n "<ManagerDashboard" src/App.tsx`), nie samo sąsiedztwo nazw.
+    Wykrył to dopiero `harness-app.html`, który montuje App i porównuje, co z
+    niego wychodzi z tym, co dociera do zakładki.
+
 ## Google Apps Script (`Odbior_Danych.gs`)
 
 Funkcje: `doGet` (health-check, zwraca `SCRIPT_VERSION` — podbijaj tę
@@ -1304,7 +1497,7 @@ uzasadnieniami. Poniżej tylko to, o co najłatwiej się potknąć:
   widoków od razu, liczy się jako niewysłana i kasuje dopiero przy
   publikacji, która informuje o tym pracownika. Zmiana nigdy niewysłana
   kasuje się od razu. Migracja:
-  [`docs/sql/grafik-04-usuwanie.sql`](docs/sql/grafik-04-usuwanie.sql).
+  [`docs/sql/migrations/0008_grafik_usuwanie.sql`](docs/sql/migrations/0008_grafik_usuwanie.sql).
 - **Wolne/urlop wprost z grafiku** — link w modalu zmiany, gdy pracownika
   długo nie ma i nie zgłosi tego sam (`addNiedostepnoscDirectly` obok
   istniejącego `addUrlopDirectly` w `utils/absences.ts`).

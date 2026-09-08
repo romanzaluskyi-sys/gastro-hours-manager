@@ -1,0 +1,159 @@
+<meta charset="utf-8">
+<title>Panel Kierownika — pełny łańcuch</title>
+<!-- Renderuje CAŁY ManagerDashboard z propsami takimi, jakie podaje App.tsx.
+     Sprawdza to, czego dwa pozostałe harnessy nie mogą: czy props faktycznie
+     dojeżdża przez wszystkie poziomy (App -> ManagerDashboard -> KartaDnia ->
+     PulsSzablony), a nie tylko czy każdy komponent osobno się renderuje.
+
+     api/supabase jest tu PODMIENIONE na atrapę, więc klikanie niczego nie
+     zapisuje do produkcyjnej bazy — w odróżnieniu od harness-karta.html. -->
+<style>
+  body { font: 14px system-ui, sans-serif; margin: 0; background: #F1F1EE; }
+  #status { padding: 8px 14px; background: #17120F; color: #fff; font: 12px ui-monospace, monospace; }
+  #status.zle { background: #DE3A22; }
+  pre { background: #fff; padding: 12px; font-size: 12px; overflow-x: auto; }
+</style>
+<div id="status">ładowanie…</div>
+<div id="app"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js" crossorigin="anonymous"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+const status = document.getElementById("status");
+const pokazBlad = (e) => {
+  console.error("HARNESS", (e && e.stack) || e);
+  status.className = "zle";
+  status.textContent = "BŁĄD: " + (e && e.message ? e.message : e);
+  const pre = document.createElement("pre");
+  pre.textContent = (e && e.stack) || String(e);
+  document.getElementById("app").appendChild(pre);
+};
+window.addEventListener("error", (ev) => pokazBlad(ev.error || ev.message));
+window.addEventListener("unhandledrejection", (ev) => pokazBlad(ev.reason));
+
+const IKONY = ["AlertCircle", "AlertTriangle", "Archive", "ArchiveRestore", "ArrowLeft", "ArrowLeftRight", "ArrowRight", "BarChart3", "Bell", "BookOpen", "Briefcase", "Calendar", "CalendarCheck", "CalendarDays", "CalendarRange", "Check", "CheckCircle", "CheckCircle2", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "ClipboardCheck", "ClipboardList", "ClipboardPlus", "Clock", "Cloud", "Construction", "Copy", "CopyPlus", "Delete", "Download", "Edit2", "Eye", "FileText", "Flag", "HelpCircle", "History", "Home", "Info", "Lock", "LogIn", "LogOut", "Mail", "MapPin", "MoreHorizontal", "Palmtree", "Pencil", "Plus", "Printer", "RefreshCw", "Save", "Send", "SlidersHorizontal", "Trash2", "User", "UserPlus", "Users", "WifiOff", "X"];
+const stub = (kod) => URL.createObjectURL(new Blob([kod], { type: "text/javascript" }));
+
+// Atrapa Supabase — nic nie leci do sieci, każdy zapis wraca z wymyślonym id.
+window.__zapisy = [];
+const API_STUB = stub(`
+  // Atrapa trzyma dane w pamięci, więc api.get po zapisie zwraca to, co
+  // zapisano — inaczej ekrany, które odświeżają się z bazy, wyglądałyby na
+  // zepsute, choć są w porządku.
+  window.__tabele = {};
+  export const api = {
+    get: async (tabela) => (window.__tabele[tabela] || []).slice(),
+    post: async (tabela, dane) => {
+      window.__zapisy.push([tabela, dane]);
+      // Postgres dokłada domyślne znaczniki czasu — bez nich ekrany renderują
+      // "Invalid Date" i wygląda to na błąd aplikacji, którym nie jest.
+      const teraz = new Date().toISOString();
+      const wiersz = { id: "fake-" + (window.__zapisy.length), created_at: teraz,
+        recorded_at: teraz, completed_at: teraz, ...dane };
+      (window.__tabele[tabela] = window.__tabele[tabela] || []).push(wiersz);
+      return wiersz;
+    },
+    patch: async (tabela, id, dane) => {
+      window.__zapisy.push([tabela, id, dane]);
+      const lista = window.__tabele[tabela] || [];
+      const i = lista.findIndex((w) => w.id === id);
+      const wiersz = { ...(lista[i] || {}), id, ...dane };
+      if (i >= 0) lista[i] = wiersz;
+      return wiersz;
+    },
+    delete: async () => true,
+    patchByFilter: async () => true,
+  };
+`);
+
+const PAKIETY = {
+  react: stub(`const R = window.React;
+    export default R;
+    export const useState = R.useState, useMemo = R.useMemo, useEffect = R.useEffect,
+      useRef = R.useRef, useCallback = R.useCallback, Fragment = R.Fragment;`),
+  "lucide-react": stub(
+    `const ikona = (n) => (p) => window.React.createElement("span", { "data-ikona": n }, "▪");
+     ` + IKONY.map((n) => `export const ${n} = ikona("${n}");`).join("\n")
+  ),
+};
+
+const cache = new Map();
+async function zaladuj(sciezka) {
+  if (sciezka.endsWith("/api/supabase")) return API_STUB;
+  if (cache.has(sciezka)) return cache.get(sciezka);
+  const p = (async () => {
+    let kod = null;
+    for (const ext of [".tsx", ".ts", ""]) {
+      const r = await fetch(sciezka + ext + "?cb=" + Date.now());
+      if (r.ok) { kod = await r.text(); break; }
+    }
+    if (kod === null) throw new Error("nie znaleziono " + sciezka);
+    const baza = sciezka.slice(0, sciezka.lastIndexOf("/"));
+    const spec = [...kod.matchAll(/from\s+"([^"]+)"/g)].map((m) => m[1]);
+    const mapa = {};
+    for (const s of spec) {
+      mapa[s] = PAKIETY[s] ? PAKIETY[s]
+        : await zaladuj(new URL(baza + "/" + s, location.origin).pathname);
+    }
+    kod = kod.replace(/from\s+"([^"]+)"/g, (m, s) => `from "${mapa[s]}"`);
+    return URL.createObjectURL(new Blob([
+      Babel.transform(kod, { presets: [["typescript", { allExtensions: true, isTSX: true }], "react"] }).code
+    ], { type: "text/javascript" }));
+  })();
+  cache.set(sciezka, p);
+  return p;
+}
+
+const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+const wczoraj = ymd(new Date(Date.now() - 86400000));
+const godz = (h) => { const d = new Date(wczoraj + "T00:00:00"); d.setHours(h); return d; };
+
+(async () => {
+  try {
+    const MD = (await import(await zaladuj("/src/components/ManagerDashboard"))).default;
+    const { useState, createElement: h } = React;
+
+    function Harness() {
+      // Stan trzymany tak jak w App.tsx — dzięki temu widać, czy setter
+      // faktycznie dociera i czy lista rośnie po zapisie.
+      const [dayLogTemplates, setDayLogTemplates] = useState([]);
+      const [dayLogs, setDayLogs] = useState([]);
+      const [dayLogEntries, setDayLogEntries] = useState([]);
+
+      const props = {
+        currentUser: { id: "u0", name: "Roman", role: "admin", allowed_lokale: "" },
+        setCurrentView: () => {},
+        users: [
+          { id: "u1", name: "Ala", stawka: 32, active: true, archived: false, role: "open", default_lokal: "Bułka i Jacek" },
+          { id: "u2", name: "Bo", active: true, archived: false, role: "open", default_lokal: "Ceglana" },
+        ],
+        lokale: [
+          { id: "l1", name: "Bułka i Jacek", miasto: "Koszalin", archived: false },
+          { id: "l2", name: "Ceglana", miasto: "Koszalin", archived: false },
+        ],
+        stanowiska: [{ id: "s1", name: "Kucharz", lokal_name: "Bułka i Jacek", archived: false }],
+        shifts: [{ id: "sh1", user_name: "Ala", lokal: "Bułka i Jacek", stanowisko: "Kucharz",
+                   start_time: godz(8), end_time: godz(16) }],
+        issues: [], notifications: [], shiftEdits: [], tasks: [], taskCompletions: [],
+        absences: [], planShifts: [], shiftSwaps: [], staffingRules: [], staffingRuleSets: [],
+        lokaleGodziny: [], grafikWyjatki: [], weatherForecasts: [],
+        dayLogs, setDayLogs, dayLogEntries, setDayLogEntries,
+        dayLogTemplates, setDayLogTemplates,
+        showMsg: (m, t) => console.log("showMsg:", t, m),
+      };
+      "setUsers setLokale setStanowiska setShifts setIssues setNotifications setShiftEdits setTasks setTaskCompletions setAbsences setPlanShifts setShiftSwaps setStaffingRules setStaffingRuleSets setLokaleGodziny setGrafikWyjatki"
+        .split(" ").forEach((k) => { props[k] = () => {}; });
+
+      window.__stanSzablonow = dayLogTemplates;
+      return h(MD, props);
+    }
+
+    ReactDOM.createRoot(document.getElementById("app")).render(h(Harness));
+    setTimeout(() => {
+      if (status.className !== "zle") status.textContent = "panel zamontowany";
+    }, 400);
+  } catch (e) { pokazBlad(e); }
+})();
+</script>

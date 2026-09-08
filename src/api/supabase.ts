@@ -9,13 +9,14 @@ export const api = {
     "Content-Type": "application/json",
     Prefer: "return=representation",
   },
-  get: async (table) => {
+  get: async (table, filter) => {
     const pageSize = 1000;
     let allRows = [];
     let from = 0;
     while (true) {
       const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/${table}?select=*&order=id.asc`,
+        `${SUPABASE_URL}/rest/v1/${table}?select=*&order=id.asc` +
+          (filter ? `&${filter}` : ""),
         {
           headers: {
             ...api.headers,

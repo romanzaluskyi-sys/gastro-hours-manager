@@ -3,6 +3,14 @@
     {
       "path": "/api/cron/check-document-terms",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/capture-weather",
+      "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/check-puls",
+      "schedule": "0 7 * * *"
     }
   ]
 }

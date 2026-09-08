@@ -1,8 +1,9 @@
 // @ts-nocheck
 import React, { useState, useEffect } from "react";
-import { Lock, AlertCircle, Delete, ChevronLeft, Mail } from "lucide-react";
+import { Lock, AlertCircle, Delete, ChevronLeft, Mail, BookOpen } from "lucide-react";
 import { getTodaysShiftsForUser } from "../utils/shifts";
 import { offersForUser, STATUS_LABEL } from "../utils/swaps";
+import { mozeZamykacPuls } from "./manager/PulsZmiany";
 import { trimTime, toLocalYMD } from "../utils/grafik";
 import {
   fmtHHMM,
@@ -266,6 +267,16 @@ const KioskDashboard = ({
                     <div className="text-[13px] text-[#6E6E66] mt-0.5">
                       {u.default_stanowisko || ""}
                     </div>
+                    {/* Prawo do zamknięcia Pulsu jest jednodniowe, więc łatwo
+                        o nim zapomnieć — a zapomniany dzień zostaje niewpisany.
+                        Znak stoi na liście, żeby był widoczny zanim ktokolwiek
+                        wejdzie na swoją stronę. */}
+                    {mozeZamykacPuls(u) && (
+                      <div className="text-[13px] font-bold text-[#8A3A2B] mt-1 flex items-center gap-1">
+                        <BookOpen size={14} strokeWidth={2.3} />
+                        Dziś Ty zamykasz dzień
+                      </div>
+                    )}
                     {nieprzeczytane > 0 && (
                       <div className="text-[13px] font-bold text-[#8A3A2B] mt-1 flex items-center gap-1">
                         <Mail size={14} strokeWidth={2.3} />

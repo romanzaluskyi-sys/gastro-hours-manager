@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import { CheckCircle, AlertCircle } from "lucide-react";
 import { isConfigured, APP_VERSION } from "./config";
 import { api } from "./api/supabase";
+import { toLocalYMD } from "./api/googleSheets";
 import LoginScreen from "./components/LoginScreen";
 import PersonalDashboard from "./components/PersonalDashboard";
 import KioskDashboard from "./components/KioskDashboard";
@@ -52,6 +53,11 @@ export default function App() {
   const [tasks, setTasks] = useState([]);
   const [taskCompletions, setTaskCompletions] = useState([]);
   const [absences, setAbsences] = useState([]);
+  // Dziennik dnia ("Puls") — karta, wpisy i szablony wpisów.
+  const [dayLogs, setDayLogs] = useState([]);
+  const [dayLogEntries, setDayLogEntries] = useState([]);
+  const [dayLogTemplates, setDayLogTemplates] = useState([]);
+  const [weatherForecasts, setWeatherForecasts] = useState([]);
   // Grafik (patrz docs/GRAFIK.md) — plan zmian, wymagania obsady, godziny
   // otwarcia, wyjątki i giełda zmian.
   const [planShifts, setPlanShifts] = useState([]);
@@ -192,6 +198,30 @@ export default function App() {
         console.error("Błąd pobierania wniosków o wolne:", err.message || err);
       });
 
+    // Dziennik dnia — ten sam wzorzec co absences/tasks wyżej: osobno i
+    // nieblokująco. weather_forecasts przycinamy do ostatnich 120 dni: tabela
+    // rośnie o kilkadziesiąt wierszy dziennie na każde miasto, a karta dnia i
+    // tak patrzy tylko wstecz — ściąganie całej historii przy każdym otwarciu
+    // apki byłoby czystym marnowaniem transferu.
+    const dziennikOd = (() => {
+      const d = new Date();
+      d.setDate(d.getDate() - 120);
+      return toLocalYMD(d);
+    })();
+    [
+      ["day_logs", setDayLogs, `date=gte.${dziennikOd}`],
+      ["day_log_entries", setDayLogEntries, `date=gte.${dziennikOd}`],
+      ["day_log_templates", setDayLogTemplates, null],
+      ["weather_forecasts", setWeatherForecasts, `target_date=gte.${dziennikOd}`],
+    ].forEach(([tabela, setter, filtr]) => {
+      api
+        .get(tabela, filtr)
+        .then((rows) => setter(Array.isArray(rows) ? rows : []))
+        .catch((err) => {
+          console.error(`Błąd pobierania ${tabela}:`, err.message || err);
+        });
+    });
+
     // Grafik — sześć tabel, ten sam wzorzec co absences/tasks wyżej: każda
     // osobno i nieblokująco, żeby brak którejkolwiek (albo błąd RLS) nie
     // zatrzymał logowania i reszty apki.
@@ -321,6 +351,13 @@ export default function App() {
           setTasks={setTasks}
           taskCompletions={taskCompletions}
           setTaskCompletions={setTaskCompletions}
+          dayLogs={dayLogs}
+          setDayLogs={setDayLogs}
+          dayLogEntries={dayLogEntries}
+          setDayLogEntries={setDayLogEntries}
+          dayLogTemplates={dayLogTemplates}
+          setDayLogTemplates={setDayLogTemplates}
+          weatherForecasts={weatherForecasts}
           absences={absences}
           setAbsences={setAbsences}
           planShifts={planShifts}

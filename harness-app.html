@@ -1,0 +1,123 @@
+<meta charset="utf-8">
+<title>App — cały łańcuch od korzenia</title>
+<!-- Montuje PRAWDZIWY App.tsx z podstawioną sesją i atrapą Supabase, w której
+     dane już są. Sprawdza jedyną rzecz, której nie widzą pozostałe harnessy:
+     czy propsy wychodzące z App faktycznie dochodzą do zakładek. -->
+<style>
+  body { font: 14px system-ui, sans-serif; margin: 0; }
+  #status { padding: 8px 14px; background: #17120F; color: #fff; font: 12px ui-monospace, monospace; position: sticky; top: 0; z-index: 99; }
+  #status.zle { background: #DE3A22; }
+  pre { background: #fff; padding: 12px; font-size: 12px; overflow-x: auto; }
+</style>
+<div id="status">ładowanie…</div>
+<div id="root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js" crossorigin="anonymous"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+const status = document.getElementById("status");
+const pokazBlad = (e) => {
+  console.error("HARNESS", (e && e.stack) || e);
+  status.className = "zle";
+  status.textContent = "BŁĄD: " + (e && e.message ? e.message : e);
+};
+window.addEventListener("error", (ev) => pokazBlad(ev.error || ev.message));
+window.addEventListener("unhandledrejection", (ev) => pokazBlad(ev.reason));
+
+const IKONY = ["AlertCircle", "AlertTriangle", "Archive", "ArchiveRestore", "ArrowLeft", "ArrowLeftRight", "ArrowRight", "BarChart3", "Bell", "BookOpen", "Briefcase", "Calendar", "CalendarCheck", "CalendarDays", "CalendarRange", "Check", "CheckCircle", "CheckCircle2", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "ClipboardCheck", "ClipboardList", "ClipboardPlus", "Clock", "Cloud", "Construction", "Copy", "CopyPlus", "Delete", "Download", "Edit2", "Eye", "FileText", "Flag", "HelpCircle", "History", "Home", "Info", "Lock", "LogIn", "LogOut", "Mail", "MapPin", "MoreHorizontal", "Palmtree", "Pencil", "Plus", "Printer", "RefreshCw", "Save", "Send", "SlidersHorizontal", "Trash2", "User", "UserPlus", "Users", "WifiOff", "X"];
+const stub = (kod) => URL.createObjectURL(new Blob([kod], { type: "text/javascript" }));
+
+const dzis = new Date();
+const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+const wczoraj = ymd(new Date(Date.now() - 86400000));
+
+// Atrapa z danymi na starcie — dokładnie taka sytuacja jak po odświeżeniu
+// strony: w bazie coś jest, App to pobiera.
+window.__tabele = {
+  users: [{ id: "u1", name: "Ala", stawka: 32, active: true, archived: false, role: "open", default_lokal: "Bułka i Jacek" }],
+  lokale: [{ id: "l1", name: "Bułka i Jacek", miasto: "Koszalin", archived: false }],
+  stanowiska: [{ id: "s1", name: "Kucharz", lokal_name: "Bułka i Jacek", archived: false }],
+  shifts: [], issues: [], notifications: [],
+  day_log_templates: [
+    { id: "t1", lokal: "Bułka i Jacek", klucz: "lodowka", nazwa: "Lodówka kuchnia",
+      typ: "temperatura", pora: "poranne", archived: false, kolejnosc: 1,
+      pola: [{ klucz: "temperatura", label: "Temperatura", typ: "number", jednostka: "°C", min: 0, max: 5 }] },
+    { id: "t2", lokal: "Bułka i Jacek", klucz: "zamrazarka", nazwa: "Zamrażarka",
+      typ: "temperatura", pora: "poranne", archived: false, kolejnosc: 2,
+      pola: [{ klucz: "temperatura", label: "Temperatura", typ: "number", jednostka: "°C", min: -25, max: -18 }] },
+  ],
+  day_logs: [{ id: "k1", lokal: "Bułka i Jacek", date: wczoraj, obrot: 4800, status: "otwarty" }],
+  day_log_entries: [],
+  weather_forecasts: [],
+};
+window.__zapisy = [];
+const API_STUB = stub(`
+  export const api = {
+    get: async (tabela) => (window.__tabele[String(tabela).split("?")[0]] || []).slice(),
+    post: async (t, d) => { window.__zapisy.push([t, d]);
+      const w = { id: "n" + (window.__zapisy.length), created_at: new Date().toISOString(),
+                  recorded_at: new Date().toISOString(), ...d };
+      (window.__tabele[t] = window.__tabele[t] || []).push(w); return w; },
+    patch: async (t, id, d) => { window.__zapisy.push([t, id, d]);
+      const l = window.__tabele[t] || []; const i = l.findIndex((w) => w.id === id);
+      const w = { ...(l[i] || {}), id, ...d }; if (i >= 0) l[i] = w; return w; },
+    delete: async () => true, patchByFilter: async () => true,
+  };
+`);
+
+const PAKIETY = {
+  react: stub(`const R = window.React; export default R;
+    export const useState=R.useState, useMemo=R.useMemo, useEffect=R.useEffect,
+      useRef=R.useRef, useCallback=R.useCallback, Fragment=R.Fragment;`),
+  "react-dom/client": stub(`export const createRoot = window.ReactDOM.createRoot;
+    export default { createRoot: window.ReactDOM.createRoot };`),
+  "lucide-react": stub(
+    `const ikona=(n)=>(p)=>window.React.createElement("span",{"data-ikona":n},"▪");
+     ` + IKONY.map((n) => `export const ${n} = ikona("${n}");`).join("\n")
+  ),
+};
+
+const cache = new Map();
+async function zaladuj(sciezka) {
+  if (sciezka.endsWith("/api/supabase")) return API_STUB;
+  if (cache.has(sciezka)) return cache.get(sciezka);
+  const p = (async () => {
+    let kod = null;
+    for (const ext of [".tsx", ".ts", ""]) {
+      const r = await fetch(sciezka + ext + "?cb=" + Date.now());
+      if (r.ok) { kod = await r.text(); break; }
+    }
+    if (kod === null) throw new Error("nie znaleziono " + sciezka);
+    const baza = sciezka.slice(0, sciezka.lastIndexOf("/"));
+    const spec = [...kod.matchAll(/from\s+"([^"]+)"/g)].map((m) => m[1]);
+    const mapa = {};
+    for (const s of spec) {
+      mapa[s] = PAKIETY[s] ? PAKIETY[s]
+        : await zaladuj(new URL(baza + "/" + s, location.origin).pathname);
+    }
+    kod = kod.replace(/from\s+"([^"]+)"/g, (m, s) => `from "${mapa[s]}"`);
+    return URL.createObjectURL(new Blob([
+      Babel.transform(kod, { presets: [["typescript", { allExtensions: true, isTSX: true }], "react"] }).code
+    ], { type: "text/javascript" }));
+  })();
+  cache.set(sciezka, p);
+  return p;
+}
+
+(async () => {
+  try {
+    const { APP_VERSION } = await import(await zaladuj("/src/config"));
+    localStorage.setItem("gastro_session", JSON.stringify({
+      currentUser: { id: "u0", name: "Roman", role: "admin", allowed_lokale: "" },
+      currentView: "manager_dashboard",
+      appVersion: APP_VERSION,
+    }));
+    const App = (await import(await zaladuj("/src/App"))).default;
+    ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+    setTimeout(() => {
+      if (status.className !== "zle") status.textContent = "App zamontowany (v" + APP_VERSION + ")";
+    }, 600);
+  } catch (e) { pokazBlad(e); }
+})();
+</script>

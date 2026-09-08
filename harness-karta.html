@@ -1,0 +1,163 @@
+<meta charset="utf-8">
+<!-- ⚠️ Ten harness używa PRAWDZIWEGO klucza Supabase z src/config.ts. Renderowanie
+     niczego nie zapisuje, ale przyciski, które wołają api.post (np. "Szybki start"
+     w konfiguracji wpisów albo "Zamknij dzień"), zapiszą wiersz do produkcyjnej bazy.
+     Klikaj tu tylko to, co czyta. -->
+<title>Render karty dnia</title>
+<style>
+  body { font: 14px system-ui, sans-serif; background: #F1F1EE; margin: 0; }
+  #status { padding: 10px 16px; background: #17120F; color: #fff; font: 12px ui-monospace, monospace; }
+  #status.zle { background: #DE3A22; }
+  #app { padding: 16px; }
+  pre { background: #fff; padding: 12px; overflow-x: auto; font-size: 12px; }
+</style>
+<div id="status">ładowanie…</div>
+<div id="app"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js" crossorigin="anonymous"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+const status = document.getElementById("status");
+const pokazBlad = (e) => {
+  console.error("HARNESS", e && e.stack || e);
+  status.className = "zle";
+  status.textContent = "BŁĄD: " + (e && e.message ? e.message : e);
+  const pre = document.createElement("pre");
+  pre.textContent = (e && e.stack) || String(e);
+  document.getElementById("app").appendChild(pre);
+};
+window.addEventListener("error", (ev) => pokazBlad(ev.error || ev.message));
+window.addEventListener("unhandledrejection", (ev) => pokazBlad(ev.reason));
+
+// Zaślepki dla pakietów z node_modules — tu nie ma bundlera, więc "react"
+// i "lucide-react" trzeba podstawić ręcznie.
+const IKONY = ["ChevronLeft","ChevronRight","Lock","CheckCircle2","AlertTriangle","Plus",
+               "ArrowRight","Palmtree","ArrowLeftRight",
+               "SlidersHorizontal","Trash2","ArrowLeft"];
+const stub = (kod) => URL.createObjectURL(new Blob([kod], { type: "text/javascript" }));
+const PAKIETY = {
+  react: stub(`const R = window.React;
+    export default R;
+    export const useState = R.useState, useMemo = R.useMemo, useEffect = R.useEffect,
+      useRef = R.useRef, useCallback = R.useCallback, Fragment = R.Fragment;`),
+  "lucide-react": stub(
+    `const ikona = (n) => (p) => window.React.createElement("span", { "data-ikona": n }, "▪");
+     ` + IKONY.map((n) => `export const ${n} = ikona("${n}");`).join("\n")
+  ),
+};
+
+const cache = new Map();
+async function zaladuj(sciezka) {
+  if (cache.has(sciezka)) return cache.get(sciezka);
+  const p = (async () => {
+    let kod = null;
+    for (const ext of [".tsx", ".ts", ""]) {
+      const r = await fetch(sciezka + ext + "?cb=" + Date.now());
+      if (r.ok) { kod = await r.text(); break; }
+    }
+    if (kod === null) throw new Error("nie znaleziono " + sciezka);
+    const baza = sciezka.slice(0, sciezka.lastIndexOf("/"));
+    const spec = [...kod.matchAll(/from\s+"([^"]+)"/g)].map((m) => m[1]);
+    const mapa = {};
+    for (const s of spec) {
+      mapa[s] = PAKIETY[s]
+        ? PAKIETY[s]
+        : await zaladuj(new URL(baza + "/" + s, location.origin).pathname);
+    }
+    kod = kod.replace(/from\s+"([^"]+)"/g, (m, s) => `from "${mapa[s]}"`);
+    const js = Babel.transform(kod, {
+      presets: [["typescript", { allExtensions: true, isTSX: true }], "react"],
+    }).code;
+    return URL.createObjectURL(new Blob([js], { type: "text/javascript" }));
+  })();
+  cache.set(sciezka, p);
+  return p;
+}
+
+const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+const wczoraj = ymd(new Date(Date.now() - 86400000));
+const g = (h) => { const d = new Date(wczoraj + "T00:00:00"); d.setHours(h); return d; };
+
+(async () => {
+  try {
+    const mod = await import(await zaladuj("/src/components/manager/KartaDnia"));
+    const KartaDnia = mod.default;
+
+    const props = {
+      currentUser: { name: "Roman", role: "admin" },
+      // UWAGA: dokładnie taki kształt, jaki podaje ManagerDashboard —
+      // availableLokaleForManager to WIERSZE tabeli lokale, a selectedLokal
+      // przy "Cała sieć" to "ALL". Pierwsza wersja harnessu podawała tu listę
+      // nazw i dlatego przepuściła biały ekran na produkcji.
+      selectedLokal: "ALL",
+      availableLokaleForManager: [
+        { id: "l1", name: "Bułka i Jacek", miasto: "Koszalin", archived: false },
+        { id: "l2", name: "Ceglana", miasto: "Koszalin", archived: false },
+      ],
+      lokale: [{ name: "Bułka i Jacek", miasto: "Koszalin" }, { name: "Ceglana", miasto: "Koszalin" }],
+      shifts: [
+        { lokal: "Bułka i Jacek", user_name: "Ala", start_time: g(8), end_time: g(16) },
+        { lokal: "Bułka i Jacek", user_name: "Bo", start_time: g(10), end_time: g(18) },
+      ],
+      planShifts: [
+        { lokal: "Bułka i Jacek", date: wczoraj, start_time: "08:00", end_time: "16:00", stanowisko: "Kucharz" },
+      ],
+      users: [{ name: "Ala", stawka: 32 }, { name: "Bo", stawka: null }],
+      tasks: [{ id: "t1", lokal: "Bułka i Jacek", title: "Umyć piec", active: true, archived: false, schedule_type: "ogolne", days_of_week: null }],
+      taskCompletions: [],
+      staffingRules: [], staffingRuleSets: [], grafikWyjatki: [],
+      dayLogs: [],
+      setDayLogs: () => {},
+      dayLogEntries: [
+        { id: "w1", lokal: "Bułka i Jacek", date: wczoraj, typ: "temperatura", template_key: "temp_lodowka",
+          payload: { t: 12 }, recorded_by: "Ala", recorded_at: new Date().toISOString() },
+      ],
+      setDayLogEntries: () => {},
+      setDayLogTemplates: () => {},
+      dayLogTemplates: [
+        { id: "s1", lokal: "Bułka i Jacek", klucz: "temp_lodowka", nazwa: "Lodówka kuchnia",
+          typ: "temperatura", archived: false, kolejnosc: 1,
+          pola: [{ klucz: "t", label: "Temperatura", typ: "number", min: 0, max: 5, jednostka: "°C" }] },
+        { id: "s2", lokal: "Bułka i Jacek", klucz: "dostawa", nazwa: "Przyjęcie dostawy",
+          typ: "dostawa", archived: false, kolejnosc: 2,
+          pola: [{ klucz: "dostawca", label: "Dostawca", typ: "text" }, { klucz: "temp", label: "Temperatura", typ: "number", max: 4, jednostka: "°C" }] },
+      ],
+      weatherForecasts: [
+        { miasto: "Koszalin", target_date: wczoraj, horizon_days: 0, temp_max: 17.1, opady_mm: 2.0, kod: 80 },
+        { miasto: "Koszalin", target_date: wczoraj, horizon_days: 3, temp_max: 17.4, opady_mm: 1.6, kod: 61 },
+        { miasto: "Koszalin", target_date: wczoraj, horizon_days: 7, temp_max: 20.0, opady_mm: 0.4, kod: 3 },
+        { miasto: "Koszalin", target_date: wczoraj, horizon_days: 14, temp_max: 14.0, opady_mm: 6.0, kod: 61 },
+      ],
+      showMsg: (m) => console.log("showMsg:", m),
+    };
+
+    // Pulpit dostaje te same dane — chodzi o pasek "dzień niezamknięty",
+    // który stąd prowadzi do karty.
+    const Pulpit = (await import(await zaladuj("/src/components/manager/PulpitHome"))).default;
+    const propsPulpitu = {
+      users: props.users, shifts: props.shifts, issues: [], tasks: props.tasks,
+      taskCompletions: [], absences: [], shiftSwaps: [], planShifts: props.planShifts,
+      matchesFilter: () => true,
+      setActiveTab: (k) => console.log("setActiveTab", k),
+      dayLogs: props.dayLogs,
+      availableLokaleForManager: props.availableLokaleForManager,
+      onOpenPuls: (l, d) => console.log("onOpenPuls", l, d),
+    };
+
+    ReactDOM.createRoot(document.getElementById("app")).render(
+      React.createElement(
+        "div",
+        null,
+        React.createElement(Pulpit, propsPulpitu),
+        React.createElement("hr", { style: { margin: "32px 0", border: "0", borderTop: "2px dashed #B7B6AE" } }),
+        React.createElement(KartaDnia, { ...props, initialLokal: "Ceglana", initialDate: wczoraj })
+      )
+    );
+    setTimeout(() => {
+      if (status.className !== "zle") status.textContent = "wyrenderowane bez wyjątku";
+    }, 300);
+  } catch (e) { pokazBlad(e); }
+})();
+</script>
