@@ -3,15 +3,7 @@
 // godzin / "zapomniałem odbić" zgłoszone przez pracownika w Zgłoś). Biржа
 // zmian z Grafiku — świadomie poza zakresem, patrz plan realizacji.
 import React, { useState } from "react";
-import {
-  Check,
-  Edit2,
-  HelpCircle,
-  AlertCircle,
-  X,
-  Palmtree,
-  ArrowLeftRight,
-} from "lucide-react";
+import { Check, Edit2, HelpCircle, AlertCircle, X, Palmtree, ArrowLeftRight, Clock } from "lucide-react";
 import { resolveCorrection, askAboutCorrection } from "../../utils/corrections";
 import { countWorkdays, URLOP_HOURS_PER_DAY } from "../../utils/absences";
 import { trimTime, shiftHours } from "../../utils/grafik";
@@ -44,10 +36,15 @@ const fmtPL = (dateStr) =>
 
 const diffCls = (a, b) => (a !== b ? "text-[#DE3A22] font-bold" : "text-[#171714]");
 
+import { zmianyBezOdbicia, rozliczBrakOdbicia } from "../../utils/odbicia";
+
 export default function ZatwierdzanieZmian({
   currentUser,
   shifts,
   setShifts,
+  users = [],
+  absences = [],
+  setPlanShifts,
   issues,
   setIssues,
   shiftEdits,
@@ -68,6 +65,44 @@ export default function ZatwierdzanieZmian({
   const [busy, setBusy] = useState(false);
   const [absenceBusyId, setAbsenceBusyId] = useState(null);
   const [swapBusyId, setSwapBusyId] = useState(null);
+  const [odbicieBusyId, setOdbicieBusyId] = useState(null);
+  // Poprawione godziny dla pozycji "był w grafiku, nie odbił" — trzymamy je
+  // per pozycja, bo kierownik potrafi poprawiać kilka naraz.
+  const [odbicieGodziny, setOdbicieGodziny] = useState({});
+
+  const brakiOdbicia = zmianyBezOdbicia({
+    planShifts,
+    shifts,
+    users,
+    absences,
+    lokalOk: hasAccessToLokal,
+  });
+
+  const rozliczOdbicie = async (poz, decyzja) => {
+    setOdbicieBusyId(poz.plan.id);
+    try {
+      const g = odbicieGodziny[poz.plan.id] || {};
+      await rozliczBrakOdbicia({
+        plan: poz.plan,
+        user: poz.user,
+        decyzja,
+        start: g.start,
+        end: g.end,
+        kto: currentUser.name,
+        shifts,
+        setShifts,
+        planShifts,
+        setPlanShifts,
+      });
+      showMsg(
+        decyzja === "zapisano" ? "Zmiana dopisana do godzin" : "Pozycja odrzucona",
+        "success"
+      );
+    } catch (e) {
+      showMsg(e.message || "Błąd zapisu", "error");
+    }
+    setOdbicieBusyId(null);
+  };
 
   const rows = issues
     .filter((iss) => iss.type === "correction" && iss.status === "nowe")
@@ -219,6 +254,81 @@ export default function ZatwierdzanieZmian({
 
   return (
     <div className="max-w-5xl mx-auto">
+      {brakiOdbicia.length > 0 && (
+        <div className="mb-8">
+          <h3 className="font-['Archivo'] font-extrabold text-lg mb-3 flex items-center gap-2">
+            <Clock size={18} /> Był w grafiku, nie odbił · {brakiOdbicia.length}
+          </h3>
+          <p className="text-[13px] text-[#6E6E66] mb-3 max-w-[70ch]">
+            Zwykle to zapomniany tablet, nie nieobecność. Bez decyzji te godziny
+            nie trafią ani do raportu, ani na wypłatę.
+          </p>
+          <div className="space-y-3">
+            {brakiOdbicia.map((poz) => {
+              const g = odbicieGodziny[poz.plan.id] || {};
+              const zajety = odbicieBusyId === poz.plan.id;
+              return (
+                <div
+                  key={poz.plan.id}
+                  className="bg-white rounded-xl border-[2px] border-[#171714] p-4 flex flex-wrap items-center gap-4"
+                >
+                  <div className="min-w-[190px]">
+                    <div className="font-['Archivo'] font-extrabold text-[16px]">
+                      {poz.user.name}
+                    </div>
+                    <div className="text-[13px] text-[#6E6E66]">
+                      {poz.plan.date.split("-").reverse().join(".")} · {poz.plan.lokal}
+                      {poz.plan.stanowisko ? ` · ${poz.plan.stanowisko}` : ""}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="time"
+                      value={g.start ?? trimTime(poz.plan.start_time)}
+                      onChange={(e) =>
+                        setOdbicieGodziny({
+                          ...odbicieGodziny,
+                          [poz.plan.id]: { ...g, start: e.target.value },
+                        })
+                      }
+                      className="p-2 border-[2px] border-[#171714] rounded"
+                    />
+                    <span className="text-[#6E6E66]">–</span>
+                    <input
+                      type="time"
+                      value={g.end ?? trimTime(poz.plan.end_time)}
+                      onChange={(e) =>
+                        setOdbicieGodziny({
+                          ...odbicieGodziny,
+                          [poz.plan.id]: { ...g, end: e.target.value },
+                        })
+                      }
+                      className="p-2 border-[2px] border-[#171714] rounded"
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-2 ml-auto">
+                    <button
+                      disabled={zajety}
+                      onClick={() => rozliczOdbicie(poz, "odrzucono")}
+                      className="px-4 py-2.5 rounded border-[2px] border-[#171714] font-['Archivo'] font-bold text-sm bg-white disabled:opacity-50"
+                    >
+                      Nie było zmiany
+                    </button>
+                    <button
+                      disabled={zajety}
+                      onClick={() => rozliczOdbicie(poz, "zapisano")}
+                      className="px-4 py-2.5 rounded font-['Archivo'] font-bold text-sm bg-[#DE3A22] text-white disabled:opacity-50"
+                    >
+                      Dopisz godziny
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {pendingSwaps.length > 0 && (
         <div className="mb-8">
           <h3 className="font-['Archivo'] font-extrabold text-lg mb-3 flex items-center gap-2">

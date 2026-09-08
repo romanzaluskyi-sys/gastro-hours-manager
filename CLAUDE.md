@@ -1139,6 +1139,43 @@ zarejestrowaniem godzin w trakcie urlopu), nie naprawiaj tego jako "bug".
 `App.tsx` ładuje `absences` jako osobny, nieblokujący fetch (ten sam
 wzorzec co `shift_edits`/`tasks`) — błąd tu nie blokuje reszty apki.
 
+## Zmiany z grafiku bez odbicia — dodane 2026-09-08
+
+[`utils/odbicia.ts`](src/utils/odbicia.ts) + sekcja w `ZatwierdzanieZmian.tsx`
++ `api/cron/check-odbicia.js`.
+
+Najczęstsza przyczyna braku odbicia to zapomniany tablet, nie nieobecność —
+człowiek przyszedł, przepracował swoje i wyszedł. Zostawione tak, dzień pokazuje
+minus kilka godzin, plan/fakt kłamie, a pracownik nie dostaje za tę zmianę
+pieniędzy. Stąd kolejka decyzji: dopisz jak w grafiku, popraw godziny, odrzuć.
+
+⚠️ **Nie zgadujemy i nie dopisujemy nic automatycznie** — to podpis kierownika
+pod czyjąś wypłatą. Cron tylko powiadamia (pracownika i kierownika), decyzję
+podejmuje człowiek.
+
+Szczegóły, które łatwo zepsuć:
+- Odbicie w INNYM lokalu zamyka sprawę. Człowiek gdzieś był, tylko nie tam,
+  gdzie planowano — to inna rzecz i nie należy do tej kolejki.
+- `is_urlop` nie liczy się jako odbicie (to zmaterializowany urlop, nie praca).
+- Rozliczona pozycja dostaje `grafik_shifts.rozliczenie` ('zapisano'/'odrzucono')
+  i nie wraca. Kolejka, która pokazuje w kółko to samo, przestaje być czytana.
+- Cron patrzy WYŁĄCZNIE na wczoraj — dzięki temu każda zmiana jest sprawdzana
+  dokładnie raz i nie trzeba niczego oznaczać przeciw dublowaniu powiadomień.
+- Okno kolejki to 14 dni (`OKNO_DNI`). Dalej nikt nie pamięta, czy tamtego
+  wtorku przyszedł, a zgadywanie jest gorsze niż brak.
+
+**Tablet a grafik:** `KioskDashboard` pokazuje przypisanych do lokalu PLUS tych,
+których opublikowany grafik stawia dziś tutaj. **Dodajemy, nie przenosimy** —
+plany się zmieniają, a osoba zdjęta z listy macierzystego lokalu nie odbiłaby
+zmiany wcale, gdyby jednak tam przyszła. Kto jest w grafiku w dwóch lokalach,
+pokaże się na obu tabletach.
+
+**Odejście pracownika:** `przepiszZmiany()` w `utils/grafik.ts` przenosi przyszłe
+zmiany na następcę. NIE dotyka `published_at`, więc wiersz liczy się jako
+niewysłany i przy najbliższej publikacji nowa osoba dowie się o swoich zmianach.
+Dni z wolnym, kolizją albo po `ostatni_dzien` są pomijane i zdejmowane — zmiana
+wpisana komuś niedostępnemu jest gorsza niż brak obsady, bo wygląda na pokrytą.
+
 ## Znane błędy — JUŻ NAPRAWIONE, nie wprowadzaj ponownie
 
 1. **Supabase domyślnie zwraca max 1000 wierszy na request.** `api.get()`

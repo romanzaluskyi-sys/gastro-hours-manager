@@ -5,6 +5,23 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.30.0 — 2026-09-08
+
+- **„Był w grafiku, nie odbił”** — nowa sekcja w Zatwierdzaniu zmian. Zwykle to
+  zapomniany tablet, nie nieobecność, a bez decyzji te godziny nie trafiają ani
+  do raportu, ani na wypłatę. Kierownik dopisuje je jednym kliknięciem, poprawia
+  godziny albo odrzuca. Rano pracownik i kierownik dostają o tym powiadomienie.
+- **Tablet pokazuje ludzi tam, gdzie stawia ich grafik.** Osoba wypożyczona do
+  innego lokalu znajdzie się na jego tablecie i odbije zmianę bez chodzenia i
+  telefonów. Zostaje też na liście swojego lokalu — plany się zmieniają.
+- **Odejście pracownika: zmiany można przepisać na następcę** zamiast
+  przepisywać kilkanaście pozycji ręcznie. Dni, w których nowa osoba ma wolne,
+  kończy pracę albo ma już zmianę, zostaną pominięte i wymienione.
+- **Umowa bezterminowa** — osobne pole zamiast pustego terminu i żółtego
+  ostrzeżenia „brak terminu”.
+- **Ostatni dzień pracy** — po tej dacie Grafik nie pozwoli wpisać zmiany, a
+  przypomnienia o umowie milkną.
+
 ## 0.29.0 — 2026-09-07
 
 - **Nowa zakładka "Puls"** w Panelu Kierownika, w czterech widokach: lista

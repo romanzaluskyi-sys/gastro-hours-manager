@@ -1824,6 +1824,9 @@ const ManagerDashboard = ({
             planShifts={planShifts}
             onResolveSwap={handleResolveSwap}
             showMsg={showMsg}
+            users={users}
+            absences={absences}
+            setPlanShifts={setPlanShifts}
           />
         )}
 
