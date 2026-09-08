@@ -609,6 +609,12 @@ innych lokali ani **kosztów pracy i stawek** — to nie jest informacja dla tej
 roli. Zamknięcie idzie do kierownika lokalu przez `createManagerNotification`,
 a `api/cron/check-puls.js` przypomina rano o dniu, którego nikt nie zamknął.
 Ekran pobiera własne dane, nie bierze ich propsami (patrz błąd #16).
+Prawo nadaje się w DWÓCH miejscach — w karcie pracownika (`Pracownicy.tsx`) i
+w `Puls → Konfiguracja` (`PulsSzablony.tsx`, sekcja "Kto może zamykać dzień").
+To ta sama kolumna `users.puls_do`; drugie wejście istnieje, bo nadawanie na
+dziś to decyzja podejmowana co rano, a karta pracownika jest miejscem na rzeczy
+rzadkie — chodzenie tam po każdą zmianę było na tyle niewygodne, że prawa po
+prostu by nie nadawano.
 Przypomnienie stoi w dwóch miejscach — przy nazwisku na liście osób
 (`KioskDashboard.tsx`) i paskiem na Pulpicie
 ([`PulsPrzypomnienie.tsx`](src/components/manager/PulsPrzypomnienie.tsx), który

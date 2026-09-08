@@ -35,6 +35,7 @@ export default function Puls({
   shifts,
   planShifts,
   users,
+  setUsers,
   tasks,
   taskCompletions,
   staffingRules,
@@ -171,6 +172,8 @@ export default function Puls({
             setSzablonyLokalne(lista);
             sync(setDayLogTemplates, lista);
           }}
+          users={users}
+          setUsers={setUsers}
           onWroc={() => setWidok("karta")}
           showMsg={showMsg}
         />

@@ -19,6 +19,10 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 - **Odejście pracownika: zmiany można przepisać na następcę** zamiast
   przepisywać kilkanaście pozycji ręcznie. Dni, w których nowa osoba ma wolne,
   kończy pracę albo ma już zmianę, zostaną pominięte i wymienione.
+- **Prawo do zamykania dnia nadajesz też w Puls → Konfiguracja** — lista zespołu
+  lokalu z przyciskami „Na dziś”, „Na tydzień”, „Odbierz”. To samo pole co w
+  karcie pracownika, tylko pod ręką: karta jest miejscem na rzeczy rzadkie,
+  a to decyzja podejmowana co rano.
 - **Umowa bezterminowa** — osobne pole zamiast pustego terminu i żółtego
   ostrzeżenia „brak terminu”.
 - **Ostatni dzień pracy** — po tej dacie Grafik nie pozwoli wpisać zmiany, a

@@ -1238,6 +1238,7 @@ const ManagerDashboard = ({
             shifts={shifts}
             planShifts={planShifts}
             users={users}
+            setUsers={setUsers}
             tasks={tasks}
             taskCompletions={taskCompletions}
             staffingRules={staffingRules}

@@ -9,7 +9,9 @@
 // nowy lokal ma być gotowy na dwa kliknięcia, a nie na kwadrans wpisywania.
 import React, { useState } from "react";
 import { api } from "../../api/supabase";
-import { Plus, Trash2, ArrowLeft, Copy } from "lucide-react";
+import { Plus, Trash2, ArrowLeft, Copy, BookOpen } from "lucide-react";
+import { toLocalYMD } from "../../utils/dziennik";
+import { mozeZamykacPuls } from "./PulsZmiany";
 import {
   sectionCardCls,
   sectionHeaderCls,
@@ -50,6 +52,8 @@ export default function PulsSzablony({
   onZmienLokal,
   dayLogTemplates,
   onZmiana,
+  users = [],
+  setUsers,
   onWroc,
   showMsg,
 }) {
@@ -66,6 +70,50 @@ export default function PulsSzablony({
     const lista = Array.isArray(wiersze) ? wiersze : [];
     setSzablony(lista);
     if (typeof onZmiana === "function") onZmiana(lista);
+  };
+
+  // Prawo do zamykania dnia trzyma się na users.puls_do — to samo pole co w
+  // karcie pracownika. Tutaj jest tylko drugie wejście: nadawanie na dziś to
+  // decyzja podejmowana co rano, a karta pracownika jest miejscem na rzeczy
+  // rzadkie (stawka, terminy, notatki). Chodzenie tam po każdą zmianę grafiku
+  // było na tyle niewygodne, że prawa po prostu by nie nadawano.
+  const [ludzieLokalni, setLudzieLokalni] = useState(null);
+  const ludzie = ludzieLokalni || users || [];
+  const [dostepBusy, setDostepBusy] = useState(null);
+
+  const zespol = ludzie
+    .filter(
+      (u) =>
+        u.active &&
+        !u.archived &&
+        u.role !== "kiosk" &&
+        (u.default_lokal === lokal || (u.allowed_lokale || "").split(",").includes(lokal))
+    )
+    .sort((a, b) => a.name.localeCompare(b.name, "pl"));
+
+  const zmienDostep = async (u, doDnia) => {
+    setDostepBusy(u.id);
+    try {
+      const zapisany = await api.patch("users", u.id, { puls_do: doDnia });
+      const nowa = ludzie.map((x) => (x.id === u.id ? zapisany : x));
+      setLudzieLokalni(nowa);
+      if (typeof setUsers === "function") setUsers(nowa);
+      showMsg(
+        doDnia
+          ? `${u.name} może zamykać dzień do ${doDnia.split("-").reverse().join(".")}`
+          : `${u.name} nie może już zamykać dnia`,
+        "success"
+      );
+    } catch (e) {
+      showMsg(e.message || "Błąd zapisu", "error");
+    }
+    setDostepBusy(null);
+  };
+
+  const dzienZa = (n) => {
+    const d = new Date();
+    d.setDate(d.getDate() + n);
+    return toLocalYMD(d);
   };
 
   const moje = (szablony || [])
@@ -168,6 +216,66 @@ export default function PulsSzablony({
           ))}
         </div>
       )}
+
+      <div className={sectionCardCls}>
+        <div className={sectionHeaderCls}>
+          <span>Kto może zamykać dzień</span>
+          <span className="text-[12px] font-normal text-[#6E6E66]">
+            prawo wygasa samo
+          </span>
+        </div>
+        {!zespol.length && (
+          <div className="p-4 text-[14px] text-[#6E6E66]">
+            Nikt nie jest przypisany do tego lokalu.
+          </div>
+        )}
+        {zespol.map((u) => {
+          const ma = mozeZamykacPuls(u);
+          return (
+            <div
+              key={u.id}
+              className="px-4 py-2.5 border-b-[2px] border-[#171714] last:border-b-0 flex flex-wrap items-center gap-3"
+            >
+              <div className="flex-1 min-w-[170px] flex items-center gap-2">
+                {ma && <BookOpen size={15} />}
+                <div>
+                  <div className="font-['Archivo'] font-bold text-[15px]">{u.name}</div>
+                  <div className="text-[12px] text-[#6E6E66]">
+                    {ma
+                      ? `może zamykać do ${u.puls_do.split("-").reverse().join(".")}`
+                      : u.puls_do
+                      ? `prawo wygasło ${u.puls_do.split("-").reverse().join(".")}`
+                      : "bez prawa"}
+                  </div>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  className={btnSecondaryCls}
+                  disabled={dostepBusy === u.id}
+                  onClick={() => zmienDostep(u, dzienZa(0))}
+                >
+                  Na dziś
+                </button>
+                <button
+                  className={btnSecondaryCls}
+                  disabled={dostepBusy === u.id}
+                  onClick={() => zmienDostep(u, dzienZa(6))}
+                >
+                  Na tydzień
+                </button>
+                <button
+                  className={btnSecondaryCls}
+                  disabled={dostepBusy === u.id || !u.puls_do}
+                  onClick={() => zmienDostep(u, null)}
+                >
+                  Odbierz
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
 
       {brakujace.length > 0 && (
         <div className={sectionCardCls}>
