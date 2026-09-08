@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   ChevronDown,
   Check,
+  BookOpen,
 } from "lucide-react";
 import { api } from "../api/supabase";
 import { sendToGoogleSheets, toLocalYMD } from "../api/googleSheets";
@@ -19,6 +20,7 @@ import { createManagerNotification } from "../api/notifications";
 import { APP_VERSION } from "../config";
 import { findOverlappingShift, getTodaysShiftsForUser } from "../utils/shifts";
 import WeatherBadge from "./WeatherBadge";
+import PulsZmiany, { mozeZamykacPuls } from "./manager/PulsZmiany";
 import {
   getDayOfWeek,
   getMonthName,
@@ -2061,6 +2063,16 @@ export const EmployeeSessionScreens = ({
           </span>
         </button>
         )}
+        {/* Prawo kierownika zmiany (users.puls_do) jest na czas i wygasa samo —
+            dlatego wiersz pojawia się i znika bez niczyjej ingerencji. */}
+        {mozeZamykacPuls(employee) && (
+          <button onClick={() => setScreen("PULS")} className={menuRowCls}>
+            <BookOpen size={21} className="text-[#171714] flex-shrink-0" />
+            <span className="flex-1 text-base font-semibold text-[#171714]">
+              Zamknięcie dnia
+            </span>
+          </button>
+        )}
         {bloki.includes("WIADOMOSCI") && (
         <button onClick={() => setScreen("WIADOMOSCI")} className={menuRowCls}>
           <Bell size={21} className="text-[#171714] flex-shrink-0" />
@@ -2115,6 +2127,31 @@ export const EmployeeSessionScreens = ({
   // ==========================================
   // EKRAN: WIADOMOSCI
   // ==========================================
+  if (screen === "PULS") {
+    return (
+      <Shell
+        screen={screen}
+        setScreen={setScreen}
+        onBack={onBack}
+        unreadCount={unreadCount}
+        taskBadgeCount={taskBadgeCount}
+        grafikBadgeCount={grafikBadgeCount}
+        bloki={bloki}
+        personName={onBack ? employee.name : null}
+        title="Zamknięcie dnia"
+      >
+        <div className="p-3">
+          <PulsZmiany
+            currentUser={employee}
+            lokal={effectiveAssignment.lokal}
+            showMsg={showMsg}
+            onBack={() => setScreen("WIECEJ")}
+          />
+        </div>
+      </Shell>
+    );
+  }
+
   if (screen === "WIADOMOSCI") {
     const sortedNotifications = [...myNotifications].sort(
       (a, b) => new Date(b.created_at) - new Date(a.created_at)

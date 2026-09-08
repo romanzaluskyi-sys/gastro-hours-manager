@@ -473,21 +473,6 @@ export const zamknijDzien = async ({ karta, lokal, dateStr, pola, kto, dayLogs, 
     },
   });
 
-// Zamknięty dzień trzeba dać się otworzyć. Zamknięcie to nie jest zapis
-// HACCP — te siedzą w day_log_entries i tam korekta zostawia ślad. Tu chodzi
-// tylko o to, czy karta jest już domknięta, a pomyłka w jednym kliknięciu nie
-// może blokować kierownika na zawsze.
-export const otworzPonownie = async ({ karta, dayLogs, setDayLogs }) => {
-  wymagajSettera(setDayLogs, "setDayLogs");
-  const zapisana = await api.patch("day_logs", karta.id, {
-    status: "otwarty",
-    closed_by: null,
-    closed_at: null,
-  });
-  setDayLogs((dayLogs || []).map((k) => (k.id === karta.id ? zapisana : k)));
-  return zapisana;
-};
-
 export const zapiszWpis = async ({
   lokal,
   dateStr,

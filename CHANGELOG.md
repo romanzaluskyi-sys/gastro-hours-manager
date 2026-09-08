@@ -53,6 +53,14 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
   stara wartość, nowa i powód, widoczne w karcie na zawsze.
 - W konfiguracji wpisów doszedł **przycisk kopiowania** — przy pięciu lodówkach
   o tych samych normach to różnica między minutą a kwadransem.
+- **Dzień może zamknąć kierownik zmiany**, gdy kierownika lokalu nie ma na
+  miejscu. W karcie pracownika nadajesz mu prawo **do konkretnego dnia** — samo
+  wygasa. Na Tablecie Służbowym dostaje wtedy ekran „Zamknięcie dnia”: utarg,
+  notatki, wpisy i zdarzenia. Bez historii, bez innych lokali i bez kosztów
+  pracy. Po zamknięciu kierownik lokalu dostaje powiadomienie, a rano —
+  przypomnienie o dniu, którego nikt nie zamknął.
+- **Zamkniętego dnia nie da się już otworzyć** — jedyna droga to poprawka ze
+  śladem. Otwarcie kasowałoby sens zamknięcia.
 - Anonimowe zgłoszenie znów da się wysłać — wcześniej znikało bez śladu.
 
 ## 0.28.0 — 2026-09-05

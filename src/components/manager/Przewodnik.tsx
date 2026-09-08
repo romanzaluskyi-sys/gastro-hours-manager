@@ -39,6 +39,8 @@ const CHANGELOG = [
       "Do utargu dopisujesz powód (pogoda/wydarzenie/akcja/personel) i komentarz.",
       "Zgłoszenie zdarzenia ma pełny formularz: kategoria, uczestnicy, co zrobiono, skutek finansowy, status.",
       "Zamkniętego dnia nie da się po cichu zmienić — poprawka zapisuje starą wartość, nową i powód.",
+      "Dzień może zamknąć kierownik zmiany — prawo nadajesz w karcie pracownika do konkretnego dnia i wygasa samo. Dostaje wtedy na tablecie ekran z utargiem i wpisami, bez kosztów i bez historii.",
+      "Kierownik lokalu dostaje powiadomienie po zamknięciu i przypomnienie rano, gdy dnia nikt nie zamknął.",
       "Anonimowe zgłoszenie znów da się wysłać.",
     ],
   },

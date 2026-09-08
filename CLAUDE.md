@@ -599,6 +599,22 @@ i nową wartością oraz powodem), dopiero potem zmienia `day_logs`. Kolejność
 jest celowa: gdyby ślad padł po zmianie liczby, zostałaby po cichu podmieniona
 wartość bez wyjaśnienia — dokładnie to, przed czym ta funkcja chroni.
 
+**Kierownik zmiany** — [`manager/PulsZmiany.tsx`](src/components/manager/PulsZmiany.tsx),
+wpięte w `employeeSessionShared.tsx` jako ekran `PULS` (wiersz w "Więcej").
+Zamiast nowej roli — **prawo na czas**: `users.puls_do` to ostatni dzień, w
+którym ta osoba może zamknąć Puls swojego lokalu z Tabletu Służbowego
+(`mozeZamykacPuls`). Wygasa samo; uprawnień, które trzeba pamiętać odebrać,
+nikt nie odbiera. Ekran świadomie NIE pokazuje warstwy automatycznej, historii,
+innych lokali ani **kosztów pracy i stawek** — to nie jest informacja dla tej
+roli. Zamknięcie idzie do kierownika lokalu przez `createManagerNotification`,
+a `api/cron/check-puls.js` przypomina rano o dniu, którego nikt nie zamknął.
+Ekran pobiera własne dane, nie bierze ich propsami (patrz błąd #16).
+
+⚠️ **Zamkniętego dnia nie da się otworzyć.** Nie ma i nie ma być przycisku
+"otwórz ponownie": otwarcie pozwoliłoby zmienić liczby tak, jakby nigdy nie
+były inne, czyli skasowałoby sens zamknięcia. Jedyna droga to
+`poprawZamknietyDzien()`, która zostawia ślad.
+
 ### Sprawdziany bez Node — `harness-*.html`
 
 W tym środowisku nie ma Node ani npm, więc `npm run build` i testy jednostkowe

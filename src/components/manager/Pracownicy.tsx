@@ -763,6 +763,44 @@ export default function Pracownicy({
               {editingUser.role !== "kiosk" && (
                 <>
                   <p className={`${statLabelCls} mb-2`}>Sanepid i umowa</p>
+                  <div className="border-[2px] border-[#171714] rounded-lg p-3 mb-3">
+                    {/* Prawo na czas zamiast nowej roli: kierownik zmiany może
+                        zamknąć Puls swojego lokalu z Tabletu Służbowego do tego
+                        dnia włącznie. Wygasa samo — uprawnień, które trzeba
+                        pamiętać odebrać, nikt nie odbiera. */}
+                    <label className="text-xs font-bold text-[#6E6E66]">
+                      Może zamykać Puls (kierownik zmiany) — do dnia
+                    </label>
+                    <div className="flex flex-wrap gap-2 items-center mt-1">
+                      <input
+                        type="date"
+                        value={editingUser.puls_do || ""}
+                        onChange={(e) =>
+                          setEditingUser({ ...editingUser, puls_do: e.target.value || null })
+                        }
+                        className="p-2 border-[2px] border-[#171714] rounded"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setEditingUser({
+                            ...editingUser,
+                            puls_do: new Date().toISOString().slice(0, 10),
+                          })
+                        }
+                        className="px-3 py-2 border-[2px] border-[#171714] rounded text-sm font-bold"
+                      >
+                        Na dziś
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingUser({ ...editingUser, puls_do: null })}
+                        className="px-3 py-2 border-[2px] border-[#B7B6AE] rounded text-sm text-[#6E6E66]"
+                      >
+                        Odbierz
+                      </button>
+                    </div>
+                  </div>
                   <div className="grid grid-cols-2 gap-3 mb-5">
                     <div>
                       <label className="text-xs font-bold text-[#6E6E66]">
