@@ -12,8 +12,12 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
   lokali, a pod nazwiskiem widać, ile z tego przypada na oglądany lokal.
   Kafelki u góry i „Według lokalu” pokazują teraz to samo, więc liczby się
   zgadzają.
-- **Poprawka: „Błąd usuwania” nie mówił, co się stało.** Teraz komunikat podaje
-  przyczynę (a wiersz bez id jest odrzucany, zanim poleci zapytanie).
+- **Poprawka: nie dało się usunąć zmiany, do której pracownik wysłał „Popraw
+  zmianę”.** Baza blokowała usunięcie, a komunikat mówił tylko „Błąd usuwania”.
+  Zgłoszenie zostaje w historii — traci tylko odwołanie do skasowanej zmiany.
+  (Wymaga migracji `0017`.)
+- Komunikaty przy usuwaniu podają teraz przyczynę zamiast samego „Błąd
+  usuwania”.
 
 ## 0.30.2 — 2026-09-09
 

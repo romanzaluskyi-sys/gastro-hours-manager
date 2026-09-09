@@ -959,7 +959,8 @@ zakresem — wymaga Grafiku, którego nie ma.
 - **issues** — zgłoszenia od pracowników, dwa typy w jednej tabeli (patrz
   "Zgłoszenia i powiadomienia" wyżej). Podstawowe:
   `id, user_id, user_name, issue_text, status, is_anonymous, shift_id`
-  (uuid, nullable, references `shifts(id)`). Od 2026-09-02 też `type`
+  (uuid, nullable, references `shifts(id)` **ON DELETE SET NULL** od migracji
+  `0017` — jedyny prawdziwy FK w projekcie, patrz błąd #17 niżej). Od 2026-09-02 też `type`
   (text, default `'problem'` — stare wiersze bez wartości traktuj jak
   `'problem'`) i, tylko dla `type='correction'`: `proposed_date` (date),
   `proposed_lokal`/`proposed_stanowisko` (text), `proposed_start_time`/
@@ -976,8 +977,9 @@ zakresem — wymaga Grafiku, którego nie ma.
   FK (`references shifts(id)`) padła na niezgodność typów w Supabase SQL
   Editor (`bigint` vs `uuid`, patrz błąd #12 niżej); zamiast zgadywać
   poprawny typ drugi raz, zostawione jako luźne, niewymuszone odwołanie —
-  ten sam wzorzec co reszta tabel w tym projekcie (żadna nie ma prawdziwych
-  FK). RLS: otwarta polityka jak reszta. Czytane przez "Historia" w Rejestr
+  ten sam wzorzec co reszta tabel w tym projekcie. ⚠️ Z jednym wyjątkiem:
+  `issues.shift_id` MA prawdziwy FK do `shifts(id)` (patrz `issues` wyżej i
+  błąd #17 niżej) — to jedyny w całym projekcie. RLS: otwarta polityka jak reszta. Czytane przez "Historia" w Rejestr
   Godzin i licznik "Korekty" w Raporty i koszty; zapisywane WYŁĄCZNIE przez
   `resolveCorrection()` w `utils/corrections.ts` — nie pisz do tej tabeli
   z innego miejsca.
@@ -1401,6 +1403,21 @@ wpisana komuś niedostępnemu jest gorsza niż brak obsady, bo wygląda na pokry
     (`grep -n "<ManagerDashboard" src/App.tsx`), nie samo sąsiedztwo nazw.
     Wykrył to dopiero `harness-app.html`, który montuje App i porównuje, co z
     niego wychodzi z tym, co dociera do zakładki.
+
+17. **Usunięcie zmiany, do której odnosi się zgłoszenie, padało z 409.**
+    `issues.shift_id` to jedyny prawdziwy klucz obcy w projekcie i był bez
+    klauzuli `ON DELETE`, więc Postgres blokował `delete` na `shifts`
+    (`violates foreign key constraint "issues_shift_id_fkey"`). Trafiało to
+    dokładnie w te zmiany, do których pracownik wysłał "Popraw zmianę" — czyli
+    w te, które kierownik najczęściej chce potem skasować. Migracja `0017`
+    zmienia FK na `ON DELETE SET NULL`: zgłoszenie zostaje (to zapis, o co
+    pracownik prosił i jak to rozstrzygnięto), traci tylko wskaźnik na
+    nieistniejący wiersz. ⚠️ Przy okazji: `api.delete` pokazywało samo
+    "Błąd usuwania" bez statusu i treści z Postgresa, więc przez dłuższą chwilę
+    nie dało się odróżnić FK od braku uprawnień, sieci i wiersza bez id — dziś
+    komunikat niesie przyczynę, a pusty `id` jest odrzucany przed wysłaniem
+    zapytania. **Każdy nowy komunikat błędu przy zapisie/usuwaniu ma podawać
+    przyczynę**, nie samo "coś poszło nie tak".
 
 ## Google Apps Script (`Odbior_Danych.gs`)
 
