@@ -1210,12 +1210,17 @@ Szczegóły, które łatwo zepsuć:
 - Okno kolejki to 14 dni (`OKNO_DNI`). Dalej nikt nie pamięta, czy tamtego
   wtorku przyszedł, a zgadywanie jest gorsze niż brak.
 
-⚠️ **Raporty i koszty NIE słuchają wyboru lokalu z górnego paska** — biorą
-wszystkie lokale, do których kierownik ma dostęp (`hasAccessToLokal`, nie
-`matchesLokalFilter`). Godziny i koszt jednej osoby to fakt płacowy, nie fakt
-lokalu: pracownik wypożyczony między lokalami pokazywał się dwa razy, w każdej
-zakładce z częścią godzin, i żadna nie mówiła, ile mu się należy. Podział na
-lokale żyje w sekcji "Według lokalu". Nie „napraw” tego z powrotem na filtr.
+⚠️ **Raporty i koszty mają DWA zakresy i nie wolno ich zlepić w jeden.**
+`periodShifts` (górny pasek, `matchesLokalFilter`) decyduje tylko o tym, KOGO
+widać na liście — to nawigacja. Wszystkie liczby idą z `zakresOsob`: pełne
+godziny tych osób ze wszystkich lokali, do których kierownik ma dostęp
+(`hasAccessToLokal`). Powód: godziny i koszt jednej osoby to fakt płacowy, nie
+fakt lokalu — liczone per zakładka, pracownik wypożyczony między lokalami
+pokazywał się dwa razy, w każdej z częścią godzin, i żadna nie mówiła, ile mu
+się w sumie należy. Kafelki, "Według lokalu" i wiersze osób liczą się z tego
+samego `zakresOsob`, więc suma u góry zgadza się z rozbiciem pod spodem; w
+wierszu dochodzi podpis "w tym X h w tym lokalu", gdy część godzin jest gdzie
+indziej.
 
 ⚠️ **Formularz "Popraw zmianę" używa PEŁNYCH słowników** (`lokaleWszystkie`/
 `stanowiskaWszystkie`), nie tych zawężonych do urządzenia — opisuje przeszłą

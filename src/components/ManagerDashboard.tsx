@@ -961,7 +961,9 @@ const ManagerDashboard = ({
       setEditingShift(null);
       showMsg("Zapis usunięty z Bazy.");
     } catch (err) {
-      showMsg("Błąd usuwania.", "error");
+      // Pokazujemy prawdziwą przyczynę — samo "Błąd usuwania." nie mówiło
+      // ani co padło, ani czy zmiana została skasowana.
+      showMsg(err.message || "Błąd usuwania.", "error");
     }
   };
 

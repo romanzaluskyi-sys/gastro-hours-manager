@@ -5,6 +5,16 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.30.3 — 2026-09-09
+
+- **Raporty i koszty: wybór lokalu u góry znów działa** — decyduje, kogo widzisz
+  na liście. Ale godziny i koszt osoby są zawsze pełne, ze wszystkich Twoich
+  lokali, a pod nazwiskiem widać, ile z tego przypada na oglądany lokal.
+  Kafelki u góry i „Według lokalu” pokazują teraz to samo, więc liczby się
+  zgadzają.
+- **Poprawka: „Błąd usuwania” nie mówił, co się stało.** Teraz komunikat podaje
+  przyczynę (a wiersz bez id jest odrzucany, zanim poleci zapytanie).
+
 ## 0.30.2 — 2026-09-09
 
 - **Raporty i koszty pokazują jedną kartę na osobę**, niezależnie od tego, w ilu

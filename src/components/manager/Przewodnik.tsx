@@ -23,6 +23,14 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.30.3",
+    date: "2026-09-09",
+    items: [
+      "Raporty i koszty: wybór lokalu u góry decyduje, kogo widzisz; godziny i koszt osoby są zawsze pełne, z podpisem ile przypada na oglądany lokal.",
+      "Poprawka: komunikat \"Błąd usuwania\" podaje teraz przyczynę.",
+    ],
+  },
+  {
     version: "0.30.2",
     date: "2026-09-09",
     items: [
