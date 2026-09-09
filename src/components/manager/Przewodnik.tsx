@@ -30,6 +30,7 @@ const CHANGELOG = [
       "W wierszu widać wykorzystanie umowy: \"128/176 h\" przy umowie o pracę, godziny i koszt przy zleceniu.",
       "Jedną zmianę można wpisać od razu na kilka dni tygodnia; dni z urlopem lub kolizją są pomijane.",
       "Wymagania obsady można teraz poprawiać, a nie tylko dodawać i kasować.",
+      "Widok Miesiąc ma drugi układ wydruku \"Osoby × dni\" — wiersz na osobę, 31 kolumn, gotowy na A4 poziomo.",
     ],
   },
   {

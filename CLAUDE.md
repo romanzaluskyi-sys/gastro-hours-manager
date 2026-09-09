@@ -1860,9 +1860,32 @@ Trzy decyzje, których nie zmieniaj bez rozmowy z właścicielem:
     aktywnego zestawu, więc zapis po cichu przeniósłby regułę gdzie indziej.
     Skasowanie edytowanej reguły też czyści formularz — inaczej zapisałby ją
     z powrotem pod nieistniejącym już id.
+- **Widok Miesiąc ma DWA układy** (`GrafikMiesiac.tsx`, stan `uklad`):
+  `kalendarz` (siedem kolumn, kartka na ścianę) i `osoby` (wiersz na osobę,
+  kolumna na dzień, w kratce początek/koniec/skrót stanowiska jeden pod
+  drugim). To dwa różne pytania — "kto jest w sobotę?" kontra "kiedy
+  pracuję?" — i dlatego dwa układy, a nie jeden kompromis.
+  - ⚠️ **Zawsze 31 kolumn** (`DNI_W_SIATCE`), także w lutym. Dni, których w
+    miesiącu nie ma, zostają puste i BEZ etykiety. Powód jest praktyczny:
+    identyczna szerokość kolumn w każdym miesiącu, więc wydruki da się
+    położyć obok siebie bez szukania, gdzie co stoi. Ustalenie właściciela.
+  - **Rozmiary czcionek w druku są ZMIERZONE, nie wyczute.** A4 poziomo to
+    283 mm użytecznej szerokości; nazwisko bierze 9%, więc na kolumnę dnia
+    zostaje ~8,3 mm (≈31 px). Przy 6,2 pt "08:30" zajmuje 24 px, czterolitrowy
+    skrót stanowiska 26 px — mieści się z zapasem na obramowania. **Dlatego
+    liczba kolumn nie może urosnąć** i dlatego nie podnosimy tych rozmiarów
+    "na oko".
+  - Minimalna wysokość wiersza siedzi na komórce z nazwiskiem (`.go-min`) —
+    wiersz rośnie do najwyższej komórki, więc osoba bez ani jednej zmiany
+    dostaje taki sam pasek co reszta. Bez tego wydruk miał raz linijkę, raz
+    trzy.
+  - `overflow-x-auto` z widoku ekranowego MUSI być wyłączone w druku
+    (`.go-scroll`), inaczej kolumny od dwudziestej wzwyż nie wychodzą na
+    papier.
+  - `isSameUser` i `absenceOn` przeniesione z `GrafikTydzien.tsx` do
+    `utils/grafik.ts` — używają ich teraz oba widoki.
 
 ### 5d. Grafik — świadomie NIE zrobione
-- Drugi wariant druku miesiąca (tabela pracownicy × dni) — odłożony.
 - Potwierdzenia odczytu grafiku przez pracownika ("przeczytało 12 z 14").
 - Etat jako reguła (dziś pokazujemy tylko różnicę godzin przy zamianie,
   żeby kierownik sam ocenił).

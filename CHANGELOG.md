@@ -23,6 +23,12 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
   doszedł wybór „Powtórz w dniach”, jak przy zadaniach. Powstają zwykłe,
   niezależne zmiany. Dni z urlopem, kolizją godzin albo po ostatnim dniu pracy
   są pomijane, a po zapisie aplikacja mówi, które i dlaczego.
+- **Drugi układ wydruku miesiąca: „Osoby × dni”** (Grafik → Miesiąc). Wiersz
+  na osobę, kolumna na dzień; w kratce początek, koniec i skrót stanowiska,
+  jedno pod drugim. Siatka ma zawsze 31 kolumn, więc luty drukuje się w tej
+  samej szerokości co marzec i wydruki da się położyć obok siebie. Mieści się
+  na A4 poziomo; przełącznik „Kalendarz / Osoby × dni” jest przy przyciskach
+  miesiąca.
 - Poprawka: w liście wymagań obsady było „2 osób” zamiast „2 osoby”.
 
 ## 0.31.0 — 2026-09-09

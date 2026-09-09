@@ -262,6 +262,8 @@ export default function Grafik({
           staffingRules={staffingRules}
           staffingRuleSets={staffingRuleSets}
           grafikWyjatki={grafikWyjatki}
+          users={users}
+          absences={absences}
           month={month}
           setMonth={setMonth}
           onBackToWeek={() => setView("tydzien")}

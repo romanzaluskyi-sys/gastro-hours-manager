@@ -17,6 +17,8 @@ import {
   shiftHours,
   checkDayCoverage,
   dowOf,
+  isSameUser,
+  absenceOn,
 } from "../../utils/grafik";
 import { fetchDailyForecast } from "../../utils/weather";
 
@@ -47,6 +49,12 @@ const shiftMonth = (monthPrefix, delta) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 };
 
+// ⚠️ Zawsze 31 kolumn, niezależnie od długości miesiąca (ustalenie
+// właściciela). Luty i tak dostanie 31 kolumn, trzy ostatnie puste — dzięki
+// temu każda kartka ma identyczną szerokość kolumn i wydruk z lutego da się
+// położyć obok wydruku z marca bez przeliczania, gdzie co stoi.
+const DNI_W_SIATCE = 31;
+
 const PRINT_CSS = `
 @media print {
   @page { size: A4 landscape; margin: 7mm; }
@@ -61,6 +69,27 @@ const PRINT_CSS = `
   #grafik-print .gp-entry { font-size: 6.5pt; }
   #grafik-print .gp-skrot { font-size: 6pt; padding: 0 2px; }
   .gp-noprint { display: none !important; }
+
+  /* Układ "osoby × dni". 297 mm minus 2×7 mm marginesu to 283 mm; nazwisko
+     bierze 9%, więc na 31 dni zostaje po ~8,3 mm (≈31 px) na kolumnę.
+     Najszerszy napis w kratce to "08:30" — przy 6,2 pt zajmuje ~25 px, czyli
+     mieści się z zapasem na obramowania. Zmierzone, nie wyczute: to jest
+     powód, dla którego liczba kolumn NIE może urosnąć powyżej 31. */
+  #grafik-osoby { font-size: 6.2pt; line-height: 1.1; }
+  #grafik-osoby td, #grafik-osoby th { padding: 0 !important; }
+  #grafik-osoby .go-nazwisko { font-size: 7pt; padding: 0 1mm !important; }
+  #grafik-osoby .go-dow { font-size: 5.5pt; }
+  #grafik-osoby .go-num { font-size: 7.5pt; }
+  #grafik-osoby .go-znacznik { font-size: 7pt; }
+  /* Trzy linijki czasu przy 6,2 pt i interlinii 1,1 to ~3,3 em; z zapasem na
+     obramowania wychodzi 3,6 em. */
+  #grafik-osoby .go-min { min-height: 3.6em !important; }
+  /* Wiersz osoby nie może się rozpaść na dwie strony w połowie. */
+  #grafik-osoby tr { break-inside: avoid; page-break-inside: avoid; }
+  #grafik-osoby thead { display: table-header-group; }
+  /* Ekranowy overflow-x-auto obcina tabelę przy drukowaniu — kolumny od 20.
+     wzwyż po prostu nie wychodziły na papier. */
+  #grafik-print .go-scroll { overflow: visible !important; }
 }
 `;
 
@@ -72,11 +101,19 @@ export default function GrafikMiesiac({
   staffingRules,
   staffingRuleSets,
   grafikWyjatki,
+  users,
+  absences,
   month,
   setMonth,
   onBackToWeek,
 }) {
   const [forecast, setForecast] = useState({});
+  // "kalendarz" — siedem kolumn, jak kartka na ścianę przy grafiku.
+  // "osoby"     — jeden wiersz na osobę, 31 kolumn dni; ten układ czyta się
+  //               po ludziach ("kiedy pracuję?"), a tamten po dniach
+  //               ("kto jest w sobotę?"). To dwa różne pytania i dlatego dwa
+  //               układy, a nie jeden kompromis.
+  const [uklad, setUklad] = useState("kalendarz");
 
   useEffect(() => {
     let cancelled = false;
@@ -133,6 +170,33 @@ export default function GrafikMiesiac({
       .filter((s) => s.date === dateStr)
       .sort((a, b) => trimTime(a.start_time).localeCompare(trimTime(b.start_time)));
 
+  // Wiersze układu "osoby": przypisani do lokalu plus każdy, kto ma tu w tym
+  // miesiącu zmianę. Ta sama zasada co w siatce tygodnia — bez niej osoba
+  // wypożyczona zniknęłaby z wydruku, mimo że w nim pracuje.
+  const osobyMiesiaca = (users || [])
+    .filter((u) => {
+      if (u.role === "kiosk") return false;
+      const maTuZmiany = zmianyLokalu.some((s) => isSameUser(s, u));
+      if (u.archived || u.active === false) return maTuZmiany;
+      return u.default_lokal === lokal || maTuZmiany;
+    })
+    .sort((a, b) => {
+      const sa = a.default_stanowisko || "";
+      const sb = b.default_stanowisko || "";
+      if (sa !== sb) return sa.localeCompare(sb, "pl");
+      return a.name.localeCompare(b.name, "pl");
+    });
+
+  // Zawsze 31 kratek. Dni, których w miesiącu nie ma, zostają puste i BEZ
+  // etykiety — dorobiony "31 lutego" wyglądałby jak dzień, w którym nikt nie
+  // pracuje, zamiast jak dzień, którego nie ma.
+  const kolumnyDni = Array.from({ length: DNI_W_SIATCE }, (_, i) => dni[i] || null);
+
+  const zmianyOsobyDnia = (user, dateStr) =>
+    zmianyLokalu
+      .filter((s) => s.date === dateStr && isSameUser(s, user))
+      .sort((a, b) => trimTime(a.start_time).localeCompare(trimTime(b.start_time)));
+
   const ostatniaZmiana = zmianyLokalu
     .map((s) => s.updated_at)
     .filter(Boolean)
@@ -154,6 +218,20 @@ export default function GrafikMiesiac({
         <button onClick={onBackToWeek} className={btnSecondaryCls}>
           <CalendarRange size={15} className="inline -mt-0.5 mr-1" /> Wróć do tygodnia
         </button>
+        <div className="flex gap-2 ml-2">
+          <button
+            onClick={() => setUklad("kalendarz")}
+            className={uklad === "kalendarz" ? btnPrimaryCls : btnSecondaryCls}
+          >
+            Kalendarz
+          </button>
+          <button
+            onClick={() => setUklad("osoby")}
+            className={uklad === "osoby" ? btnPrimaryCls : btnSecondaryCls}
+          >
+            Osoby × dni
+          </button>
+        </div>
         <button onClick={() => window.print()} className={`ml-auto ${btnPrimaryCls}`}>
           <Printer size={15} className="inline -mt-0.5 mr-1" /> Drukuj (A4 poziomo)
         </button>
@@ -178,6 +256,7 @@ export default function GrafikMiesiac({
           </span>
         </div>
 
+        {uklad === "kalendarz" && (
         <div className="grid grid-cols-7">
           {DNI_NAGLOWEK.map((d) => (
             <div
@@ -270,11 +349,130 @@ export default function GrafikMiesiac({
             })
           )}
         </div>
+        )}
+
+        {uklad === "osoby" && (
+          <div className="overflow-x-auto go-scroll">
+            <table
+              id="grafik-osoby"
+              className="w-full border-collapse table-fixed text-[10px]"
+            >
+              {/* Nazwisko dostaje stały procent, a 31 dni dzieli resztę po
+                  równo — inaczej kolumna z dłuższym imieniem zjadłaby dni i
+                  wydruk przestałby się mieścić na szerokość A4. */}
+              <colgroup>
+                <col style={{ width: "9%" }} />
+                {kolumnyDni.map((_, i) => (
+                  <col key={i} style={{ width: `${91 / DNI_W_SIATCE}%` }} />
+                ))}
+              </colgroup>
+              <thead>
+                <tr>
+                  <th className="border-[1px] border-[#171714] px-2 py-1 text-center go-nazwisko font-['Archivo'] font-extrabold uppercase tracking-wide">
+                    {getMonthName(mies - 1)}
+                  </th>
+                  {kolumnyDni.map((d, i) => {
+                    const weekend = d && (dowOf(d) === 0 || dowOf(d) === 6);
+                    return (
+                      <th
+                        key={i}
+                        className={`border-[1px] border-[#171714] px-0 py-0.5 text-center ${
+                          weekend ? "bg-[#EDEDE8]" : "bg-white"
+                        }`}
+                      >
+                        <div className="go-dow text-[8px] font-bold text-[#6E6E66] leading-none">
+                          {d ? DNI_NAGLOWEK[(dowOf(d) + 6) % 7] : ""}
+                        </div>
+                        <div className="go-num font-['Archivo'] font-extrabold text-[11px] leading-tight">
+                          {d ? Number(d.slice(8)) : ""}
+                        </div>
+                      </th>
+                    );
+                  })}
+                </tr>
+              </thead>
+              <tbody>
+                {osobyMiesiaca.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={DNI_W_SIATCE + 1}
+                      className="border-[1px] border-[#171714] px-4 py-6 text-center text-[#6E6E66] text-[13px]"
+                    >
+                      Nikt nie jest przypisany do tego lokalu i nikt nie ma tu zmian w
+                      tym miesiącu.
+                    </td>
+                  </tr>
+                )}
+                {osobyMiesiaca.map((u) => (
+                  <tr key={u.id}>
+                    {/* Minimalna wysokość trzymana na komórce z nazwiskiem:
+                        wiersz rośnie do najwyższej komórki, więc osoba bez ani
+                        jednej zmiany dostaje taki sam pasek co reszta. Bez tego
+                        wydruk miał raz linijkę, raz trzy, i przestawał wyglądać
+                        jak formularz. */}
+                    <td className="border-[1px] border-[#171714] px-2 py-1 go-nazwisko font-['Archivo'] font-bold text-[12px] text-center">
+                      <div className="go-min min-h-[40px] flex items-center justify-center">
+                        {u.name}
+                      </div>
+                    </td>
+                    {kolumnyDni.map((d, i) => {
+                      if (!d) {
+                        return (
+                          <td
+                            key={i}
+                            className="border-[1px] border-[#E7E7E2] bg-[#F6F6F3]"
+                          />
+                        );
+                      }
+                      const weekend = dowOf(d) === 0 || dowOf(d) === 6;
+                      const zm = zmianyOsobyDnia(u, d);
+                      const abs = zm.length === 0 ? absenceOn(absences, u, d) : null;
+                      return (
+                        <td
+                          key={i}
+                          className={`border-[1px] border-[#171714] px-0 py-0 text-center align-middle ${
+                            weekend ? "bg-[#F6F6F3]" : ""
+                          }`}
+                        >
+                          {/* Trzy linijki w pionie: początek, koniec,
+                              stanowisko — tak samo jak w arkuszu, z którego
+                              ten układ pochodzi. Druga zmiana tego samego dnia
+                              dokłada kolejną trójkę pod spodem, zamiast
+                              chować się za "…". */}
+                          {zm.map((sh) => (
+                            <div
+                              key={sh.id}
+                              className={`leading-tight tabular-nums ${
+                                sh.__nieaktywny ? "line-through text-[#8A3A2B]" : ""
+                              }`}
+                            >
+                              <div>{trimTime(sh.start_time)}</div>
+                              <div>{trimTime(sh.end_time)}</div>
+                              <div className="font-bold">
+                                {stanowiskoShort(activeStanowiska, lokal, sh.stanowisko)}
+                              </div>
+                            </div>
+                          ))}
+                          {abs && (
+                            <div className="go-znacznik font-extrabold text-[10px] text-[#6E6E66]">
+                              {abs.type === "urlop" ? "URP" : "NIE"}
+                            </div>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         <div className="px-4 py-2 border-t-[2px] border-[#171714] flex flex-wrap items-center justify-between gap-2 text-[11px] text-[#6E6E66]">
           <span>
-            Czerwony numer dnia — obsada poniżej wymagań dla tego lokalu.
-            Skrót przy zmianie to stanowisko.
+            {uklad === "osoby"
+              ? "W kratce: początek, koniec, skrót stanowiska. URP — zatwierdzony urlop, NIE — zgłoszony brak dostępności. Siatka ma zawsze 31 kolumn, żeby każdy miesiąc drukował się tak samo."
+              : "Czerwony numer dnia — obsada poniżej wymagań dla tego lokalu. Skrót przy zmianie to stanowisko."}
           </span>
           {ostatniaZmiana && (
             <span>

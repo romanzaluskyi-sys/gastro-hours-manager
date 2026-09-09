@@ -43,6 +43,8 @@ import {
   storedStanowiskaArr,
   isUnpublished,
   problemyObsady,
+  isSameUser,
+  absenceOn,
   krotkaGodzina,
 } from "../../utils/grafik";
 import { activeSwapFor, pendingSwapDelta } from "../../utils/swaps";
@@ -122,17 +124,6 @@ const fmtRange = (from, to) => {
 
 const fmtH = (h) => `${Math.round(h * 10) / 10} h`;
 
-// Wniosek o wolne obowiązujący danego dnia. Tylko zatwierdzone — odrzucone
-// i oczekujące nie blokują niczego w grafiku.
-const absenceOn = (absences, user, dateStr) =>
-  (absences || []).find(
-    (a) =>
-      a.status === "approved" &&
-      a.start_date <= dateStr &&
-      dateStr <= a.end_date &&
-      (a.user_id ? String(a.user_id) === String(user.id) : a.user_name === user.name)
-  ) || null;
-
 // Ostrzeżenia o obsadzie pokazywane WPROST w kolumnie dnia — czerwone, gdy
 // kogoś brakuje, żółte, gdy wpisano więcej osób, niż wynika z wymagań. Te
 // same dane siedziały wcześniej wyłącznie w dymku `title` i praktycznie nikt
@@ -177,11 +168,6 @@ function ProblemyObsady({ stat, activeStanowiska, lokal }) {
     </div>
   );
 }
-
-const isSameUser = (planShift, user) =>
-  planShift.user_id
-    ? String(planShift.user_id) === String(user.id)
-    : planShift.user_name === user.name;
 
 // Godziny urlopu w danym miesiącu — urlop nie jest zmianą w planie, ale
 // liczy się jako 8 h za każdy dzień roboczy (ustalenie właściciela, ta
