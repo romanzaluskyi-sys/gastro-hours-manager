@@ -1,3 +1,9 @@
+// @ts-nocheck
+// ⚠️ `@ts-nocheck` doszedł w 0.33.0 razem z odczytem zmiennych środowiskowych.
+// Wcześniej ten plik był samymi literałami i jako jedyny w `src/` obywał się
+// bez tej linii; po dodaniu funkcji pomocniczych `strict: true` wywala
+// TS7006 na nietypowanych parametrach i build na Vercelu pada. Reszta plików
+// frontendu ma to samo — patrz błąd #4 w tym pliku CLAUDE.md.
 // ==========================================
 // KONFIGURACJA NAJEMCY (tenant)
 // ==========================================

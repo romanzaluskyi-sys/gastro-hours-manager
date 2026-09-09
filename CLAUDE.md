@@ -76,6 +76,13 @@ Crony (`api/cron/*.js`, runtime): `SUPABASE_URL`, `SUPABASE_KEY`,
 `CRON_SECRET`. Te same wartości trzeba wpisać dwa razy — to dwa różne
 mechanizmy (build-time DefinePlugin kontra runtime `process.env`).
 
+⚠️ **`src/config.ts` musi mieć `// @ts-nocheck`.** Do 0.32.0 był jedynym
+plikiem w `src/` bez tej linii, bo składał się z samych literałów. Odczyt
+zmiennych dokłada funkcje pomocnicze, a `strict: true` wywala wtedy TS7006 na
+nietypowanych parametrach — build lokalnie przechodzi (babel typów nie
+sprawdza), a pada dopiero na Vercelu. Jedyny plik w `src/` bez tej linii to
+dziś `index.tsx`, który jest w pełni otypowany.
+
 ⚠️ **Pułapki `src/config.ts`, obie sprawdzone eksperymentalnie:**
 - CRA podmienia CAŁE wyrażenie `process.env` na literał obiektu, i robi to
   **przez dopasowanie tekstu**. Dlatego `process.env` występuje w tym pliku
@@ -1434,8 +1441,8 @@ wpisana komuś niedostępnemu jest gorsza niż brak obsady, bo wygląda na pokry
    całym arkuszu.
 4. Node/TypeScript: `tsconfig.json` wymaga `"skipLibCheck": true` (konflikt
    wersji `typescript` z `@types/react`), a każdy plik frontendowy (dawniej
-   tylko `App.tsx`, dziś każdy plik w `components/`, `api/`, `utils/`) ma
-   `// @ts-nocheck` (kod pisany bez pełnego typowania — nie usuwaj tej linii,
+   tylko `App.tsx`, dziś każdy plik w `components/`, `api/`, `utils/`, a od
+   0.33.0 także `config.ts`) ma `// @ts-nocheck` (kod pisany bez pełnego typowania — nie usuwaj tej linii,
    chyba że robisz świadomą migrację do prawdziwych typów).
 5. `// @ts-nocheck` w `App.tsx` był kiedyś przypadkowo usunięty jednym z
    commitów, mimo `strict: true` w `tsconfig.json` — build z tym combo by
