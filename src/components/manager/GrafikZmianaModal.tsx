@@ -20,6 +20,7 @@ import {
   poOstatnimDniu,
   allowedStanowiskaArr,
   addDaysYMD,
+  godzinyZWymagan,
 } from "../../utils/grafik";
 import { ostrzezeniaKodeksu } from "../../utils/kodeks";
 import { naEtacie } from "../../utils/umowy";
@@ -259,6 +260,11 @@ export default function GrafikZmianaModal({
   const paryPozostale = wszystkieParty.filter((p) => !wKarcie(p)).sort(sortujPary);
   const obceStanowisko = user && stanowisko && !knowsStanowisko(user, stanowisko);
   const wolneUzytkownika = user ? findBlockingAbsence(absences, user, date) : null;
+
+  // Godziny do kliknięcia obok pól — te, które dla tego stanowiska i dnia
+  // wynikają z wymagań obsady. Gdy wymagań nie ma, list nie ma i pola
+  // wyglądają jak wcześniej.
+  const propozycje = godzinyZWymagan(rulesForDay, stanowisko);
 
   const poOdejsciu = poOstatnimDniu(user, date);
 
@@ -615,27 +621,71 @@ export default function GrafikZmianaModal({
           <div className="grid md:grid-cols-2 gap-3">
             <div>
               <label className={statLabelCls}>Od</label>
-              <input
-                type="time"
-                value={start}
-                onChange={(e) => {
-                  setStart(e.target.value);
-                  setZrodloGodzin(null);
-                }}
-                className="w-full p-2 border-[2px] border-[#171714] rounded"
-              />
+              {/* Pole węższe, obok niego godziny wynikające z wymagań obsady na
+                  ten dzień i stanowisko. Sobota z wymaganiami 08:30–21:00 i
+                  dodatkowym 14:00–19:00 daje do kliknięcia 08:30 i 14:00 —
+                  kierownik i tak wystukiwał je ręcznie, choć system już je zna. */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <input
+                  type="time"
+                  value={start}
+                  onChange={(e) => {
+                    setStart(e.target.value);
+                    setZrodloGodzin(null);
+                  }}
+                  className="w-[110px] p-2 border-[2px] border-[#171714] rounded flex-shrink-0"
+                />
+                {propozycje.poczatki.map((g) => (
+                  <button
+                    key={g}
+                    type="button"
+                    onClick={() => {
+                      setStart(g);
+                      setZrodloGodzin(null);
+                    }}
+                    className={`px-2 py-1.5 rounded border-[2px] text-[13px] font-bold tabular-nums ${
+                      start === g
+                        ? "bg-[#171714] text-white border-[#171714]"
+                        : "bg-white text-[#171714] border-[#B7B6AE] hover:border-[#171714]"
+                    }`}
+                    title="Godzina z wymagań obsady na ten dzień"
+                  >
+                    {g}
+                  </button>
+                ))}
+              </div>
             </div>
             <div>
               <label className={statLabelCls}>Do</label>
-              <input
-                type="time"
-                value={end}
-                onChange={(e) => {
-                  setEnd(e.target.value);
-                  setZrodloGodzin(null);
-                }}
-                className="w-full p-2 border-[2px] border-[#171714] rounded"
-              />
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <input
+                  type="time"
+                  value={end}
+                  onChange={(e) => {
+                    setEnd(e.target.value);
+                    setZrodloGodzin(null);
+                  }}
+                  className="w-[110px] p-2 border-[2px] border-[#171714] rounded flex-shrink-0"
+                />
+                {propozycje.konce.map((g) => (
+                  <button
+                    key={g}
+                    type="button"
+                    onClick={() => {
+                      setEnd(g);
+                      setZrodloGodzin(null);
+                    }}
+                    className={`px-2 py-1.5 rounded border-[2px] text-[13px] font-bold tabular-nums ${
+                      end === g
+                        ? "bg-[#171714] text-white border-[#171714]"
+                        : "bg-white text-[#171714] border-[#B7B6AE] hover:border-[#171714]"
+                    }`}
+                    title="Godzina z wymagań obsady na ten dzień"
+                  >
+                    {g}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -698,8 +748,15 @@ export default function GrafikZmianaModal({
           )}
 
           <p className="text-[12px] text-[#6E6E66]">
+            {/* ⚠️ "Brak wymagań" tylko wtedy, gdy ich naprawdę nie ma.
+                `zrodloGodzin` zeruje się przy każdej ręcznej zmianie godziny —
+                w tym przy kliknięciu podpowiedzi — więc oparcie na nim samym
+                kazało napisowi twierdzić, że wymagań nie ma, tuż pod przyciskami
+                z nich zrobionymi. */}
             {zrodloGodzin
               ? `Godziny podstawiono ze standardu stanowiska ${zrodloGodzin}. Możesz je nadpisać.`
+              : propozycje.poczatki.length > 0
+              ? "Godziny obok pól pochodzą z wymagań obsady na ten dzień."
               : "Brak wymagań obsady dla tego stanowiska w tym dniu — wpisz godziny ręcznie."}
             {end && start && end <= start
               ? " Godzina końca jest wcześniejsza niż początku — zmiana przez północ."

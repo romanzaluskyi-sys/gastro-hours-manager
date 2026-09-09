@@ -387,6 +387,34 @@ const sprawdz = (nazwa, warunek, szczegol = "") => {
     sprawdz("prognoza mówi, ile zabraknie do normy", prog.roznica === -16, "jest " + prog.roznica);
 
     // ---------------------------------------------------------------
+    // ---------------------------------------------------------------
+    log("");
+    log("grafik.ts — godziny z wymagań obsady (podpowiedzi przy polach)");
+    const regulySob = [
+      { stanowisko: "Bar", start_time: "08:30:00", end_time: "21:00:00", required_count: 2 },
+      { stanowisko: "Bar", start_time: "14:00:00", end_time: "19:00:00", required_count: 1 },
+      { stanowisko: "Kuchnia", start_time: "10:00:00", end_time: "18:00:00", required_count: 1 },
+    ];
+    const pod = G.godzinyZWymagan(regulySob, "Bar");
+    sprawdz("podpowiedzi biorą oba wymagania tego stanowiska",
+      pod.poczatki.join() === "08:30,14:00" && pod.konce.join() === "19:00,21:00",
+      JSON.stringify(pod));
+    sprawdz("cudze stanowisko nie wchodzi do podpowiedzi",
+      !pod.poczatki.includes("10:00") && !pod.konce.includes("18:00"));
+    sprawdz("godziny są posortowane rosnąco, nie w kolejności reguł",
+      pod.konce[0] === "19:00");
+    sprawdz("powtórzona godzina pojawia się raz",
+      G.godzinyZWymagan(
+        [
+          { stanowisko: "Bar", start_time: "08:30", end_time: "21:00" },
+          { stanowisko: "Bar", start_time: "08:30", end_time: "16:00" },
+        ],
+        "Bar"
+      ).poczatki.length === 1);
+    sprawdz("brak wymagań = puste listy, nie wyjątek",
+      G.godzinyZWymagan([], "Bar").poczatki.length === 0 &&
+        G.godzinyZWymagan(null, "Bar").konce.length === 0);
+
     log("");
     log("kodeks.ts — odpoczynek dobowy, tygodniowy, serie bez wolnego");
     const KP = await import(await zaladuj("/src/utils/kodeks"));

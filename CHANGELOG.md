@@ -5,6 +5,15 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.35.1 — 2026-09-09
+
+- **Godziny z wymagań obsady jednym kliknięciem.** Przy polach „Od” i „Do” w
+  oknie przypisywania zmiany stoją teraz gotowe godziny wynikające z wymagań
+  na ten dzień i stanowisko. Sobota z wymaganiem 08:30–21:00 i dodatkowym
+  14:00–19:00 daje do wyboru 08:30 i 14:00 przy „Od” oraz 19:00 i 21:00 przy
+  „Do” — zamiast wystukiwania godziny, którą system już zna. Pola zostały
+  węższe, żeby zrobić na nie miejsce; wpisać ręcznie nadal można.
+
 ## 0.35.0 — 2026-09-09
 
 - **Ostrzeżenia o odpoczynku przy układaniu grafiku.** Przy wpisywaniu zmiany
