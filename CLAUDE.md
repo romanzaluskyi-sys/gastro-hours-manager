@@ -1992,6 +1992,16 @@ Trzy decyzje, których nie zmieniaj bez rozmowy z właścicielem:
   grafiku, nie na błąd, i dlatego przeżyło kilka wydań. Ostatni dzień bierzemy
   teraz z długości tablicy. **Każde nowe miejsce liczące zakres tygodnia ma
   używać `weekDays[weekDays.length - 1]`**, nigdy stałego indeksu.
+- **Godziny z wymagań stoją jako przyciski przy polach Od/Do** w modalu zmiany
+  (`godzinyZWymagan` w `utils/grafik.ts`). `defaultHoursForStanowisko` wybiera
+  JEDNO, najdłuższe wymaganie do podstawienia w pola; to jest lista wszystkich
+  godzin tego stanowiska i dnia, do kliknięcia. Początki i końce są osobno i
+  celowo się nie parują: przy wymaganiach 08:30–21:00 i 14:00–19:00 sensowna
+  bywa zmiana 14:00–21:00.
+  - ⚠️ Napis "Brak wymagań obsady" musi zależeć od tego, czy wymagania
+    ISTNIEJĄ, a nie od `zrodloGodzin` — ta zmienna zeruje się przy każdej
+    ręcznej zmianie godziny, w tym przy kliknięciu podpowiedzi, więc napis
+    twierdził, że wymagań nie ma, tuż pod przyciskami z nich zrobionymi.
 - **Wymagania obsady można EDYTOWAĆ** (`GrafikWymagania.tsx`). Wcześniej były
   tylko "dodaj" i "kasuj", więc podniesienie liczby osób z 2 na 3 wymagało
   skasowania reguły i wpisania jej od nowa — razem z dniami tygodnia, które

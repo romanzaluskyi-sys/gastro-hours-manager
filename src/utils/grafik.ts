@@ -630,6 +630,30 @@ export const defaultHoursForStanowisko = (rulesForDay, stanowisko) => {
   return { start: trimTime(best.r.start_time), end: trimTime(best.r.end_time) };
 };
 
+// Wszystkie godziny, jakie dla tego stanowiska i dnia wynikają z wymagań
+// obsady — osobno początki i osobno końce, bez powtórzeń, rosnąco.
+//
+// Po co: sobota w Bułce ma wymaganie 08:30–21:00 i drugie, dodatkowe,
+// 14:00–19:00. Kierownik wpisujący tę drugą osobę i tak wystukuje "14:00"
+// ręcznie, choć ta godzina jest już w systemie. `defaultHoursForStanowisko`
+// wybiera JEDNO, najdłuższe wymaganie na podstawienie do pól; to jest lista
+// wszystkiego, co da się kliknąć zamiast wpisywać.
+//
+// Godziny z RÓŻNYCH wymagań mieszają się celowo: przy wymaganiach 08:30–21:00
+// i 14:00–19:00 sensowna bywa zmiana 14:00–21:00 (ktoś dochodzi po południu i
+// zostaje do końca), więc nie parujemy początków z końcami.
+export const godzinyZWymagan = (rulesForDay, stanowisko) => {
+  const rows = (rulesForDay || []).filter((r) => r.stanowisko === stanowisko);
+  const uniq = (lista) =>
+    [...new Set(lista.filter(Boolean))].sort(
+      (a, b) => (timeToMin(a) ?? 0) - (timeToMin(b) ?? 0)
+    );
+  return {
+    poczatki: uniq(rows.map((r) => trimTime(r.start_time))),
+    konce: uniq(rows.map((r) => trimTime(r.end_time))),
+  };
+};
+
 // Kopiowanie poprzedniego tygodnia — zwraca gotowe wiersze do wstawienia.
 // Pomijamy osoby, które w nowym terminie mają zatwierdzone wolne albo
 // kolidującą zmianę: cicha kolizja byłaby gorsza niż brak wpisu.

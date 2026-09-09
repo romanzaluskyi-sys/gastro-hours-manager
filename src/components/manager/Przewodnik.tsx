@@ -23,6 +23,13 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.35.1",
+    date: "2026-09-09",
+    items: [
+      "Przy polach Od/Do w oknie zmiany są gotowe godziny z wymagań obsady — jedno kliknięcie zamiast wpisywania.",
+    ],
+  },
+  {
     version: "0.35.0",
     date: "2026-09-09",
     items: [
