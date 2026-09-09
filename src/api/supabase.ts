@@ -57,11 +57,28 @@ export const api = {
     return json[0];
   },
   delete: async (table, id) => {
+    // Bez tego pusty/niezdefiniowany id leci do PostgREST jako literalne
+    // "undefined" i wraca 400 "invalid input syntax for type uuid" — a
+    // użytkownik widział tylko "Błąd usuwania" i nie było jak zgadnąć, czy to
+    // uprawnienia, sieć, czy wiersz bez id.
+    if (id == null || id === "") {
+      throw new Error(`Nie mam id wiersza do usunięcia (${table}).`);
+    }
     const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`, {
       method: "DELETE",
       headers: api.headers,
     });
-    if (!res.ok) throw new Error("Błąd usuwania");
+    if (!res.ok) {
+      let powod = "";
+      try {
+        powod = (await res.json()).message || "";
+      } catch {
+        powod = "";
+      }
+      throw new Error(
+        `Błąd usuwania (${table}, ${res.status})${powod ? `: ${powod}` : ""}`
+      );
+    }
     return true;
   },
   patchByFilter: async (table, filterQuery, data) => {

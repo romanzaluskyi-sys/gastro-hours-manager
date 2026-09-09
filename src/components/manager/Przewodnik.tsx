@@ -23,6 +23,29 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.30.3",
+    date: "2026-09-09",
+    items: [
+      "Raporty i koszty: wybór lokalu u góry decyduje, kogo widzisz; godziny i koszt osoby są zawsze pełne, z podpisem ile przypada na oglądany lokal.",
+      "Poprawka: komunikat \"Błąd usuwania\" podaje teraz przyczynę.",
+    ],
+  },
+  {
+    version: "0.30.2",
+    date: "2026-09-09",
+    items: [
+      "Raporty i koszty: jedna karta na osobę, niezależnie od liczby lokali. Podział na lokale został w sekcji \"Według lokalu\".",
+      "Poprawka: \"Popraw zmianę\" podpowiadała stanowiska z niewłaściwego lokalu — teraz idą za wybranym lokalem.",
+    ],
+  },
+  {
+    version: "0.30.1",
+    date: "2026-09-09",
+    items: [
+      "Poprawka: osoba wypożyczona do innego lokalu nie mogła zapisać godzin — tablet pokazywał \"Wypełnij wymagane pola!\". Lokal i stanowisko podpowiadają się teraz z grafiku tego dnia.",
+    ],
+  },
+  {
     version: "0.30.0",
     date: "2026-09-08",
     items: [

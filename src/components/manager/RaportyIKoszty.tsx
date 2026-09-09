@@ -36,6 +36,7 @@ export default function RaportyIKoszty({
   users,
   shifts,
   matchesFilter,
+  hasAccessToLokal,
   onEditShift,
   selectedUserId,
   setSelectedUserId,
@@ -60,12 +61,21 @@ export default function RaportyIKoszty({
   };
   const isCurrentMonth = month === new Date().getMonth() && year === new Date().getFullYear();
 
-  const periodShifts = shifts.filter(
-    (s) =>
-      matchesFilter(s.lokal) &&
-      s.start_time.getMonth() === month &&
-      s.start_time.getFullYear() === year
-  );
+  // Dwa zakresy, celowo:
+  // - `periodShifts` słucha górnego paska (nawigacja: kogo i co widzę w tym
+  //   lokalu, sumy lokalu, sekcja "Według lokalu");
+  // - `periodShiftsAll` bierze wszystkie lokale, do których kierownik ma
+  //   dostęp, i służy WYŁĄCZNIE do liczb per osoba.
+  //
+  // Godziny i koszt jednej osoby to fakt płacowy, nie fakt lokalu. Liczone per
+  // zakładka, pracownik wypożyczony między lokalami pokazywał się dwa razy, w
+  // każdej z częścią swoich godzin, i żadna nie mówiła, ile mu się w sumie
+  // należy.
+  const widoczny = hasAccessToLokal || matchesFilter;
+  const wMiesiacu = (s) =>
+    s.start_time.getMonth() === month && s.start_time.getFullYear() === year;
+  const periodShifts = shifts.filter((s) => matchesFilter(s.lokal) && wMiesiacu(s));
+  const periodShiftsAll = shifts.filter((s) => widoczny(s.lokal) && wMiesiacu(s));
 
   const rateByUser = {};
   users.forEach((u) => {
@@ -75,19 +85,45 @@ export default function RaportyIKoszty({
   const hoursOf = (s) => (s.end_time ? (s.end_time - s.start_time) / 3600000 : 0);
 
   // --- agregacja per pracownik ---
+  // Kogo pokazujemy: tych, którzy pracowali w oglądanym lokalu. Ale WSZYSTKIE
+  // liczby (kafelki, wiersze, "Według lokalu") liczymy z pełnych godzin tych
+  // osób — inaczej suma u góry nie zgadzałaby się z rozbiciem pod spodem, a
+  // kierownik nie miałby jak zobaczyć, gdzie podziała się reszta.
+  const widoczneOsoby = new Set(
+    periodShifts.map((s) => s.user_id).filter(Boolean)
+  );
+  const zakresOsob = periodShiftsAll.filter(
+    (s) => s.user_id && widoczneOsoby.has(s.user_id)
+  );
+
   const byUser = {};
-  periodShifts.forEach((s) => {
+  zakresOsob.forEach((s) => {
     if (!s.user_id) return;
-    byUser[s.user_id] = byUser[s.user_id] || { hours: 0, count: 0, incomplete: false };
+    byUser[s.user_id] = byUser[s.user_id] || { hours: 0, count: 0 };
     byUser[s.user_id].hours += hoursOf(s);
     byUser[s.user_id].count += 1;
   });
-  const employeeRows = Object.keys(byUser)
+  // Ile z tych godzin przypada na oglądany lokal — pokazujemy pod spodem, gdy
+  // różni się od całości, żeby liczba w wierszu nie wyglądała na pomyłkę.
+  const wTymLokalu = {};
+  periodShifts.forEach((s) => {
+    if (!s.user_id) return;
+    wTymLokalu[s.user_id] = (wTymLokalu[s.user_id] || 0) + hoursOf(s);
+  });
+  // Lista słucha zakładki (nawigacja), ale liczby w wierszu są pełne.
+  const employeeRows = Object.keys(wTymLokalu)
     .map((uid) => {
       const u = users.find((x) => x.id === uid);
       const rate = rateByUser[uid];
-      const cost = rate != null ? byUser[uid].hours * rate : null;
-      return { uid, user: u, hours: byUser[uid].hours, count: byUser[uid].count, cost };
+      const hours = byUser[uid] ? byUser[uid].hours : 0;
+      return {
+        uid,
+        user: u,
+        hours,
+        hoursTuLokal: wTymLokalu[uid],
+        count: byUser[uid] ? byUser[uid].count : 0,
+        cost: rate != null ? hours * rate : null,
+      };
     })
     .filter((r) => r.user)
     .sort((a, b) => (b.cost ?? b.hours) - (a.cost ?? a.hours));
@@ -116,7 +152,7 @@ export default function RaportyIKoszty({
     factShifts: shifts,
     from: okresOd,
     to: okresDo,
-    lokalOk: matchesFilter,
+    lokalOk: widoczny,
   });
   const pf = sumujPlanFakt(planFaktMapa);
   const pfOsoby = {};
@@ -126,7 +162,7 @@ export default function RaportyIKoszty({
     r.faktH += v.faktH;
   });
 
-  const urlopHours = periodShifts
+  const urlopHours = zakresOsob
     .filter((s) => s.is_urlop)
     .reduce((a, s) => a + hoursOf(s), 0);
   const pracaHours = totalHours - urlopHours;
@@ -138,7 +174,7 @@ export default function RaportyIKoszty({
   // Urlopu nie przypisujemy do lokalu — pracownik go tam nie przepracował,
   // a wliczony w "Według lokalu" zawyżałby obsadę konkretnego miejsca.
   const byLokal = {};
-  periodShifts.forEach((s) => {
+  zakresOsob.forEach((s) => {
     const klucz = s.is_urlop ? "Urlop" : s.lokal;
     byLokal[klucz] = byLokal[klucz] || { hours: 0 };
     byLokal[klucz].hours += hoursOf(s);
@@ -152,7 +188,7 @@ export default function RaportyIKoszty({
 
   const selectedUser = selectedUserId ? users.find((u) => u.id === selectedUserId) : null;
   const selectedShifts = selectedUserId
-    ? periodShifts
+    ? periodShiftsAll
         .filter((s) => s.user_id === selectedUserId)
         .sort((a, b) => a.start_time - b.start_time)
     : [];
@@ -180,6 +216,12 @@ export default function RaportyIKoszty({
           <span className="inline-block bg-[#171714] text-white font-['Archivo'] font-extrabold text-base px-3 py-1 rounded mt-1.5">
             {getMonthName(month)} {year}
           </span>
+          {/* Bez tego zdania kierownik szukałby, czemu liczby nie zmieniają się
+              przy przełączaniu lokalu w górnym pasku. */}
+          <p className="text-[13px] text-[#6E6E66] mt-1.5 max-w-[62ch]">
+            Wybór lokalu u góry decyduje, kogo widzisz. Godziny i koszt osoby są
+            zawsze pełne — ze wszystkich Twoich lokali, bo tyle się jej należy.
+          </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <button onClick={() => shiftMonth(-1)} className={btnSecondaryCls}>
@@ -308,6 +350,13 @@ export default function RaportyIKoszty({
                   <p className="text-xs text-[#6E6E66] truncate">
                     {r.user.default_stanowisko || "—"} · {r.count} zmiany
                   </p>
+                  {/* Gdy część godzin przypada na inny lokal, mówimy to wprost —
+                      inaczej liczba w wierszu wygląda na niezgodną z sumą lokalu. */}
+                  {Math.abs(r.hours - r.hoursTuLokal) > 0.01 && (
+                    <p className="text-xs text-[#8F8E86] truncate">
+                      w tym {r.hoursTuLokal.toFixed(1).replace(".", ",")} h w tym lokalu
+                    </p>
+                  )}
                 </div>
                 <div className="text-right flex-shrink-0">
                   <p className="font-['Archivo'] font-bold text-sm tabular-nums">

@@ -5,6 +5,42 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.30.3 — 2026-09-09
+
+- **Raporty i koszty: wybór lokalu u góry znów działa** — decyduje, kogo widzisz
+  na liście. Ale godziny i koszt osoby są zawsze pełne, ze wszystkich Twoich
+  lokali, a pod nazwiskiem widać, ile z tego przypada na oglądany lokal.
+  Kafelki u góry i „Według lokalu” pokazują teraz to samo, więc liczby się
+  zgadzają.
+- **Poprawka: nie dało się usunąć zmiany, do której pracownik wysłał „Popraw
+  zmianę”.** Baza blokowała usunięcie, a komunikat mówił tylko „Błąd usuwania”.
+  Zgłoszenie zostaje w historii — traci tylko odwołanie do skasowanej zmiany.
+  (Wymaga migracji `0017`.)
+- Komunikaty przy usuwaniu podają teraz przyczynę zamiast samego „Błąd
+  usuwania”.
+
+## 0.30.2 — 2026-09-09
+
+- **Raporty i koszty pokazują jedną kartę na osobę**, niezależnie od tego, w ilu
+  lokalach pracowała. Wcześniej pracownik wypożyczony między lokalami pojawiał
+  się dwa razy — w każdej zakładce lokalu z częścią swoich godzin — i żadna nie
+  mówiła, ile mu się w sumie należy. Podział na lokale został tam, gdzie ma
+  sens: w sekcji „Według lokalu”.
+- **Poprawka: „Popraw zmianę” podpowiadała stanowiska z niewłaściwego lokalu.**
+  Na tablecie jednego lokalu dało się wskazać drugi lokal, ale stanowiska
+  zostawały z pierwszego — w rejestrze powstawała godzina pod stanowiskiem,
+  którego tamten lokal w ogóle nie ma. Lista lokali i stanowisk jest teraz pełna
+  i stanowiska idą za wybranym lokalem.
+
+## 0.30.1 — 2026-09-09
+
+- **Poprawka:** osoba wypożyczona do innego lokalu nie mogła zapisać godzin —
+  tablet mówił „Wypełnij wymagane pola!”, choć formularz wyglądał na
+  kompletny. Lokal i stanowisko podpowiadają się teraz **z grafiku tego dnia**,
+  a nie z macierzystego lokalu tej osoby.
+- To samo dotyczyło „Popraw zmianę” dla zmiany odbytej w innym lokalu — jej
+  lokal jest teraz na liście do wyboru.
+
 ## 0.30.0 — 2026-09-08
 
 - **„Był w grafiku, nie odbił”** — nowa sekcja w Zatwierdzaniu zmian. Zwykle to

@@ -35,6 +35,7 @@ wykonalne.
 | `0014` | powód i komentarz do utargu, dzień wypłaty lokalu | nowe |
 | `0015` | prawo kierownika zmiany do zamykania Pulsu (`users.puls_do`) | nowe |
 | `0016` | umowa bezterminowa, ostatni dzień pracy, rozliczanie zmian bez odbicia | nowe |
+| `0017` | `issues.shift_id` ON DELETE SET NULL — usuwanie zmiany ze zgłoszeniem | nowe |
 
 `0001`–`0004` odtworzono ze zrzutu prawdziwej bazy
 (`docs/sql/tools/zrzut-schematu.sql`, 2026-09-07), a nie z opisu w
