@@ -106,6 +106,10 @@ src/
                                   pracownika (publishedShiftsFor — filtruje
                                   niewysłane i oznaczone do usunięcia).
                                   NIE duplikuj tego w komponentach.
+    umowy.ts                    typ umowy, norma miesięczna, koszt lokalu i
+                                  bilans okresu rozliczeniowego — patrz
+                                  "Umowa, norma i koszt" niżej. NIE licz
+                                  kosztu pracownika nigdzie indziej.
     swaps.ts                    giełda zmian — jedyne miejsce piszące do
                                   shift_swaps i przepisujące zmianę na
                                   innego pracownika (resolveSwap)
@@ -646,6 +650,11 @@ odpadają. Zamiast tego dwa pliki w katalogu głównym, uruchamiane przez
   Supabase, w której dane już są, i sprawdza, czy propsy z App docierają do
   zakładek. Jedyny sprawdzian, który łapie props wstawiony do złego elementu
   (patrz błąd #16);
+- `harness-raport.html` — montuje `PersonalDashboard` (osobisty telefon) z
+  atrapą Supabase i przełącznikiem czterech osób: pełny etat, pół etatu,
+  zlecenie, konto bez żadnych danych o umowie. Powstał dla normy w Raporcie —
+  każda liczba w tym bloku ma przypadek, w którym jej NIE MA, i wtedy blok ma
+  zniknąć, a nie pokazać "null h";
 - `harness-panel.html` — montuje CAŁY `ManagerDashboard` z propsami takimi,
   jakie podaje `App.tsx`, z PODMIENIONYM `api/supabase` (nic nie leci do sieci,
   można klikać wszystko). To jedyny sprawdzian, który łapie propsy gubione
@@ -910,9 +919,21 @@ zakresem — wymaga Grafiku, którego nie ma.
   zmiany"), `umowa_bezterminowa` (bool, default false — wyklucza się z
   `umowa_expiry`; `handleSaveUser` czyści termin przy zaznaczeniu),
   `ostatni_dzien` (date, nullable — po tej dacie Grafik nie pozwoli wpisać
-  zmiany, `poOstatnimDniu()`). Migracje `0015`, `0016`.
+  zmiany, `poOstatnimDniu()`). Migracje `0015`, `0016`. Od 2026-09-09
+  (migracja `0018`): `telefon`, `data_urodzenia`, `data_zatrudnienia`,
+  `typ_umowy` (text: `umowa_o_prace`|`zlecenie`|`b2b`|`inna`), `wymiar_etatu`
+  (numeric — 1 / 0,75 / 0,5…, skaluje normę), `wynagrodzenie_mies` (numeric —
+  kwota z umowy ZA TEN wymiar, NIE do mnożenia przez `wymiar_etatu`).
+  ⚠️ `etat` (text) jest od tej migracji NIEUŻYWANY — trzymał naraz wymiar i
+  rodzaj umowy. Kolumna zostaje z danymi, a `typUmowy()` w `utils/umowy.ts`
+  czyta ją jako fallback dla kont, których jeszcze nie zapisano po migracji.
 - **lokale** — `id, name, archived, miasto, dzien_wyplaty (int, nullable,
-  puste = 10 — dzień wypłaty pokazywany w kontekście dnia w Pulsie)`. `miasto` (text, nullable,
+  puste = 10 — dzień wypłaty pokazywany w kontekście dnia w Pulsie),
+  okres_rozliczeniowy (int, nullable, puste = 1), narzut_umowa/narzut_zlecenie
+  (numeric, nullable, procent ponad wynagrodzenie, puste = 0)`. Trzy ostatnie
+  z migracji `0018` — ustawienia płacowe siedzą na LOKALU, nie na pracowniku:
+  to decyzje organizacyjne, jednakowe dla całej załogi, a skopiowane do
+  kilkudziesięciu kart rozjadą się przy pierwszej pomyłce. `miasto` (text, nullable,
   ustawiane ręcznie w Pracownicy → Lokale) — miasto używane do pogody w
   pasku górnym Panelu Kierownika i na Pulpicie pracownika, patrz sekcja
   "Pogoda" niżej. Dodane 2026-09-03, wymaga ręcznej migracji w Supabase
@@ -1187,6 +1208,96 @@ zarejestrowaniem godzin w trakcie urlopu), nie naprawiaj tego jako "bug".
 `App.tsx` ładuje `absences` jako osobny, nieblokujący fetch (ten sam
 wzorzec co `shift_edits`/`tasks`) — błąd tu nie blokuje reszty apki.
 
+## Umowa, norma i koszt — dodane 2026-09-09
+
+[`utils/umowy.ts`](src/utils/umowy.ts) + `wymiarCzasuPracy()` w
+[`utils/kalendarz.ts`](src/utils/kalendarz.ts). Migracja `0018`.
+
+Jedno rozróżnienie, z którego wynika cała reszta:
+
+| | Zlecenie | Umowa o pracę |
+|---|---|---|
+| Co lokal płaci | godziny × stawka | kwotę z umowy, niezależnie od godzin |
+| Godziny mówią o | koszcie | tym, czy lokal ten koszt WYKORZYSTAŁ |
+| Kolejna godzina w normie | kosztuje stawkę | nie kosztuje nic |
+
+Dlatego `kosztMiesiaca()` (ile lokal wydał) i `bilansOkresu()` (ile z tego
+wydatku zamieniło się w godziny) to dwie różne funkcje. Zlepienie ich daje
+albo zawyżony labour cost, albo złudzenie, że etatowiec w chudym tygodniu
+jest darmowy. Właściciel sformułował to wprost: **interesuje nas, ile lokal
+wydaje, nie ile pracownik zarabia.**
+
+**Normę liczymy z kalendarza (art. 130 KP), nie z tabeli.** Dni pon–pt × 8
+minus 8 za każde święto poza niedzielą; `swietaRoku()` już było. Suma 2026
+wychodzi 2016 h — to liczba z publikowanych tabel wymiaru i harness ją
+sprawdza. Święta odejmujemy MIMO że gastronomia w święta pracuje (art. 151-10
+KP na to pozwala): normę i tak trzeba odebrać w innym dniu, a bez odejmowania
+wrzesień i grudzień miałyby tę samą normę — czyli zniknąłby cały powód, dla
+którego to liczymy.
+
+⚠️ **Dopłat za nadgodziny i pracę w święta (50/100%) świadomie NIE MA.**
+Ustalenie właściciela: w gastronomii praca w święta jest normą, a dopłaty
+ponad ustawowe minimum to decyzja restauracji, nie reguła prawa. Miejsce na
+przyszły słownik wyjątków ("ten dzień ×1,5") jest, ale puste — nie dopisuj go
+z własnej inicjatywy.
+
+⚠️ **Ujemny bilans NIE jest długiem pracownika.** Jeśli lokal nie dał pracy w
+okresie rozliczeniowym, wynagrodzenie i tak się należy (przestój, art. 81 KP)
+— godziny nie przechodzą dalej. To miara niewykorzystanego zasobu po stronie
+kierownika, i dlatego opis brzmi "do wypracowania brakuje X h", nigdy
+"zaległe". Bilans zeruje się z końcem okresu.
+
+Szczegóły, które łatwo zepsuć:
+- **Liczymy tylko miesiące ZAMKNIĘTE.** Porównanie 40 przepracowanych godzin
+  do pełnej normy 176 h w połowie miesiąca pokazywałoby "brakuje 136 h" i
+  znaczyłoby tylko tyle, że jest połowa miesiąca — ta sama zasada co w
+  raporcie tygodnia w Pulsie.
+- **Miesiąc z zerem godzin jest POMIJANY**, nie liczony jako pełny niedobór.
+  Etatowiec, który przez cały miesiąc nie przepracował ani godziny, praktycznie
+  nie istnieje — to prawie zawsze brak danych (system wdrożono później, umowę
+  uzupełniono wstecz). Pierwszy alarm o niczym uczy kierownika ignorować
+  wszystkie następne. Pominięte miesiące wracają w `bilans.pominiete` i karta
+  o nich mówi.
+- **Okres kotwiczymy w początku roku kalendarzowego** (`okresDla`): przy 3
+  miesiącach wychodzą kwartały. Kotwica ruchoma, od daty zatrudnienia, dałaby
+  każdemu inny okres i porównanie dwóch osób przestałoby cokolwiek znaczyć.
+- **`wymiar_etatu` skaluje NORMĘ, nie wynagrodzenie.** W umowie stoi kwota za
+  ten właśnie wymiar, a nie kwota pełnoetatowa do przeliczenia.
+- **`narzut_*` domyślnie 0.** Dopóki właściciel nie wpisze procentu, koszt to
+  sama wypłata i nic nie jest zmyślane.
+
+**Pracownik widzi swoją normę w STOPCE Raportu** (`employeeSessionShared.tsx`,
+ekran `RAPORT`) — nie w osobnej ramce nad tabelą: pod sumą godzin drobne
+"z 176 h", pod imieniem i miesiącem jedno zdanie o różnicy. Dwa miejsca
+mówiące o tym samym miesiącu zawsze wyglądają, jakby się nie zgadzały.
+
+To zdanie (`normaOpis`) mówi co innego zależnie od tego, czy miesiąc się
+skończył:
+- **miesiąc zamknięty** — fakty: "o 32 h ponad normę" / "do normy zabrakło X h";
+- **miesiąc trwający** — to, co wyjdzie Z GRAFIKIEM: "z grafikiem wyjdzie 40 h
+  — zabraknie 136 h". W połowie miesiąca "do normy brakuje 152 h" znaczyłoby
+  tylko tyle, że jest połowa miesiąca;
+- **brak zmian w grafiku do końca miesiąca** — mówimy wprost, że ich nie ma,
+  zamiast pokazywać niedobór, którego pracownik nie ma jak nadrobić.
+
+Prognoza to fakt + to, co JUŻ STOI w wysłanym grafiku (`publishedShiftsFor`)
+— świadomie nie średnia i nie ekstrapolacja: pracownik ma zobaczyć dokładnie
+to, co mu wpisano, i zdążyć zareagować PRZED końcem miesiąca. Bez czerwieni i
+bez słowa "zaległe" — powód wyżej. Przy zleceniu blok w ogóle się nie pokazuje.
+
+⚠️ **Zamknięty miesiąc bez ANI JEDNEJ zmiany nie dostaje normy w ogóle** — ani
+"z 176 h", ani zdania o różnicy. Ta sama zasada co pomijanie pustych miesięcy
+w `bilansOkresu`: za miesiąc, w którym system jeszcze nie działał, "do normy
+zabrakło 176 h" to alarm o niczym.
+
+**Karta pracownika** ([`Pracownicy.tsx`](src/components/manager/Pracownicy.tsx))
+jest od tej wersji rozbita na bloki w kolejności ustalonej z właścicielem:
+dane podstawowe → kontakt i logowanie → miejsce pracy → umowa i wynagrodzenie
+→ ten miesiąc → dokumenty i uprawnienia → urlop → koniec współpracy → notatki
+→ konto aktywne i akcje. Pola umowy rozgałęziają się po `typ_umowy`, ale
+**termin umowy i "bezterminowa" zostają wspólne dla obu rodzajów** — umowa o
+pracę też bywa na czas określony.
+
 ## Zmiany z grafiku bez odbicia — dodane 2026-09-08
 
 [`utils/odbicia.ts`](src/utils/odbicia.ts) + sekcja w `ZatwierdzanieZmian.tsx`
@@ -1418,6 +1529,15 @@ wpisana komuś niedostępnemu jest gorsza niż brak obsady, bo wygląda na pokry
     komunikat niesie przyczynę, a pusty `id` jest odrzucany przed wysłaniem
     zapytania. **Każdy nowy komunikat błędu przy zapisie/usuwaniu ma podawać
     przyczynę**, nie samo "coś poszło nie tak".
+
+18. **"Dzień wypłaty" w ustawieniach lokalu nie zapisywał się.** Pole było w
+    formularzu (`Pracownicy.tsx`, widok Lokale), ale `handleSaveDict` budował
+    payload z trzech kolumn — `name`, `miasto`, `dostepne_bloki` — więc
+    wartość przepadała bez śladu i bez błędu. Klasa błędu do zapamiętania:
+    **payload zapisu jest tu budowany z jawnej listy pól, nie ze `{...stanu}`**
+    (inaczej niż `handleSaveUser`), więc każde nowe pole w formularzu słownika
+    trzeba dopisać w DWÓCH miejscach. Dodając kolumnę do Lokali/Stanowisk,
+    sprawdź payload, a nie tylko formularz.
 
 ## Google Apps Script (`Odbior_Danych.gs`)
 

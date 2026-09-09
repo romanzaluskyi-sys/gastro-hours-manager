@@ -282,6 +282,110 @@ const sprawdz = (nazwa, warunek, szczegol = "") => {
         shifts: [], users: [A], absences: [], dzis: dz(0), lokalOk: (l) => l === "L",
       }).length === 0);
 
+    // ---------------------------------------------------------------
+    log("");
+    log("umowy.ts — norma, koszt, bilans okresu");
+    const U = await import(await zaladuj("/src/utils/umowy"));
+
+    // Wymiar czasu pracy 2026 z art. 130 KP. Suma roczna 2016 h to liczba
+    // publikowana w tabelach wymiaru — jeśli się rozjedzie, znaczy że
+    // zepsuliśmy odejmowanie świąt albo listę świąt samą w sobie.
+    sprawdz("norma 09.2026 = 176 h", K.wymiarCzasuPracy(2026, 9) === 176,
+      "jest " + K.wymiarCzasuPracy(2026, 9));
+    sprawdz("norma 07.2026 = 184 h (brak świąt, 23 dni robocze)",
+      K.wymiarCzasuPracy(2026, 7) === 184, "jest " + K.wymiarCzasuPracy(2026, 7));
+    sprawdz("norma 11.2026 = 160 h (1 i 11 XI odjęte)",
+      K.wymiarCzasuPracy(2026, 11) === 160, "jest " + K.wymiarCzasuPracy(2026, 11));
+    sprawdz("cały 2026 = 2016 h",
+      Array.from({ length: 12 }, (_, i) => K.wymiarCzasuPracy(2026, i + 1))
+        .reduce((a, b) => a + b, 0) === 2016);
+
+    const etatowiec = { typ_umowy: "umowa_o_prace", wymiar_etatu: 1, wynagrodzenie_mies: 5200 };
+    const polEtatu = { typ_umowy: "umowa_o_prace", wymiar_etatu: 0.5, wynagrodzenie_mies: 2600 };
+    const zleceniobiorca = { typ_umowy: "zlecenie", stawka: 32 };
+
+    sprawdz("wymiar etatu skaluje normę: 0,5 × 176 = 88",
+      U.normaMiesiaca(polEtatu, 2026, 9) === 88, "jest " + U.normaMiesiaca(polEtatu, 2026, 9));
+    sprawdz("zlecenie nie ma normy", U.normaMiesiaca(zleceniobiorca, 2026, 9) === null);
+    sprawdz("etat bez wymiaru nie ma normy (nie zgadujemy pełnego etatu)",
+      U.normaMiesiaca({ typ_umowy: "umowa_o_prace" }, 2026, 9) === null);
+
+    // Ta sama kwota daje INNĄ stawkę godzinową w różnych miesiącach — to jest
+    // cały powód, dla którego ten plik istnieje.
+    sprawdz("5200 zł / 176 h = 29,55 zł/h (wrzesień)",
+      U.stawkaEfektywna(etatowiec, 2026, 9) === 29.55, "jest " + U.stawkaEfektywna(etatowiec, 2026, 9));
+    sprawdz("ta sama kwota / 184 h = 28,26 zł/h (lipiec)",
+      U.stawkaEfektywna(etatowiec, 2026, 7) === 28.26, "jest " + U.stawkaEfektywna(etatowiec, 2026, 7));
+
+    sprawdz("zlecenie: koszt = godziny × stawka",
+      U.kosztMiesiaca({ user: zleceniobiorca, godziny: 10, rok: 2026, mies: 9 }) === 320);
+    sprawdz("etat: koszt to kwota z umowy, nie godziny × stawka",
+      U.kosztMiesiaca({ user: etatowiec, godziny: 10, rok: 2026, mies: 9 }) === 5200);
+    sprawdz("etat: mniej przepracowanych godzin NIE obniża kosztu lokalu",
+      U.kosztMiesiaca({ user: etatowiec, godziny: 1, rok: 2026, mies: 9 }) ===
+        U.kosztMiesiaca({ user: etatowiec, godziny: 200, rok: 2026, mies: 9 }));
+    sprawdz("narzut 20% dolicza się do kwoty z umowy",
+      U.kosztMiesiaca({ user: etatowiec, godziny: 10, lokalRow: { narzut_umowa: 20 }, rok: 2026, mies: 9 }) === 6240);
+    sprawdz("pusty narzut = 0, nic nie jest zmyślane",
+      U.kosztMiesiaca({ user: etatowiec, godziny: 10, lokalRow: { narzut_umowa: null }, rok: 2026, mies: 9 }) === 5200);
+    sprawdz("brak stawki i kwoty -> null, nie 0",
+      U.kosztMiesiaca({ user: { typ_umowy: "zlecenie" }, godziny: 10, rok: 2026, mies: 9 }) === null);
+
+    sprawdz("okres 3-miesięczny to kwartał", U.okresDla(2026, 9, 3).od === 7 && U.okresDla(2026, 9, 3).do === 9);
+    sprawdz("pusty okres = 1 miesiąc", U.okresDla(2026, 9, null).od === 9);
+
+    // Bilans liczymy dla września, więc zamknięte miesiące kwartału to lipiec
+    // (184) i sierpień (160).
+    const bilans = U.bilansOkresu({
+      user: etatowiec,
+      godzinyMiesiaca: (r, m) => (m === 7 ? 180 : m === 8 ? 160 : 20),
+      lokalRow: { okres_rozliczeniowy: 3 },
+      dzis: "2026-09-09",
+    });
+    sprawdz("bilans bierze 2 zamknięte miesiące kwartału", bilans.miesiace.length === 2,
+      JSON.stringify(bilans.miesiace.map((m) => m.mies)));
+    sprawdz("bilans: 340 przepracowanych z 344 normy = −4 h", bilans.roznica === -4,
+      "jest " + bilans.roznica);
+    sprawdz("bieżący miesiąc liczony osobno, nie wchodzi do bilansu",
+      bilans.biezacy.mies === 9 && bilans.biezacy.godziny === 20);
+    sprawdz("opis mówi o brakujących godzinach, nie o zaległości",
+      U.opisBilansu(bilans) === "do wypracowania brakuje 4 h", U.opisBilansu(bilans));
+
+    // ⚠️ Miesiąc bez ANI JEDNEJ zapisanej godziny to prawie zawsze brak
+    // danych, nie zerowa praca etatowca — policzony dałby alarm o niczym.
+    const zPusta = U.bilansOkresu({
+      user: etatowiec,
+      godzinyMiesiaca: (r, m) => (m === 7 ? 0 : 160),
+      lokalRow: { okres_rozliczeniowy: 3 },
+      dzis: "2026-09-09",
+    });
+    sprawdz("miesiąc bez godzin jest pomijany, nie liczony jako pełny niedobór",
+      zPusta.miesiace.length === 1 && zPusta.pominiete.join() === "7",
+      JSON.stringify({ liczone: zPusta.miesiace.map((m) => m.mies), pominiete: zPusta.pominiete }));
+
+    sprawdz("miesiąc sprzed zatrudnienia nie jest niedoborem",
+      U.bilansOkresu({
+        user: { ...etatowiec, data_zatrudnienia: "2026-08-15" },
+        godzinyMiesiaca: () => 100,
+        lokalRow: { okres_rozliczeniowy: 3 },
+        dzis: "2026-09-09",
+      }).miesiace.map((m) => m.mies).join() === "8");
+
+    sprawdz("zlecenie nie ma bilansu okresu",
+      U.bilansOkresu({ user: zleceniobiorca, godzinyMiesiaca: () => 0, dzis: "2026-09-09" }) === null);
+
+    // Stare konto, w którym rodzaj umowy siedzi jeszcze w kolumnie `etat`.
+    sprawdz("fallback: etat='zlecenie' czyta się jako zlecenie",
+      U.typUmowy({ etat: "zlecenie" }) === "zlecenie");
+    sprawdz("fallback: etat='pełny' czyta się jako umowa o pracę",
+      U.typUmowy({ etat: "pełny" }) === "umowa_o_prace");
+    sprawdz("fallback nie zgadza wymiaru etatu",
+      U.normaMiesiaca({ etat: "pełny" }, 2026, 9) === null);
+
+    const prog = U.prognozaMiesiaca({ user: etatowiec, przepracowane: 120, zaplanowane: 40, rok: 2026, mies: 9 });
+    sprawdz("prognoza = fakt + wysłany grafik", prog.prognoza === 160);
+    sprawdz("prognoza mówi, ile zabraknie do normy", prog.roznica === -16, "jest " + prog.roznica);
+
     log("");
     log(`ZDANYCH ${zdanych}, OBLANYCH ${oblanych}`, oblanych ? "zle" : "ok");
   } catch (e) {

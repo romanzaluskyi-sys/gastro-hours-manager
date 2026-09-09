@@ -1,12 +1,12 @@
 <meta charset="utf-8">
-<title>Panel Kierownika — pełny łańcuch</title>
-<!-- Renderuje CAŁY ManagerDashboard z propsami takimi, jakie podaje App.tsx.
-     Sprawdza to, czego dwa pozostałe harnessy nie mogą: czy props faktycznie
-     dojeżdża przez wszystkie poziomy (App -> ManagerDashboard -> KartaDnia ->
-     PulsSzablony), a nie tylko czy każdy komponent osobno się renderuje.
+<title>Ekrany pracownika — Raport i norma</title>
+<!-- Montuje PersonalDashboard (osobisty telefon pracownika) z atrapą
+     Supabase. Powstał dla bloku "norma miesięczna w Raporcie": ekran liczy
+     normę z kalendarza i prognozę z wysłanego grafiku, a każda z tych liczb
+     ma przypadek, w którym jej NIE MA (zlecenie, brak wymiaru etatu, miesiąc
+     z przeszłości) — i wtedy blok ma zniknąć, a nie pokazać "null h".
 
-     api/supabase jest tu PODMIENIONE na atrapę, więc klikanie niczego nie
-     zapisuje do produkcyjnej bazy — w odróżnieniu od harness-karta.html. -->
+     api/supabase jest PODMIENIONE na atrapę, nic nie leci do sieci. -->
 <style>
   body { font: 14px system-ui, sans-serif; margin: 0; background: #F1F1EE; }
   #status { padding: 8px 14px; background: #17120F; color: #fff; font: 12px ui-monospace, monospace; }
@@ -116,76 +116,104 @@ const poprzedniMiesiac = (h) => {
 
 (async () => {
   try {
-    const MD = (await import(await zaladuj("/src/components/ManagerDashboard"))).default;
+    const PD = (await import(await zaladuj("/src/components/PersonalDashboard"))).default;
     const { useState, createElement: h } = React;
 
+    // Zmiany z bieżącego miesiąca (fakt) i przyszłe z grafiku (plan) — bez
+    // obu tych zestawów nie da się sprawdzić ani "z normy", ani prognozy.
+    const teraz = new Date();
+    const wTymMiesiacu = (dzien, od, doGodz) => {
+      const a = new Date(teraz.getFullYear(), teraz.getMonth(), dzien, od);
+      const b = new Date(teraz.getFullYear(), teraz.getMonth(), dzien, doGodz);
+      return { start_time: a, end_time: b };
+    };
+    const ymdMies = (dzien) =>
+      `${teraz.getFullYear()}-${String(teraz.getMonth() + 1).padStart(2, "0")}-${String(dzien).padStart(2, "0")}`;
+    // Dzień na tyle późny, żeby był po dzisiejszym w każdym miesiącu testowym.
+    const przyszly = Math.min(28, teraz.getDate() + 2);
+
+    const OSOBY = {
+      etat: { id: "u1", name: "Bo", role: "closed", typ_umowy: "umowa_o_prace",
+              wymiar_etatu: 1, wynagrodzenie_mies: 5200, default_lokal: "Ceglana",
+              default_stanowisko: "Kucharz", active: true, archived: false },
+      polEtatu: { id: "u2", name: "Cezary", role: "closed", typ_umowy: "umowa_o_prace",
+              wymiar_etatu: 0.5, default_lokal: "Ceglana", default_stanowisko: "Kucharz",
+              active: true, archived: false },
+      zlecenie: { id: "u3", name: "Ala", role: "closed", typ_umowy: "zlecenie", stawka: 32,
+              default_lokal: "Ceglana", default_stanowisko: "Kucharz",
+              active: true, archived: false },
+      bezDanych: { id: "u4", name: "Dorota", role: "closed", default_lokal: "Ceglana",
+              default_stanowisko: "Kucharz", active: true, archived: false },
+    };
+
     function Harness() {
-      // Stan trzymany tak jak w App.tsx — dzięki temu widać, czy setter
-      // faktycznie dociera i czy lista rośnie po zapisie.
-      const [dayLogTemplates, setDayLogTemplates] = useState([]);
-      const [dayLogs, setDayLogs] = useState([]);
-      const [dayLogEntries, setDayLogEntries] = useState([]);
+      const [kto, setKto] = useState("etat");
+      const user = OSOBY[kto];
+      const [shifts, setShifts] = useState([]);
+      const [issues, setIssues] = useState([]);
+      const [notifications, setNotifications] = useState([]);
+
+      const wszystkieShifts = [1, 2, 3].map((d, idx) => ({
+        id: "sh" + idx, user_id: user.id, user_name: user.name, lokal: "Ceglana",
+        stanowisko: "Kucharz", ...wTymMiesiacu(d, 8, 16),
+      }));
+      // Poprzedni miesiąc obrobiony ponad normę — jedyny sposób, żeby zobaczyć
+      // wariant "o X h ponad normę" (miesiąc zamknięty mówi o faktach, nie o
+      // prognozie). Miesiąc PUSTY i zamknięty ma normy nie pokazywać wcale.
+      for (let d = 1; d <= 24; d++) {
+        const a = new Date(teraz.getFullYear(), teraz.getMonth() - 1, d, 8);
+        const b = new Date(teraz.getFullYear(), teraz.getMonth() - 1, d, 16);
+        wszystkieShifts.push({
+          id: "pm" + d, user_id: user.id, user_name: user.name, lokal: "Ceglana",
+          stanowisko: "Kucharz", start_time: a, end_time: b,
+        });
+      }
 
       const props = {
-        currentUser: { id: "u0", name: "Roman", role: "admin", allowed_lokale: "" },
+        currentUser: user,
         setCurrentView: () => {},
-        users: [
-          // Zlecenie — stawka godzinowa, koszt = godziny × stawka.
-          { id: "u1", name: "Ala", stawka: 32, typ_umowy: "zlecenie", active: true,
-            archived: false, role: "open", default_lokal: "Bułka i Jacek",
-            default_stanowisko: "Kucharz" },
-          // Umowa o pracę — norma z kalendarza, koszt = kwota z umowy.
-          { id: "u2", name: "Bo", typ_umowy: "umowa_o_prace", wymiar_etatu: 1,
-            wynagrodzenie_mies: 5200, active: true, archived: false, role: "closed",
-            email: "bo@x.pl", pin: "123456", default_lokal: "Ceglana",
-            default_stanowisko: "Kucharz" },
-          // Pół etatu i pusta kwota — karta ma pokazać normę, ale nie koszt.
-          { id: "u3", name: "Cezary", typ_umowy: "umowa_o_prace", wymiar_etatu: 0.5,
-            active: true, archived: false, role: "closed", email: "c@x.pl", pin: "123456",
-            default_lokal: "Ceglana", default_stanowisko: "Kucharz" },
-          // Nic nie wypełnione — nie może wywrócić karty ani pokazać zmyślonej liczby.
-          { id: "u4", name: "Dorota", active: true, archived: false, role: "open",
-            default_lokal: "Ceglana" },
-          // Stare konto: typ umowy siedzi jeszcze w kolumnie `etat`.
-          { id: "u5", name: "Ewa", etat: "zlecenie", stawka: 31.4, active: true,
-            archived: false, role: "open", default_lokal: "Ceglana" },
+        lokale: [{ id: "l1", name: "Ceglana", miasto: "Koszalin", archived: false }],
+        stanowiska: [{ id: "s1", name: "Kucharz", lokal_name: "Ceglana", archived: false }],
+        shifts: wszystkieShifts,
+        setShifts,
+        issues, setIssues,
+        notifications, setNotifications,
+        tasks: [], taskCompletions: [], setTaskCompletions: () => {},
+        absences: [], setAbsences: () => {},
+        // Grafik wysłany: dwie przyszłe zmiany po 8 h — prognoza ma je dodać.
+        planShifts: [
+          { id: "p1", user_id: user.id, user_name: user.name, lokal: "Ceglana",
+            stanowisko: "Kucharz", date: ymdMies(przyszly), start_time: "10:00",
+            end_time: "18:00", published_at: "2020-01-01T00:00:00Z" },
+          { id: "p2", user_id: user.id, user_name: user.name, lokal: "Ceglana",
+            stanowisko: "Kucharz", date: ymdMies(Math.min(28, przyszly + 1)),
+            start_time: "10:00", end_time: "18:00", published_at: "2020-01-01T00:00:00Z" },
         ],
-        lokale: [
-          { id: "l1", name: "Bułka i Jacek", miasto: "Koszalin", archived: false },
-          { id: "l2", name: "Ceglana", miasto: "Koszalin", archived: false,
-            okres_rozliczeniowy: 3, narzut_umowa: 20.5, narzut_zlecenie: 0, dzien_wyplaty: 10 },
-        ],
-        stanowiska: [
-          { id: "s1", name: "Kucharz", lokal_name: "Bułka i Jacek", archived: false },
-          { id: "s2", name: "Kucharz", lokal_name: "Ceglana", archived: false },
-          { id: "s3", name: "Kelner", lokal_name: "Ceglana", archived: false },
-        ],
-        shifts: [
-          { id: "sh1", user_id: "u1", user_name: "Ala", lokal: "Bułka i Jacek", stanowisko: "Kucharz",
-            start_time: godz(8), end_time: godz(16) },
-          // Bo w poprzednim miesiącu — żeby bilans okresu miał zamknięty miesiąc.
-          { id: "sh2", user_id: "u2", user_name: "Bo", lokal: "Ceglana", stanowisko: "Kucharz",
-            start_time: poprzedniMiesiac(8), end_time: poprzedniMiesiac(16) },
-          { id: "sh3", user_id: "u2", user_name: "Bo", lokal: "Ceglana", stanowisko: "Kucharz",
-            start_time: godz(8), end_time: godz(16) },
-        ],
-        issues: [], notifications: [], shiftEdits: [], tasks: [], taskCompletions: [],
-        absences: [], planShifts: [], shiftSwaps: [], staffingRules: [], staffingRuleSets: [],
-        lokaleGodziny: [], grafikWyjatki: [], weatherForecasts: [],
-        dayLogs, setDayLogs, dayLogEntries, setDayLogEntries,
-        dayLogTemplates, setDayLogTemplates,
+        shiftSwaps: [], setShiftSwaps: () => {},
         showMsg: (m, t) => console.log("showMsg:", t, m),
       };
-      "setUsers setLokale setStanowiska setShifts setIssues setNotifications setShiftEdits setTasks setTaskCompletions setAbsences setPlanShifts setShiftSwaps setStaffingRules setStaffingRuleSets setLokaleGodziny setGrafikWyjatki"
-        .split(" ").forEach((k) => { props[k] = () => {}; });
 
-      window.__stanSzablonow = dayLogTemplates;
-      return h(MD, props);
+      return h("div", null,
+        h("div", { style: { padding: "8px 14px", background: "#fff", borderBottom: "2px solid #171714" } },
+          Object.keys(OSOBY).map((k) =>
+            h("button", {
+              key: k, onClick: () => setKto(k),
+              style: {
+                marginRight: 8, padding: "4px 10px", fontWeight: 700,
+                border: "2px solid #171714", borderRadius: 4,
+                background: k === kto ? "#171714" : "#fff",
+                color: k === kto ? "#fff" : "#171714",
+              },
+            }, `${OSOBY[k].name} (${k})`)
+          )
+        ),
+        h("div", { style: { maxWidth: 430, margin: "0 auto", height: "88vh" } }, h(PD, props))
+      );
     }
 
     ReactDOM.createRoot(document.getElementById("app")).render(h(Harness));
     setTimeout(() => {
-      if (status.className !== "zle") status.textContent = "panel zamontowany";
+      if (status.className !== "zle") status.textContent = "ekrany pracownika zamontowane — wejdź w Raport";
     }, 400);
   } catch (e) { pokazBlad(e); }
 })();

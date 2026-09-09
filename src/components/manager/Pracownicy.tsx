@@ -24,6 +24,32 @@ import {
 } from "lucide-react";
 import { pageTitleCls, cardCls, btnPrimaryCls, btnSecondaryCls, statLabelCls } from "./designTokens";
 import { BLOKI_PRACOWNIKA, blokiLokalu } from "../../utils/grafik";
+import { getMonthName } from "../../utils/format";
+import {
+  TYPY_UMOWY,
+  WYMIARY_ETATU,
+  typUmowy,
+  naEtacie,
+  normaMiesiaca,
+  stawkaEfektywna,
+  kosztMiesiaca,
+  bilansOkresu,
+  opisBilansu,
+} from "../../utils/umowy";
+
+// Powtarzały się w kilkudziesięciu miejscach tej karty — po przebudowie
+// formularza na bloki tym bardziej.
+const labelCls = "text-xs font-bold text-[#6E6E66]";
+const inputCls = "w-full p-2 border-[2px] border-[#171714] rounded";
+const fmtH = (n) => (Math.round((n || 0) * 10) / 10).toString().replace(".", ",");
+// Polska odmiana: 1 miesiąc, 2–4 miesiące, 5+ miesięcy (z wyjątkiem 12–14).
+const miesiaceLabel = (n) => {
+  const ost = n % 10;
+  const dwie = n % 100;
+  if (n === 1) return "1 miesiąc";
+  if (ost >= 2 && ost <= 4 && !(dwie >= 12 && dwie <= 14)) return `${n} miesiące`;
+  return `${n} miesięcy`;
+};
 
 const roleLabel = (role) =>
   ({
@@ -114,22 +140,49 @@ export default function Pracownicy({
     : [];
 
   const now = new Date();
-  const monthShifts = editingUser?.id
-    ? shifts.filter(
-        (s) =>
-          s.user_id === editingUser.id &&
-          s.start_time.getMonth() === now.getMonth() &&
-          s.start_time.getFullYear() === now.getFullYear()
-      )
-    : [];
-  const monthHours = monthShifts.reduce(
-    (a, s) => a + (s.end_time ? (s.end_time - s.start_time) / 3600000 : 0),
-    0
-  );
-  const monthCost =
-    editingUser?.stawka != null && editingUser.stawka !== ""
-      ? monthHours * Number(editingUser.stawka)
-      : null;
+  // Godziny tej osoby w dowolnym miesiącu — bilans okresu rozliczeniowego
+  // potrzebuje ich dla kilku miesięcy wstecz, nie tylko dla bieżącego.
+  const godzinyWMiesiacu = (rok, mies) =>
+    editingUser?.id
+      ? shifts
+          .filter(
+            (s) =>
+              s.user_id === editingUser.id &&
+              s.start_time.getFullYear() === rok &&
+              s.start_time.getMonth() === mies - 1
+          )
+          .reduce((a, s) => a + (s.end_time ? (s.end_time - s.start_time) / 3600000 : 0), 0)
+      : 0;
+  const monthHours = godzinyWMiesiacu(now.getFullYear(), now.getMonth() + 1);
+
+  // Okres rozliczeniowy i narzut pracodawcy są ustawieniem lokalu, nie
+  // pracownika (patrz migracja 0018) — bierzemy je z jego lokalu macierzystego.
+  const lokalPracownika = editingUser
+    ? activeLokale.find((l) => l.name === editingUser.default_lokal) || null
+    : null;
+  const normaBiezaca = editingUser
+    ? normaMiesiaca(editingUser, now.getFullYear(), now.getMonth() + 1)
+    : null;
+  const stawkaEfekt = editingUser
+    ? stawkaEfektywna(editingUser, now.getFullYear(), now.getMonth() + 1)
+    : null;
+  const monthCost = editingUser
+    ? kosztMiesiaca({
+        user: editingUser,
+        godziny: monthHours,
+        lokalRow: lokalPracownika,
+        rok: now.getFullYear(),
+        mies: now.getMonth() + 1,
+      })
+    : null;
+  const bilans = editingUser
+    ? bilansOkresu({
+        user: editingUser,
+        godzinyMiesiaca: godzinyWMiesiacu,
+        lokalRow: lokalPracownika,
+      })
+    : null;
+  const opisBilansuTekst = opisBilansu(bilans);
 
   const allowedArr = (u) =>
     Array.isArray(u.allowed_lokale)
@@ -346,6 +399,76 @@ export default function Pracownicy({
                         placeholder="10"
                         className="w-full p-2 border-[2px] border-[#171714] rounded"
                       />
+
+                      {/* Ustawienia płacowe lokalu. Świadomie tutaj, a nie w
+                          karcie pracownika: to decyzje organizacyjne, jednakowe
+                          dla całej załogi. Skopiowane do 24 kart rozjechałyby
+                          się przy pierwszej pomyłce. */}
+                      <div className="mt-4 pt-3 border-t-[2px] border-[#E7E7E2]">
+                        <label className="text-xs font-bold text-[#6E6E66]">
+                          Okres rozliczeniowy (miesiące)
+                        </label>
+                        <select
+                          value={editingDict.okres_rozliczeniowy ?? ""}
+                          onChange={(e) =>
+                            setEditingDict({
+                              ...editingDict,
+                              okres_rozliczeniowy:
+                                e.target.value === "" ? null : Number(e.target.value),
+                            })
+                          }
+                          className="w-full p-2 border-[2px] border-[#171714] rounded"
+                        >
+                          <option value="">1 miesiąc (domyślnie)</option>
+                          <option value="1">1 miesiąc</option>
+                          <option value="3">3 miesiące</option>
+                          <option value="4">4 miesiące</option>
+                        </select>
+                        <p className="text-[11px] text-[#6E6E66] mt-1">
+                          W tym oknie pracownik na umowie o pracę może odrobić
+                          niewykorzystane godziny. Z końcem okresu bilans zeruje się.
+                        </p>
+
+                        <div className="grid grid-cols-2 gap-3 mt-3">
+                          <div>
+                            <label className="text-xs font-bold text-[#6E6E66]">
+                              Narzut — umowa o pracę (%)
+                            </label>
+                            <input
+                              type="number"
+                              step="0.1"
+                              min="0"
+                              value={editingDict.narzut_umowa ?? ""}
+                              onChange={(e) =>
+                                setEditingDict({ ...editingDict, narzut_umowa: e.target.value })
+                              }
+                              placeholder="0"
+                              className="w-full p-2 border-[2px] border-[#171714] rounded"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-bold text-[#6E6E66]">
+                              Narzut — zlecenie (%)
+                            </label>
+                            <input
+                              type="number"
+                              step="0.1"
+                              min="0"
+                              value={editingDict.narzut_zlecenie ?? ""}
+                              onChange={(e) =>
+                                setEditingDict({ ...editingDict, narzut_zlecenie: e.target.value })
+                              }
+                              placeholder="0"
+                              className="w-full p-2 border-[2px] border-[#171714] rounded"
+                            />
+                          </div>
+                        </div>
+                        <p className="text-[11px] text-[#6E6E66] mt-1">
+                          Koszty pracodawcy ponad wynagrodzenie (ZUS itd.). Puste = 0,
+                          czyli koszt liczy się z samej wypłaty. Po wpisaniu udział
+                          kosztu pracy w utargu pokaże wydatek lokalu, a nie samą wypłatę.
+                        </p>
+                      </div>
                     </div>
                   )}
                   {view === "stanowiska" && (
@@ -516,24 +639,25 @@ export default function Pracownicy({
                 {isNew ? "Nowy pracownik" : editingUser.name}
               </h3>
 
+              {/* 1–2. Kim jest i jakim kontem się posługuje. */}
               <p className={`${statLabelCls} mb-2`}>Dane podstawowe</p>
               <div className="space-y-3 mb-5">
                 <div>
-                  <label className="text-xs font-bold text-[#6E6E66]">Imię i nazwisko</label>
+                  <label className={labelCls}>Imię i nazwisko</label>
                   <input
                     type="text"
                     value={editingUser.name}
                     onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })}
-                    className="w-full p-2 border-[2px] border-[#171714] rounded"
+                    className={inputCls}
                     required
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-[#6E6E66]">Typ konta</label>
+                  <label className={labelCls}>Typ pracownika</label>
                   <select
                     value={editingUser.role}
                     onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value })}
-                    className="w-full p-2 border-[2px] border-[#171714] rounded font-bold"
+                    className={`${inputCls} font-bold`}
                   >
                     <option value="closed">Pracownik (Aplikacja na telefon)</option>
                     <option value="open">Pracownik (Otwarte Konto - Kiosk)</option>
@@ -542,27 +666,34 @@ export default function Pracownicy({
                     {!isLocalManager && <option value="admin">Szef (Admin)</option>}
                   </select>
                 </div>
+              </div>
 
+              {/* 3. Kontakt i logowanie. E-mail i PIN są wymagane tylko tam,
+                  gdzie bez nich nie da się wejść do aplikacji; reszta —
+                  telefon, data urodzenia, początek pracy — jest opcjonalna,
+                  jak wszystkie pozostałe bloki tej karty. */}
+              <p className={`${statLabelCls} mb-2`}>Kontakt i logowanie</p>
+              <div className="space-y-3 mb-5">
                 {isEmailPinRequired ? (
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs font-bold text-[#6E6E66]">Email / Login</label>
+                      <label className={labelCls}>Email / Login</label>
                       <input
                         type="email"
                         value={editingUser.email}
                         onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })}
-                        className="w-full p-2 border-[2px] border-[#171714] rounded"
+                        className={inputCls}
                         required
                       />
                     </div>
                     <div>
-                      <label className="text-xs font-bold text-[#6E6E66]">PIN (6 cyfr)</label>
+                      <label className={labelCls}>PIN (6 cyfr)</label>
                       <input
                         type="text"
                         value={editingUser.pin}
                         onChange={(e) => setEditingUser({ ...editingUser, pin: e.target.value })}
                         maxLength="6"
-                        className="w-full p-2 border-[2px] border-[#171714] rounded"
+                        className={inputCls}
                         required
                       />
                     </div>
@@ -582,7 +713,7 @@ export default function Pracownicy({
                           }
                           maxLength="4"
                           placeholder="brak — kiosk nie pyta o PIN"
-                          className="w-full p-2 border-[2px] border-[#171714] rounded"
+                          className={inputCls}
                         />
                       </div>
                       <div>
@@ -596,7 +727,7 @@ export default function Pracownicy({
                             setEditingUser({ ...editingUser, email: e.target.value })
                           }
                           placeholder="opcjonalnie"
-                          className="w-full p-2 border-[2px] border-[#171714] rounded"
+                          className={inputCls}
                         />
                       </div>
                     </div>
@@ -613,6 +744,50 @@ export default function Pracownicy({
                   </div>
                 )}
 
+                {editingUser.role !== "kiosk" && (
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className={labelCls}>Telefon</label>
+                      <input
+                        type="tel"
+                        value={editingUser.telefon || ""}
+                        onChange={(e) => setEditingUser({ ...editingUser, telefon: e.target.value })}
+                        placeholder="opcjonalnie"
+                        className={inputCls}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Data urodzenia</label>
+                      <input
+                        type="date"
+                        value={editingUser.data_urodzenia || ""}
+                        onChange={(e) =>
+                          setEditingUser({ ...editingUser, data_urodzenia: e.target.value || null })
+                        }
+                        className={inputCls}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Początek pracy</label>
+                      <input
+                        type="date"
+                        value={editingUser.data_zatrudnienia || ""}
+                        onChange={(e) =>
+                          setEditingUser({
+                            ...editingUser,
+                            data_zatrudnienia: e.target.value || null,
+                          })
+                        }
+                        className={inputCls}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 4–5. Gdzie i na czym pracuje. */}
+              <p className={`${statLabelCls} mb-2`}>Miejsce pracy</p>
+              <div className="space-y-3 mb-5">
                 {(editingUser.role === "kiosk" || editingUser.role === "manager_lokalu") && (
                   <div className="p-3 bg-[#F1F1EE] border-[2px] border-[#171714] rounded">
                     <label className="text-xs font-bold text-[#171714] mb-2 block">
@@ -641,7 +816,7 @@ export default function Pracownicy({
                 {editingUser.role !== "kiosk" && (
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs font-bold text-[#6E6E66]">Lokal</label>
+                      <label className={labelCls}>Lokal</label>
                       <select
                         value={editingUser.default_lokal || ""}
                         onChange={(e) =>
@@ -651,7 +826,7 @@ export default function Pracownicy({
                             default_stanowisko: "",
                           })
                         }
-                        className="w-full p-2 border-[2px] border-[#171714] rounded"
+                        className={inputCls}
                         required
                       >
                         <option value="">-- wybierz --</option>
@@ -663,13 +838,13 @@ export default function Pracownicy({
                       </select>
                     </div>
                     <div>
-                      <label className="text-xs font-bold text-[#6E6E66]">Stanowisko</label>
+                      <label className={labelCls}>Stanowisko</label>
                       <select
                         value={editingUser.default_stanowisko || ""}
                         onChange={(e) =>
                           setEditingUser({ ...editingUser, default_stanowisko: e.target.value })
                         }
-                        className="w-full p-2 border-[2px] border-[#171714] rounded"
+                        className={inputCls}
                         required
                       >
                         <option value="">-- wybierz --</option>
@@ -686,7 +861,7 @@ export default function Pracownicy({
                 {editingUser.role !== "kiosk" && wszystkieNazwyStanowisk.length > 0 && (
                   <div className="p-3 bg-[#F1F1EE] border-[2px] border-[#171714] rounded">
                     <label className="text-xs font-bold text-[#171714] block">
-                      Inne stanowiska, na których umie pracować
+                      Dodatkowe stanowiska, na których umie pracować
                     </label>
                     <p className="text-[11px] text-[#6E6E66] mt-0.5 mb-2">
                       Używane w Grafiku: wpisanie zmiany na stanowisko spoza tej
@@ -723,91 +898,205 @@ export default function Pracownicy({
                     </div>
                   </div>
                 )}
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-bold text-[#6E6E66]">Stawka (zł/h)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={editingUser.stawka ?? ""}
-                      onChange={(e) => setEditingUser({ ...editingUser, stawka: e.target.value })}
-                      placeholder="opcjonalnie"
-                      className="w-full p-2 border-[2px] border-[#171714] rounded"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-[#6E6E66]">Etat</label>
-                    <select
-                      value={editingUser.etat || ""}
-                      onChange={(e) => setEditingUser({ ...editingUser, etat: e.target.value })}
-                      className="w-full p-2 border-[2px] border-[#171714] rounded"
-                    >
-                      <option value="">-- nieustalone --</option>
-                      <option value="pełny">Pełny etat</option>
-                      <option value="część">Część etatu</option>
-                      <option value="zlecenie">Umowa zlecenie</option>
-                    </select>
-                  </div>
-                </div>
-
-                <label className="flex items-center gap-2 pt-1 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={editingUser.active}
-                    onChange={(e) => setEditingUser({ ...editingUser, active: e.target.checked })}
-                    className="w-5 h-5"
-                  />
-                  <span className="font-bold text-sm">Konto aktywne</span>
-                </label>
               </div>
 
               {editingUser.role !== "kiosk" && (
                 <>
-                  <p className={`${statLabelCls} mb-2`}>Sanepid i umowa</p>
-                  <div className="border-[2px] border-[#171714] rounded-lg p-3 mb-3">
-                    {/* Prawo na czas zamiast nowej roli: kierownik zmiany może
-                        zamknąć Puls swojego lokalu z Tabletu Służbowego do tego
-                        dnia włącznie. Wygasa samo — uprawnień, które trzeba
-                        pamiętać odebrać, nikt nie odbiera. */}
-                    <label className="text-xs font-bold text-[#6E6E66]">
-                      Może zamykać Puls (kierownik zmiany) — do dnia
-                    </label>
-                    <div className="flex flex-wrap gap-2 items-center mt-1">
-                      <input
-                        type="date"
-                        value={editingUser.puls_do || ""}
+                  {/* 6. Umowa. Rodzaj umowy decyduje o tym, JAK liczy się koszt,
+                      więc dopiero po jego wybraniu pokazujemy właściwe pola:
+                      zlecenie — stawka za godzinę, umowa o pracę — wymiar etatu
+                      i kwota z umowy. Termin (albo "bezterminowa") zostaje
+                      wspólny dla obu: umowa o pracę też bywa na czas określony. */}
+                  <p className={`${statLabelCls} mb-2`}>Umowa i wynagrodzenie</p>
+                  <div className="border-[2px] border-[#171714] rounded-lg p-3 mb-5 space-y-3">
+                    <div>
+                      <label className={labelCls}>Typ umowy</label>
+                      <select
+                        value={typUmowy(editingUser) || ""}
                         onChange={(e) =>
-                          setEditingUser({ ...editingUser, puls_do: e.target.value || null })
+                          setEditingUser({ ...editingUser, typ_umowy: e.target.value || null })
                         }
-                        className="p-2 border-[2px] border-[#171714] rounded"
-                      />
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setEditingUser({
-                            ...editingUser,
-                            puls_do: new Date().toISOString().slice(0, 10),
-                          })
-                        }
-                        className="px-3 py-2 border-[2px] border-[#171714] rounded text-sm font-bold"
+                        className={`${inputCls} font-bold`}
                       >
-                        Na dziś
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setEditingUser({ ...editingUser, puls_do: null })}
-                        className="px-3 py-2 border-[2px] border-[#B7B6AE] rounded text-sm text-[#6E6E66]"
-                      >
-                        Odbierz
-                      </button>
+                        <option value="">-- nieustalony --</option>
+                        {TYPY_UMOWY.map((t) => (
+                          <option key={t.key} value={t.key}>
+                            {t.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {naEtacie(editingUser) ? (
+                      <>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className={labelCls}>Wymiar etatu</label>
+                            <select
+                              value={editingUser.wymiar_etatu ?? ""}
+                              onChange={(e) =>
+                                setEditingUser({
+                                  ...editingUser,
+                                  wymiar_etatu: e.target.value === "" ? null : Number(e.target.value),
+                                })
+                              }
+                              className={inputCls}
+                            >
+                              <option value="">-- nieustalony --</option>
+                              {WYMIARY_ETATU.map((w) => (
+                                <option key={w.key} value={w.key}>
+                                  {w.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className={labelCls}>Wynagrodzenie miesięczne (zł)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={editingUser.wynagrodzenie_mies ?? ""}
+                              onChange={(e) =>
+                                setEditingUser({ ...editingUser, wynagrodzenie_mies: e.target.value })
+                              }
+                              placeholder="kwota z umowy"
+                              className={inputCls}
+                            />
+                          </div>
+                        </div>
+                        <p className="text-[11px] text-[#6E6E66]">
+                          {normaBiezaca != null
+                            ? `Norma na ${getMonthName(now.getMonth())}: ${fmtH(normaBiezaca)} h${
+                                stawkaEfekt != null
+                                  ? ` · to ${stawkaEfekt.toFixed(2).replace(".", ",")} zł za godzinę w tym miesiącu`
+                                  : ""
+                              }. Norma zmienia się co miesiąc — liczymy ją z kalendarza, nie wpisujesz jej ręcznie.`
+                            : "Wpisz wymiar etatu, żeby aplikacja policzyła miesięczną normę godzin."}
+                        </p>
+                      </>
+                    ) : (
+                      <div>
+                        <label className={labelCls}>Stawka (zł/h)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={editingUser.stawka ?? ""}
+                          onChange={(e) => setEditingUser({ ...editingUser, stawka: e.target.value })}
+                          placeholder="opcjonalnie"
+                          className={inputCls}
+                        />
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-3 pt-1 border-t-[2px] border-[#E7E7E2]">
+                      <div>
+                        <label className={labelCls}>Termin umowy</label>
+                        <input
+                          type="date"
+                          disabled={!!editingUser.umowa_bezterminowa}
+                          value={editingUser.umowa_expiry || ""}
+                          onChange={(e) =>
+                            setEditingUser({ ...editingUser, umowa_expiry: e.target.value })
+                          }
+                          className={`w-full p-2 border-[2px] rounded disabled:bg-[#F1F1EE] disabled:text-[#8F8E86] ${
+                            showTermWarnings &&
+                            !editingUser.umowa_expiry &&
+                            !editingUser.umowa_bezterminowa
+                              ? "border-[#DE3A22] bg-[#FAEAE6]"
+                              : "border-[#171714]"
+                          }`}
+                        />
+                        {showTermWarnings &&
+                          !editingUser.umowa_expiry &&
+                          !editingUser.umowa_bezterminowa && (
+                            <p className="text-xs text-[#DE3A22] mt-1">
+                              Brak terminu — przypomnienia wyłączone
+                            </p>
+                          )}
+                      </div>
+                      <div className="flex items-end pb-2">
+                        <label className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4"
+                            checked={!!editingUser.umowa_bezterminowa}
+                            onChange={(e) =>
+                              setEditingUser({
+                                ...editingUser,
+                                umowa_bezterminowa: e.target.checked,
+                                // Termin i "bezterminowa" wykluczają się — trzymanie
+                                // starej daty obok zaznaczonego pola prosi się o to,
+                                // żeby ktoś kiedyś zaczął jej ufać.
+                                umowa_expiry: e.target.checked ? null : editingUser.umowa_expiry,
+                              })
+                            }
+                          />
+                          umowa bezterminowa
+                        </label>
+                      </div>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3 mb-5">
+                </>
+              )}
+
+              {!isNew && editingUser.role !== "kiosk" && (
+                <>
+                  {/* Odczyt tego, co wpisano wyżej. Dla umowy o pracę koszt to
+                      kwota z umowy — nie godziny × stawka — bo lokal wydaje ją
+                      niezależnie od tego, ile godzin z niej wykorzystał. */}
+                  <p className={`${statLabelCls} mb-2`}>Ten miesiąc</p>
+                  <div className="border-[2px] border-[#171714] rounded-lg p-3 mb-5">
+                    <div className="flex flex-wrap gap-x-8 gap-y-2">
+                      <div>
+                        <p className="font-['Archivo'] font-extrabold text-xl">
+                          {fmtH(monthHours)}
+                          {normaBiezaca != null && (
+                            <span className="text-[#8F8E86] font-bold text-base">
+                              {" "}
+                              z {fmtH(normaBiezaca)}
+                            </span>
+                          )}{" "}
+                          h
+                        </p>
+                        <p className="text-[11px] text-[#8F8E86]">
+                          {normaBiezaca != null ? "przepracowane z normy" : "przepracowane"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="font-['Archivo'] font-extrabold text-xl">
+                          {monthCost != null ? `${Math.round(monthCost)} zł` : "—"}
+                        </p>
+                        <p className="text-[11px] text-[#8F8E86]">
+                          {monthCost == null
+                            ? "brak danych o wynagrodzeniu"
+                            : naEtacie(editingUser)
+                            ? "koszt lokalu (kwota z umowy)"
+                            : "koszt lokalu (godziny × stawka)"}
+                        </p>
+                      </div>
+                    </div>
+                    {opisBilansuTekst && (
+                      <p className="text-[12px] text-[#6E6E66] mt-3 pt-3 border-t-[2px] border-[#E7E7E2]">
+                        Okres rozliczeniowy, policzone{" "}
+                        {miesiaceLabel(bilans.miesiace.length)}: <b>{opisBilansuTekst}</b>. Bilans
+                        obejmuje tylko miesiące już zakończone i zeruje się z końcem okresu.
+                        {bilans.pominiete.length > 0 &&
+                          ` Pominięto ${miesiaceLabel(
+                            bilans.pominiete.length
+                          )} bez żadnych zapisanych godzin.`}
+                      </p>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {editingUser.role !== "kiosk" && (
+                <>
+                  {/* 7–8. Dokument i uprawnienie na czas. */}
+                  <p className={`${statLabelCls} mb-2`}>Dokumenty i uprawnienia</p>
+                  <div className="border-[2px] border-[#171714] rounded-lg p-3 mb-5 space-y-3">
                     <div>
-                      <label className="text-xs font-bold text-[#6E6E66]">
-                        Termin książeczki sanepid
-                      </label>
+                      <label className={labelCls}>Termin książeczki sanepid</label>
                       <input
                         type="date"
                         value={editingUser.sanepid_expiry || ""}
@@ -826,72 +1115,43 @@ export default function Pracownicy({
                         </p>
                       )}
                     </div>
+                    {/* Prawo na czas zamiast nowej roli: kierownik zmiany może
+                        zamknąć Puls swojego lokalu z Tabletu Służbowego do tego
+                        dnia włącznie. Wygasa samo — uprawnień, które trzeba
+                        pamiętać odebrać, nikt nie odbiera. */}
                     <div>
-                      <label className="text-xs font-bold text-[#6E6E66]">Termin umowy</label>
-                      <input
-                        type="date"
-                        disabled={!!editingUser.umowa_bezterminowa}
-                        value={editingUser.umowa_expiry || ""}
-                        onChange={(e) =>
-                          setEditingUser({ ...editingUser, umowa_expiry: e.target.value })
-                        }
-                        className={`w-full p-2 border-[2px] rounded disabled:bg-[#F1F1EE] disabled:text-[#8F8E86] ${
-                          showTermWarnings &&
-                          !editingUser.umowa_expiry &&
-                          !editingUser.umowa_bezterminowa
-                            ? "border-[#DE3A22] bg-[#FAEAE6]"
-                            : "border-[#171714]"
-                        }`}
-                      />
-                      <label className="flex items-center gap-2 text-sm mt-2">
+                      <label className={labelCls}>
+                        Może zamykać Puls (kierownik zmiany) — do dnia
+                      </label>
+                      <div className="flex flex-wrap gap-2 items-center mt-1">
                         <input
-                          type="checkbox"
-                          className="w-4 h-4"
-                          checked={!!editingUser.umowa_bezterminowa}
+                          type="date"
+                          value={editingUser.puls_do || ""}
                           onChange={(e) =>
+                            setEditingUser({ ...editingUser, puls_do: e.target.value || null })
+                          }
+                          className="p-2 border-[2px] border-[#171714] rounded"
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
                             setEditingUser({
                               ...editingUser,
-                              umowa_bezterminowa: e.target.checked,
-                              // Termin i "bezterminowa" wykluczają się — trzymanie
-                              // starej daty obok zaznaczonego pola prosi się o to,
-                              // żeby ktoś kiedyś zaczął jej ufać.
-                              umowa_expiry: e.target.checked ? null : editingUser.umowa_expiry,
+                              puls_do: new Date().toISOString().slice(0, 10),
                             })
                           }
-                        />
-                        umowa bezterminowa
-                      </label>
-                      {showTermWarnings &&
-                        !editingUser.umowa_expiry &&
-                        !editingUser.umowa_bezterminowa && (
-                          <p className="text-xs text-[#DE3A22] mt-1">
-                            Brak terminu — przypomnienia wyłączone
-                          </p>
-                        )}
-                    </div>
-                    <div className="md:col-span-2">
-                      {/* Znany ostatni dzień pracy. Grafik po tej dacie nie da
-                          wpisać zmiany, a przypomnienia o umowie milkną — nie ma
-                          sensu gonić kogoś, kto i tak odchodzi. */}
-                      <label className="text-xs font-bold text-[#6E6E66]">
-                        Ostatni dzień pracy (jeśli znany)
-                      </label>
-                      <input
-                        type="date"
-                        value={editingUser.ostatni_dzien || ""}
-                        onChange={(e) =>
-                          setEditingUser({
-                            ...editingUser,
-                            ostatni_dzien: e.target.value || null,
-                          })
-                        }
-                        className="w-full p-2 border-[2px] border-[#171714] rounded"
-                      />
-                      {editingUser.ostatni_dzien && (
-                        <p className="text-xs text-[#6E6E66] mt-1">
-                          Po tej dacie Grafik nie pozwoli wpisać tej osobie zmiany.
-                        </p>
-                      )}
+                          className="px-3 py-2 border-[2px] border-[#171714] rounded text-sm font-bold"
+                        >
+                          Na dziś
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingUser({ ...editingUser, puls_do: null })}
+                          className="px-3 py-2 border-[2px] border-[#B7B6AE] rounded text-sm text-[#6E6E66]"
+                        >
+                          Odbierz
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </>
@@ -899,47 +1159,27 @@ export default function Pracownicy({
 
               {!isNew && editingUser.role !== "kiosk" && (
                 <>
-                  <p className={`${statLabelCls} mb-2`}>Godziny i koszt (ten miesiąc)</p>
-                  <div className="flex gap-6 mb-5">
-                    <div>
-                      <p className="font-['Archivo'] font-extrabold text-xl">
-                        {monthHours.toFixed(1).replace(".", ",")} h
-                      </p>
-                    </div>
-                    <div>
-                      <p className="font-['Archivo'] font-extrabold text-xl">
-                        {monthCost != null ? `${monthCost.toFixed(0)} zł` : "—"}
-                      </p>
-                      {monthCost == null && (
-                        <p className="text-[11px] text-[#8F8E86]">brak stawki</p>
-                      )}
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {!isNew && editingUser.role !== "kiosk" && (
-                <>
+                  {/* 9. Urlop i dni wolne. */}
                   <p className={`${statLabelCls} mb-2 flex items-center gap-1.5`}>
-                    <Palmtree size={13} /> Urlop
+                    <Palmtree size={13} /> Urlop i dni wolne
                   </p>
                   <div className="grid grid-cols-2 gap-3 mb-2">
                     <div>
-                      <label className="text-xs font-bold text-[#6E6E66]">Od</label>
+                      <label className={labelCls}>Od</label>
                       <input
                         type="date"
                         value={urlopFrom}
                         onChange={(e) => setUrlopFrom(e.target.value)}
-                        className="w-full p-2 border-[2px] border-[#171714] rounded"
+                        className={inputCls}
                       />
                     </div>
                     <div>
-                      <label className="text-xs font-bold text-[#6E6E66]">Do</label>
+                      <label className={labelCls}>Do</label>
                       <input
                         type="date"
                         value={urlopTo}
                         onChange={(e) => setUrlopTo(e.target.value)}
-                        className="w-full p-2 border-[2px] border-[#171714] rounded"
+                        className={inputCls}
                       />
                     </div>
                   </div>
@@ -986,6 +1226,32 @@ export default function Pracownicy({
                 </>
               )}
 
+              {editingUser.role !== "kiosk" && (
+                <>
+                  {/* 10. Znany ostatni dzień pracy. Grafik po tej dacie nie da
+                      wpisać zmiany, a przypomnienia o umowie milkną — nie ma
+                      sensu gonić kogoś, kto i tak odchodzi. */}
+                  <p className={`${statLabelCls} mb-2`}>Koniec współpracy</p>
+                  <div className="mb-5">
+                    <label className={labelCls}>Ostatni dzień pracy (jeśli znany)</label>
+                    <input
+                      type="date"
+                      value={editingUser.ostatni_dzien || ""}
+                      onChange={(e) =>
+                        setEditingUser({ ...editingUser, ostatni_dzien: e.target.value || null })
+                      }
+                      className={inputCls}
+                    />
+                    {editingUser.ostatni_dzien && (
+                      <p className="text-xs text-[#6E6E66] mt-1">
+                        Po tej dacie Grafik nie pozwoli wpisać tej osobie zmiany.
+                      </p>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {/* 11. Notatki. */}
               <p className={`${statLabelCls} mb-2`}>Notatki kierownika</p>
               <textarea
                 value={editingUser.notatki || ""}
@@ -994,12 +1260,23 @@ export default function Pracownicy({
                 className="w-full p-2 border-[2px] border-[#171714] rounded min-h-[70px] mb-1"
               />
               {editingUser.notatki_updated_by && (
-                <p className="text-[11px] text-[#8F8E86] mb-5">
+                <p className="text-[11px] text-[#8F8E86] mb-2">
                   Ostatnia zmiana: {editingUser.notatki_updated_by},{" "}
                   {new Date(editingUser.notatki_updated_at).toLocaleDateString("pl-PL")}
                 </p>
               )}
 
+              {/* 12. Stan konta i akcje — razem, bo to jedna decyzja: co robimy
+                  z tą kartą po wyjściu. */}
+              <label className="flex items-center gap-2 mb-3 mt-4 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={editingUser.active}
+                  onChange={(e) => setEditingUser({ ...editingUser, active: e.target.checked })}
+                  className="w-5 h-5"
+                />
+                <span className="font-bold text-sm">Konto aktywne</span>
+              </label>
               <div className="flex gap-2 pt-3 border-t-[2px] border-[#171714] flex-wrap">
                 <button type="submit" className={btnPrimaryCls}>
                   Zapisz zmiany

@@ -29,6 +29,7 @@ import {
   formatNotificationText,
 } from "../utils/format";
 import { stanowiskoShort, stanowiskoBadgeStyle } from "../utils/stanowiska";
+import { normaMiesiaca, prognozaMiesiaca } from "../utils/umowy";
 import {
   offerSwap,
   withdrawSwap,
@@ -90,6 +91,11 @@ export const BLOKI_WSZYSTKIE = [
   "ZGLOS_PROBLEM",
   "WOLNE",
 ];
+
+// Godziny w bloku normy: bez zbędnego ",0" przy pełnych liczbach. Wiersze
+// pojedynczych zmian zostają przy jednym miejscu po przecinku — tam różnica
+// pół godziny naprawdę bywa istotna, w normie miesiąca nie.
+const godz = (n) => (Math.round((n || 0) * 10) / 10).toString().replace(".", ",");
 
 export const fmtHHMM = (d) =>
   `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(
@@ -555,6 +561,59 @@ export const EmployeeSessionScreens = ({
   const raportUrlop = raportShifts
     .filter((s) => s.is_urlop)
     .reduce((acc, s) => acc + (s.end_time ? (s.end_time - s.start_time) / 3600000 : 0), 0);
+
+  // Norma miesięczna dla umowy o pracę. Pracownicy i tak sprawdzają swoje
+  // godziny w Raporcie — to najlepsze miejsce, żeby zobaczyli, ile z normy
+  // zostało, i zdążyli o tym pogadać PRZED końcem miesiąca. Świadomie bez
+  // czerwieni i bez słowa "zaległe": niedobór godzin to sprawa planowania
+  // grafiku, nie przewinienie pracownika.
+  const raportNorma = normaMiesiaca(employee, raportYear, raportMonth + 1);
+  const raportBiezacyMiesiac =
+    raportYear === new Date().getFullYear() && raportMonth === new Date().getMonth();
+  // Prognoza tylko dla trwającego miesiąca i wyłącznie z tego, co JUŻ stoi w
+  // wysłanym grafiku — żadnych średnich. Pracownik ma zobaczyć dokładnie to,
+  // co mu wpisano.
+  const raportZaplanowane =
+    raportBiezacyMiesiac && raportNorma != null
+      ? publishedShiftsFor(planShifts, employee)
+          .filter((s) => s.date > todayStr && s.date.slice(0, 7) === todayStr.slice(0, 7))
+          .reduce((acc, s) => acc + shiftHours(s), 0)
+      : 0;
+  // ⚠️ Zamknięty miesiąc bez ANI JEDNEJ zapisanej zmiany zostaje bez normy.
+  // "Do normy zabrakło 176 h" za miesiąc, w którym system jeszcze nie działał
+  // albo umowę uzupełniono wstecz, to alarm o niczym — a pierwszy taki alarm
+  // uczy nie czytać następnych. Ta sama zasada co w bilansie okresu w karcie
+  // pracownika (utils/umowy.ts).
+  const raportPrognoza =
+    raportNorma == null || (!raportBiezacyMiesiac && raportTotal <= 0)
+      ? null
+      : prognozaMiesiaca({
+          user: employee,
+          przepracowane: raportTotal,
+          zaplanowane: raportZaplanowane,
+          rok: raportYear,
+          mies: raportMonth + 1,
+        });
+
+  // Jedno zdanie zamiast trzech linijek. Dla miesiąca zamkniętego mówi o
+  // faktach, dla trwającego — o tym, co wyjdzie Z GRAFIKIEM: w połowie
+  // miesiąca "do normy brakuje 152 h" znaczy tylko tyle, że jest połowa
+  // miesiąca, i tak brzmiący komunikat nauczyłby ludzi go nie czytać.
+  const normaOpis = (() => {
+    if (!raportPrognoza) return null;
+    const r = raportPrognoza;
+    if (!raportBiezacyMiesiac) {
+      if (r.roznica > 0.5) return `o ${godz(r.roznica)} h ponad normę`;
+      if (r.roznica < -0.5) return `do normy zabrakło ${godz(-r.roznica)} h`;
+      return "dokładnie w normie";
+    }
+    if (r.zaplanowane <= 0) return "w grafiku nie ma jeszcze zmian do końca miesiąca";
+    if (r.roznica > 0.5)
+      return `z grafikiem wyjdzie ${godz(r.prognoza)} h — o ${godz(r.roznica)} h ponad normę`;
+    if (r.roznica < -0.5)
+      return `z grafikiem wyjdzie ${godz(r.prognoza)} h — zabraknie ${godz(-r.roznica)} h`;
+    return `z grafikiem wyjdzie ${godz(r.prognoza)} h — dokładnie w normie`;
+  })();
 
   const recentShiftsForZgloszenie = shifts
     .filter((s) => s.user_id === employee.id)
@@ -1890,11 +1949,20 @@ export const EmployeeSessionScreens = ({
         personName={onBack ? employee.name : null}
         title="Raport"
         footer={
-          <div className="flex-shrink-0 border-t-[2.5px] border-[#171714] bg-white px-5 pt-[18px] pb-[22px] flex items-baseline justify-between">
-            <div>
+          <div className="flex-shrink-0 border-t-[2.5px] border-[#171714] bg-white px-5 pt-[18px] pb-[22px] flex items-end justify-between gap-3">
+            <div className="min-w-0">
               <span className={sectionLabelCls}>
                 {employee.name} · {getMonthName(raportMonth)}
               </span>
+              {/* Norma mieszka w stopce, przy sumie godzin, a nie w osobnej
+                  ramce — pracownik i tak patrzy tu na jedną liczbę, a dwa
+                  miejsca mówiące o tym samym miesiącu zawsze wyglądają, jakby
+                  się nie zgadzały. */}
+              {normaOpis && (
+                <div className="text-[12px] text-[#6E6E66] leading-snug mt-0.5">
+                  {normaOpis}
+                </div>
+              )}
               {raportUrlop > 0 && (
                 <div className="text-[12px] text-[#6E6E66]">
                   urlop {raportUrlop.toFixed(1).replace(".", ",")} h · bez urlopu{" "}
@@ -1902,9 +1970,16 @@ export const EmployeeSessionScreens = ({
                 </div>
               )}
             </div>
-            <span className="font-['Archivo'] font-extrabold text-[28px] text-[#171714] tabular-nums">
-              {raportTotal.toFixed(1).replace(".", ",")} godz.
-            </span>
+            <div className="text-right flex-shrink-0">
+              <div className="font-['Archivo'] font-extrabold text-[28px] text-[#171714] tabular-nums leading-none">
+                {raportTotal.toFixed(1).replace(".", ",")} godz.
+              </div>
+              {raportPrognoza && (
+                <div className="text-[12px] text-[#6E6E66] tabular-nums mt-1">
+                  z {godz(raportPrognoza.norma)} h
+                </div>
+              )}
+            </div>
           </div>
         }
       >
