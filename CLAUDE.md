@@ -1841,6 +1841,25 @@ Trzy decyzje, których nie zmieniaj bez rozmowy z właścicielem:
   komunikat po zapisie mówi które i dlaczego ("Dodano 2 zmiany. Pominięto:
   WT (kolizja godzin), CZW (urlop)."). Gdy odpadną wszystkie — komunikat
   błędu, nigdy cichy sukces.
+- **Wymagania obsady można EDYTOWAĆ** (`GrafikWymagania.tsx`). Wcześniej były
+  tylko "dodaj" i "kasuj", więc podniesienie liczby osób z 2 na 3 wymagało
+  skasowania reguły i wpisania jej od nowa — razem z dniami tygodnia, które
+  przy okazji łatwo było zgubić. `submitRule` robi `patch`, gdy `form.id` jest
+  ustawione, i `post`, gdy nie.
+  - **Który wiersz jest edytowany, czyta się z formularza** (`ruleForm.id` /
+    `wyjatekRuleForm.id`), NIE z osobnego stanu. Formularze są dwa — zestawu i
+    wyjątku — a jeden wspólny stan podświetlałby przy przeskoku między nimi
+    inny wiersz niż ten faktycznie otwarty.
+  - ⚠️ **`parseDays` zwraca `null` przy pustej wartości, a `null` znaczy
+    "codziennie"** (tak czyta to `daysLabel` i cała kontrola obsady). Przy
+    wczytywaniu do formularza null musi wrócić jako PEŁNY tydzień (`parseDni`)
+    — inaczej wejście w edycję po cichu odznaczałoby wszystkie dni, a zapis
+    zawężałby regułę do niczego. Ta sama pułapka co `parseDaysOfWeek` w
+    `utils/tasks.ts`.
+  - Zmiana zestawu w trakcie edycji przerywa ją: payload niesie `set_id`
+    aktywnego zestawu, więc zapis po cichu przeniósłby regułę gdzie indziej.
+    Skasowanie edytowanej reguły też czyści formularz — inaczej zapisałby ją
+    z powrotem pod nieistniejącym już id.
 
 ### 5d. Grafik — świadomie NIE zrobione
 - Drugi wariant druku miesiąca (tabela pracownicy × dni) — odłożony.

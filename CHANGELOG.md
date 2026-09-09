@@ -14,10 +14,16 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 - **W wierszu widać wykorzystanie umowy**: przy umowie o pracę „128/176 h”
   (godziny wobec normy miesiąca, przekroczenie na bursztynowo), przy zleceniu
   godziny i koszt. Liczba zmian i pozostałe szczegóły są pod kursorem.
+- **Wymagania obsady można poprawiać** (Grafik → Konfiguracja). Do tej pory
+  dawało się je tylko dodać albo skasować, więc zmiana „2 osoby” na „3 osoby”
+  oznaczała skasowanie wymagania i wpisanie go od nowa. Przycisk „Edytuj”
+  wczytuje wymaganie do formularza pod spodem; działa tak samo w zwykłych
+  wymaganiach i w wymaganiach wyjątku.
 - **Jedną zmianę można wpisać od razu na kilka dni** — w oknie przypisywania
   doszedł wybór „Powtórz w dniach”, jak przy zadaniach. Powstają zwykłe,
   niezależne zmiany. Dni z urlopem, kolizją godzin albo po ostatnim dniu pracy
   są pomijane, a po zapisie aplikacja mówi, które i dlaczego.
+- Poprawka: w liście wymagań obsady było „2 osób” zamiast „2 osoby”.
 
 ## 0.31.0 — 2026-09-09
 

@@ -7,7 +7,7 @@
 // Cała logika "co obowiązuje danego dnia" żyje w utils/grafik.ts — tutaj
 // jest wyłącznie UI i zapis. Pełna specyfikacja: docs/GRAFIK.md.
 import React, { useState, useMemo } from "react";
-import { Plus, Trash2, Copy, CalendarDays, Clock, AlertTriangle } from "lucide-react";
+import { Plus, Trash2, Copy, CalendarDays, Clock, AlertTriangle, Pencil } from "lucide-react";
 import { api } from "../../api/supabase";
 import {
   pageTitleCls,
@@ -57,7 +57,24 @@ const daysLabel = (raw) => {
     .join(", ");
 };
 
+// ⚠️ `parseDays` zwraca null przy pustej wartości, a null tu znaczy
+// "codziennie", nie "nigdy" (tak też czyta to `daysLabel` i cała kontrola
+// obsady). Formularz trzyma tablicę, więc null musi wrócić jako pełny
+// tydzień — inaczej wejście w edycję po cichu odznaczałoby wszystkie dni.
+const parseDni = (raw) => parseDays(raw) || DNI.map((d) => d.idx);
+
+// Polska odmiana: 1 osoba, 2–4 osoby, 5+ osób (poza 12–14). Wcześniej wszystko
+// powyżej jedynki było "osób", więc w siatce stało "2 osób".
+const osobyLabel = (n) => {
+  const ost = n % 10;
+  const dwie = n % 100;
+  if (n === 1) return "1 osoba";
+  if (ost >= 2 && ost <= 4 && !(dwie >= 12 && dwie <= 14)) return `${n} osoby`;
+  return `${n} osób`;
+};
+
 const emptyRuleForm = () => ({
+  id: null,
   stanowisko: "",
   days: [1, 2, 3, 4, 5, 6, 0],
   start_time: "",
@@ -87,6 +104,15 @@ export default function GrafikWymagania({
   const [newSetYear, setNewSetYear] = useState(nextMonth.getFullYear());
   const [newSetMonthNum, setNewSetMonthNum] = useState(nextMonth.getMonth());
   const [ruleForm, setRuleForm] = useState(emptyRuleForm());
+  // Które wymaganie jest właśnie poprawiane, czyta się WPROST z formularza
+  // (`ruleForm.id` / `wyjatekRuleForm.id`), bez osobnego stanu. Osobny stan
+  // musiałby być jeden na dwa niezależne formularze — zestawu i wyjątku — i
+  // przy przeskoku między nimi podświetlałby inny wiersz, niż ten faktycznie
+  // otwarty do edycji.
+  //
+  // Dotąd wymaganie dało się tylko dodać i skasować, więc zmiana "2 osoby" na
+  // "3 osoby" oznaczała skasowanie reguły i wpisanie jej od nowa — łatwo było
+  // przy tym zgubić dni tygodnia.
   const [saving, setSaving] = useState(false);
   const [godzinyDraft, setGodzinyDraft] = useState(null);
   const [wyjatekForm, setWyjatekForm] = useState(null);
@@ -184,7 +210,7 @@ export default function GrafikWymagania({
     }
     setSaving(true);
     try {
-      const created = await api.post("staffing_rules", {
+      const payload = {
         set_id: wyjatekId ? null : activeSet.id,
         wyjatek_id: wyjatekId || null,
         stanowisko: form.stanowisko,
@@ -193,15 +219,48 @@ export default function GrafikWymagania({
         start_time: form.start_time,
         end_time: form.end_time,
         required_count: Number(form.required_count) || 1,
-      });
-      setStaffingRules([...(staffingRules || []), created]);
+      };
+      if (form.id) {
+        const zapisana = await api.patch("staffing_rules", form.id, payload);
+        setStaffingRules(
+          (staffingRules || []).map((r) => (r.id === zapisana.id ? zapisana : r))
+        );
+        showMsg("Zapisano wymaganie.");
+      } else {
+        const created = await api.post("staffing_rules", payload);
+        setStaffingRules([...(staffingRules || []), created]);
+        showMsg("Dodano wymaganie.");
+      }
+      // Po zapisie wracamy do pustego formularza. Stanowisko zostaje tylko
+      // przy DODAWANIU — kierownik zwykle wpisuje kilka reguł pod rząd na to
+      // samo stanowisko, ale po poprawce oczekuje czystego pola.
       if (wyjatekId) setWyjatekRuleForm(emptyRuleForm());
-      else setRuleForm({ ...emptyRuleForm(), stanowisko: form.stanowisko });
-      showMsg("Dodano wymaganie.");
+      else setRuleForm(form.id ? emptyRuleForm() : { ...emptyRuleForm(), stanowisko: form.stanowisko });
     } catch (err) {
       showMsg(`Błąd zapisu wymagania: ${err.message || "nieznany błąd"}`, "error");
     }
     setSaving(false);
+  };
+
+  // Wczytanie reguły do formularza. `days_of_week` wraca jako tekst po
+  // przecinku (albo null przy wyjątku, gdzie dni tygodnia nie obowiązują),
+  // a formularz trzyma tablicę liczb.
+  const edytujRegule = (rule, wyjatekId) => {
+    const form = {
+      id: rule.id,
+      stanowisko: rule.stanowisko || "",
+      days: parseDni(rule.days_of_week),
+      start_time: trimTime(rule.start_time) || "",
+      end_time: trimTime(rule.end_time) || "",
+      required_count: rule.required_count || 1,
+    };
+    if (wyjatekId) setWyjatekRuleForm(form);
+    else setRuleForm(form);
+  };
+
+  const anulujEdycje = (wyjatekId) => {
+    if (wyjatekId) setWyjatekRuleForm(emptyRuleForm());
+    else setRuleForm(emptyRuleForm());
   };
 
   const deleteRule = async (rule) => {
@@ -209,6 +268,10 @@ export default function GrafikWymagania({
     try {
       await api.delete("staffing_rules", rule.id);
       setStaffingRules((staffingRules || []).filter((r) => r.id !== rule.id));
+      // Formularz z regułą, której już nie ma, zapisałby ją z powrotem pod
+      // starym id — czyścimy go razem z wierszem.
+      if (ruleForm.id === rule.id) setRuleForm(emptyRuleForm());
+      if (wyjatekRuleForm.id === rule.id) setWyjatekRuleForm(emptyRuleForm());
     } catch (err) {
       showMsg(`Błąd usuwania: ${err.message || "nieznany błąd"}`, "error");
     }
@@ -416,8 +479,23 @@ export default function GrafikWymagania({
           />
         </div>
         <button type="submit" disabled={saving} className={btnPrimaryCls}>
-          <Plus size={15} className="inline -mt-0.5 mr-1" /> Dodaj wymaganie
+          {form.id ? (
+            "Zapisz wymaganie"
+          ) : (
+            <>
+              <Plus size={15} className="inline -mt-0.5 mr-1" /> Dodaj wymaganie
+            </>
+          )}
         </button>
+        {form.id && (
+          <button
+            type="button"
+            onClick={() => anulujEdycje(wyjatekId)}
+            className={btnSecondaryCls}
+          >
+            Anuluj
+          </button>
+        )}
         <p className="text-[12px] text-[#6E6E66] flex-1 min-w-[220px]">
           Wymagania się <strong>sumują</strong>: "2 osoby 09:00–21:00" plus
           "1 osoba 14:00–19:00" daje trzy osoby między 14:00 a 19:00.
@@ -426,7 +504,7 @@ export default function GrafikWymagania({
     </form>
   );
 
-  const renderRulesTable = (rows, emptyText) => (
+  const renderRulesTable = (rows, emptyText, wyjatekId = null) => (
     <div>
       {rows.length === 0 ? (
         <p className="px-4 py-6 text-center text-[#6E6E66] text-sm">{emptyText}</p>
@@ -434,7 +512,9 @@ export default function GrafikWymagania({
         rows.map((r) => (
           <div
             key={r.id}
-            className="flex items-center gap-3 px-4 py-2.5 border-b-[2px] border-[#E7E7E2] last:border-b-0"
+            className={`flex items-center gap-3 px-4 py-2.5 border-b-[2px] border-[#E7E7E2] last:border-b-0 ${
+              (wyjatekId ? wyjatekRuleForm.id : ruleForm.id) === r.id ? "bg-[#FDF3D4]" : ""
+            }`}
           >
             <span className="font-['Archivo'] font-bold text-[14px] min-w-[150px]">
               {r.stanowisko}
@@ -443,14 +523,21 @@ export default function GrafikWymagania({
               {trimTime(r.start_time)} – {trimTime(r.end_time)}
             </span>
             <span className="text-[13px] px-2 py-0.5 rounded bg-[#F1F1EE] font-bold">
-              {r.required_count} {r.required_count === 1 ? "osoba" : "osób"}
+              {osobyLabel(r.required_count)}
             </span>
             {r.days_of_week != null && (
               <span className="text-[13px] text-[#6E6E66]">{daysLabel(r.days_of_week)}</span>
             )}
             <button
+              onClick={() => edytujRegule(r, wyjatekId)}
+              className="ml-auto px-2.5 py-1 rounded border-[2px] border-[#171714] text-[13px] font-bold hover:bg-[#F1F1EE]"
+              title="Popraw to wymaganie w formularzu poniżej"
+            >
+              <Pencil size={13} className="inline -mt-0.5 mr-1" /> Edytuj
+            </button>
+            <button
               onClick={() => deleteRule(r)}
-              className="ml-auto text-[#DE3A22] hover:opacity-70"
+              className="text-[#DE3A22] hover:opacity-70"
               title="Usuń wymaganie"
             >
               <Trash2 size={16} />
@@ -494,7 +581,13 @@ export default function GrafikWymagania({
                 <label className={statLabelCls}>Wersja wymagań</label>
                 <select
                   value={activeSet?.id || ""}
-                  onChange={(e) => setSelectedSetId(e.target.value)}
+                  onChange={(e) => {
+                    // Zmiana zestawu w trakcie poprawiania reguły przeniosłaby
+                    // ją po cichu do innego zestawu (payload niesie set_id
+                    // aktywnego zestawu), więc edycję przerywamy.
+                    anulujEdycje(null);
+                    setSelectedSetId(e.target.value);
+                  }}
                   className="p-2 border-[2px] border-[#171714] rounded bg-white min-w-[220px]"
                   disabled={setsForLokal.length === 0}
                 >
@@ -730,7 +823,8 @@ export default function GrafikWymagania({
                       <div className="bg-white border-t-[2px] border-[#E7E7E2]">
                         {renderRulesTable(
                           own,
-                          "Brak własnych wymagań — obowiązują zwykłe wymagania miesięczne."
+                          "Brak własnych wymagań — obowiązują zwykłe wymagania miesięczne.",
+                          w.id
                         )}
                         {renderRuleForm(wyjatekRuleForm, setWyjatekRuleForm, w.id)}
                       </div>
