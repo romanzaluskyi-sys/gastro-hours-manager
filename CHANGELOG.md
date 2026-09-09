@@ -5,6 +5,11 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.34.1 — 2026-09-09
+
+- Tablet Służbowy ma w nagłówku znak i nazwę Shiftro zamiast napisu „Tablet
+  Służbowy”. Który to lokal i która godzina, widać obok jak wcześniej.
+
 ## 0.34.0 — 2026-09-09
 
 - **Znak produktu (logo) Shiftro** — na ekranie logowania nad nazwą, w panelu

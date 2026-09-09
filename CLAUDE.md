@@ -24,7 +24,13 @@ plik w `public/` — harnessy ładują komponenty prosto w przeglądarce, bez
 serwera CRA, więc `%PUBLIC_URL%` i ścieżki z `public/` tam nie działają.
 Statyczny plik został tylko dla favikony (`public/shiftro-favicon.svg`), którą
 ładuje przeglądarka, nie React. `tone="dark"` dla sidebara. Znak jest zawsze
-kwadratowy i bez zaokrągleń — reszta UI ma `rounded`, on nie.
+kwadratowy i bez zaokrągleń — reszta UI ma `rounded`, on nie. Stoi w trzech
+miejscach: ekran logowania, sidebar kierownika i nagłówek Tabletu Służbowego.
+
+⚠️ Sam termin **"Tablet Służbowy" zostaje w słowniku aplikacji** — tak nazywa
+się typ konta w karcie pracownika ("Konto Służbowe (Tablet lokalu)"), tak mówi
+o nim Przewodnik i ta dokumentacja. Marka zastąpiła tylko NAPIS w nagłówku
+tego jednego ekranu, nie pojęcie.
 
 Pierwszym klientem jest sieć "Gastro Emka" (cztery lokale wymienione wyżej);
 drugi klient — pilotaż u innej właścicielki — jest w przygotowaniu, stąd cała
@@ -717,6 +723,10 @@ odpadają. Zamiast tego dwa pliki w katalogu głównym, uruchamiane przez
   Supabase, w której dane już są, i sprawdza, czy propsy z App docierają do
   zakładek. Jedyny sprawdzian, który łapie props wstawiony do złego elementu
   (patrz błąd #16);
+- `harness-kiosk.html` — montuje `KioskDashboard` (Tablet Służbowy): ekran
+  wyboru osoby, blokada PIN-em, mini-konto po wybraniu. To jedyny ekran w
+  aplikacji, którego nie da się obejrzeć przy biurku — stoi na sali i nikt na
+  niego nie patrzy, dopóki nie przestanie działać;
 - `harness-login.html` — montuje sam `LoginScreen`. Ten ekran był wcześniej
   niesprawdzalny inaczej niż przez wylogowanie się w produkcji, a od 0.33.0
   pokazuje nazwę produktu, nazwę najemcy i znak — czyli dokładnie to, co
