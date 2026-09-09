@@ -1,9 +1,36 @@
 # Changelog
 
 Historia widocznych zmian w aplikacji. Numer wersji wyświetla się na
-ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
+ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
+
+## 0.34.1 — 2026-09-09
+
+- Tablet Służbowy ma w nagłówku znak i nazwę Shiftro zamiast napisu „Tablet
+  Służbowy”. Który to lokal i która godzina, widać obok jak wcześniej.
+
+## 0.34.0 — 2026-09-09
+
+- **Znak produktu (logo) Shiftro** — na ekranie logowania nad nazwą, w panelu
+  kierownika obok nazwy i jako ikona karty w przeglądarce. Trzy pasy zmiany,
+  środkowy przesunięty; te same kolory, co reszta aplikacji.
+
+## 0.33.0 — 2026-09-09
+
+- **Aplikacja nazywa się Shiftro.** Nazwa produktu zastąpiła roboczą "Godziny
+  Gastro" na ekranie logowania, w panelu kierownika i w tytule karty
+  przeglądarki. Pod nią stoi nazwa sieci, żeby było widać, czyje to dane.
+- **Konfiguracja klienta wyszła z kodu do zmiennych środowiskowych.** Adres
+  bazy, klucz, nazwa sieci i nazwa produktu były wpisane na sztywno w sześciu
+  plikach, więc podłączenie drugiej restauracji wymagałoby skopiowania całego
+  repozytorium — i ręcznego przepisywania każdej późniejszej poprawki do obu
+  kopii. Teraz jedno repozytorium obsługuje dowolną liczbę klientów.
+- **Nazwa sieci widoczna na ekranie logowania i w panelu**, pod nazwą
+  produktu. To sygnał kontrolny: jeśli w nowym wdrożeniu widać tam nazwę
+  starego klienta, konfiguracji nie ustawiono.
+- Nowa instrukcja `docs/NOWY-KLIENT.md` — uruchomienie klienta od pustej bazy
+  po dane startowe.
 
 ## 0.32.0 — 2026-09-09
 

@@ -1,0 +1,224 @@
+<meta charset="utf-8">
+<title>Tablet Służbowy</title>
+<!-- Montuje KioskDashboard, czyli Tablet Służbowy: ekran wyboru osoby i to,
+     co widać po jej wybraniu. Urządzenie stoi na sali otwarte cały dzień i
+     jest jedynym ekranem, którego nikt nie ogląda na biurku — a przy tym
+     jedynym, gdzie nie da się nic sprawdzić inaczej niż podejściem do
+     tabletu.
+
+     api/supabase jest PODMIENIONE na atrapę, nic nie leci do sieci. -->
+<style>
+  body { font: 14px system-ui, sans-serif; margin: 0; background: #F1F1EE; }
+  #status { padding: 8px 14px; background: #17120F; color: #fff; font: 12px ui-monospace, monospace; }
+  #status.zle { background: #DE3A22; }
+  pre { background: #fff; padding: 12px; font-size: 12px; overflow-x: auto; }
+</style>
+<div id="status">ładowanie…</div>
+<div id="app"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js" crossorigin="anonymous"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+const status = document.getElementById("status");
+const pokazBlad = (e) => {
+  console.error("HARNESS", (e && e.stack) || e);
+  status.className = "zle";
+  status.textContent = "BŁĄD: " + (e && e.message ? e.message : e);
+  const pre = document.createElement("pre");
+  pre.textContent = (e && e.stack) || String(e);
+  document.getElementById("app").appendChild(pre);
+};
+window.addEventListener("error", (ev) => pokazBlad(ev.error || ev.message));
+window.addEventListener("unhandledrejection", (ev) => pokazBlad(ev.reason));
+
+const IKONY = ["AlertCircle", "AlertTriangle", "Archive", "ArchiveRestore", "ArrowLeft", "ArrowLeftRight", "ArrowRight", "BarChart3", "Bell", "BookOpen", "Briefcase", "Calendar", "CalendarCheck", "CalendarDays", "CalendarRange", "Check", "CheckCircle", "CheckCircle2", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "ClipboardCheck", "ClipboardList", "ClipboardPlus", "Clock", "Cloud", "Construction", "Copy", "CopyPlus", "Delete", "Download", "Edit2", "Eye", "FileText", "Flag", "HelpCircle", "History", "Home", "Info", "Lock", "LogIn", "LogOut", "Mail", "MapPin", "MoreHorizontal", "Palmtree", "Pencil", "Plus", "Printer", "RefreshCw", "Save", "Send", "SlidersHorizontal", "Trash2", "User", "UserPlus", "Users", "WifiOff", "X"];
+const stub = (kod) => URL.createObjectURL(new Blob([kod], { type: "text/javascript" }));
+
+// Atrapa Supabase — nic nie leci do sieci, każdy zapis wraca z wymyślonym id.
+window.__zapisy = [];
+const API_STUB = stub(`
+  // Atrapa trzyma dane w pamięci, więc api.get po zapisie zwraca to, co
+  // zapisano — inaczej ekrany, które odświeżają się z bazy, wyglądałyby na
+  // zepsute, choć są w porządku.
+  window.__tabele = {};
+  export const api = {
+    get: async (tabela) => (window.__tabele[tabela] || []).slice(),
+    post: async (tabela, dane) => {
+      window.__zapisy.push([tabela, dane]);
+      // Postgres dokłada domyślne znaczniki czasu — bez nich ekrany renderują
+      // "Invalid Date" i wygląda to na błąd aplikacji, którym nie jest.
+      const teraz = new Date().toISOString();
+      const wiersz = { id: "fake-" + (window.__zapisy.length), created_at: teraz,
+        recorded_at: teraz, completed_at: teraz, ...dane };
+      (window.__tabele[tabela] = window.__tabele[tabela] || []).push(wiersz);
+      return wiersz;
+    },
+    patch: async (tabela, id, dane) => {
+      window.__zapisy.push([tabela, id, dane]);
+      const lista = window.__tabele[tabela] || [];
+      const i = lista.findIndex((w) => w.id === id);
+      const wiersz = { ...(lista[i] || {}), id, ...dane };
+      if (i >= 0) lista[i] = wiersz;
+      return wiersz;
+    },
+    delete: async () => true,
+    patchByFilter: async () => true,
+  };
+`);
+
+const PAKIETY = {
+  react: stub(`const R = window.React;
+    export default R;
+    export const useState = R.useState, useMemo = R.useMemo, useEffect = R.useEffect,
+      useRef = R.useRef, useCallback = R.useCallback, Fragment = R.Fragment;`),
+  "lucide-react": stub(
+    `const ikona = (n) => (p) => window.React.createElement("span", { "data-ikona": n }, "▪");
+     ` + IKONY.map((n) => `export const ${n} = ikona("${n}");`).join("\n")
+  ),
+};
+
+const cache = new Map();
+async function zaladuj(sciezka) {
+  if (sciezka.endsWith("/api/supabase")) return API_STUB;
+  if (cache.has(sciezka)) return cache.get(sciezka);
+  const p = (async () => {
+    let kod = null;
+    for (const ext of [".tsx", ".ts", ""]) {
+      const r = await fetch(sciezka + ext + "?cb=" + Date.now());
+      if (r.ok) { kod = await r.text(); break; }
+    }
+    if (kod === null) throw new Error("nie znaleziono " + sciezka);
+    const baza = sciezka.slice(0, sciezka.lastIndexOf("/"));
+    const spec = [...kod.matchAll(/from\s+"([^"]+)"/g)].map((m) => m[1]);
+    const mapa = {};
+    for (const s of spec) {
+      mapa[s] = PAKIETY[s] ? PAKIETY[s]
+        : await zaladuj(new URL(baza + "/" + s, location.origin).pathname);
+    }
+    kod = kod.replace(/from\s+"([^"]+)"/g, (m, s) => `from "${mapa[s]}"`);
+    return URL.createObjectURL(new Blob([
+      Babel.transform(kod, { presets: [["typescript", { allExtensions: true, isTSX: true }], "react"] }).code
+    ], { type: "text/javascript" }));
+  })();
+  cache.set(sciezka, p);
+  return p;
+}
+
+const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+const wczoraj = ymd(new Date(Date.now() - 86400000));
+const godz = (h) => { const d = new Date(wczoraj + "T00:00:00"); d.setHours(h); return d; };
+// Poniedziałek bieżącego tygodnia i siedem dni od niego — plan grafiku musi
+// trafić w tydzień, który siatka domyślnie pokazuje.
+const poniedzialek = (() => {
+  const d = new Date();
+  const dow = (d.getDay() + 6) % 7;
+  d.setDate(d.getDate() - dow);
+  return ymd(d);
+})();
+const dniTygodnia = Array.from({ length: 7 }, (_, i) => {
+  const d = new Date(poniedzialek + "T00:00:00");
+  d.setDate(d.getDate() + i);
+  return ymd(d);
+});
+const opub = { published_at: "2020-01-01T00:00:00Z", deleted_at: null };
+const miesiacOd = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-01`;
+const zestawyStartowe = [
+  { id: "zs1", lokal: "Ceglana", obowiazuje_od: miesiacOd, created_by: "Roman" },
+  { id: "zs2", lokal: "Bułka i Jacek", obowiazuje_od: miesiacOd, created_by: "Roman" },
+];
+// Trzy reguły, w tym jedna BEZ dni tygodnia (null = codziennie) — to pułapka
+// przy edycji: formularz trzyma tablicę dni, więc null musi wrócić jako pełny
+// tydzień, a nie jako brak zaznaczeń.
+const wyjatkiStartowe = [
+  { id: "wy1", lokal: "Ceglana", date_from: dniTygodnia[5], date_to: dniTygodnia[5],
+    zamkniete: false, open_time: "12:00", close_time: "23:00", note: "Wesele na sali",
+    created_by: "Roman" },
+];
+const regulyStartowe = [
+  { id: "sr1", set_id: "zs1", wyjatek_id: null, stanowisko: "Kucharz",
+    days_of_week: "1,2,3,4,5", start_time: "09:00", end_time: "17:00", required_count: 2 },
+  { id: "sr2", set_id: "zs1", wyjatek_id: null, stanowisko: "Kelner",
+    days_of_week: "6,0", start_time: "14:00", end_time: "19:00", required_count: 1 },
+  { id: "sr3", set_id: "zs1", wyjatek_id: null, stanowisko: "Kucharz",
+    days_of_week: null, start_time: "17:00", end_time: "22:00", required_count: 1 },
+  { id: "sr4", set_id: null, wyjatek_id: "wy1", stanowisko: "Kelner",
+    days_of_week: null, start_time: "16:00", end_time: "23:00", required_count: 4 },
+];
+const planTygodnia = [
+  { id: "g1", user_id: "u1", user_name: "Ala", lokal: "Bułka i Jacek",
+    stanowisko: "Kucharz", date: dniTygodnia[0], start_time: "10:00", end_time: "18:00", ...opub },
+  { id: "g2", user_id: "u1", user_name: "Ala", lokal: "Bułka i Jacek",
+    stanowisko: "Kucharz", date: dniTygodnia[2], start_time: "10:00", end_time: "18:00", ...opub },
+  { id: "g3", user_id: "u2", user_name: "Bo", lokal: "Ceglana",
+    stanowisko: "Kucharz", date: dniTygodnia[1], start_time: "08:00", end_time: "16:00", ...opub },
+  { id: "g4", user_id: "u3", user_name: "Cezary", lokal: "Ceglana",
+    stanowisko: "Kelner", date: dniTygodnia[4], start_time: "12:00", end_time: "20:00", ...opub },
+  // Druga zmiana tego samego dnia — w wydruku "osoby × dni" kratka rośnie o
+  // kolejną trójkę zamiast chować drugą zmianę.
+  { id: "g5", user_id: "u3", user_name: "Cezary", lokal: "Ceglana",
+    stanowisko: "Kucharz", date: dniTygodnia[4], start_time: "21:00", end_time: "23:30", ...opub },
+  // Bo jest z Ceglanej, ale ten dzień robi w Bułce — w wydruku Ceglanej ma
+  // być widoczny (to jego lokal macierzysty, miesiąc musi być kompletny),
+  // a w wydruku Bułki NIE, bo Bułka nie prowadzi jego grafiku.
+  { id: "g6", user_id: "u2", user_name: "Bo", lokal: "Bułka i Jacek",
+    stanowisko: "Kucharz", date: dniTygodnia[2], start_time: "10:00", end_time: "18:00", ...opub },
+  // Ala odwrotnie: z Bułki, wyjątkowo jeden dzień w Ceglanej. W Ceglanej
+  // pokazujemy TYLKO ten jeden dzień.
+  { id: "g7", user_id: "u1", user_name: "Ala", lokal: "Ceglana",
+    stanowisko: "Kelner", date: dniTygodnia[6], start_time: "14:00", end_time: "22:00", ...opub },
+];
+
+const poprzedniMiesiac = (h) => {
+  const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); d.setDate(10); d.setHours(h, 0, 0, 0);
+  return d;
+};
+
+(async () => {
+  try {
+    const KD = (await import(await zaladuj("/src/components/KioskDashboard"))).default;
+    const { useState, createElement: h } = React;
+
+    function Harness() {
+      const [shifts, setShifts] = useState([]);
+      const [issues, setIssues] = useState([]);
+      const [notifications, setNotifications] = useState([]);
+      const props = {
+        currentUser: {
+          id: "k1", name: "Tablet Ceglana", role: "kiosk",
+          allowed_lokale: "Ceglana",
+        },
+        setCurrentView: () => {},
+        lokale: [{ id: "l2", name: "Ceglana", miasto: "Koszalin", archived: false }],
+        stanowiska: [
+          { id: "s2", name: "Kucharz", lokal_name: "Ceglana", archived: false },
+          { id: "s3", name: "Kelner", lokal_name: "Ceglana", archived: false },
+        ],
+        shifts, setShifts,
+        users: [
+          { id: "u2", name: "Bo", role: "open", active: true, archived: false,
+            default_lokal: "Ceglana", default_stanowisko: "Kucharz" },
+          { id: "u3", name: "Cezary", role: "open", active: true, archived: false,
+            default_lokal: "Ceglana", default_stanowisko: "Kelner" },
+          // Z PIN-em blokady — po kliknięciu ma wyjść klawiatura, nie konto.
+          { id: "u4", name: "Dorota", role: "open", active: true, archived: false,
+            default_lokal: "Ceglana", default_stanowisko: "Kelner", kiosk_pin: "1234" },
+        ],
+        issues, setIssues,
+        notifications, setNotifications,
+        tasks: [], taskCompletions: [], setTaskCompletions: () => {},
+        absences: [], setAbsences: () => {},
+        planShifts: [], shiftSwaps: [], setShiftSwaps: () => {},
+        showMsg: (m, t) => console.log("showMsg:", t, m),
+      };
+      return h(KD, props);
+    }
+
+    ReactDOM.createRoot(document.getElementById("app")).render(h(Harness));
+    setTimeout(() => {
+      if (status.className !== "zle") status.textContent = "Tablet Służbowy zamontowany";
+    }, 400);
+  } catch (e) { pokazBlad(e); }
+})();
+</script>

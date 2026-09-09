@@ -12,6 +12,8 @@ import {
   EmployeeSessionScreens,
 } from "./employeeSessionShared";
 import WeatherBadge from "./WeatherBadge";
+import ShiftroMark from "./ShiftroMark";
+import { PRODUKT } from "../config";
 
 // ==========================================
 // KIOSK SŁUŻBOWY — nowy design ("Tablet Służbowy")
@@ -223,8 +225,16 @@ const KioskDashboard = ({
       <div className="h-screen bg-white flex flex-col items-center overflow-hidden">
         <div className="w-full max-w-md bg-white h-full flex flex-col shadow-lg overflow-hidden">
           <header className="px-[18px] pt-[22px] pb-[14px] bg-[#F1F1EE] border-b-[1.5px] border-[#B7B6AE] flex items-center justify-between flex-shrink-0">
-            <span className="font-['Archivo'] font-extrabold text-[19px] text-[#171714]">
-              Tablet Służbowy
+            {/* Marka zamiast napisu "Tablet Służbowy": urządzenie i tak
+                przedstawia się obok nazwą lokalu i zegarem, a to jest jedyny
+                ekran, który stoi otwarty na sali cały dzień. Sam termin
+                "Tablet Służbowy" zostaje w słowniku aplikacji — tak nazywa się
+                typ konta w karcie pracownika i tak mówi o nim Przewodnik. */}
+            <span className="flex items-center gap-2">
+              <ShiftroMark size={24} />
+              <span className="font-['Archivo'] font-extrabold text-[19px] text-[#171714]">
+                {PRODUKT}
+              </span>
             </span>
             <span className="text-sm text-[#8F8E86]">
               {allowed.join(", ") || "Brak lokalu"} · {fmtHHMM(now)}

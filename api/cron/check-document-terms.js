@@ -15,8 +15,15 @@
 // paru linijek z src/api/supabase.ts i src/api/notifications.ts — jeśli te
 // pliki się zmienią, sprawdź czy trzeba przenieść zmianę też tutaj.
 
-const SUPABASE_URL = "https://gdzossvaauznqsrfqovw.supabase.co";
-const SUPABASE_KEY = "sb_publishable_4SuEM6I6VujiuBtqGze1Nw_vFoeoM3S";
+// ⚠️ Model silo: adres bazy NIE MOŻE stać w kodzie — jedno repozytorium
+// obsługuje N projektów Vercel, każdy z własnym projektem Supabase. Zmienne
+// ustawia się w Vercel → Project Settings → Environment Variables, obok
+// istniejącego CRON_SECRET. Fallback na wartości pierwszego klienta zostaje,
+// żeby ta zmiana nie zgasiła działającego crona przed ich ustawieniem.
+const SUPABASE_URL =
+  process.env.SUPABASE_URL || "https://gdzossvaauznqsrfqovw.supabase.co";
+const SUPABASE_KEY =
+  process.env.SUPABASE_KEY || "sb_publishable_4SuEM6I6VujiuBtqGze1Nw_vFoeoM3S";
 
 const headers = {
   apikey: SUPABASE_KEY,

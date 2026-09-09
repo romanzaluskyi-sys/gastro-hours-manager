@@ -1,7 +1,8 @@
 // @ts-nocheck
 import React, { useState } from "react";
 import { LogIn, RefreshCw, WifiOff } from "lucide-react";
-import { APP_VERSION } from "../config";
+import { APP_VERSION, PRODUKT, TENANT } from "../config";
+import ShiftroMark from "./ShiftroMark";
 import {
   fieldLabelCls,
   selectElCls,
@@ -78,11 +79,18 @@ const LoginScreen = ({
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-[#F1F1EE] p-4">
       <div className="bg-white p-8 rounded-xl border-[2.5px] border-[#171714] w-full max-w-md">
+        <div className="flex justify-center mb-2">
+          <ShiftroMark size={44} />
+        </div>
         <h1 className="font-['Archivo'] font-extrabold text-2xl text-center mb-1 text-[#171714]">
-          Godziny Gastro
+          {PRODUKT}
         </h1>
+        {/* Nazwa najemcy pod nazwą produktu — jedyne miejsce, w którym gołym
+            okiem widać, do CZYJEJ bazy podłączone jest to wdrożenie. Jeśli
+            u nowego klienta stoi tu nazwa starego, nie ustawiono zmiennych
+            środowiskowych i aplikacja czyta cudze dane. */}
         <p className="text-center text-[13px] text-[#8F8E86] mb-6">
-          Wersja {APP_VERSION}
+          {TENANT} · wersja {APP_VERSION}
         </p>
         {dbError && (
           <div className="bg-[#FAEAE6] border-l-4 border-[#DE3A22] p-4 mb-6 rounded">
