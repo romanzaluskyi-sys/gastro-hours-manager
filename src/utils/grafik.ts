@@ -41,6 +41,24 @@ export const addDaysYMD = (dateStr, delta) => {
 
 export const dowOf = (dateStr) => new Date(dateStr + "T00:00:00").getDay();
 
+// Czy ta pozycja planu należy do tej osoby. Stare wiersze bywają bez
+// `user_id`, więc porównanie po imieniu jest fallbackiem, nie regułą.
+export const isSameUser = (planShift, user) =>
+  planShift.user_id
+    ? String(planShift.user_id) === String(user.id)
+    : planShift.user_name === user.name;
+
+// Wniosek o wolne obowiązujący danego dnia. Tylko zatwierdzone — odrzucone
+// i oczekujące nie blokują niczego w grafiku.
+export const absenceOn = (absences, user, dateStr) =>
+  (absences || []).find(
+    (a) =>
+      a.status === "approved" &&
+      a.start_date <= dateStr &&
+      dateStr <= a.end_date &&
+      (a.user_id ? String(a.user_id) === String(user.id) : a.user_name === user.name)
+  ) || null;
+
 // Poniedziałek tygodnia, w którym leży podana data — tydzień w grafiku
 // zawsze zaczyna się od poniedziałku (0=niedziela w JS, stąd korekta).
 export const mondayOf = (dateStr) => {

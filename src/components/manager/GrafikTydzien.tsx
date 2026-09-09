@@ -43,15 +43,71 @@ import {
   storedStanowiskaArr,
   isUnpublished,
   problemyObsady,
+  isSameUser,
+  absenceOn,
   krotkaGodzina,
 } from "../../utils/grafik";
 import { activeSwapFor, pendingSwapDelta } from "../../utils/swaps";
 import { addUrlopDirectly, addNiedostepnoscDirectly } from "../../utils/absences";
 import { stanowiskoShort, stanowiskoBadgeStyle } from "../../utils/stanowiska";
+import { normaMiesiaca } from "../../utils/umowy";
 import { countWorkdays, URLOP_HOURS_PER_DAY } from "../../utils/absences";
 import { fetchDailyForecast, describeWeatherCode } from "../../utils/weather";
 
+// Szerokości siatki. Dzień jest wąski i STAŁY — mieści "KUCH 10:00 – 18:00"
+// i nic więcej mu nie potrzeba; pracownik szeroki, bo od 0.32 stoi tam też
+// wykorzystanie normy.
+const KOL_PRACOWNIK = 240;
+const KOL_DZIEN = 112;
+
+// ⚠️ `fmtH` (niżej) dokleja jednostkę — tu potrzebna jest sama liczba, bo
+// "128/176 h" ma jedno "h" na końcu, nie dwa w środku.
+const hLiczba = (h) => Math.round((h || 0) * 10) / 10;
+
+// Podpowiedź pod kursorem: to, co wypadło z wiersza przy skracaniu go do
+// dwóch linijek. Nic nie zginęło, tylko przestało zabierać wysokość.
+const opisOsoby = (meta) => {
+  const czesci = [`${hLiczba(meta.hours)} h w miesiącu`, `${meta.zmian} zmian`];
+  if (meta.norma != null) {
+    const r = hLiczba(meta.hours - meta.norma);
+    czesci.push(
+      `norma ${hLiczba(meta.norma)} h — ${
+        Math.abs(r) < 0.05
+          ? "dokładnie w normie"
+          : r > 0
+          ? `o ${r} h ponad normę`
+          : `brakuje ${-r} h`
+      }`
+    );
+  }
+  if (meta.koszt != null) czesci.push(`${Math.round(meta.koszt)} zł`);
+  if (Math.abs(meta.swapDelta) > 0.01) {
+    czesci.push(
+      `${meta.swapDelta > 0 ? "+" : "−"}${hLiczba(Math.abs(meta.swapDelta))} h po zatwierdzeniu zamian z giełdy`
+    );
+  }
+  return czesci.join(" · ");
+};
+
+// Przekroczona norma świeci na bursztynowo — tym samym kolorem co nadmiar
+// obsady w nagłówku dnia, bo to ten sam rodzaj informacji: "wpisano więcej,
+// niż wynika z planu". Czerwień zostaje dla dziur, których nikt nie pokrył.
+const klasaGodzin = (meta) => {
+  if (meta.norma == null) return "text-[#171714]";
+  if (meta.hours > meta.norma + 0.05) return "text-[#7A5B12]";
+  return "text-[#171714]";
+};
+
 const DZIEN_SKROT = ["ND", "PON", "WT", "ŚR", "CZW", "PT", "SOB"];
+
+// Polska odmiana: 1 zmianę, 2–4 zmiany, 5+ zmian (poza 12–14).
+const zmianyLabel = (n) => {
+  const ost = n % 10;
+  const dwie = n % 100;
+  if (n === 1) return "1 zmianę";
+  if (ost >= 2 && ost <= 4 && !(dwie >= 12 && dwie <= 14)) return `${n} zmiany`;
+  return `${n} zmian`;
+};
 
 const fmtDay = (dateStr) =>
   new Date(dateStr + "T00:00:00").toLocaleDateString("pl-PL", {
@@ -67,17 +123,6 @@ const fmtRange = (from, to) => {
 };
 
 const fmtH = (h) => `${Math.round(h * 10) / 10} h`;
-
-// Wniosek o wolne obowiązujący danego dnia. Tylko zatwierdzone — odrzucone
-// i oczekujące nie blokują niczego w grafiku.
-const absenceOn = (absences, user, dateStr) =>
-  (absences || []).find(
-    (a) =>
-      a.status === "approved" &&
-      a.start_date <= dateStr &&
-      dateStr <= a.end_date &&
-      (a.user_id ? String(a.user_id) === String(user.id) : a.user_name === user.name)
-  ) || null;
 
 // Ostrzeżenia o obsadzie pokazywane WPROST w kolumnie dnia — czerwone, gdy
 // kogoś brakuje, żółte, gdy wpisano więcej osób, niż wynika z wymagań. Te
@@ -124,11 +169,6 @@ function ProblemyObsady({ stat, activeStanowiska, lokal }) {
   );
 }
 
-const isSameUser = (planShift, user) =>
-  planShift.user_id
-    ? String(planShift.user_id) === String(user.id)
-    : planShift.user_name === user.name;
-
 // Godziny urlopu w danym miesiącu — urlop nie jest zmianą w planie, ale
 // liczy się jako 8 h za każdy dzień roboczy (ustalenie właściciela, ta
 // sama formuła co buildUrlopShiftDrafts w utils/absences.ts). Liczba zmian
@@ -173,6 +213,8 @@ function LokalSection({
   onCopyPrevWeek,
   onClearRange,
   onAddEmployee,
+  onAddAtStanowisko,
+  uklad = "osoby",
   shiftSwaps,
   onResolveSwap,
 }) {
@@ -206,7 +248,12 @@ function LokalSection({
     forecastFrom != null && d >= forecastFrom && d <= forecastTo;
 
   const weekFrom = weekDays[0];
-  const weekTo = weekDays[6];
+  // ⚠️ Ostatni dzień liczymy z DŁUGOŚCI tablicy, nie ze stałego [6]. W trybie
+  // dnia `weekDays` ma jeden element, więc [6] było `undefined`, a
+  // `s.date <= undefined` jest zawsze fałszem — cały widok dnia renderował się
+  // poprawnie, tylko każda kratka była pusta. Wyglądało to na brak grafiku, a
+  // nie na błąd, więc przeżyło kilka wydań.
+  const weekTo = weekDays[weekDays.length - 1];
   const planWeek = (planShifts || []).filter(
     (s) => s.date >= weekFrom && s.date <= weekTo
   );
@@ -234,6 +281,11 @@ function LokalSection({
       monthShifts.reduce((sum, s) => sum + shiftHours(s), 0) +
       urlopHoursInMonth(absences, u, monthPrefix);
     const stawka = u.stawka === "" || u.stawka == null ? null : Number(u.stawka);
+    // Norma tylko dla umowy o pracę z wpisanym wymiarem — zlecenie normy nie
+    // ma i nie wolno mu jej dorabiać. Liczona z kalendarza, więc każdy miesiąc
+    // ma swoją (patrz utils/umowy.ts).
+    const [nrRok, nrMies] = monthPrefix.split("-").map(Number);
+    const norma = normaMiesiaca(u, nrRok, nrMies);
     const lokaleOsoby = [...new Set(monthShifts.map((s) => s.lokal))];
     const stanowiskaOsoby = [...new Set(monthShifts.map((s) => s.stanowisko).filter(Boolean))];
     return {
@@ -244,12 +296,49 @@ function LokalSection({
       // zatwierdzone — kierownik musi to widzieć przed decyzją.
       swapDelta: pendingSwapDelta(shiftSwaps, planShifts, u, monthPrefix),
       zmian: monthShifts.length,
+      norma,
       koszt: stawka != null ? hours * stawka : null,
       wieleLokali: lokaleOsoby.length > 1,
       wieleStanowisk: stanowiskaOsoby.length > 1,
       innyLokal: lokaleOsoby.filter((l) => l !== lokal),
     };
   });
+
+  // --- UKŁAD "WG STANOWISK" ---------------------------------------------
+  // Wiersz na stanowisko, a nie na człowieka. To jest ta sama siatka
+  // czytana od drugiej strony: "kto stoi na barze w sobotę i czy ktokolwiek
+  // tam stoi" zamiast "ile Ala ma godzin". Układanie grafiku od zera idzie
+  // właśnie tak — najpierw wiadomo, że bar musi być obsadzony, potem kto go
+  // obsadzi.
+  //
+  // Lista stanowisk bierze też te, które wiszą w zmianach, a nie ma ich już
+  // w słowniku — inaczej zmiana na zarchiwizowanym stanowisku zniknęłaby z
+  // widoku, zostając w bazie i w kontroli obsady.
+  const stanowiskaWiersze = [
+    ...new Set([
+      ...(activeStanowiska || [])
+        .filter((st) => st.lokal_name === lokal)
+        .map((st) => st.name),
+      ...planWeek
+        .filter((s) => s.lokal === lokal && s.stanowisko)
+        .map((s) => s.stanowisko),
+    ]),
+  ].sort((a, b) => a.localeCompare(b, "pl"));
+
+  const zmianyStanowiskaDnia = (stanowisko, dateStr) =>
+    planWeek
+      .filter(
+        (s) =>
+          s.lokal === lokal &&
+          s.date === dateStr &&
+          (s.stanowisko || "") === stanowisko
+      )
+      .sort((a, b) => trimTime(a.start_time).localeCompare(trimTime(b.start_time)));
+
+  const godzinyStanowiska = (stanowisko) =>
+    planWeek
+      .filter((s) => s.lokal === lokal && (s.stanowisko || "") === stanowisko)
+      .reduce((sum, s) => sum + shiftHours(s), 0);
 
   const sorted = [...rowMeta].sort((a, b) => {
     if (sortBy === "godziny") return b.hours - a.hours;
@@ -584,18 +673,32 @@ function LokalSection({
       </div>
 
       <div className="overflow-x-auto">
-        <table className={`w-full border-collapse ${trybDnia ? "min-w-[340px]" : "min-w-[1040px]"}`}>
+        {/* table-fixed + colgroup: bez tego dni "oddychały" — tydzień z jedną
+            gęstą środą rozpychał właśnie ją, a reszta się zwężała, więc siatka
+            wyglądała inaczej w każdym tygodniu. Kolumna pracownika dostała
+            więcej miejsca, bo mieści teraz godziny wobec normy. */}
+        <table
+          className={`w-full border-collapse table-fixed ${
+            trybDnia ? "min-w-[340px]" : "min-w-[1024px]"
+          }`}
+        >
+          <colgroup>
+            <col style={{ width: KOL_PRACOWNIK }} />
+            {weekDays.map((d) => (
+              <col key={d} style={trybDnia ? undefined : { width: KOL_DZIEN }} />
+            ))}
+          </colgroup>
           <thead>
             <tr className="bg-[#F1F1EE]">
-              <th className="text-left px-3 py-2 border-r-[2px] border-[#171714] w-[190px] min-w-[190px] align-top">
-                <span className={statLabelCls}>Pracownik</span>
-                <div className="text-[11px] text-[#8F8E86] font-normal normal-case">
-                  godziny i zmiany w miesiącu
-                </div>
+              {/* Bez nagłówka "Pracownik" i bez podpisu pod nim: kolumna jest
+                  oczywista z zawartości, a te dwie linijki podnosiły cały
+                  wiersz nagłówka, który i tak jest najwyższym elementem siatki. */}
+              <th className="text-left px-3 py-2 border-r-[2px] border-[#171714] align-bottom">
                 {mode === "edycja" && (
                   <button
                     onClick={() => onAddEmployee(lokal)}
-                    className="mt-1.5 w-full px-2 py-1 rounded border-[2px] border-[#DE3A22] text-[#DE3A22] text-[12px] font-bold hover:bg-[#FAEAE6]"
+                    className="w-full px-2 py-1.5 rounded border-[2px] border-[#DE3A22] text-[#DE3A22] text-[12px] font-bold hover:bg-[#FAEAE6]"
+                    title="Zakłada nowego pracownika w systemie i otwiera jego kartę"
                   >
                     <UserPlus size={13} className="inline -mt-0.5 mr-1" /> Dodaj pracownika
                   </button>
@@ -609,33 +712,20 @@ function LokalSection({
                     key={d}
                     className="px-3 py-2 text-left border-r-[2px] border-[#E7E7E2] last:border-r-0 align-top"
                   >
-                    <div className="font-['Archivo'] font-extrabold text-[19px] leading-none text-[#8F8E86]">
-                      {DZIEN_SKROT[new Date(d + "T00:00:00").getDay()]}
-                    </div>
-                    <div className="font-['Archivo'] font-extrabold text-[15px] mt-1">
-                      {fmtDay(d)}
-                    </div>
-                    {/* Stała wysokość, żeby dni bez prognozy nie rozjeżdżały
-                        wyrównania nagłówków; "—" zamiast pustki, bo pusty
-                        wiersz nie odróżnia "brak danych" od "nie działa". */}
-                    <div
-                      className="text-[11px] text-[#8F8E86] h-[15px] leading-[15px] whitespace-nowrap"
-                      title={
-                        pogoda && pogoda.temp != null
-                          ? describeWeatherCode(pogoda.code).label
-                          : wZasieguProgozy(d)
-                          ? "Brak prognozy dla tego dnia"
-                          : "Prognoza sięga 16 dni w przód"
-                      }
-                    >
-                      {pogoda && pogoda.temp != null
-                        ? `${describeWeatherCode(pogoda.code).icon} ${Math.round(pogoda.temp)}°`
-                        : wZasieguProgozy(d)
-                        ? "—"
-                        : ""}
+                    {/* Dwie linijki zamiast czterech: dzień tygodnia i data w
+                        jednej, pogoda z obsadą w drugiej. Nagłówek był
+                        najwyższym elementem siatki, a niósł te same cztery
+                        liczby co teraz. */}
+                    <div className="flex items-baseline justify-between gap-1">
+                      <span className="font-['Archivo'] font-extrabold text-[17px] leading-none text-[#8F8E86]">
+                        {DZIEN_SKROT[new Date(d + "T00:00:00").getDay()]}
+                      </span>
+                      <span className="font-['Archivo'] font-extrabold text-[13px] leading-none whitespace-nowrap">
+                        {fmtDay(d)}
+                      </span>
                     </div>
                     <div
-                      className={`flex items-center justify-between gap-2 text-[12px] font-bold mt-1 ${
+                      className={`flex items-baseline justify-between gap-1 text-[12px] font-bold mt-1.5 ${
                         stat.hasGap
                           ? "text-[#DE3A22]"
                           : stat.hasNadmiar
@@ -643,8 +733,26 @@ function LokalSection({
                           : "text-[#171714]"
                       }`}
                     >
-                      <span>{stat.people} os.</span>
-                      <span>{fmtH(stat.hours)}</span>
+                      {/* Pogoda ma stałą szerokość, żeby dni bez prognozy nie
+                          przesuwały liczb obsady w sąsiednich kolumnach. */}
+                      <span
+                        className="text-[11px] font-normal text-[#8F8E86] w-[38px] whitespace-nowrap"
+                        title={
+                          pogoda && pogoda.temp != null
+                            ? describeWeatherCode(pogoda.code).label
+                            : wZasieguProgozy(d)
+                            ? "Brak prognozy dla tego dnia"
+                            : "Prognoza sięga 16 dni w przód"
+                        }
+                      >
+                        {pogoda && pogoda.temp != null
+                          ? `${describeWeatherCode(pogoda.code).icon}${Math.round(pogoda.temp)}°`
+                          : wZasieguProgozy(d)
+                          ? "—"
+                          : ""}
+                      </span>
+                      <span className="whitespace-nowrap">{stat.people} os.</span>
+                      <span className="whitespace-nowrap">{fmtH(stat.hours)}</span>
                     </div>
                     <ProblemyObsady
                       stat={stat}
@@ -657,19 +765,138 @@ function LokalSection({
             </tr>
           </thead>
           <tbody>
-            {sorted.length === 0 && (
+            {uklad === "stanowiska" &&
+              (stanowiskaWiersze.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={weekDays.length + 1}
+                    className="px-4 py-6 text-center text-[#6E6E66] text-sm"
+                  >
+                    Ten lokal nie ma zdefiniowanych stanowisk. Dodaj je w
+                    Pracownicy → Stanowiska.
+                  </td>
+                </tr>
+              ) : (
+                stanowiskaWiersze.map((stanowisko) => {
+                  const style = stanowiskoBadgeStyle(activeStanowiska, lokal, stanowisko);
+                  return (
+                    <tr key={stanowisko} className="border-t-[2px] border-[#E7E7E2]">
+                      <td className="px-3 py-1.5 border-r-[2px] border-[#171714] align-top">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span
+                            className="px-1.5 py-0.5 rounded text-[11px] font-extrabold flex-shrink-0"
+                            style={style || { backgroundColor: "#E7E7E2", color: "#171714" }}
+                          >
+                            {stanowiskoShort(activeStanowiska, lokal, stanowisko)}
+                          </span>
+                          <span className="font-['Archivo'] font-bold text-[14px] truncate">
+                            {stanowisko || "bez stanowiska"}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-[#6E6E66] mt-0.5">
+                          {fmtH(godzinyStanowiska(stanowisko))} w tygodniu
+                        </div>
+                      </td>
+                      {weekDays.map((d, di) => {
+                        const zm = zmianyStanowiskaDnia(stanowisko, d);
+                        const dziury = (dayStats[di].gaps || []).filter(
+                          (g) => g.stanowisko === stanowisko
+                        );
+                        return (
+                          <td
+                            key={d}
+                            className="px-2 py-1.5 border-r-[2px] border-[#E7E7E2] last:border-r-0 align-top"
+                          >
+                            <div className="space-y-0.5">
+                              {zm.map((sh) => {
+                                const Wrapper = edycja ? "button" : "div";
+                                return (
+                                  <Wrapper
+                                    key={sh.id}
+                                    onClick={
+                                      edycja
+                                        ? () =>
+                                            onCellClick(
+                                              (users || []).find((u) => isSameUser(sh, u)) || {
+                                                id: sh.user_id,
+                                                name: sh.user_name,
+                                              },
+                                              d,
+                                              sh,
+                                              activeSwapFor(shiftSwaps, sh.id)
+                                            )
+                                        : undefined
+                                    }
+                                    className={`w-full text-left leading-tight rounded px-1 -mx-1 ${
+                                      edycja ? "hover:bg-[#F1F1EE]" : ""
+                                    } ${
+                                      sh.__nieaktywny
+                                        ? "bg-[#FAEAE6] line-through decoration-[#8A3A2B]"
+                                        : ""
+                                    }`}
+                                    title={edycja ? "Kliknij, aby edytować" : ""}
+                                  >
+                                    <div className="text-[12px] font-bold truncate">
+                                      {sh.user_name}
+                                      {isUnpublished(sh) && (
+                                        <span
+                                          className="text-[#DE3A22] font-extrabold"
+                                          title="Niewysłane pracownikom"
+                                        >
+                                          {" "}
+                                          •
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="text-[11px] text-[#6E6E66] tabular-nums whitespace-nowrap">
+                                      {trimTime(sh.start_time)}–{trimTime(sh.end_time)}
+                                    </div>
+                                  </Wrapper>
+                                );
+                              })}
+                              {/* Dziura tego stanowiska w tym dniu stoi wprost
+                                  w kratce — w tym układzie to jest główna
+                                  informacja, a nie przypis pod nagłówkiem. */}
+                              {dziury.map((g, gi) => (
+                                <div
+                                  key={`gap-${gi}`}
+                                  className="text-[11px] font-bold text-[#DE3A22] leading-tight"
+                                  title={`Brakuje ${g.missing} os. między ${g.from} a ${g.to}`}
+                                >
+                                  −{g.missing} {g.from}–{g.to}
+                                </div>
+                              ))}
+                              {edycja && (
+                                <button
+                                  onClick={() => onAddAtStanowisko(stanowisko, d)}
+                                  className="text-[11px] font-bold text-[#8F8E86] hover:text-[#DE3A22]"
+                                >
+                                  + dodaj
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })
+              ))}
+
+            {uklad !== "stanowiska" && sorted.length === 0 && (
               <tr>
                 <td
-                  colSpan={8}
+                  colSpan={weekDays.length + 1}
                   className="px-4 py-6 text-center text-[#6E6E66] text-sm"
                 >
                   Nikt nie jest przypisany do tego lokalu.
                 </td>
               </tr>
             )}
-            {sorted.map((meta) => (
+            {uklad !== "stanowiska" &&
+              sorted.map((meta) => (
               <tr key={meta.user.id} className="border-t-[2px] border-[#E7E7E2]">
-                <td className="px-3 py-2 border-r-[2px] border-[#171714] align-top">
+                <td className="px-3 py-1.5 border-r-[2px] border-[#171714] align-top">
                   <div className="flex items-start gap-1.5">
                     {(meta.wieleLokali || meta.wieleStanowisk) && (
                       <span
@@ -681,37 +908,50 @@ function LokalSection({
                         }
                       />
                     )}
-                    <div className="min-w-0">
-                      <div className="font-['Archivo'] font-bold text-[14px] truncate">
-                        {meta.user.name}
+                    {/* Dwie linijki zamiast pięciu. Liczba zmian i koszt nie
+                        zniknęły — siedzą w podpowiedzi (`title`), bo przy
+                        planowaniu tygodnia decyduje wykorzystanie normy, a nie
+                        one. Krótszy wiersz = więcej osób widocznych naraz, co
+                        było główną prośbą właściciela. */}
+                    <div className="min-w-0" title={opisOsoby(meta)}>
+                      <div className="flex items-baseline gap-1 min-w-0">
+                        <span className="font-['Archivo'] font-bold text-[14px] truncate">
+                          {meta.user.name}
+                        </span>
+                        {meta.wylaczone && (
+                          <span
+                            className="text-[9px] font-extrabold text-[#8A3A2B] bg-[#FAEAE6] rounded px-1 flex-shrink-0"
+                            title="Konto wyłączone — zmiany tej osoby nie liczą się do obsady"
+                          >
+                            WYŁ.
+                          </span>
+                        )}
                       </div>
-                      {meta.wylaczone && (
-                        <div className="text-[10px] font-extrabold text-[#8A3A2B] bg-[#FAEAE6] rounded px-1 inline-block">
-                          KONTO WYŁĄCZONE
-                        </div>
-                      )}
-                      <div className="text-[11px] text-[#6E6E66] truncate">
+                      <div className="text-[11px] text-[#6E6E66] truncate leading-tight">
                         {meta.user.default_stanowisko || "bez stanowiska"}
-                      </div>
-                      <div className="text-[12px] mt-0.5">
-                        <strong>{fmtH(meta.hours)}</strong>{" "}
-                        <span className="text-[#6E6E66]">· {meta.zmian} zmian</span>
+                        {" · "}
+                        <strong className={klasaGodzin(meta)}>
+                          {hLiczba(meta.hours)}
+                          {meta.norma != null ? `/${hLiczba(meta.norma)}` : ""} h
+                        </strong>
                         {Math.abs(meta.swapDelta) > 0.01 && (
                           <span
                             className={`ml-1 font-extrabold ${
                               meta.swapDelta > 0 ? "text-[#2F7A2A]" : "text-[#DE3A22]"
                             }`}
-                            title="Zmiana godzin po zatwierdzeniu oczekujących zamian z giełdy"
                           >
                             {meta.swapDelta > 0 ? "+" : "−"}
-                            {fmtH(Math.abs(meta.swapDelta))}
+                            {hLiczba(Math.abs(meta.swapDelta))}
                           </span>
                         )}
-                      </div>
-                      <div className="text-[11px] text-[#6E6E66]">
-                        {meta.koszt != null
-                          ? `${Math.round(meta.koszt)} zł`
-                          : "brak stawki"}
+                        {/* Zlecenie normy nie ma, więc w tym samym miejscu
+                            stoi liczba, która przy zleceniu naprawdę wynika z
+                            umowy: koszt godzin. Przy umowie o pracę byłaby
+                            myląca — tam kolejna godzina w normie nie kosztuje
+                            nic dodatkowego. */}
+                        {meta.norma == null && meta.koszt != null
+                          ? ` · ${Math.round(meta.koszt)} zł`
+                          : ""}
                       </div>
                     </div>
                   </div>
@@ -792,7 +1032,10 @@ export default function GrafikTydzien({
   // wpisywanie, kontrola obsady i sumy działają identycznie, a na telefonie
   // jedna kolumna wreszcie mieści się na ekranie.
   trybDnia = false,
+  // "osoby" — wiersz na pracownika; "stanowiska" — wiersz na stanowisko.
+  uklad = "osoby",
   mode,
+  onNewEmployee,
   shiftSwaps,
   onResolveSwap,
   setAbsences,
@@ -821,75 +1064,124 @@ export default function GrafikTydzien({
   const openAddEmployee = (lokal) =>
     setModalCtx({ user: null, date: weekStart, shift: null, lokal, pickDate: true });
 
+  // Wejście z siatki "wg stanowisk": dzień i stanowisko są znane z klikniętej
+  // kratki, brakuje tylko człowieka — i to jest dokładnie pytanie, które
+  // kierownik ma w głowie, układając grafik od strony obsady.
+  const openAddNaStanowisko = (stanowisko, dateStr, lokal) =>
+    setModalCtx({ user: null, date: dateStr, shift: null, lokal, stanowisko });
+
   // Jedyne miejsce, które zapisuje zaplanowaną zmianę. Kolejność sprawdzeń
   // jest istotna: najpierw zatwierdzone wolne (twarda odmowa), potem
   // nakładające się godziny. Praca w dwóch lokalach jednego dnia i druga
   // zmiana tego samego dnia są DOZWOLONE — patrz docs/GRAFIK.md.
-  const handleSave = async (data) => {
+  // Co stoi na przeszkodzie, żeby wpisać tę zmianę w TEN dzień. Wydzielone z
+  // handleSave, bo od 0.32 ta sama zmiana może iść na kilka dni naraz i każdy
+  // dzień trzeba sprawdzić osobno.
+  const przeszkodaDnia = (data, dateStr) => {
     const user = (users || []).find((u) => String(u.id) === String(data.user_id));
     // Znany ostatni dzień pracy jest twardszy niż wolne: po nim tej osoby po
     // prostu nie będzie. Sprawdzamy to pierwsze, żeby komunikat mówił o
     // odejściu, a nie o urlopie, który akurat też wypada w tym terminie.
-    if (poOstatnimDniu(user, data.date)) {
-      setBlokada({
-        userName: data.user_name,
+    if (poOstatnimDniu(user, dateStr)) {
+      return {
+        krotko: "koniec pracy",
         tekst: `${data.user_name} kończy pracę ${user.ostatni_dzien} — ta zmiana wypada później.`,
         podpowiedz:
           "Jeśli data odejścia się zmieniła, popraw ją w karcie pracownika (Pracownicy).",
-      });
-      return false;
+      };
     }
-    const wolne = user ? findBlockingAbsence(absences, user, data.date) : null;
+    const wolne = user ? findBlockingAbsence(absences, user, dateStr) : null;
     if (wolne) {
-      setBlokada({
-        userName: data.user_name,
+      return {
+        krotko: wolne.type === "urlop" ? "urlop" : "niedostępność",
         tekst:
           wolne.type === "urlop"
             ? `${data.user_name} ma tego dnia zatwierdzony urlop (${wolne.start_date} – ${wolne.end_date}).`
             : `${data.user_name} zgłosił(a) brak dostępności na ten dzień (${wolne.start_date} – ${wolne.end_date}).`,
         podpowiedz:
           "Dostępność zgłasza pracownik w swojej aplikacji. Aby to obejść, poproś o wycofanie zgłoszenia.",
-      });
-      return false;
+      };
     }
-
     const kolizja = findOverlappingPlanShift(planShifts, {
       user_id: data.user_id,
       user_name: data.user_name,
-      date: data.date,
+      date: dateStr,
       start_time: data.start_time,
       end_time: data.end_time,
       excludeId: data.id,
     });
     if (kolizja) {
-      setBlokada({
-        userName: data.user_name,
+      return {
+        krotko: "kolizja godzin",
         tekst: `${data.user_name} ma już zmianę w lokalu ${kolizja.lokal} (${trimTime(
           kolizja.start_time
         )} – ${trimTime(kolizja.end_time)}, ${kolizja.date}), która nachodzi na te godziny.`,
         podpowiedz:
           "Blokujemy tylko nachodzące godziny — zmianę dzieloną (np. do 14:00 tu, od 14:00 gdzie indziej) można wpisać normalnie.",
-      });
+      };
+    }
+    return null;
+  };
+
+  const handleSave = async (data) => {
+    // Edycja dotyczy jednego wiersza; tylko tworzenie może iść na kilka dni.
+    const dni = data.id
+      ? [data.date]
+      : [...new Set(data.dni && data.dni.length ? data.dni : [data.date])].sort();
+
+    // Jeden dzień = dotychczasowe zachowanie: modal z pełnym wyjaśnieniem,
+    // dlaczego się nie da. Przy kilku dniach pojedyncza przeszkoda nie może
+    // przerwać całej operacji — pomijamy ten dzień i mówimy o tym po zapisie.
+    if (dni.length === 1) {
+      const b = przeszkodaDnia(data, dni[0]);
+      if (b) {
+        setBlokada({ userName: data.user_name, tekst: b.tekst, podpowiedz: b.podpowiedz });
+        return false;
+      }
+    }
+
+    const doZapisu = [];
+    const pominiete = [];
+    for (const d of dni) {
+      const b = dni.length === 1 ? null : przeszkodaDnia(data, d);
+      if (b) pominiete.push(`${DZIEN_SKROT[new Date(d + "T00:00:00").getDay()]} (${b.krotko})`);
+      else doZapisu.push(d);
+    }
+
+    // Wszystkie dni odpadły — to nie jest cichy sukces, kierownik musi wiedzieć.
+    if (doZapisu.length === 0) {
+      showMsg(`Nie dodano żadnej zmiany. Pominięto: ${pominiete.join(", ")}.`, "error");
       return false;
     }
 
     try {
-      const payload = {
+      const bazowy = {
         lokal: data.lokal,
         user_id: data.user_id,
         user_name: data.user_name,
         stanowisko: data.stanowisko,
-        date: data.date,
         start_time: data.start_time,
         end_time: data.end_time,
         updated_at: new Date().toISOString(),
       };
       if (data.id) {
-        const zapisana = await api.patch("grafik_shifts", data.id, payload);
+        const zapisana = await api.patch("grafik_shifts", data.id, {
+          ...bazowy,
+          date: data.date,
+        });
         setPlanShifts((planShifts || []).map((s) => (s.id === zapisana.id ? zapisana : s)));
       } else {
-        const zapisana = await api.post("grafik_shifts", payload);
-        setPlanShifts([...(planShifts || []), zapisana]);
+        const nowe = [];
+        for (const d of doZapisu) {
+          nowe.push(await api.post("grafik_shifts", { ...bazowy, date: d }));
+        }
+        setPlanShifts([...(planShifts || []), ...nowe]);
+        if (nowe.length > 1 || pominiete.length > 0) {
+          showMsg(
+            `Dodano ${zmianyLabel(nowe.length)}.` +
+              (pominiete.length ? ` Pominięto: ${pominiete.join(", ")}.` : "")
+          );
+        }
       }
       if (!data.dodajNastepna) setModalCtx(null);
       return true;
@@ -1151,7 +1443,10 @@ export default function GrafikTydzien({
           title={trybDnia ? "Skocz do dnia" : "Skocz do tygodnia z tą datą"}
         />
 
-        <div className="ml-auto flex items-center gap-2">
+        {/* Sortowanie dotyczy wierszy-osób. W układzie "wg stanowisk" wiersze
+            są stanowiskami i idą alfabetycznie, więc te przyciski nie mają
+            czego przestawiać. */}
+        <div className={`ml-auto flex items-center gap-2 ${uklad === "stanowiska" ? "hidden" : ""}`}>
           <span className={statLabelCls}>Sortuj</span>
           {[
             { key: "stanowisko", label: "Stanowisko" },
@@ -1213,19 +1508,34 @@ export default function GrafikTydzien({
           onCellClick={(user, dateStr, shift, oferta) =>
             openCell(user, dateStr, shift, lokal, oferta)
           }
+          onAddAtStanowisko={(stanowisko, dateStr) =>
+            openAddNaStanowisko(stanowisko, dateStr, lokal)
+          }
           onCopyPrevWeek={handleCopyPrevWeek}
           onClearRange={handleClearRange}
-          onAddEmployee={openAddEmployee}
+          uklad={uklad}
+          onAddEmployee={() => onNewEmployee && onNewEmployee(lokal)}
           shiftSwaps={shiftSwaps}
           onResolveSwap={onResolveSwap}
         />
       ))}
 
       <p className="text-[12px] text-[#6E6E66]">
-        <strong>URP</strong> — urlop zatwierdzony · <strong>NIE</strong> — pracownik
-        zgłosił brak dostępności, nie da się tu wpisać zmiany · czerwony pasek przy
-        nazwisku — kilka lokali lub stanowisk · szare "w ..." — tego dnia osoba ma
-        zmianę w innym lokalu.{" "}
+        {uklad === "stanowiska" ? (
+          <>
+            Wiersz to stanowisko, kratka to jego obsada w danym dniu. Czerwone
+            „−2 09:00–17:00” znaczy, że w tych godzinach brakuje dwóch osób wobec
+            wymagań. „+ dodaj” wpisuje kolejną osobę na to samo stanowisko i dzień —
+            druga zmiana na jednym stanowisku jest normalna, nie błędem.{" "}
+          </>
+        ) : (
+          <>
+            <strong>URP</strong> — urlop zatwierdzony · <strong>NIE</strong> — pracownik
+            zgłosił brak dostępności, nie da się tu wpisać zmiany · czerwony pasek przy
+            nazwisku — kilka lokali lub stanowisk · szare "w ..." — tego dnia osoba ma
+            zmianę w innym lokalu.{" "}
+          </>
+        )}
         {mode === "edycja"
           ? "Tryb edycji — zmiany nie są jeszcze wysłane pracownikom."
           : "Tryb podglądu — przełącz na Edycję, żeby wpisywać zmiany."}

@@ -293,7 +293,7 @@ export default function ZadaniaISprzatanie({
     <div className="max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-1 flex-wrap gap-3">
         <div>
-          <p className={statLabelCls}>Zadania i sprzątanie</p>
+          <p className={statLabelCls}>Zadania</p>
           <h2 className={pageTitleCls}>Kontrola wykonania po osobach</h2>
         </div>
         <div className="flex items-center gap-2">

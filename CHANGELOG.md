@@ -5,6 +5,57 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.32.0 — 2026-09-09
+
+- **Poprawka: widok „Dzień” w Grafiku nie pokazywał ŻADNYCH zmian.** Siatka
+  rysowała się poprawnie, tylko każda kratka była pusta, więc wyglądało to na
+  brak grafiku, a nie na błąd.
+- **Drugi sposób układania grafiku: „Wg stanowisk”.** Przełącznik obok
+  „Miesiąc”. Wiersz to stanowisko, kratka to jego obsada w danym dniu —
+  widać od razu, gdzie nikogo nie ma. „+ dodaj” dopisuje kolejną osobę na to
+  samo stanowisko i dzień. Dotychczasowy układ jest pod „Wg osób”.
+- **Przebudowany pasek Grafiku**: „Wyślij grafik pracownikom” to teraz
+  „Wyślij grafik”, a Podgląd, Edycja i Konfiguracja zwinęły się do samych
+  ikon i stoją obok wysyłki.
+- **„Dodaj pracownika” nad siatką zakłada pracownika**, a nie wpisuje zmianę
+  komuś spoza listy — przycisk prowadzi teraz do karty nowego pracownika z
+  wypełnionym lokalem.
+- **Nagłówek dnia w siatce jest niższy**: dzień tygodnia i data w jednej
+  linijce, pogoda z obsadą w drugiej. Ostrzeżenia o obsadzie bez zmian.
+- **Nowa kolejność zakładek** w panelu: Pulpit, Zatwierdzanie zmian, Grafik,
+  Zadania, Puls, a dalej reszta. Na telefonie w dolnym pasku widać właśnie tę
+  piątkę. „Zadania i sprzątanie” nazywają się teraz po prostu „Zadania”.
+- **Jaśniejszy pasek boczny** — zamiast czarnego bloku odcina się od treści
+  jednym tonem.
+- **Siatka Grafiku jest gęstsza.** Kolumny dni mają stałą szerokość, więc
+  tydzień wygląda tak samo niezależnie od tego, w którym dniu jest tłok.
+  Wiersz pracownika zajmuje dwie linijki zamiast pięciu — na ekran wchodzi
+  prawie dwa razy więcej osób.
+- **W wierszu widać wykorzystanie umowy**: przy umowie o pracę „128/176 h”
+  (godziny wobec normy miesiąca, przekroczenie na bursztynowo), przy zleceniu
+  godziny i koszt. Liczba zmian i pozostałe szczegóły są pod kursorem.
+- **Wymagania obsady można poprawiać** (Grafik → Konfiguracja). Do tej pory
+  dawało się je tylko dodać albo skasować, więc zmiana „2 osoby” na „3 osoby”
+  oznaczała skasowanie wymagania i wpisanie go od nowa. Przycisk „Edytuj”
+  wczytuje wymaganie do formularza pod spodem; działa tak samo w zwykłych
+  wymaganiach i w wymaganiach wyjątku.
+- **Jedną zmianę można wpisać od razu na kilka dni** — w oknie przypisywania
+  doszedł wybór „Powtórz w dniach”, jak przy zadaniach. Powstają zwykłe,
+  niezależne zmiany. Dni z urlopem, kolizją godzin albo po ostatnim dniu pracy
+  są pomijane, a po zapisie aplikacja mówi, które i dlaczego.
+- **Drugi układ wydruku miesiąca: „Osoby × dni”** (Grafik → Miesiąc). Wiersz
+  na osobę, kolumna na dzień; w kratce początek, koniec i skrót stanowiska,
+  jedno pod drugim. Siatka ma zawsze 31 kolumn, więc luty drukuje się w tej
+  samej szerokości co marzec i wydruki da się położyć obok siebie. Mieści się
+  na A4 poziomo; przełącznik „Kalendarz / Osoby × dni” jest przy przyciskach
+  miesiąca. Przy nazwisku widać sumę godzin i liczbę zmian w miesiącu.
+- **W układzie „Osoby × dni” pracownik tego lokalu ma CAŁY swój miesiąc** —
+  także dni, w które pracuje w innym lokalu (szara, pochylona kratka ze
+  skrótem tamtego lokalu). Dzięki temu nie wygląda na wolnego i nie dostanie
+  drugiej zmiany na ten sam dzień. Osoba przychodząca do nas wyjątkowo ma
+  pokazane tylko zmiany u nas — jej pozostały grafik należy do jej lokalu.
+- Poprawka: w liście wymagań obsady było „2 osób” zamiast „2 osoby”.
+
 ## 0.31.0 — 2026-09-09
 
 - **Karta pracownika przebudowana na bloki** — dane podstawowe, kontakt i

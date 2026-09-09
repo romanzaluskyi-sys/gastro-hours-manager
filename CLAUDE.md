@@ -347,6 +347,13 @@ na każdym poziomie `flex-1`/`overflow-y-auto` przestaje faktycznie się
 stosować (domyślne `min-height: auto` na elementach flex) i strona
 przestaje się scrollować w ogóle zamiast scrollować tylko `<main>`.
 
+⚠️ Kolejność zakładek (`NAV_ITEMS` w `ManagerShell.tsx`) i pierwsza piątka w
+dolnym pasku mobile (`MOBILE_PRIMARY_KEYS`) są ustaleniem właściciela z
+0.32.0, ułożonym wg tego, jak często się tam wchodzi: Pulpit, Zatwierdzanie
+zmian, Grafik, Zadania, Puls, a dalej reszta. Nie przestawiaj ich "logicznie"
+przy okazji innych zmian. Sidebar jest od 0.32.0 JASNY (`#E4E4DE`,
+`shellSidebarCls`) — o ton ciemniejszy od tła strony, nie czarny.
+
 **Zakładki** (kolejność z `NAV_ITEMS`): **Pulpit** (`PulpitHome.tsx`, "Dziś
 w liczbach" — godziny dziś/tydzień z porównaniem do poprzedniego tygodnia,
 koszt miesiąca z `users.stawka`, podgląd "Wymaga Twojej decyzji"/"Teraz na
@@ -1809,8 +1816,125 @@ Trzy decyzje, których nie zmieniaj bez rozmowy z właścicielem:
 - **To sygnał, nie zarzut.** Świadomie NIE wykrywamy "nie stawił się" ani
   "pracował poza grafikiem" — rozbieżności są normalne i tak ma zostać.
 
-### 5c. Grafik — świadomie NIE zrobione
-- Drugi wariant druku miesiąca (tabela pracownicy × dni) — odłożony.
+### 5c. Siatka i wpisywanie na kilka dni — od 0.32.0
+
+- **Kolumny mają stałe szerokości** (`table-fixed` + `<colgroup>`,
+  `KOL_PRACOWNIK`/`KOL_DZIEN` w `GrafikTydzien.tsx`). Wcześniej dni
+  "oddychały": tydzień z jedną gęstą środą rozpychał właśnie ją, więc siatka
+  wyglądała inaczej w każdym tygodniu. W widoku "Dzień" jedyna kolumna dnia
+  zostaje elastyczna.
+- **Wiersz pracownika ma dwie linijki, nie pięć**: imię, a pod nim
+  "stanowisko · godziny". Liczba zmian, koszt i różnica z giełdy przeniosły
+  się do podpowiedzi (`opisOsoby`) — nie zniknęły, przestały zabierać
+  wysokość. Głównym powodem była prośba właściciela o więcej osób na ekranie.
+- **W wierszu stoi liczba, która wynika z UMOWY tej osoby**: przy umowie o
+  pracę godziny wobec normy miesiąca (`128/176 h`, przekroczenie na
+  bursztynowo — tym samym kolorem co nadmiar obsady), przy zleceniu godziny i
+  koszt. Świadomie nie odwrotnie: przy umowie o pracę kolejna godzina w
+  ramach normy nie kosztuje nic dodatkowego, więc "godziny × stawka" byłoby
+  tam liczbą myląco wyglądającą na koszt decyzji.
+- **"Powtórz w dniach"** w modalu przypisania (`GrafikZmianaModal.tsx`) —
+  wybór dni bieżącego tygodnia, jak przy zadaniach. ⚠️ To **zwielokrotnione
+  tworzenie, NIE reguła powtarzania**: powstaje N niezależnych wierszy, bez
+  żadnego powiązania między nimi. Gdyby powiązanie istniało, każda późniejsza
+  edycja jednej zmiany rodziłaby pytanie "czy zmieniam wszystkie?", na które
+  nie ma dobrej odpowiedzi. Blok pokazuje się TYLKO przy tworzeniu — przy
+  edycji poprawiamy jeden wiersz.
+- **Dni z przeszkodą są pomijane, nie blokują reszty.** `przeszkodaDnia()`
+  (wydzielone z `handleSave`) sprawdza każdy dzień osobno: po `ostatni_dzien`,
+  urlop/niedostępność, kolizja godzin. Przy JEDNYM dniu zachowanie jest
+  dotychczasowe — modal blokady z pełnym wyjaśnieniem. Przy kilku dniach
+  pojedyncza przeszkoda nie może przerwać całej operacji, więc dzień odpada, a
+  komunikat po zapisie mówi które i dlaczego ("Dodano 2 zmiany. Pominięto:
+  WT (kolizja godzin), CZW (urlop)."). Gdy odpadną wszystkie — komunikat
+  błędu, nigdy cichy sukces.
+- **Siatka ma DWA układy** (`uklad` w `Grafik.tsx`, przekazywane do
+  `GrafikTydzien`): `osoby` — wiersz na pracownika, `stanowiska` — wiersz na
+  stanowisko, a w kratce ludzie, którzy je tego dnia obsadzają. Drugi układ
+  jest bliższy temu, jak grafik POWSTAJE ("bar musi być obsadzony, kto go
+  obsadzi?"), pierwszy — temu, jak się go potem SPRAWDZA ("ile Ala ma
+  godzin?").
+  - Dziury obsady tego stanowiska stoją wprost w kratce (`−2 09:00–17:00`) —
+    w tym układzie to jest główna informacja, a nie przypis pod nagłówkiem.
+  - "+ dodaj" otwiera modal z **ustawionym stanowiskiem i dniem**
+    (`ctx.stanowisko`), więc wybór osoby go nie nadpisuje
+    (`stanowiskoRuszone` startuje wtedy jako `true`). Druga osoba na tym samym
+    stanowisku i dniu jest normalna, nie błędem.
+  - Lista wierszy bierze też stanowiska, których nie ma już w słowniku, ale
+    wiszą w zmianach — inaczej zmiana na zarchiwizowanym stanowisku znikałaby
+    z widoku, zostając w bazie i w kontroli obsady.
+  - Sortowanie (Stanowisko/Godziny/Nazwisko) dotyczy tylko układu `osoby`.
+- **"Dodaj pracownika" nad siatką ZAKŁADA PRACOWNIKA** (`goToNewEmployee` w
+  `ManagerDashboard.tsx`), a nie otwiera modalu zmiany dla kogoś spoza siatki.
+  Przycisk mówił "pracownika", a dawał zmianę — to było mylące. Zmianę komuś
+  spoza siatki wpisuje się dalej przez kratkę i "Pokaż wszystkich".
+- ⚠️ **Widok "Dzień" liczył zakres z `weekDays[6]`**, a w tym trybie
+  `weekDays` ma jeden element — `s.date <= undefined` jest zawsze fałszem, więc
+  siatka renderowała się poprawnie z PUSTYMI kratkami. Wyglądało to na brak
+  grafiku, nie na błąd, i dlatego przeżyło kilka wydań. Ostatni dzień bierzemy
+  teraz z długości tablicy. **Każde nowe miejsce liczące zakres tygodnia ma
+  używać `weekDays[weekDays.length - 1]`**, nigdy stałego indeksu.
+- **Wymagania obsady można EDYTOWAĆ** (`GrafikWymagania.tsx`). Wcześniej były
+  tylko "dodaj" i "kasuj", więc podniesienie liczby osób z 2 na 3 wymagało
+  skasowania reguły i wpisania jej od nowa — razem z dniami tygodnia, które
+  przy okazji łatwo było zgubić. `submitRule` robi `patch`, gdy `form.id` jest
+  ustawione, i `post`, gdy nie.
+  - **Który wiersz jest edytowany, czyta się z formularza** (`ruleForm.id` /
+    `wyjatekRuleForm.id`), NIE z osobnego stanu. Formularze są dwa — zestawu i
+    wyjątku — a jeden wspólny stan podświetlałby przy przeskoku między nimi
+    inny wiersz niż ten faktycznie otwarty.
+  - ⚠️ **`parseDays` zwraca `null` przy pustej wartości, a `null` znaczy
+    "codziennie"** (tak czyta to `daysLabel` i cała kontrola obsady). Przy
+    wczytywaniu do formularza null musi wrócić jako PEŁNY tydzień (`parseDni`)
+    — inaczej wejście w edycję po cichu odznaczałoby wszystkie dni, a zapis
+    zawężałby regułę do niczego. Ta sama pułapka co `parseDaysOfWeek` w
+    `utils/tasks.ts`.
+  - Zmiana zestawu w trakcie edycji przerywa ją: payload niesie `set_id`
+    aktywnego zestawu, więc zapis po cichu przeniósłby regułę gdzie indziej.
+    Skasowanie edytowanej reguły też czyści formularz — inaczej zapisałby ją
+    z powrotem pod nieistniejącym już id.
+- **Widok Miesiąc ma DWA układy** (`GrafikMiesiac.tsx`, stan `uklad`):
+  `kalendarz` (siedem kolumn, kartka na ścianę) i `osoby` (wiersz na osobę,
+  kolumna na dzień, w kratce początek/koniec/skrót stanowiska jeden pod
+  drugim). To dwa różne pytania — "kto jest w sobotę?" kontra "kiedy
+  pracuję?" — i dlatego dwa układy, a nie jeden kompromis.
+  - ⚠️ **Zawsze 31 kolumn** (`DNI_W_SIATCE`), także w lutym. Dni, których w
+    miesiącu nie ma, zostają puste i BEZ etykiety. Powód jest praktyczny:
+    identyczna szerokość kolumn w każdym miesiącu, więc wydruki da się
+    położyć obok siebie bez szukania, gdzie co stoi. Ustalenie właściciela.
+  - **Rozmiary czcionek w druku są ZMIERZONE, nie wyczute.** A4 poziomo to
+    283 mm użytecznej szerokości; nazwisko bierze 9%, więc na kolumnę dnia
+    zostaje ~8,3 mm (≈31 px). Przy 6,2 pt "08:30" zajmuje 24 px, czterolitrowy
+    skrót stanowiska 26 px — mieści się z zapasem na obramowania. **Dlatego
+    liczba kolumn nie może urosnąć** i dlatego nie podnosimy tych rozmiarów
+    "na oko".
+  - Minimalna wysokość wiersza siedzi na komórce z nazwiskiem (`.go-min`) —
+    wiersz rośnie do najwyższej komórki, więc osoba bez ani jednej zmiany
+    dostaje taki sam pasek co reszta. Bez tego wydruk miał raz linijkę, raz
+    trzy.
+  - `overflow-x-auto` z widoku ekranowego MUSI być wyłączone w druku
+    (`.go-scroll`), inaczej kolumny od dwudziestej wzwyż nie wychodzą na
+    papier.
+  - ⚠️ **Zakres wiersza zależy od tego, CZYJ to lokal macierzysty** — i jest
+    inny niż w układzie kalendarza oraz w nagłówku nad tabelą. Osoba, dla
+    której to jest `default_lokal`, dostaje WSZYSTKIE swoje zmiany miesiąca,
+    także te w innych lokalach (szara, pochylona kratka ze skrótem tamtego
+    lokalu, `lokalSkrot`). Osoba wypożyczona tutaj — tylko zmiany u nas.
+    Powód: kierownik lokalu macierzystego rozlicza CAŁY miesiąc tej osoby,
+    więc dzień pracy gdzie indziej musi widzieć, inaczej wygląda na wolny i
+    dostanie kolejną zmianę. Lokal, do którego ktoś przychodzi wyjątkowo, nie
+    ma powodu znać reszty cudzego grafiku (ustalenie właściciela).
+  - Suma przy nazwisku (`podsumowanieOsoby`) liczy się z **tego samego
+    zakresu, który widać w wierszu** — inaczej nie zgadzałaby się z tym, co da
+    się policzyć okiem. Dopisek o zmianach w innym lokalu siedzi w `title`, a
+    nie w druku: zawijał kolumnę nazwisk na trzy linijki i rozpychał wiersz.
+  - `lokalSkrot` NIE jest `getShort` z `utils/format` — tamto bierze pierwsze
+    litery słów, więc jednowyrazowa "Ceglana" schodzi do "C" i myli się z
+    każdym innym lokalem na tę samą literę.
+  - `isSameUser` i `absenceOn` przeniesione z `GrafikTydzien.tsx` do
+    `utils/grafik.ts` — używają ich teraz oba widoki.
+
+### 5d. Grafik — świadomie NIE zrobione
 - Potwierdzenia odczytu grafiku przez pracownika ("przeczytało 12 z 14").
 - Etat jako reguła (dziś pokazujemy tylko różnicę godzin przy zamianie,
   żeby kierownik sam ocenił).

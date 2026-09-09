@@ -31,9 +31,12 @@ import { shellSidebarCls, shellNavBtnCls, shellBadgeCls, lokalTabCls } from "./d
 import { APP_VERSION } from "../../config";
 import WeatherBadge from "../WeatherBadge";
 
+// Kolejność ustalona przez właściciela (0.33.0) i ułożona wg tego, jak
+// często się tu wchodzi w ciągu dnia, a nie wg tego, kiedy moduły powstawały.
+// Pierwsza piątka to codzienna praca kierownika; reszta to rzeczy, po które
+// się sięga, gdy trzeba.
 export const NAV_ITEMS = [
   { key: "pulpit", label: "Pulpit", shortLabel: "Pulpit", Icon: Home },
-  { key: "puls", label: "Puls", shortLabel: "Puls", Icon: BookOpen },
   {
     key: "zatwierdzanie",
     label: "Zatwierdzanie zmian",
@@ -41,17 +44,18 @@ export const NAV_ITEMS = [
     Icon: CheckCircle2,
     badgeKey: "zatwierdzanie",
   },
-  { key: "godziny", label: "Rejestr Godzin", shortLabel: "Rejestr", Icon: FileText },
-  { key: "aktywni", label: "Aktywni", shortLabel: "Aktywni", Icon: Clock },
+  { key: "grafik", label: "Grafik", Icon: Calendar },
   {
     key: "zadania",
-    label: "Zadania i sprzątanie",
+    label: "Zadania",
     shortLabel: "Zadania",
     Icon: ClipboardCheck,
     badgeKey: "zadania",
   },
+  { key: "puls", label: "Puls", shortLabel: "Puls", Icon: BookOpen },
+  { key: "godziny", label: "Rejestr Godzin", shortLabel: "Rejestr", Icon: FileText },
   { key: "moja_praca", label: "Moja Praca", Icon: User },
-  { key: "grafik", label: "Grafik", Icon: Calendar },
+  { key: "aktywni", label: "Aktywni", shortLabel: "Aktywni", Icon: Clock },
   { key: "zgloszenia", label: "Zgłoszenia", Icon: Flag, badgeKey: "zgloszenia" },
   { key: "powiadomienia", label: "Powiadomienia", Icon: Bell, badgeKey: "powiadomienia" },
   { key: "pracownicy", label: "Pracownicy", Icon: Users, badgeKey: "pracownicy" },
@@ -59,13 +63,10 @@ export const NAV_ITEMS = [
   { key: "przewodnik", label: "Przewodnik", Icon: HelpCircle },
 ];
 
-// Te 4 zostają zawsze widoczne w dolnym pasku na mobile (ten sam rytm co
-// Pulpit/Zmiana/Raport/Zadania/Więcej u pracownika), reszta chowa się pod
-// "Więcej" — Rejestr Godzin świadomie NIE jest tu, bo pełny rejestr z
-// filtrami to bardziej biurkowe zadanie niż coś sprawdzane w biegu z
-// telefonu; Aktywni (kto teraz pracuje, zakończ zmianę) jest bardziej
-// "mobilne". Do ustalenia ponownie, jeśli w praktyce okaże się inaczej.
-const MOBILE_PRIMARY_KEYS = ["pulpit", "zatwierdzanie", "aktywni", "zadania"];
+// Pierwsza piątka z NAV_ITEMS zostaje w dolnym pasku na mobile, reszta chowa
+// się pod "Więcej". Pięć plus "Więcej" to sześć kafelków — dokładnie tyle, ile
+// mieści się czytelnie na telefonie; siódmy zaczyna ścinać podpisy.
+const MOBILE_PRIMARY_KEYS = ["pulpit", "zatwierdzanie", "grafik", "zadania", "puls"];
 
 export default function ManagerShell({
   currentUser,
@@ -108,7 +109,7 @@ export default function ManagerShell({
     <div className="h-screen bg-[#F1F1EE] flex flex-col md:flex-row overflow-hidden">
       {/* --- Sidebar: tylko desktop --- */}
       <aside className={`${shellSidebarCls} hidden md:flex md:w-72`}>
-        <div className="p-5 border-b border-white/10">
+        <div className="p-5 border-b border-white/15">
           <p className="font-['Archivo'] font-extrabold text-xl">Godziny Gastro</p>
           <p className="text-xs text-[#B7B6AE] mt-1">
             {currentUser.name} ·{" "}
@@ -132,11 +133,11 @@ export default function ManagerShell({
         </nav>
         <button
           onClick={onLogout}
-          className="p-4 flex items-center gap-2.5 text-[#B7B6AE] hover:text-white font-['Archivo'] font-bold text-sm border-t border-white/10"
+          className="p-4 flex items-center gap-2.5 text-[#B7B6AE] hover:text-white font-['Archivo'] font-bold text-sm border-t border-white/15"
         >
           <LogOut size={17} /> Wyloguj
         </button>
-        <p className="text-[10.5px] text-white/30 text-center pb-2.5">
+        <p className="text-[10.5px] text-white/40 text-center pb-2.5">
           Wersja {APP_VERSION}
         </p>
       </aside>

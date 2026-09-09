@@ -109,6 +109,67 @@ async function zaladuj(sciezka) {
 const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 const wczoraj = ymd(new Date(Date.now() - 86400000));
 const godz = (h) => { const d = new Date(wczoraj + "T00:00:00"); d.setHours(h); return d; };
+// Poniedziałek bieżącego tygodnia i siedem dni od niego — plan grafiku musi
+// trafić w tydzień, który siatka domyślnie pokazuje.
+const poniedzialek = (() => {
+  const d = new Date();
+  const dow = (d.getDay() + 6) % 7;
+  d.setDate(d.getDate() - dow);
+  return ymd(d);
+})();
+const dniTygodnia = Array.from({ length: 7 }, (_, i) => {
+  const d = new Date(poniedzialek + "T00:00:00");
+  d.setDate(d.getDate() + i);
+  return ymd(d);
+});
+const opub = { published_at: "2020-01-01T00:00:00Z", deleted_at: null };
+const miesiacOd = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-01`;
+const zestawyStartowe = [
+  { id: "zs1", lokal: "Ceglana", obowiazuje_od: miesiacOd, created_by: "Roman" },
+  { id: "zs2", lokal: "Bułka i Jacek", obowiazuje_od: miesiacOd, created_by: "Roman" },
+];
+// Trzy reguły, w tym jedna BEZ dni tygodnia (null = codziennie) — to pułapka
+// przy edycji: formularz trzyma tablicę dni, więc null musi wrócić jako pełny
+// tydzień, a nie jako brak zaznaczeń.
+const wyjatkiStartowe = [
+  { id: "wy1", lokal: "Ceglana", date_from: dniTygodnia[5], date_to: dniTygodnia[5],
+    zamkniete: false, open_time: "12:00", close_time: "23:00", note: "Wesele na sali",
+    created_by: "Roman" },
+];
+const regulyStartowe = [
+  { id: "sr1", set_id: "zs1", wyjatek_id: null, stanowisko: "Kucharz",
+    days_of_week: "1,2,3,4,5", start_time: "09:00", end_time: "17:00", required_count: 2 },
+  { id: "sr2", set_id: "zs1", wyjatek_id: null, stanowisko: "Kelner",
+    days_of_week: "6,0", start_time: "14:00", end_time: "19:00", required_count: 1 },
+  { id: "sr3", set_id: "zs1", wyjatek_id: null, stanowisko: "Kucharz",
+    days_of_week: null, start_time: "17:00", end_time: "22:00", required_count: 1 },
+  { id: "sr4", set_id: null, wyjatek_id: "wy1", stanowisko: "Kelner",
+    days_of_week: null, start_time: "16:00", end_time: "23:00", required_count: 4 },
+];
+const planTygodnia = [
+  { id: "g1", user_id: "u1", user_name: "Ala", lokal: "Bułka i Jacek",
+    stanowisko: "Kucharz", date: dniTygodnia[0], start_time: "10:00", end_time: "18:00", ...opub },
+  { id: "g2", user_id: "u1", user_name: "Ala", lokal: "Bułka i Jacek",
+    stanowisko: "Kucharz", date: dniTygodnia[2], start_time: "10:00", end_time: "18:00", ...opub },
+  { id: "g3", user_id: "u2", user_name: "Bo", lokal: "Ceglana",
+    stanowisko: "Kucharz", date: dniTygodnia[1], start_time: "08:00", end_time: "16:00", ...opub },
+  { id: "g4", user_id: "u3", user_name: "Cezary", lokal: "Ceglana",
+    stanowisko: "Kelner", date: dniTygodnia[4], start_time: "12:00", end_time: "20:00", ...opub },
+  // Druga zmiana tego samego dnia — w wydruku "osoby × dni" kratka rośnie o
+  // kolejną trójkę zamiast chować drugą zmianę.
+  { id: "g5", user_id: "u3", user_name: "Cezary", lokal: "Ceglana",
+    stanowisko: "Kucharz", date: dniTygodnia[4], start_time: "21:00", end_time: "23:30", ...opub },
+  // Bo jest z Ceglanej, ale ten dzień robi w Bułce — w wydruku Ceglanej ma
+  // być widoczny (to jego lokal macierzysty, miesiąc musi być kompletny),
+  // a w wydruku Bułki NIE, bo Bułka nie prowadzi jego grafiku.
+  { id: "g6", user_id: "u2", user_name: "Bo", lokal: "Bułka i Jacek",
+    stanowisko: "Kucharz", date: dniTygodnia[2], start_time: "10:00", end_time: "18:00", ...opub },
+  // Ala odwrotnie: z Bułki, wyjątkowo jeden dzień w Ceglanej. W Ceglanej
+  // pokazujemy TYLKO ten jeden dzień.
+  { id: "g7", user_id: "u1", user_name: "Ala", lokal: "Ceglana",
+    stanowisko: "Kelner", date: dniTygodnia[6], start_time: "14:00", end_time: "22:00", ...opub },
+];
+
 const poprzedniMiesiac = (h) => {
   const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); d.setDate(10); d.setHours(h, 0, 0, 0);
   return d;
@@ -125,6 +186,12 @@ const poprzedniMiesiac = (h) => {
       const [dayLogTemplates, setDayLogTemplates] = useState([]);
       const [dayLogs, setDayLogs] = useState([]);
       const [dayLogEntries, setDayLogEntries] = useState([]);
+      // Prawdziwy stan, nie zaślepka: bez tego widać tylko, ŻE poszedł zapis,
+      // a nie czy lista po nim pokazuje nową wartość — a to jest właśnie ten
+      // rodzaj błędu, dla którego ten harness powstał.
+      const [planShifts, setPlanShifts] = useState(planTygodnia);
+      const [staffingRules, setStaffingRules] = useState(regulyStartowe);
+      const [staffingRuleSets, setStaffingRuleSets] = useState(zestawyStartowe);
 
       const props = {
         currentUser: { id: "u0", name: "Roman", role: "admin", allowed_lokale: "" },
@@ -170,13 +237,34 @@ const poprzedniMiesiac = (h) => {
             start_time: godz(8), end_time: godz(16) },
         ],
         issues: [], notifications: [], shiftEdits: [], tasks: [], taskCompletions: [],
-        absences: [], planShifts: [], shiftSwaps: [], staffingRules: [], staffingRuleSets: [],
-        lokaleGodziny: [], grafikWyjatki: [], weatherForecasts: [],
+        // Plan na bieżący tydzień — bez niego siatka Grafiku jest pusta i nie
+        // widać ani szerokości kolumn, ani wykorzystania normy w wierszu.
+        planShifts, setPlanShifts,
+        absences: [
+          // Jeden dzień zablokowany, żeby dało się sprawdzić pomijanie dni
+          // przy wpisywaniu tej samej zmiany na kilka dni naraz.
+          { id: "ab1", user_id: "u2", user_name: "Bo", lokal: "Ceglana",
+            start_date: dniTygodnia[3], end_date: dniTygodnia[3], type: "urlop",
+            status: "approved" },
+        ],
+        shiftSwaps: [],
+        // Zestaw wymagań obowiązujący od początku bieżącego miesiąca plus trzy
+        // reguły: codzienna, tylko-w-weekend i taka bez dni tygodnia (null =
+        // codziennie) — ta ostatnia jest pułapką przy edycji, bo formularz
+        // trzyma tablicę dni, a null musi wrócić jako pełny tydzień.
+        staffingRuleSets, setStaffingRuleSets,
+        staffingRules, setStaffingRules,
+        lokaleGodziny: [],
+        // Wyjątek z własną regułą — ten sam formularz co wymagania zestawu,
+        // ale z drugim, niezależnym stanem. Bez tego nie widać, czy edycja w
+        // jednym miejscu nie miesza się z drugim.
+        grafikWyjatki: wyjatkiStartowe,
+        weatherForecasts: [],
         dayLogs, setDayLogs, dayLogEntries, setDayLogEntries,
         dayLogTemplates, setDayLogTemplates,
         showMsg: (m, t) => console.log("showMsg:", t, m),
       };
-      "setUsers setLokale setStanowiska setShifts setIssues setNotifications setShiftEdits setTasks setTaskCompletions setAbsences setPlanShifts setShiftSwaps setStaffingRules setStaffingRuleSets setLokaleGodziny setGrafikWyjatki"
+      "setUsers setLokale setStanowiska setShifts setIssues setNotifications setShiftEdits setTasks setTaskCompletions setAbsences setShiftSwaps setLokaleGodziny setGrafikWyjatki"
         .split(" ").forEach((k) => { props[k] = () => {}; });
 
       window.__stanSzablonow = dayLogTemplates;

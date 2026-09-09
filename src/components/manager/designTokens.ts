@@ -15,12 +15,17 @@ export const COLORS = {
   mutedLight: "#8F8E86",
 };
 
-export const shellSidebarCls = "bg-[#171714] text-white flex flex-col flex-shrink-0";
+// Sidebar: ciepła ciemna szarość, w pół drogi między czernią sprzed 0.32
+// (#171714) a jasnym panelem, który ją na chwilę zastąpił (#E4E4DE). Panel ma
+// odcinać się od treści, ale nie być drugim ciężkim blokiem obok jasnej
+// reszty aplikacji.
+export const shellSidebarCls =
+  "bg-[#3D3C36] text-white flex flex-col flex-shrink-0";
 export const shellNavBtnCls = (active) =>
   `w-full text-left px-4 py-3 flex items-center gap-2.5 font-['Archivo'] font-bold text-[14px] border-l-[3px] whitespace-nowrap ${
     active
-      ? "border-[#DE3A22] bg-white/5 text-white"
-      : "border-transparent text-[#B7B6AE] hover:bg-white/5 hover:text-white"
+      ? "border-[#DE3A22] bg-white/10 text-white"
+      : "border-transparent text-[#C9C8C1] hover:bg-white/10 hover:text-white"
   }`;
 export const shellBadgeCls =
   "ml-auto bg-[#DE3A22] text-white text-[11px] font-extrabold min-w-[20px] h-5 rounded flex items-center justify-center px-1.5";
@@ -45,6 +50,16 @@ export const btnPrimaryCls =
   "bg-[#DE3A22] text-white font-['Archivo'] font-bold text-sm px-4 py-2.5 rounded hover:opacity-90 disabled:opacity-50";
 export const btnSecondaryCls =
   "bg-white text-[#171714] font-['Archivo'] font-bold text-sm px-4 py-2.5 rounded border-[2px] border-[#171714] hover:bg-[#F1F1EE] disabled:opacity-50";
+
+// Przycisk z samą ikoną — kwadratowy, tej samej wysokości co zwykłe przyciski
+// paska. Dla rzeczy, które kierownik klika stale i zna z kształtu (tryb
+// podglądu/edycji, konfiguracja); podpis zostaje w `title`.
+export const btnIconCls = (active) =>
+  `w-[42px] h-[42px] rounded border-[2px] flex items-center justify-center flex-shrink-0 ${
+    active
+      ? "bg-[#DE3A22] text-white border-[#DE3A22]"
+      : "bg-white text-[#171714] border-[#171714] hover:bg-[#F1F1EE]"
+  }`;
 
 // Zadania i sprzątanie — pasek postępu i wiersz zadania na desktopie
 // (kiosk/konto osobiste mają własny checkboxRowCls w employeeSessionShared.tsx,

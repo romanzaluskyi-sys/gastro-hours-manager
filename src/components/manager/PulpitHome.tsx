@@ -571,7 +571,7 @@ export default function PulpitHome({
             onClick={() => setActiveTab("zadania")}
             className="w-full p-3 text-sm font-bold text-[#171714] flex items-center justify-center gap-1.5 border-t-[2px] border-[#171714]"
           >
-            Zadania i sprzątanie <ArrowRight size={14} />
+            Zadania <ArrowRight size={14} />
           </button>
         </div>
       </div>

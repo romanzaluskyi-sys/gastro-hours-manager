@@ -23,6 +23,21 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.32.0",
+    date: "2026-09-09",
+    items: [
+      "Poprawka: widok \"Dzień\" w Grafiku nie pokazywał żadnych zmian.",
+      "Nowy układ Grafiku \"Wg stanowisk\": wiersz to stanowisko, widać od razu, gdzie nikogo nie ma.",
+      "Nowa kolejność zakładek i jaśniejszy pasek boczny; \"Zadania i sprzątanie\" to teraz \"Zadania\".",
+      "Siatka Grafiku: stałe szerokości dni i dwuwierszowy wiersz pracownika — więcej osób na ekranie.",
+      "W wierszu widać wykorzystanie umowy: \"128/176 h\" przy umowie o pracę, godziny i koszt przy zleceniu.",
+      "Jedną zmianę można wpisać od razu na kilka dni tygodnia; dni z urlopem lub kolizją są pomijane.",
+      "Wymagania obsady można teraz poprawiać, a nie tylko dodawać i kasować.",
+      "Widok Miesiąc ma drugi układ wydruku \"Osoby × dni\" — wiersz na osobę, 31 kolumn, gotowy na A4 poziomo.",
+      "W tym układzie pracownik tego lokalu ma cały swój miesiąc, razem ze zmianami w innych lokalach (na szaro), a przy nazwisku sumę godzin i zmian.",
+    ],
+  },
+  {
     version: "0.31.0",
     date: "2026-09-09",
     items: [
