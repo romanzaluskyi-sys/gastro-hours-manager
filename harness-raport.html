@@ -157,6 +157,17 @@ const poprzedniMiesiac = (h) => {
         id: "sh" + idx, user_id: user.id, user_name: user.name, lokal: "Ceglana",
         stanowisko: "Kucharz", ...wTymMiesiacu(d, 8, 16),
       }));
+      // Poprzedni miesiąc obrobiony ponad normę — jedyny sposób, żeby zobaczyć
+      // wariant "o X h ponad normę" (miesiąc zamknięty mówi o faktach, nie o
+      // prognozie). Miesiąc PUSTY i zamknięty ma normy nie pokazywać wcale.
+      for (let d = 1; d <= 24; d++) {
+        const a = new Date(teraz.getFullYear(), teraz.getMonth() - 1, d, 8);
+        const b = new Date(teraz.getFullYear(), teraz.getMonth() - 1, d, 16);
+        wszystkieShifts.push({
+          id: "pm" + d, user_id: user.id, user_name: user.name, lokal: "Ceglana",
+          stanowisko: "Kucharz", start_time: a, end_time: b,
+        });
+      }
 
       const props = {
         currentUser: user,

@@ -1266,12 +1266,29 @@ Szczegóły, które łatwo zepsuć:
 - **`narzut_*` domyślnie 0.** Dopóki właściciel nie wpisze procentu, koszt to
   sama wypłata i nic nie jest zmyślane.
 
-**Pracownik widzi swoją normę w Raporcie** (`employeeSessionShared.tsx`,
-ekran `RAPORT`): "24 z 176 h", zaplanowane do końca miesiąca i prognoza.
+**Pracownik widzi swoją normę w STOPCE Raportu** (`employeeSessionShared.tsx`,
+ekran `RAPORT`) — nie w osobnej ramce nad tabelą: pod sumą godzin drobne
+"z 176 h", pod imieniem i miesiącem jedno zdanie o różnicy. Dwa miejsca
+mówiące o tym samym miesiącu zawsze wyglądają, jakby się nie zgadzały.
+
+To zdanie (`normaOpis`) mówi co innego zależnie od tego, czy miesiąc się
+skończył:
+- **miesiąc zamknięty** — fakty: "o 32 h ponad normę" / "do normy zabrakło X h";
+- **miesiąc trwający** — to, co wyjdzie Z GRAFIKIEM: "z grafikiem wyjdzie 40 h
+  — zabraknie 136 h". W połowie miesiąca "do normy brakuje 152 h" znaczyłoby
+  tylko tyle, że jest połowa miesiąca;
+- **brak zmian w grafiku do końca miesiąca** — mówimy wprost, że ich nie ma,
+  zamiast pokazywać niedobór, którego pracownik nie ma jak nadrobić.
+
 Prognoza to fakt + to, co JUŻ STOI w wysłanym grafiku (`publishedShiftsFor`)
 — świadomie nie średnia i nie ekstrapolacja: pracownik ma zobaczyć dokładnie
 to, co mu wpisano, i zdążyć zareagować PRZED końcem miesiąca. Bez czerwieni i
 bez słowa "zaległe" — powód wyżej. Przy zleceniu blok w ogóle się nie pokazuje.
+
+⚠️ **Zamknięty miesiąc bez ANI JEDNEJ zmiany nie dostaje normy w ogóle** — ani
+"z 176 h", ani zdania o różnicy. Ta sama zasada co pomijanie pustych miesięcy
+w `bilansOkresu`: za miesiąc, w którym system jeszcze nie działał, "do normy
+zabrakło 176 h" to alarm o niczym.
 
 **Karta pracownika** ([`Pracownicy.tsx`](src/components/manager/Pracownicy.tsx))
 jest od tej wersji rozbita na bloki w kolejności ustalonej z właścicielem:

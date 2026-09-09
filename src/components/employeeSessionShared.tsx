@@ -579,8 +579,13 @@ export const EmployeeSessionScreens = ({
           .filter((s) => s.date > todayStr && s.date.slice(0, 7) === todayStr.slice(0, 7))
           .reduce((acc, s) => acc + shiftHours(s), 0)
       : 0;
+  // ⚠️ Zamknięty miesiąc bez ANI JEDNEJ zapisanej zmiany zostaje bez normy.
+  // "Do normy zabrakło 176 h" za miesiąc, w którym system jeszcze nie działał
+  // albo umowę uzupełniono wstecz, to alarm o niczym — a pierwszy taki alarm
+  // uczy nie czytać następnych. Ta sama zasada co w bilansie okresu w karcie
+  // pracownika (utils/umowy.ts).
   const raportPrognoza =
-    raportNorma == null
+    raportNorma == null || (!raportBiezacyMiesiac && raportTotal <= 0)
       ? null
       : prognozaMiesiaca({
           user: employee,
@@ -589,6 +594,26 @@ export const EmployeeSessionScreens = ({
           rok: raportYear,
           mies: raportMonth + 1,
         });
+
+  // Jedno zdanie zamiast trzech linijek. Dla miesiąca zamkniętego mówi o
+  // faktach, dla trwającego — o tym, co wyjdzie Z GRAFIKIEM: w połowie
+  // miesiąca "do normy brakuje 152 h" znaczy tylko tyle, że jest połowa
+  // miesiąca, i tak brzmiący komunikat nauczyłby ludzi go nie czytać.
+  const normaOpis = (() => {
+    if (!raportPrognoza) return null;
+    const r = raportPrognoza;
+    if (!raportBiezacyMiesiac) {
+      if (r.roznica > 0.5) return `o ${godz(r.roznica)} h ponad normę`;
+      if (r.roznica < -0.5) return `do normy zabrakło ${godz(-r.roznica)} h`;
+      return "dokładnie w normie";
+    }
+    if (r.zaplanowane <= 0) return "w grafiku nie ma jeszcze zmian do końca miesiąca";
+    if (r.roznica > 0.5)
+      return `z grafikiem wyjdzie ${godz(r.prognoza)} h — o ${godz(r.roznica)} h ponad normę`;
+    if (r.roznica < -0.5)
+      return `z grafikiem wyjdzie ${godz(r.prognoza)} h — zabraknie ${godz(-r.roznica)} h`;
+    return `z grafikiem wyjdzie ${godz(r.prognoza)} h — dokładnie w normie`;
+  })();
 
   const recentShiftsForZgloszenie = shifts
     .filter((s) => s.user_id === employee.id)
@@ -1924,11 +1949,20 @@ export const EmployeeSessionScreens = ({
         personName={onBack ? employee.name : null}
         title="Raport"
         footer={
-          <div className="flex-shrink-0 border-t-[2.5px] border-[#171714] bg-white px-5 pt-[18px] pb-[22px] flex items-baseline justify-between">
-            <div>
+          <div className="flex-shrink-0 border-t-[2.5px] border-[#171714] bg-white px-5 pt-[18px] pb-[22px] flex items-end justify-between gap-3">
+            <div className="min-w-0">
               <span className={sectionLabelCls}>
                 {employee.name} · {getMonthName(raportMonth)}
               </span>
+              {/* Norma mieszka w stopce, przy sumie godzin, a nie w osobnej
+                  ramce — pracownik i tak patrzy tu na jedną liczbę, a dwa
+                  miejsca mówiące o tym samym miesiącu zawsze wyglądają, jakby
+                  się nie zgadzały. */}
+              {normaOpis && (
+                <div className="text-[12px] text-[#6E6E66] leading-snug mt-0.5">
+                  {normaOpis}
+                </div>
+              )}
               {raportUrlop > 0 && (
                 <div className="text-[12px] text-[#6E6E66]">
                   urlop {raportUrlop.toFixed(1).replace(".", ",")} h · bez urlopu{" "}
@@ -1936,9 +1970,16 @@ export const EmployeeSessionScreens = ({
                 </div>
               )}
             </div>
-            <span className="font-['Archivo'] font-extrabold text-[28px] text-[#171714] tabular-nums">
-              {raportTotal.toFixed(1).replace(".", ",")} godz.
-            </span>
+            <div className="text-right flex-shrink-0">
+              <div className="font-['Archivo'] font-extrabold text-[28px] text-[#171714] tabular-nums leading-none">
+                {raportTotal.toFixed(1).replace(".", ",")} godz.
+              </div>
+              {raportPrognoza && (
+                <div className="text-[12px] text-[#6E6E66] tabular-nums mt-1">
+                  z {godz(raportPrognoza.norma)} h
+                </div>
+              )}
+            </div>
           </div>
         }
       >
@@ -1978,29 +2019,6 @@ export const EmployeeSessionScreens = ({
             <ChevronDown size={16} className={selectChevronCls} />
           </div>
         </div>
-        {raportPrognoza && (
-          <div className="mt-3.5 border-[2.5px] border-[#171714] rounded-[10px] p-3.5">
-            <div className="flex items-baseline justify-between gap-3">
-              <span className={fieldLabelCls}>Twoja norma</span>
-              <span className="font-['Archivo'] font-extrabold text-[17px] text-[#171714] tabular-nums">
-                {godz(raportTotal)} z {godz(raportPrognoza.norma)} h
-              </span>
-            </div>
-            {raportBiezacyMiesiac && (
-              <div className="text-[12.5px] text-[#6E6E66] mt-2 leading-[1.6]">
-                Zaplanowane do końca miesiąca: {godz(raportZaplanowane)} h
-                <br />
-                Prognoza: <b className="text-[#171714]">{godz(raportPrognoza.prognoza)} h</b>
-                {raportPrognoza.roznica < -0.5
-                  ? ` — do normy zabraknie ${godz(-raportPrognoza.roznica)} h`
-                  : raportPrognoza.roznica > 0.5
-                  ? ` — o ${godz(raportPrognoza.roznica)} h ponad normę`
-                  : " — dokładnie w normie"}
-              </div>
-            )}
-          </div>
-        )}
-
         <div className="flex gap-2 mt-5 pb-2.5 border-b-[1.5px] border-[#B7B6AE]">
           <span className="w-[54px] flex-shrink-0 mr-3 text-[10.5px] font-bold tracking-wider uppercase text-[#8F8E86]">
             Data

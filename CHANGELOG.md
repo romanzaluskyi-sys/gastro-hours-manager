@@ -23,10 +23,11 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
   lokal wydaje. Pod spodem bilans okresu rozliczeniowego: ile godzin z normy
   zostało do wypracowania albo ile wyszło ponad. Miesiące bez żadnych
   zapisanych godzin są pomijane, żeby nie robić alarmu z braku danych.
-- **Pracownik widzi swoją normę w Raporcie**: „24 z 176 h”, ile ma
-  zaplanowane do końca miesiąca i jaka z tego wychodzi prognoza. Liczone z
-  wysłanego grafiku, więc jest czas zareagować przed końcem miesiąca. Przy
-  zleceniu ten blok się nie pokazuje — normy tam nie ma.
+- **Pracownik widzi swoją normę w Raporcie**, na dole przy sumie godzin: pod
+  liczbą godzin drobne „z 176 h”, a pod imieniem i miesiącem — „o 32 h ponad
+  normę”. W trwającym miesiącu zdanie mówi, co wyjdzie z grafikiem do końca
+  miesiąca, więc jest czas zareagować. Przy zleceniu nic się nie pokazuje —
+  normy tam nie ma.
 - **Nowe ustawienia lokalu** (Pracownicy → Lokale): okres rozliczeniowy oraz
   narzut pracodawcy (ZUS itd.) osobno dla umowy o pracę i zlecenia. Puste
   narzuty = 0, czyli dopóki ich nie wpiszesz, nic się nie zmienia.

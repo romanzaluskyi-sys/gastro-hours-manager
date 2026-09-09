@@ -28,7 +28,7 @@ const CHANGELOG = [
     items: [
       "Karta pracownika przebudowana na bloki; doszły telefon, data urodzenia i początek pracy.",
       "Typ umowy zamiast pola \"Etat\": zlecenie ma stawkę godzinową, umowa o pracę — wymiar etatu i kwotę miesięczną.",
-      "Miesięczna norma godzin liczy się z kalendarza i zmienia co miesiąc. Pracownik widzi ją w Raporcie razem z prognozą z wysłanego grafiku.",
+      "Miesięczna norma godzin liczy się z kalendarza i zmienia co miesiąc. Pracownik widzi ją na dole swojego Raportu, razem z prognozą z wysłanego grafiku.",
       "\"Ten miesiąc\" w karcie pokazuje koszt lokalu i bilans okresu rozliczeniowego.",
       "Nowe ustawienia lokalu: okres rozliczeniowy i narzut pracodawcy (ZUS).",
       "Poprawka: \"Dzień wypłaty\" w ustawieniach lokalu nie zapisywał się.",
