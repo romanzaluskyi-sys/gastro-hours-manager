@@ -5,6 +5,15 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.30.1 — 2026-09-09
+
+- **Poprawka:** osoba wypożyczona do innego lokalu nie mogła zapisać godzin —
+  tablet mówił „Wypełnij wymagane pola!”, choć formularz wyglądał na
+  kompletny. Lokal i stanowisko podpowiadają się teraz **z grafiku tego dnia**,
+  a nie z macierzystego lokalu tej osoby.
+- To samo dotyczyło „Popraw zmianę” dla zmiany odbytej w innym lokalu — jej
+  lokal jest teraz na liście do wyboru.
+
 ## 0.30.0 — 2026-09-08
 
 - **„Był w grafiku, nie odbił”** — nowa sekcja w Zatwierdzaniu zmian. Zwykle to

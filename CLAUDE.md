@@ -1210,6 +1210,18 @@ Szczegóły, które łatwo zepsuć:
 - Okno kolejki to 14 dni (`OKNO_DNI`). Dalej nikt nie pamięta, czy tamtego
   wtorku przyszedł, a zgadywanie jest gorsze niż brak.
 
+⚠️ **Wartość każdego `<select>` musi istnieć wśród jego `<option>`.** Tablet
+Służbowy podaje w `lokaleOptions`/`stanowiskaOptions` TYLKO swoje lokale, a
+osoba wypożyczona ma `default_lokal` macierzystego — formularz startu zmiany
+ustawiał wtedy wartość spoza listy, select pokazywał się pusty, efekt korekty
+czyścił stanowisko i zapis padał na "Wypełnij wymagane pola!" mimo że wszystko
+wyglądało na wypełnione (0.30.0 → 0.30.1). `domyslnyLokal()` w
+`employeeSessionShared.tsx` wybiera teraz: lokal z dzisiejszego grafiku →
+własny, jeśli dostępny → pierwszy dostępny; korekta stanowiska pyta grafiku,
+zanim spadnie na pierwsze z brzegu. Formularz "Popraw zmianę" dokłada do listy
+lokal poprawianej zmiany (`lokaleDoKorekty`) — tam opisujemy przeszłość, więc
+lokal spoza urządzenia jest w porządku.
+
 **Tablet a grafik:** `KioskDashboard` pokazuje przypisanych do lokalu PLUS tych,
 których opublikowany grafik stawia dziś tutaj. **Dodajemy, nie przenosimy** —
 plany się zmieniają, a osoba zdjęta z listy macierzystego lokalu nie odbiłaby

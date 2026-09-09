@@ -334,9 +334,29 @@ export const EmployeeSessionScreens = ({
   const [justClosed, setJustClosed] = useState(false);
   const [now, setNow] = useState(new Date());
 
-  const [formLokal, setFormLokal] = useState(
-    employee?.default_lokal || lokaleOptions[0]?.name || ""
-  );
+  // Lokal startowy MUSI być jednym z tych, które to urządzenie oferuje.
+  // Osoba wypożyczona ma default_lokal swojego macierzystego lokalu, a Tablet
+  // Służbowy podaje w lokaleOptions tylko własne — wartość spoza listy zostawia
+  // <select> bez zaznaczenia, efekt korekty stanowiska czyści stanowisko (bo w
+  // tym lokalu nie ma takich stanowisk), i zapis pada na "Wypełnij wymagane
+  // pola" mimo że formularz wygląda na kompletny.
+  //
+  // Kolejność preferencji: lokal z dzisiejszego grafiku (po to ta osoba tu
+  // jest), potem jej własny lokal, na końcu pierwszy dostępny.
+  const domyslnyLokal = () => {
+    const dostepne = (lokaleOptions || []).map((l) => l.name);
+    if (!dostepne.length) return "";
+    const dzisiaj = toLocalYMD(new Date());
+    const zGrafiku = publishedShiftsFor(planShifts, employee)
+      .filter((s) => s.date === dzisiaj)
+      .map((s) => s.lokal)
+      .find((l) => dostepne.includes(l));
+    if (zGrafiku) return zGrafiku;
+    if (dostepne.includes(employee?.default_lokal)) return employee.default_lokal;
+    return dostepne[0];
+  };
+
+  const [formLokal, setFormLokal] = useState(domyslnyLokal);
   const [formStanowisko, setFormStanowisko] = useState(
     employee?.default_stanowisko || ""
   );
@@ -553,7 +573,7 @@ export const EmployeeSessionScreens = ({
   }, []);
 
   const resetShiftForm = () => {
-    setFormLokal(employee?.default_lokal || lokaleOptions[0]?.name || "");
+    setFormLokal(domyslnyLokal());
     setFormStanowisko(employee?.default_stanowisko || "");
     setKnowsEnd(false);
     setFormStartTime(fmtHHMM(new Date()));
@@ -563,10 +583,36 @@ export const EmployeeSessionScreens = ({
   // ---- korekta stanowiska, gdy zmienia się lokal (jak w TimeEntryForm) ----
   useEffect(() => {
     const dostepne = stanowiskaOptions.filter((s) => s.lokal_name === formLokal);
-    if (!dostepne.find((s) => s.name === formStanowisko)) {
-      setFormStanowisko(dostepne.length > 0 ? dostepne[0].name : "");
-    }
+    if (dostepne.find((s) => s.name === formStanowisko)) return;
+    // Osoba wypożyczona ma default_stanowisko ze swojego lokalu, którego tutaj
+    // może nie być. Zanim spadniemy na pierwsze z brzegu, pytamy grafiku — to
+    // on wie, po co ta osoba dziś tu jest.
+    const dzisiaj = toLocalYMD(new Date());
+    const zGrafiku = publishedShiftsFor(planShifts, employee).find(
+      (s) =>
+        s.date === dzisiaj &&
+        s.lokal === formLokal &&
+        dostepne.some((d) => d.name === s.stanowisko)
+    );
+    const wlasne = dostepne.find((s) => s.name === employee?.default_stanowisko);
+    setFormStanowisko(
+      (zGrafiku && zGrafiku.stanowisko) ||
+        (wlasne && wlasne.name) ||
+        (dostepne.length > 0 ? dostepne[0].name : "")
+    );
   }, [formLokal, stanowiskaOptions]);
+
+  // Poprawiana zmiana mogła się odbyć w lokalu, którego to urządzenie nie
+  // obsługuje — osoba wypożyczona pracuje z tabletu lokalu B, a w jej historii
+  // są zmiany z macierzystego A. Bez dołożenia tamtego lokalu <select> miałby
+  // wartość bez opcji, pokazałby się pusty i zapis padłby na "Wypełnij wymagane
+  // pola". Opisujemy przeszłą zmianę, a nie zaczynamy nowej — więc lokal spoza
+  // listy urządzenia jest tu w porządku.
+  const lokaleDoKorekty = (() => {
+    const lista = lokaleOptions || [];
+    if (!zgPropLokal || lista.some((l) => l.name === zgPropLokal)) return lista;
+    return [...lista, { id: `spoza-${zgPropLokal}`, name: zgPropLokal }];
+  })();
 
   // ---- to samo dla propozycji lokalu w formularzu "Popraw zmianę" ----
   // (z tym samym awaryjnym fallbackiem na pełną listę co korektaStanowiska)
@@ -2310,7 +2356,7 @@ export const EmployeeSessionScreens = ({
                     onChange={(e) => setZgPropLokal(e.target.value)}
                     className={selectElCls}
                   >
-                    {lokaleOptions.map((l) => (
+                    {lokaleDoKorekty.map((l) => (
                       <option key={l.id} value={l.name}>
                         {l.name}
                       </option>
