@@ -213,6 +213,8 @@ function LokalSection({
   onCopyPrevWeek,
   onClearRange,
   onAddEmployee,
+  onAddAtStanowisko,
+  uklad = "osoby",
   shiftSwaps,
   onResolveSwap,
 }) {
@@ -246,7 +248,12 @@ function LokalSection({
     forecastFrom != null && d >= forecastFrom && d <= forecastTo;
 
   const weekFrom = weekDays[0];
-  const weekTo = weekDays[6];
+  // ⚠️ Ostatni dzień liczymy z DŁUGOŚCI tablicy, nie ze stałego [6]. W trybie
+  // dnia `weekDays` ma jeden element, więc [6] było `undefined`, a
+  // `s.date <= undefined` jest zawsze fałszem — cały widok dnia renderował się
+  // poprawnie, tylko każda kratka była pusta. Wyglądało to na brak grafiku, a
+  // nie na błąd, więc przeżyło kilka wydań.
+  const weekTo = weekDays[weekDays.length - 1];
   const planWeek = (planShifts || []).filter(
     (s) => s.date >= weekFrom && s.date <= weekTo
   );
@@ -296,6 +303,42 @@ function LokalSection({
       innyLokal: lokaleOsoby.filter((l) => l !== lokal),
     };
   });
+
+  // --- UKŁAD "WG STANOWISK" ---------------------------------------------
+  // Wiersz na stanowisko, a nie na człowieka. To jest ta sama siatka
+  // czytana od drugiej strony: "kto stoi na barze w sobotę i czy ktokolwiek
+  // tam stoi" zamiast "ile Ala ma godzin". Układanie grafiku od zera idzie
+  // właśnie tak — najpierw wiadomo, że bar musi być obsadzony, potem kto go
+  // obsadzi.
+  //
+  // Lista stanowisk bierze też te, które wiszą w zmianach, a nie ma ich już
+  // w słowniku — inaczej zmiana na zarchiwizowanym stanowisku zniknęłaby z
+  // widoku, zostając w bazie i w kontroli obsady.
+  const stanowiskaWiersze = [
+    ...new Set([
+      ...(activeStanowiska || [])
+        .filter((st) => st.lokal_name === lokal)
+        .map((st) => st.name),
+      ...planWeek
+        .filter((s) => s.lokal === lokal && s.stanowisko)
+        .map((s) => s.stanowisko),
+    ]),
+  ].sort((a, b) => a.localeCompare(b, "pl"));
+
+  const zmianyStanowiskaDnia = (stanowisko, dateStr) =>
+    planWeek
+      .filter(
+        (s) =>
+          s.lokal === lokal &&
+          s.date === dateStr &&
+          (s.stanowisko || "") === stanowisko
+      )
+      .sort((a, b) => trimTime(a.start_time).localeCompare(trimTime(b.start_time)));
+
+  const godzinyStanowiska = (stanowisko) =>
+    planWeek
+      .filter((s) => s.lokal === lokal && (s.stanowisko || "") === stanowisko)
+      .reduce((sum, s) => sum + shiftHours(s), 0);
 
   const sorted = [...rowMeta].sort((a, b) => {
     if (sortBy === "godziny") return b.hours - a.hours;
@@ -647,15 +690,15 @@ function LokalSection({
           </colgroup>
           <thead>
             <tr className="bg-[#F1F1EE]">
-              <th className="text-left px-3 py-2 border-r-[2px] border-[#171714] align-top">
-                <span className={statLabelCls}>Pracownik</span>
-                <div className="text-[11px] text-[#8F8E86] font-normal normal-case">
-                  godziny w miesiącu wobec normy
-                </div>
+              {/* Bez nagłówka "Pracownik" i bez podpisu pod nim: kolumna jest
+                  oczywista z zawartości, a te dwie linijki podnosiły cały
+                  wiersz nagłówka, który i tak jest najwyższym elementem siatki. */}
+              <th className="text-left px-3 py-2 border-r-[2px] border-[#171714] align-bottom">
                 {mode === "edycja" && (
                   <button
                     onClick={() => onAddEmployee(lokal)}
-                    className="mt-1.5 w-full px-2 py-1 rounded border-[2px] border-[#DE3A22] text-[#DE3A22] text-[12px] font-bold hover:bg-[#FAEAE6]"
+                    className="w-full px-2 py-1.5 rounded border-[2px] border-[#DE3A22] text-[#DE3A22] text-[12px] font-bold hover:bg-[#FAEAE6]"
+                    title="Zakłada nowego pracownika w systemie i otwiera jego kartę"
                   >
                     <UserPlus size={13} className="inline -mt-0.5 mr-1" /> Dodaj pracownika
                   </button>
@@ -669,33 +712,20 @@ function LokalSection({
                     key={d}
                     className="px-3 py-2 text-left border-r-[2px] border-[#E7E7E2] last:border-r-0 align-top"
                   >
-                    <div className="font-['Archivo'] font-extrabold text-[19px] leading-none text-[#8F8E86]">
-                      {DZIEN_SKROT[new Date(d + "T00:00:00").getDay()]}
-                    </div>
-                    <div className="font-['Archivo'] font-extrabold text-[15px] mt-1">
-                      {fmtDay(d)}
-                    </div>
-                    {/* Stała wysokość, żeby dni bez prognozy nie rozjeżdżały
-                        wyrównania nagłówków; "—" zamiast pustki, bo pusty
-                        wiersz nie odróżnia "brak danych" od "nie działa". */}
-                    <div
-                      className="text-[11px] text-[#8F8E86] h-[15px] leading-[15px] whitespace-nowrap"
-                      title={
-                        pogoda && pogoda.temp != null
-                          ? describeWeatherCode(pogoda.code).label
-                          : wZasieguProgozy(d)
-                          ? "Brak prognozy dla tego dnia"
-                          : "Prognoza sięga 16 dni w przód"
-                      }
-                    >
-                      {pogoda && pogoda.temp != null
-                        ? `${describeWeatherCode(pogoda.code).icon} ${Math.round(pogoda.temp)}°`
-                        : wZasieguProgozy(d)
-                        ? "—"
-                        : ""}
+                    {/* Dwie linijki zamiast czterech: dzień tygodnia i data w
+                        jednej, pogoda z obsadą w drugiej. Nagłówek był
+                        najwyższym elementem siatki, a niósł te same cztery
+                        liczby co teraz. */}
+                    <div className="flex items-baseline justify-between gap-1">
+                      <span className="font-['Archivo'] font-extrabold text-[17px] leading-none text-[#8F8E86]">
+                        {DZIEN_SKROT[new Date(d + "T00:00:00").getDay()]}
+                      </span>
+                      <span className="font-['Archivo'] font-extrabold text-[13px] leading-none whitespace-nowrap">
+                        {fmtDay(d)}
+                      </span>
                     </div>
                     <div
-                      className={`flex items-center justify-between gap-2 text-[12px] font-bold mt-1 ${
+                      className={`flex items-baseline justify-between gap-1 text-[12px] font-bold mt-1.5 ${
                         stat.hasGap
                           ? "text-[#DE3A22]"
                           : stat.hasNadmiar
@@ -703,8 +733,26 @@ function LokalSection({
                           : "text-[#171714]"
                       }`}
                     >
-                      <span>{stat.people} os.</span>
-                      <span>{fmtH(stat.hours)}</span>
+                      {/* Pogoda ma stałą szerokość, żeby dni bez prognozy nie
+                          przesuwały liczb obsady w sąsiednich kolumnach. */}
+                      <span
+                        className="text-[11px] font-normal text-[#8F8E86] w-[38px] whitespace-nowrap"
+                        title={
+                          pogoda && pogoda.temp != null
+                            ? describeWeatherCode(pogoda.code).label
+                            : wZasieguProgozy(d)
+                            ? "Brak prognozy dla tego dnia"
+                            : "Prognoza sięga 16 dni w przód"
+                        }
+                      >
+                        {pogoda && pogoda.temp != null
+                          ? `${describeWeatherCode(pogoda.code).icon}${Math.round(pogoda.temp)}°`
+                          : wZasieguProgozy(d)
+                          ? "—"
+                          : ""}
+                      </span>
+                      <span className="whitespace-nowrap">{stat.people} os.</span>
+                      <span className="whitespace-nowrap">{fmtH(stat.hours)}</span>
                     </div>
                     <ProblemyObsady
                       stat={stat}
@@ -717,17 +765,136 @@ function LokalSection({
             </tr>
           </thead>
           <tbody>
-            {sorted.length === 0 && (
+            {uklad === "stanowiska" &&
+              (stanowiskaWiersze.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={weekDays.length + 1}
+                    className="px-4 py-6 text-center text-[#6E6E66] text-sm"
+                  >
+                    Ten lokal nie ma zdefiniowanych stanowisk. Dodaj je w
+                    Pracownicy → Stanowiska.
+                  </td>
+                </tr>
+              ) : (
+                stanowiskaWiersze.map((stanowisko) => {
+                  const style = stanowiskoBadgeStyle(activeStanowiska, lokal, stanowisko);
+                  return (
+                    <tr key={stanowisko} className="border-t-[2px] border-[#E7E7E2]">
+                      <td className="px-3 py-1.5 border-r-[2px] border-[#171714] align-top">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span
+                            className="px-1.5 py-0.5 rounded text-[11px] font-extrabold flex-shrink-0"
+                            style={style || { backgroundColor: "#E7E7E2", color: "#171714" }}
+                          >
+                            {stanowiskoShort(activeStanowiska, lokal, stanowisko)}
+                          </span>
+                          <span className="font-['Archivo'] font-bold text-[14px] truncate">
+                            {stanowisko || "bez stanowiska"}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-[#6E6E66] mt-0.5">
+                          {fmtH(godzinyStanowiska(stanowisko))} w tygodniu
+                        </div>
+                      </td>
+                      {weekDays.map((d, di) => {
+                        const zm = zmianyStanowiskaDnia(stanowisko, d);
+                        const dziury = (dayStats[di].gaps || []).filter(
+                          (g) => g.stanowisko === stanowisko
+                        );
+                        return (
+                          <td
+                            key={d}
+                            className="px-2 py-1.5 border-r-[2px] border-[#E7E7E2] last:border-r-0 align-top"
+                          >
+                            <div className="space-y-0.5">
+                              {zm.map((sh) => {
+                                const Wrapper = edycja ? "button" : "div";
+                                return (
+                                  <Wrapper
+                                    key={sh.id}
+                                    onClick={
+                                      edycja
+                                        ? () =>
+                                            onCellClick(
+                                              (users || []).find((u) => isSameUser(sh, u)) || {
+                                                id: sh.user_id,
+                                                name: sh.user_name,
+                                              },
+                                              d,
+                                              sh,
+                                              activeSwapFor(shiftSwaps, sh.id)
+                                            )
+                                        : undefined
+                                    }
+                                    className={`w-full text-left leading-tight rounded px-1 -mx-1 ${
+                                      edycja ? "hover:bg-[#F1F1EE]" : ""
+                                    } ${
+                                      sh.__nieaktywny
+                                        ? "bg-[#FAEAE6] line-through decoration-[#8A3A2B]"
+                                        : ""
+                                    }`}
+                                    title={edycja ? "Kliknij, aby edytować" : ""}
+                                  >
+                                    <div className="text-[12px] font-bold truncate">
+                                      {sh.user_name}
+                                      {isUnpublished(sh) && (
+                                        <span
+                                          className="text-[#DE3A22] font-extrabold"
+                                          title="Niewysłane pracownikom"
+                                        >
+                                          {" "}
+                                          •
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="text-[11px] text-[#6E6E66] tabular-nums whitespace-nowrap">
+                                      {trimTime(sh.start_time)}–{trimTime(sh.end_time)}
+                                    </div>
+                                  </Wrapper>
+                                );
+                              })}
+                              {/* Dziura tego stanowiska w tym dniu stoi wprost
+                                  w kratce — w tym układzie to jest główna
+                                  informacja, a nie przypis pod nagłówkiem. */}
+                              {dziury.map((g, gi) => (
+                                <div
+                                  key={`gap-${gi}`}
+                                  className="text-[11px] font-bold text-[#DE3A22] leading-tight"
+                                  title={`Brakuje ${g.missing} os. między ${g.from} a ${g.to}`}
+                                >
+                                  −{g.missing} {g.from}–{g.to}
+                                </div>
+                              ))}
+                              {edycja && (
+                                <button
+                                  onClick={() => onAddAtStanowisko(stanowisko, d)}
+                                  className="text-[11px] font-bold text-[#8F8E86] hover:text-[#DE3A22]"
+                                >
+                                  + dodaj
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })
+              ))}
+
+            {uklad !== "stanowiska" && sorted.length === 0 && (
               <tr>
                 <td
-                  colSpan={8}
+                  colSpan={weekDays.length + 1}
                   className="px-4 py-6 text-center text-[#6E6E66] text-sm"
                 >
                   Nikt nie jest przypisany do tego lokalu.
                 </td>
               </tr>
             )}
-            {sorted.map((meta) => (
+            {uklad !== "stanowiska" &&
+              sorted.map((meta) => (
               <tr key={meta.user.id} className="border-t-[2px] border-[#E7E7E2]">
                 <td className="px-3 py-1.5 border-r-[2px] border-[#171714] align-top">
                   <div className="flex items-start gap-1.5">
@@ -865,7 +1032,10 @@ export default function GrafikTydzien({
   // wpisywanie, kontrola obsady i sumy działają identycznie, a na telefonie
   // jedna kolumna wreszcie mieści się na ekranie.
   trybDnia = false,
+  // "osoby" — wiersz na pracownika; "stanowiska" — wiersz na stanowisko.
+  uklad = "osoby",
   mode,
+  onNewEmployee,
   shiftSwaps,
   onResolveSwap,
   setAbsences,
@@ -893,6 +1063,12 @@ export default function GrafikTydzien({
   // kliknięto. Po zapisaniu zmiany osoba pojawia się w siatce sama.
   const openAddEmployee = (lokal) =>
     setModalCtx({ user: null, date: weekStart, shift: null, lokal, pickDate: true });
+
+  // Wejście z siatki "wg stanowisk": dzień i stanowisko są znane z klikniętej
+  // kratki, brakuje tylko człowieka — i to jest dokładnie pytanie, które
+  // kierownik ma w głowie, układając grafik od strony obsady.
+  const openAddNaStanowisko = (stanowisko, dateStr, lokal) =>
+    setModalCtx({ user: null, date: dateStr, shift: null, lokal, stanowisko });
 
   // Jedyne miejsce, które zapisuje zaplanowaną zmianę. Kolejność sprawdzeń
   // jest istotna: najpierw zatwierdzone wolne (twarda odmowa), potem
@@ -1267,7 +1443,10 @@ export default function GrafikTydzien({
           title={trybDnia ? "Skocz do dnia" : "Skocz do tygodnia z tą datą"}
         />
 
-        <div className="ml-auto flex items-center gap-2">
+        {/* Sortowanie dotyczy wierszy-osób. W układzie "wg stanowisk" wiersze
+            są stanowiskami i idą alfabetycznie, więc te przyciski nie mają
+            czego przestawiać. */}
+        <div className={`ml-auto flex items-center gap-2 ${uklad === "stanowiska" ? "hidden" : ""}`}>
           <span className={statLabelCls}>Sortuj</span>
           {[
             { key: "stanowisko", label: "Stanowisko" },
@@ -1329,19 +1508,34 @@ export default function GrafikTydzien({
           onCellClick={(user, dateStr, shift, oferta) =>
             openCell(user, dateStr, shift, lokal, oferta)
           }
+          onAddAtStanowisko={(stanowisko, dateStr) =>
+            openAddNaStanowisko(stanowisko, dateStr, lokal)
+          }
           onCopyPrevWeek={handleCopyPrevWeek}
           onClearRange={handleClearRange}
-          onAddEmployee={openAddEmployee}
+          uklad={uklad}
+          onAddEmployee={() => onNewEmployee && onNewEmployee(lokal)}
           shiftSwaps={shiftSwaps}
           onResolveSwap={onResolveSwap}
         />
       ))}
 
       <p className="text-[12px] text-[#6E6E66]">
-        <strong>URP</strong> — urlop zatwierdzony · <strong>NIE</strong> — pracownik
-        zgłosił brak dostępności, nie da się tu wpisać zmiany · czerwony pasek przy
-        nazwisku — kilka lokali lub stanowisk · szare "w ..." — tego dnia osoba ma
-        zmianę w innym lokalu.{" "}
+        {uklad === "stanowiska" ? (
+          <>
+            Wiersz to stanowisko, kratka to jego obsada w danym dniu. Czerwone
+            „−2 09:00–17:00” znaczy, że w tych godzinach brakuje dwóch osób wobec
+            wymagań. „+ dodaj” wpisuje kolejną osobę na to samo stanowisko i dzień —
+            druga zmiana na jednym stanowisku jest normalna, nie błędem.{" "}
+          </>
+        ) : (
+          <>
+            <strong>URP</strong> — urlop zatwierdzony · <strong>NIE</strong> — pracownik
+            zgłosił brak dostępności, nie da się tu wpisać zmiany · czerwony pasek przy
+            nazwisku — kilka lokali lub stanowisk · szare "w ..." — tego dnia osoba ma
+            zmianę w innym lokalu.{" "}
+          </>
+        )}
         {mode === "edycja"
           ? "Tryb edycji — zmiany nie są jeszcze wysłane pracownikom."
           : "Tryb podglądu — przełącz na Edycję, żeby wpisywać zmiany."}

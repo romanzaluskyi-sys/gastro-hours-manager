@@ -7,6 +7,26 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
 ## 0.32.0 — 2026-09-09
 
+- **Poprawka: widok „Dzień” w Grafiku nie pokazywał ŻADNYCH zmian.** Siatka
+  rysowała się poprawnie, tylko każda kratka była pusta, więc wyglądało to na
+  brak grafiku, a nie na błąd.
+- **Drugi sposób układania grafiku: „Wg stanowisk”.** Przełącznik obok
+  „Miesiąc”. Wiersz to stanowisko, kratka to jego obsada w danym dniu —
+  widać od razu, gdzie nikogo nie ma. „+ dodaj” dopisuje kolejną osobę na to
+  samo stanowisko i dzień. Dotychczasowy układ jest pod „Wg osób”.
+- **Przebudowany pasek Grafiku**: „Wyślij grafik pracownikom” to teraz
+  „Wyślij grafik”, a Podgląd, Edycja i Konfiguracja zwinęły się do samych
+  ikon i stoją obok wysyłki.
+- **„Dodaj pracownika” nad siatką zakłada pracownika**, a nie wpisuje zmianę
+  komuś spoza listy — przycisk prowadzi teraz do karty nowego pracownika z
+  wypełnionym lokalem.
+- **Nagłówek dnia w siatce jest niższy**: dzień tygodnia i data w jednej
+  linijce, pogoda z obsadą w drugiej. Ostrzeżenia o obsadzie bez zmian.
+- **Nowa kolejność zakładek** w panelu: Pulpit, Zatwierdzanie zmian, Grafik,
+  Zadania, Puls, a dalej reszta. Na telefonie w dolnym pasku widać właśnie tę
+  piątkę. „Zadania i sprzątanie” nazywają się teraz po prostu „Zadania”.
+- **Jaśniejszy pasek boczny** — zamiast czarnego bloku odcina się od treści
+  jednym tonem.
 - **Siatka Grafiku jest gęstsza.** Kolumny dni mają stałą szerokość, więc
   tydzień wygląda tak samo niezależnie od tego, w którym dniu jest tłok.
   Wiersz pracownika zajmuje dwie linijki zamiast pięciu — na ekran wchodzi

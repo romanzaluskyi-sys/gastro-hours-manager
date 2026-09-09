@@ -347,6 +347,13 @@ na każdym poziomie `flex-1`/`overflow-y-auto` przestaje faktycznie się
 stosować (domyślne `min-height: auto` na elementach flex) i strona
 przestaje się scrollować w ogóle zamiast scrollować tylko `<main>`.
 
+⚠️ Kolejność zakładek (`NAV_ITEMS` w `ManagerShell.tsx`) i pierwsza piątka w
+dolnym pasku mobile (`MOBILE_PRIMARY_KEYS`) są ustaleniem właściciela z
+0.32.0, ułożonym wg tego, jak często się tam wchodzi: Pulpit, Zatwierdzanie
+zmian, Grafik, Zadania, Puls, a dalej reszta. Nie przestawiaj ich "logicznie"
+przy okazji innych zmian. Sidebar jest od 0.32.0 JASNY (`#E4E4DE`,
+`shellSidebarCls`) — o ton ciemniejszy od tła strony, nie czarny.
+
 **Zakładki** (kolejność z `NAV_ITEMS`): **Pulpit** (`PulpitHome.tsx`, "Dziś
 w liczbach" — godziny dziś/tydzień z porównaniem do poprzedniego tygodnia,
 koszt miesiąca z `users.stawka`, podgląd "Wymaga Twojej decyzji"/"Teraz na
@@ -1841,6 +1848,32 @@ Trzy decyzje, których nie zmieniaj bez rozmowy z właścicielem:
   komunikat po zapisie mówi które i dlaczego ("Dodano 2 zmiany. Pominięto:
   WT (kolizja godzin), CZW (urlop)."). Gdy odpadną wszystkie — komunikat
   błędu, nigdy cichy sukces.
+- **Siatka ma DWA układy** (`uklad` w `Grafik.tsx`, przekazywane do
+  `GrafikTydzien`): `osoby` — wiersz na pracownika, `stanowiska` — wiersz na
+  stanowisko, a w kratce ludzie, którzy je tego dnia obsadzają. Drugi układ
+  jest bliższy temu, jak grafik POWSTAJE ("bar musi być obsadzony, kto go
+  obsadzi?"), pierwszy — temu, jak się go potem SPRAWDZA ("ile Ala ma
+  godzin?").
+  - Dziury obsady tego stanowiska stoją wprost w kratce (`−2 09:00–17:00`) —
+    w tym układzie to jest główna informacja, a nie przypis pod nagłówkiem.
+  - "+ dodaj" otwiera modal z **ustawionym stanowiskiem i dniem**
+    (`ctx.stanowisko`), więc wybór osoby go nie nadpisuje
+    (`stanowiskoRuszone` startuje wtedy jako `true`). Druga osoba na tym samym
+    stanowisku i dniu jest normalna, nie błędem.
+  - Lista wierszy bierze też stanowiska, których nie ma już w słowniku, ale
+    wiszą w zmianach — inaczej zmiana na zarchiwizowanym stanowisku znikałaby
+    z widoku, zostając w bazie i w kontroli obsady.
+  - Sortowanie (Stanowisko/Godziny/Nazwisko) dotyczy tylko układu `osoby`.
+- **"Dodaj pracownika" nad siatką ZAKŁADA PRACOWNIKA** (`goToNewEmployee` w
+  `ManagerDashboard.tsx`), a nie otwiera modalu zmiany dla kogoś spoza siatki.
+  Przycisk mówił "pracownika", a dawał zmianę — to było mylące. Zmianę komuś
+  spoza siatki wpisuje się dalej przez kratkę i "Pokaż wszystkich".
+- ⚠️ **Widok "Dzień" liczył zakres z `weekDays[6]`**, a w tym trybie
+  `weekDays` ma jeden element — `s.date <= undefined` jest zawsze fałszem, więc
+  siatka renderowała się poprawnie z PUSTYMI kratkami. Wyglądało to na brak
+  grafiku, nie na błąd, i dlatego przeżyło kilka wydań. Ostatni dzień bierzemy
+  teraz z długości tablicy. **Każde nowe miejsce liczące zakres tygodnia ma
+  używać `weekDays[weekDays.length - 1]`**, nigdy stałego indeksu.
 - **Wymagania obsady można EDYTOWAĆ** (`GrafikWymagania.tsx`). Wcześniej były
   tylko "dodaj" i "kasuj", więc podniesienie liczby osób z 2 na 3 wymagało
   skasowania reguły i wpisania jej od nowa — razem z dniami tygodnia, które

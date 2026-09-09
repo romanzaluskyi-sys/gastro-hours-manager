@@ -136,6 +136,19 @@ const ManagerDashboard = ({
     setTab("raporty");
   };
 
+  // "Dodaj pracownika" z nagłówka siatki Grafiku. Do 0.32 otwierało modal
+  // przypisania zmiany komuś spoza siatki, co myliło: przycisk mówi
+  // "pracownika", a dawał zmianę. Teraz prowadzi tam, gdzie pracownik
+  // naprawdę powstaje — do jego karty, z domyślnie ustawionym lokalem, z
+  // którego kliknięto.
+  const goToNewEmployee = (lokal) => {
+    handleNewUserClick();
+    if (lokal) {
+      setEditingUser((u) => (u ? { ...u, default_lokal: lokal } : u));
+    }
+    setTab("pracownicy");
+  };
+
   // --- POWIADOMIENIA DLA PRACOWNIKA O ZMIANIE/USUNIĘCIU ZMIANY ---
   const fmtTime = (d) =>
     d ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : null;
@@ -1315,6 +1328,7 @@ const ManagerDashboard = ({
             setLokaleGodziny={setLokaleGodziny}
             grafikWyjatki={grafikWyjatki}
             setGrafikWyjatki={setGrafikWyjatki}
+            onNewEmployee={goToNewEmployee}
             showMsg={showMsg}
           />
         )}

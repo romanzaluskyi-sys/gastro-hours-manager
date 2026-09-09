@@ -126,8 +126,11 @@ export default function GrafikZmianaModal({
   // jest znany i pozostaje stały.
   const [date, setDate] = useState(ctx.date);
   const [userId, setUserId] = useState(ctx.user?.id || null);
+  // `ctx.stanowisko` przychodzi z siatki "wg stanowisk": tam kierownik klika
+  // konkretny wiersz, więc stanowisko jest już wybrane i wybór osoby nie ma
+  // prawa go nadpisać (stąd `stanowiskoRuszone` od razu na true niżej).
   const [stanowisko, setStanowisko] = useState(
-    ctx.shift?.stanowisko || ctx.user?.default_stanowisko || ""
+    ctx.shift?.stanowisko || ctx.stanowisko || ctx.user?.default_stanowisko || ""
   );
   const [lokal, setLokal] = useState(ctx.shift?.lokal || ctx.lokal);
   const [start, setStart] = useState(trimTime(ctx.shift?.start_time) || "");
@@ -137,7 +140,7 @@ export default function GrafikZmianaModal({
   // Czy kierownik sam wskazał stanowisko. Jeśli tak, wybór osoby go już nie
   // nadpisuje — przy dobieraniu ludzi "po stanowisku" (osoba z innego lokalu
   // na Barmana) nadpisywanie kasowałoby właśnie to, co się wybrało.
-  const [stanowiskoRuszone, setStanowiskoRuszone] = useState(false);
+  const [stanowiskoRuszone, setStanowiskoRuszone] = useState(!!ctx.stanowisko);
   const [pokazPozostale, setPokazPozostale] = useState(false);
   const [pokazWszystkich, setPokazWszystkich] = useState(false);
   // Tryb "wolne" — zamiast wpisywać zmianę, kierownik zaznacza, że tej

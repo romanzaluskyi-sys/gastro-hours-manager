@@ -14,11 +14,19 @@ import {
   Eye,
   Pencil,
   Send,
+  Users,
+  Briefcase,
 } from "lucide-react";
 import GrafikWymagania from "./GrafikWymagania";
 import GrafikTydzien from "./GrafikTydzien";
 import GrafikMiesiac from "./GrafikMiesiac";
-import { pageTitleCls, cardCls, btnPrimaryCls, btnSecondaryCls } from "./designTokens";
+import {
+  pageTitleCls,
+  cardCls,
+  btnPrimaryCls,
+  btnSecondaryCls,
+  btnIconCls,
+} from "./designTokens";
 import {
   toLocalYMD,
   mondayOf,
@@ -50,9 +58,16 @@ export default function Grafik({
   setLokaleGodziny,
   grafikWyjatki,
   setGrafikWyjatki,
+  onNewEmployee,
   showMsg,
 }) {
   const [view, setView] = useState("tydzien");
+  // Dwa sposoby czytania tej samej siatki. "osoby" — wiersz na człowieka,
+  // odpowiada na "ile ma godzin, kiedy pracuje". "stanowiska" — wiersz na
+  // stanowisko, odpowiada na "kto stoi na barze w sobotę i czy ktoś tam w
+  // ogóle stoi". Drugi jest bliższy temu, jak układa się grafik od zera,
+  // pierwszy — temu, jak się go potem sprawdza.
+  const [ukladSiatki, setUkladSiatki] = useState("osoby");
   const [weekStart, setWeekStart] = useState(() => mondayOf(toLocalYMD(new Date())));
   // Widok dnia ma własną kotwicę: przeskakiwanie tydzień <-> dzień nie może
   // gubić daty, na którą kierownik właśnie patrzy.
@@ -196,48 +211,77 @@ export default function Grafik({
           >
             <CalendarDays size={15} className="inline -mt-0.5 mr-1" /> Miesiąc
           </button>
-          <button
-            onClick={() => setView("konfiguracja")}
-            className={view === "konfiguracja" ? btnPrimaryCls : btnSecondaryCls}
-          >
-            <SlidersHorizontal size={15} className="inline -mt-0.5 mr-1" /> Konfiguracja
-          </button>
         </div>
+
         {(view === "tydzien" || view === "dzien") && (
-          <div className="flex gap-2 ml-2">
+          <div className="flex gap-2 ml-3">
             <button
-              onClick={() => setMode("podglad")}
-              className={mode === "podglad" ? btnPrimaryCls : btnSecondaryCls}
+              onClick={() => setUkladSiatki("osoby")}
+              className={ukladSiatki === "osoby" ? btnPrimaryCls : btnSecondaryCls}
+              title="Wiersz na pracownika — ile kto ma godzin i kiedy pracuje"
             >
-              <Eye size={15} className="inline -mt-0.5 mr-1" /> Podgląd
+              <Users size={15} className="inline -mt-0.5 mr-1" /> Wg osób
             </button>
             <button
-              onClick={() => setMode("edycja")}
-              className={mode === "edycja" ? btnPrimaryCls : btnSecondaryCls}
+              onClick={() => setUkladSiatki("stanowiska")}
+              className={ukladSiatki === "stanowiska" ? btnPrimaryCls : btnSecondaryCls}
+              title="Wiersz na stanowisko — kto je obsadza i czy ktokolwiek je obsadza"
             >
-              <Pencil size={15} className="inline -mt-0.5 mr-1" /> Edycja
+              <Briefcase size={15} className="inline -mt-0.5 mr-1" /> Wg stanowisk
             </button>
           </div>
         )}
-        {(view === "tydzien" || view === "dzien") && (
+
+        {/* Prawa strona paska: rzeczy, które kierownik zna z kształtu i klika
+            odruchowo, zwinięte do samych ikon — podpisy zostają w `title`.
+            Wysyłka trzyma się skraju, bo to jedyny przycisk w tym pasku, który
+            coś wysyła ludziom. */}
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          {(view === "tydzien" || view === "dzien") && (
+            <>
+              <button
+                onClick={() => setMode("podglad")}
+                className={btnIconCls(mode === "podglad")}
+                title="Podgląd — bez wpisywania zmian"
+              >
+                <Eye size={17} />
+              </button>
+              <button
+                onClick={() => setMode("edycja")}
+                className={btnIconCls(mode === "edycja")}
+                title="Edycja — wpisywanie i poprawianie zmian"
+              >
+                <Pencil size={17} />
+              </button>
+            </>
+          )}
           <button
-            onClick={handlePublish}
-            disabled={publishing || niewyslane === 0}
-            className={`ml-auto ${btnPrimaryCls}`}
-            title={
-              niewyslane === 0
-                ? "Wszystko wysłane — nic nie czeka na wysyłkę"
-                : `Niewysłanych zmian od dziś: ${niewyslane}${
-                    niewyslanePozaTygodniem > 0
-                      ? ` (${niewyslanePozaTygodniem} poza tym tygodniem)`
-                      : ""
-                  }`
-            }
+            onClick={() => setView("konfiguracja")}
+            className={btnIconCls(view === "konfiguracja")}
+            title="Konfiguracja — wymagania obsady, godziny otwarcia, wyjątki"
           >
-            <Send size={15} className="inline -mt-0.5 mr-1" /> Wyślij grafik pracownikom
-            {niewyslane > 0 ? ` (${niewyslane})` : ""}
+            <SlidersHorizontal size={17} />
           </button>
-        )}
+          {(view === "tydzien" || view === "dzien") && (
+            <button
+              onClick={handlePublish}
+              disabled={publishing || niewyslane === 0}
+              className={btnPrimaryCls}
+              title={
+                niewyslane === 0
+                  ? "Wszystko wysłane — nic nie czeka na wysyłkę"
+                  : `Niewysłanych zmian od dziś: ${niewyslane}${
+                      niewyslanePozaTygodniem > 0
+                        ? ` (${niewyslanePozaTygodniem} poza tym tygodniem)`
+                        : ""
+                    }`
+              }
+            >
+              <Send size={15} className="inline -mt-0.5 mr-1" /> Wyślij grafik
+              {niewyslane > 0 ? ` (${niewyslane})` : ""}
+            </button>
+          )}
+        </div>
         {(view === "konfiguracja" || view === "miesiac") && lokaleNames.length > 1 && (
           <select
             value={lokalKonfiguracji}
@@ -302,6 +346,8 @@ export default function Grafik({
           weekStart={view === "dzien" ? dayStart : weekStart}
           setWeekStart={view === "dzien" ? setDayStart : setWeekStart}
           trybDnia={view === "dzien"}
+          uklad={ukladSiatki}
+          onNewEmployee={onNewEmployee}
           sortBy={sortBy}
           setSortBy={setSortBy}
           mode={mode}
