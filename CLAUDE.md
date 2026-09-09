@@ -57,6 +57,43 @@ istniejącego MVP, żeby zespół polubił system, zanim dodamy duże nowe modu�
   bez `import`/`export`, bez importów z `src/` (duplikuj potrzebne parę
   linijek zamiast importować — patrz komentarz na górze tego pliku).
 
+## Konfiguracja najemcy (tenant) — od 0.33.0
+
+Model silo: **jeden repozytorium, N klientów**, każdy z własnym projektem
+Supabase i własnym projektem Vercel. Wszystko, co różni klientów, siedzi w
+zmiennych środowiskowych — pełna procedura uruchomienia nowego klienta jest w
+[`docs/NOWY-KLIENT.md`](docs/NOWY-KLIENT.md).
+
+Do 0.32.0 klucze stały **w kodzie, w sześciu miejscach** (`src/config.ts` plus
+cztery crony w `api/cron/`). Przy takim stanie "drugi klient" znaczył "kopia
+repozytorium", a każda kolejna poprawka musiałaby być wklejana ręcznie w obie
+kopie. Jeśli kiedykolwiek pojawi się pokusa dopisania czegoś
+klientozależnego wprost do kodu — to jest ten moment.
+
+Front: `REACT_APP_SUPABASE_URL`, `REACT_APP_SUPABASE_KEY`,
+`REACT_APP_GOOGLE_SCRIPT_URL`, `REACT_APP_TENANT`, `REACT_APP_PRODUKT`.
+Crony (`api/cron/*.js`, runtime): `SUPABASE_URL`, `SUPABASE_KEY`,
+`CRON_SECRET`. Te same wartości trzeba wpisać dwa razy — to dwa różne
+mechanizmy (build-time DefinePlugin kontra runtime `process.env`).
+
+⚠️ **Pułapki `src/config.ts`, obie sprawdzone eksperymentalnie:**
+- CRA podmienia CAŁE wyrażenie `process.env` na literał obiektu, i robi to
+  **przez dopasowanie tekstu**. Dlatego `process.env` występuje w tym pliku
+  dosłownie dokładnie raz, a dalej czytamy ze zwykłego obiektu.
+- Osłoną jest `try/catch`, a **nie** `typeof process !== "undefined"`.
+  DefinePlugin podmienia `process.env`, ale samego `process` już nie — więc
+  `typeof process` w zbudowanej paczce daje `"undefined"`, warunek się nie
+  spełnia i konfiguracja spada na fallback, czyli na bazę PIERWSZEGO klienta.
+  Cicha awaria najgorszego rodzaju: aplikacja działa, tylko pokazuje cudze
+  dane.
+
+⚠️ **Fallback na wartości pierwszego klienta zostaje świadomie** — bez niego
+merge tej zmiany zgasiłby produkcję, zanim ktokolwiek zdąży ustawić zmienne.
+Jest jednocześnie pułapką, dlatego `REACT_APP_TENANT` (nazwa klienta) stoi na
+ekranie logowania pod nazwą produktu i w panelu pod nazwiskiem kierownika. To
+JEDYNY widoczny gołym okiem sygnał, że wdrożenie czyta właściwą bazę — jeśli u
+nowego klienta stoi tam nazwa starego, zmiennych nie ustawiono.
+
 ## Struktura plików
 
 Frontend jest rozbity na moduły wg odpowiedzialności (refaktoryzacja z
@@ -85,7 +122,9 @@ public/
 src/
   index.tsx                  — punkt wejścia (bez zmian)
   App.tsx                    — globalny stan, fetch danych z Supabase, routing widoków
-  config.ts                  — SUPABASE_URL/KEY, GOOGLE_SCRIPT_URL, isConfigured, APP_VERSION
+  config.ts                  — konfiguracja NAJEMCY (zmienne środowiskowe),
+                                 TENANT/PRODUKT, isConfigured, APP_VERSION —
+                                 patrz "Konfiguracja najemcy" niżej
   types.ts                   — (jeszcze nie istnieje — miejsce na wspólne typy przy przyszłej migracji)
   api/
     supabase.ts               — obiekt `api` (get z paginacją/post/patch/delete/patchByFilter)

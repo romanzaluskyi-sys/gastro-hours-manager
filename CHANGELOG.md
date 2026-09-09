@@ -5,6 +5,19 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.33.0 — 2026-09-09
+
+- **Konfiguracja klienta wyszła z kodu do zmiennych środowiskowych.** Adres
+  bazy, klucz, nazwa sieci i nazwa produktu były wpisane na sztywno w sześciu
+  plikach, więc podłączenie drugiej restauracji wymagałoby skopiowania całego
+  repozytorium — i ręcznego przepisywania każdej późniejszej poprawki do obu
+  kopii. Teraz jedno repozytorium obsługuje dowolną liczbę klientów.
+- **Nazwa sieci widoczna na ekranie logowania i w panelu**, pod nazwą
+  produktu. To sygnał kontrolny: jeśli w nowym wdrożeniu widać tam nazwę
+  starego klienta, konfiguracji nie ustawiono.
+- Nowa instrukcja `docs/NOWY-KLIENT.md` — uruchomienie klienta od pustej bazy
+  po dane startowe.
+
 ## 0.32.0 — 2026-09-09
 
 - **Poprawka: widok „Dzień” w Grafiku nie pokazywał ŻADNYCH zmian.** Siatka

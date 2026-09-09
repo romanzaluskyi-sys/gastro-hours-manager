@@ -28,7 +28,7 @@ import {
   BookOpen,
 } from "lucide-react";
 import { shellSidebarCls, shellNavBtnCls, shellBadgeCls, lokalTabCls } from "./designTokens";
-import { APP_VERSION } from "../../config";
+import { APP_VERSION, PRODUKT, TENANT } from "../../config";
 import WeatherBadge from "../WeatherBadge";
 
 // Kolejność ustalona przez właściciela (0.33.0) i ułożona wg tego, jak
@@ -110,11 +110,12 @@ export default function ManagerShell({
       {/* --- Sidebar: tylko desktop --- */}
       <aside className={`${shellSidebarCls} hidden md:flex md:w-72`}>
         <div className="p-5 border-b border-white/15">
-          <p className="font-['Archivo'] font-extrabold text-xl">Godziny Gastro</p>
+          <p className="font-['Archivo'] font-extrabold text-xl">{PRODUKT}</p>
           <p className="text-xs text-[#B7B6AE] mt-1">
             {currentUser.name} ·{" "}
             {isLocalManager ? "kierownik lokalu" : "kierownik sieci"}
           </p>
+          <p className="text-[11px] text-[#B7B6AE]/70 mt-0.5">{TENANT}</p>
         </div>
         <nav className="flex-grow flex flex-col overflow-y-auto">
           {NAV_ITEMS.map(({ key, label, Icon, badgeKey }) => (

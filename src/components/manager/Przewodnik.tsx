@@ -23,6 +23,14 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.33.0",
+    date: "2026-09-09",
+    items: [
+      "Nazwa sieci widoczna na ekranie logowania i w panelu.",
+      "Przygotowanie pod kolejne restauracje: konfiguracja klienta wyszła z kodu do ustawień wdrożenia.",
+    ],
+  },
+  {
     version: "0.32.0",
     date: "2026-09-09",
     items: [
