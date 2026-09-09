@@ -18,6 +18,14 @@ da się ją nadpisać przez `REACT_APP_PRODUKT` — obok niej stoi `TENANT`, czy
 nazwa konkretnej sieci-klienta. Nie wpisuj żadnej z nich na sztywno w
 komponentach.
 
+Znak (logo, wariant 1a "Zsuw") żyje jako **inline SVG** w
+[`src/components/ShiftroMark.tsx`](src/components/ShiftroMark.tsx), a nie jako
+plik w `public/` — harnessy ładują komponenty prosto w przeglądarce, bez
+serwera CRA, więc `%PUBLIC_URL%` i ścieżki z `public/` tam nie działają.
+Statyczny plik został tylko dla favikony (`public/shiftro-favicon.svg`), którą
+ładuje przeglądarka, nie React. `tone="dark"` dla sidebara. Znak jest zawsze
+kwadratowy i bez zaokrągleń — reszta UI ma `rounded`, on nie.
+
 Pierwszym klientem jest sieć "Gastro Emka" (cztery lokale wymienione wyżej);
 drugi klient — pilotaż u innej właścicielki — jest w przygotowaniu, stąd cała
 sekcja "Konfiguracja najemcy" niżej.
@@ -709,6 +717,10 @@ odpadają. Zamiast tego dwa pliki w katalogu głównym, uruchamiane przez
   Supabase, w której dane już są, i sprawdza, czy propsy z App docierają do
   zakładek. Jedyny sprawdzian, który łapie props wstawiony do złego elementu
   (patrz błąd #16);
+- `harness-login.html` — montuje sam `LoginScreen`. Ten ekran był wcześniej
+  niesprawdzalny inaczej niż przez wylogowanie się w produkcji, a od 0.33.0
+  pokazuje nazwę produktu, nazwę najemcy i znak — czyli dokładnie to, co
+  najłatwiej po cichu zepsuć zmianą w `config.ts`;
 - `harness-raport.html` — montuje `PersonalDashboard` (osobisty telefon) z
   atrapą Supabase i przełącznikiem czterech osób: pełny etat, pół etatu,
   zlecenie, konto bez żadnych danych o umowie. Powstał dla normy w Raporcie —

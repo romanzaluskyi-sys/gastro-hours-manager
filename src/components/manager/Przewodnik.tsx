@@ -23,6 +23,13 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.34.0",
+    date: "2026-09-09",
+    items: [
+      "Znak produktu Shiftro na ekranie logowania, w panelu i jako ikona karty przeglądarki.",
+    ],
+  },
+  {
     version: "0.33.0",
     date: "2026-09-09",
     items: [

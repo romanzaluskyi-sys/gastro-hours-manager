@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import { LogIn, RefreshCw, WifiOff } from "lucide-react";
 import { APP_VERSION, PRODUKT, TENANT } from "../config";
+import ShiftroMark from "./ShiftroMark";
 import {
   fieldLabelCls,
   selectElCls,
@@ -78,6 +79,9 @@ const LoginScreen = ({
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-[#F1F1EE] p-4">
       <div className="bg-white p-8 rounded-xl border-[2.5px] border-[#171714] w-full max-w-md">
+        <div className="flex justify-center mb-2">
+          <ShiftroMark size={44} />
+        </div>
         <h1 className="font-['Archivo'] font-extrabold text-2xl text-center mb-1 text-[#171714]">
           {PRODUKT}
         </h1>

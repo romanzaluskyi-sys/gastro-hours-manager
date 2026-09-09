@@ -30,6 +30,7 @@ import {
 import { shellSidebarCls, shellNavBtnCls, shellBadgeCls, lokalTabCls } from "./designTokens";
 import { APP_VERSION, PRODUKT, TENANT } from "../../config";
 import WeatherBadge from "../WeatherBadge";
+import ShiftroMark from "../ShiftroMark";
 
 // Kolejność ustalona przez właściciela (0.33.0) i ułożona wg tego, jak
 // często się tu wchodzi w ciągu dnia, a nie wg tego, kiedy moduły powstawały.
@@ -110,7 +111,10 @@ export default function ManagerShell({
       {/* --- Sidebar: tylko desktop --- */}
       <aside className={`${shellSidebarCls} hidden md:flex md:w-72`}>
         <div className="p-5 border-b border-white/15">
-          <p className="font-['Archivo'] font-extrabold text-xl">{PRODUKT}</p>
+          <div className="flex items-center gap-2.5">
+            <ShiftroMark size={28} tone="dark" />
+            <p className="font-['Archivo'] font-extrabold text-xl">{PRODUKT}</p>
+          </div>
           <p className="text-xs text-[#B7B6AE] mt-1">
             {currentUser.name} ·{" "}
             {isLocalManager ? "kierownik lokalu" : "kierownik sieci"}

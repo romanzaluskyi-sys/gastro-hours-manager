@@ -5,6 +5,12 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.34.0 — 2026-09-09
+
+- **Znak produktu (logo) Shiftro** — na ekranie logowania nad nazwą, w panelu
+  kierownika obok nazwy i jako ikona karty w przeglądarce. Trzy pasy zmiany,
+  środkowy przesunięty; te same kolory, co reszta aplikacji.
+
 ## 0.33.0 — 2026-09-09
 
 - **Aplikacja nazywa się Shiftro.** Nazwa produktu zastąpiła roboczą "Godziny
