@@ -15,16 +15,17 @@ export const COLORS = {
   mutedLight: "#8F8E86",
 };
 
-// Sidebar jest jasny — o jeden ton ciemniejszy od tła strony (#F1F1EE), nie
-// czarny jak do 0.32. Prośba właściciela: panel ma odcinać się od treści, ale
-// nie być drugim, ciężkim blokiem obok jasnej reszty aplikacji.
+// Sidebar: ciepła ciemna szarość, w pół drogi między czernią sprzed 0.32
+// (#171714) a jasnym panelem, który ją na chwilę zastąpił (#E4E4DE). Panel ma
+// odcinać się od treści, ale nie być drugim ciężkim blokiem obok jasnej
+// reszty aplikacji.
 export const shellSidebarCls =
-  "bg-[#E4E4DE] text-[#171714] border-r-[2px] border-[#171714] flex flex-col flex-shrink-0";
+  "bg-[#3D3C36] text-white flex flex-col flex-shrink-0";
 export const shellNavBtnCls = (active) =>
   `w-full text-left px-4 py-3 flex items-center gap-2.5 font-['Archivo'] font-bold text-[14px] border-l-[3px] whitespace-nowrap ${
     active
-      ? "border-[#DE3A22] bg-white text-[#171714]"
-      : "border-transparent text-[#6E6E66] hover:bg-white/60 hover:text-[#171714]"
+      ? "border-[#DE3A22] bg-white/10 text-white"
+      : "border-transparent text-[#C9C8C1] hover:bg-white/10 hover:text-white"
   }`;
 export const shellBadgeCls =
   "ml-auto bg-[#DE3A22] text-white text-[11px] font-extrabold min-w-[20px] h-5 rounded flex items-center justify-center px-1.5";

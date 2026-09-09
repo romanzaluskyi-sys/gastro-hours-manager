@@ -109,9 +109,9 @@ export default function ManagerShell({
     <div className="h-screen bg-[#F1F1EE] flex flex-col md:flex-row overflow-hidden">
       {/* --- Sidebar: tylko desktop --- */}
       <aside className={`${shellSidebarCls} hidden md:flex md:w-72`}>
-        <div className="p-5 border-b-[2px] border-[#171714]">
+        <div className="p-5 border-b border-white/15">
           <p className="font-['Archivo'] font-extrabold text-xl">Godziny Gastro</p>
-          <p className="text-xs text-[#6E6E66] mt-1">
+          <p className="text-xs text-[#B7B6AE] mt-1">
             {currentUser.name} ·{" "}
             {isLocalManager ? "kierownik lokalu" : "kierownik sieci"}
           </p>
@@ -133,11 +133,11 @@ export default function ManagerShell({
         </nav>
         <button
           onClick={onLogout}
-          className="p-4 flex items-center gap-2.5 text-[#6E6E66] hover:text-[#171714] font-['Archivo'] font-bold text-sm border-t-[2px] border-[#171714]"
+          className="p-4 flex items-center gap-2.5 text-[#B7B6AE] hover:text-white font-['Archivo'] font-bold text-sm border-t border-white/15"
         >
           <LogOut size={17} /> Wyloguj
         </button>
-        <p className="text-[10.5px] text-[#8F8E86] text-center pb-2.5">
+        <p className="text-[10.5px] text-white/40 text-center pb-2.5">
           Wersja {APP_VERSION}
         </p>
       </aside>
