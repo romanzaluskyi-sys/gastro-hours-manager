@@ -5,6 +5,25 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.35.0 — 2026-09-09
+
+- **Ostrzeżenia o odpoczynku przy układaniu grafiku.** Przy wpisywaniu zmiany
+  aplikacja mówi, jeśli pracownikowi zabraknie odpoczynku — od razu, a nie po
+  fakcie. **Zapisać można zawsze**: to sygnał, nie blokada.
+- Zakres zależy od umowy. **Umowa o pracę**: 11 h odpoczynku na dobę
+  (art. 132) i 35 h w tygodniu (art. 133). **Pozostałe umowy**: Kodeks ich nie
+  obejmuje, więc jedno ostrzeżenie — ponad 40 h bez dnia wolnego.
+- Ostrzeżenie widać też w siatce, przy nazwisku — bursztynowy trójkąt, treść
+  pod kursorem.
+- **Odpoczynek liczy się przez wszystkie lokale.** Osoba kończąca o 23:00 w
+  jednym lokalu i zaczynająca o 6:00 w drugim ma siedem godzin przerwy
+  niezależnie od tego, na którą siatkę patrzysz.
+- **Zmiana dzielona nie jest naruszeniem** — 12:00–20:00 i 21:00–23:30 tego
+  samego dnia to normalna gastronomiczna zmiana, a nie brak odpoczynku.
+- Świadomie NIE ostrzegamy o zmianach dłuższych niż 8 h: w gastronomii
+  dwunastka w systemie równoważnym jest normą, a alarm przy każdej z nich
+  nauczyłby ignorować wszystkie pozostałe.
+
 ## 0.34.1 — 2026-09-09
 
 - Tablet Służbowy ma w nagłówku znak i nazwę Shiftro zamiast napisu „Tablet

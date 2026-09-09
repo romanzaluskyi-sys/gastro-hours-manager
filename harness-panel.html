@@ -168,6 +168,17 @@ const planTygodnia = [
   // pokazujemy TYLKO ten jeden dzień.
   { id: "g7", user_id: "u1", user_name: "Ala", lokal: "Ceglana",
     stanowisko: "Kelner", date: dniTygodnia[6], start_time: "14:00", end_time: "22:00", ...opub },
+  // Bo jest na umowie o pracę i ma już wtorek 08:00–16:00 — ta zmiana zostawia
+  // 6 h przerwy, czyli poniżej 11 h z art. 132. Do sprawdzania ostrzeżeń
+  // Kodeksu w siatce i w modalu.
+  { id: "g8", user_id: "u2", user_name: "Bo", lokal: "Ceglana",
+    stanowisko: "Kucharz", date: dniTygodnia[1], start_time: "22:00", end_time: "06:00", ...opub },
+  // Ewa jest na zleceniu — Kodeks jej nie obejmuje, więc jedyne, co ma
+  // zobaczyć kierownik, to seria: 6 dni × 8 h = 48 h bez dnia wolnego.
+  ...Array.from({ length: 6 }, (_, i) => ({
+    id: `g9${i}`, user_id: "u5", user_name: "Ewa", lokal: "Ceglana",
+    stanowisko: "Kelner", date: dniTygodnia[i], start_time: "09:00", end_time: "17:00", ...opub,
+  })),
 ];
 
 const poprzedniMiesiac = (h) => {

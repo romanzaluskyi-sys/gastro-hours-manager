@@ -1379,6 +1379,50 @@ dane podstawowe → kontakt i logowanie → miejsce pracy → umowa i wynagrodze
 **termin umowy i "bezterminowa" zostają wspólne dla obu rodzajów** — umowa o
 pracę też bywa na czas określony.
 
+## Odpoczynek i Kodeks pracy — dodane 2026-09-09
+
+[`utils/kodeks.ts`](src/utils/kodeks.ts), pokazywane w modalu przypisania
+zmiany (`GrafikZmianaModal.tsx`) i jako bursztynowy trójkąt przy nazwisku w
+siatce (`GrafikTydzien.tsx`).
+
+**Zakres zależy od rodzaju umowy** (ustalenie właściciela):
+
+| | Umowa o pracę | Pozostałe |
+|---|---|---|
+| 11 h odpoczynku dobowego (art. 132) | tak | — |
+| 35 h odpoczynku tygodniowego (art. 133) | tak | — |
+| ponad 40 h bez dnia wolnego | — | tak |
+
+Serii NIE liczymy etatowcom celowo: przekroczona seria prawie zawsze łamie też
+odpoczynek tygodniowy, a dwa komunikaty o jednym problemie uczą ignorować oba.
+
+⚠️ **To sygnał, nie blokada.** Przycisk zapisu zostaje aktywny — ta sama
+zasada co przy dziurach w obsadzie. Kierownik zna sytuacje, których system nie
+zna, a grafik, którego nie da się zapisać, powstanie obok systemu, w zeszycie.
+
+⚠️ **Odpoczynek liczy się przez WSZYSTKIE lokale.** Osoba kończąca o 23:00 w
+jednym i zaczynająca o 6:00 w drugim ma siedem godzin przerwy niezależnie od
+tego, na którą siatkę patrzymy — a to przy wypożyczaniu ludzi najłatwiej
+przeoczyć. Dlatego `ostrzezeniaKodeksu` dostaje pełne `planShifts`, nie zmiany
+jednego lokalu.
+
+⚠️ **Odpoczynek dobowy liczymy PO DOBACH, nie po parach kolejnych zmian.**
+Pierwsza wersja porównywała każdą parę i krzyczała "1 h odpoczynku" na zmianie
+dzielonej (12:00–20:00 i 21:00–23:30 tego samego dnia), która w gastronomii
+jest normą i jest dozwolona. Doba (od początku pierwszej zmiany dnia,
+art. 128 § 3 pkt 1) pokazuje to, o co chodzi: czy w ciągu 24 h znalazło się
+11 h ciągiem. Ta sama metoda nadal łapie prawdziwy przypadek — 08:00–16:00
+plus 22:00–06:00 daje 6 h i jest naruszeniem.
+
+⚠️ **Tygodnia widzianego tylko z jednej strony nie oceniamy.** Jeśli pierwsza
+znana zmiana zaczyna się po początku tygodnia (albo ostatnia kończy przed jego
+końcem), nie wiemy, jak długie było wolne przy krawędzi zakresu. Pomyłka idzie
+tu świadomie w stronę milczenia, nie fałszywego alarmu.
+
+⚠️ **Czego NIE ma i nie dodawaj bez prośby:** kontroli 8 h dobowych. W
+gastronomii standardem jest system równoważny (art. 135) z dobowym wymiarem do
+12 h — ostrzeżenie przy każdej dwunastce byłoby alarmem o normalnej zmianie.
+
 ## Zmiany z grafiku bez odbicia — dodane 2026-09-08
 
 [`utils/odbicia.ts`](src/utils/odbicia.ts) + sekcja w `ZatwierdzanieZmian.tsx`

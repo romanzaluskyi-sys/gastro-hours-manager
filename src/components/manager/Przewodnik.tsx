@@ -23,6 +23,14 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.35.0",
+    date: "2026-09-09",
+    items: [
+      "Ostrzeżenia o odpoczynku przy wpisywaniu zmiany: 11 h na dobę i 35 h w tygodniu przy umowie o pracę, ponad 40 h bez dnia wolnego przy pozostałych umowach.",
+      "Zapisać można zawsze — to sygnał, nie blokada. Odpoczynek liczy się przez wszystkie lokale.",
+    ],
+  },
+  {
     version: "0.34.0",
     date: "2026-09-09",
     items: [
