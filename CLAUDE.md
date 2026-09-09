@@ -1210,6 +1210,21 @@ Szczegóły, które łatwo zepsuć:
 - Okno kolejki to 14 dni (`OKNO_DNI`). Dalej nikt nie pamięta, czy tamtego
   wtorku przyszedł, a zgadywanie jest gorsze niż brak.
 
+⚠️ **Raporty i koszty NIE słuchają wyboru lokalu z górnego paska** — biorą
+wszystkie lokale, do których kierownik ma dostęp (`hasAccessToLokal`, nie
+`matchesLokalFilter`). Godziny i koszt jednej osoby to fakt płacowy, nie fakt
+lokalu: pracownik wypożyczony między lokalami pokazywał się dwa razy, w każdej
+zakładce z częścią godzin, i żadna nie mówiła, ile mu się należy. Podział na
+lokale żyje w sekcji "Według lokalu". Nie „napraw” tego z powrotem na filtr.
+
+⚠️ **Formularz "Popraw zmianę" używa PEŁNYCH słowników** (`lokaleWszystkie`/
+`stanowiskaWszystkie`), nie tych zawężonych do urządzenia — opisuje przeszłą
+zmianę, która mogła się odbyć w innym lokalu. Dawny fallback „gdy żadne
+stanowisko nie pasuje do lokalu, pokaż wszystkie” został USUNIĘTY: pozwalał
+zapisać zmianie w lokalu B stanowisko z lokalu A, a w rejestrze powstawała
+godzina pod stanowiskiem, którego tamten lokal nie ma. Pusta lista jest
+uczciwsza niż zła podpowiedź.
+
 ⚠️ **Wartość każdego `<select>` musi istnieć wśród jego `<option>`.** Tablet
 Służbowy podaje w `lokaleOptions`/`stanowiskaOptions` TYLKO swoje lokale, a
 osoba wypożyczona ma `default_lokal` macierzystego — formularz startu zmiany

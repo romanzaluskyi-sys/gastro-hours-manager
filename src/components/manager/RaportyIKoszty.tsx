@@ -36,6 +36,7 @@ export default function RaportyIKoszty({
   users,
   shifts,
   matchesFilter,
+  hasAccessToLokal,
   onEditShift,
   selectedUserId,
   setSelectedUserId,
@@ -60,9 +61,16 @@ export default function RaportyIKoszty({
   };
   const isCurrentMonth = month === new Date().getMonth() && year === new Date().getFullYear();
 
+  // ⚠️ Ta zakładka NIE słucha wyboru lokalu z górnego paska — bierze wszystkie
+  // lokale, do których kierownik ma dostęp. Godziny i koszt jednej osoby to
+  // fakt płacowy, nie fakt lokalu: pracownik wypożyczony między lokalami
+  // pokazywałby się dwa razy, w każdej zakładce z częścią swoich godzin, i
+  // żadna nie mówiłaby, ile mu się należy. Podział na lokale jest niżej, w
+  // sekcji "Według lokalu" — tam ma sens.
+  const widoczny = hasAccessToLokal || matchesFilter;
   const periodShifts = shifts.filter(
     (s) =>
-      matchesFilter(s.lokal) &&
+      widoczny(s.lokal) &&
       s.start_time.getMonth() === month &&
       s.start_time.getFullYear() === year
   );
@@ -116,7 +124,7 @@ export default function RaportyIKoszty({
     factShifts: shifts,
     from: okresOd,
     to: okresDo,
-    lokalOk: matchesFilter,
+    lokalOk: widoczny,
   });
   const pf = sumujPlanFakt(planFaktMapa);
   const pfOsoby = {};
@@ -180,6 +188,12 @@ export default function RaportyIKoszty({
           <span className="inline-block bg-[#171714] text-white font-['Archivo'] font-extrabold text-base px-3 py-1 rounded mt-1.5">
             {getMonthName(month)} {year}
           </span>
+          {/* Bez tego zdania kierownik szukałby, czemu liczby nie zmieniają się
+              przy przełączaniu lokalu w górnym pasku. */}
+          <p className="text-[13px] text-[#6E6E66] mt-1.5 max-w-[60ch]">
+            Wszystkie Twoje lokale razem — godziny i koszt jednej osoby liczymy w
+            całości, niezależnie od tego, gdzie pracowała. Podział na lokale niżej.
+          </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <button onClick={() => shiftMonth(-1)} className={btnSecondaryCls}>

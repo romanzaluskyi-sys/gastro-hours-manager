@@ -23,6 +23,14 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.30.2",
+    date: "2026-09-09",
+    items: [
+      "Raporty i koszty: jedna karta na osobę, niezależnie od liczby lokali. Podział na lokale został w sekcji \"Według lokalu\".",
+      "Poprawka: \"Popraw zmianę\" podpowiadała stanowiska z niewłaściwego lokalu — teraz idą za wybranym lokalem.",
+    ],
+  },
+  {
     version: "0.30.1",
     date: "2026-09-09",
     items: [

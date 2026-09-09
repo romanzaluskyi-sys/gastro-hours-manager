@@ -308,6 +308,11 @@ export const EmployeeSessionScreens = ({
   employee,
   lokaleOptions,
   stanowiskaOptions,
+  // Pełne słowniki — do OPISYWANIA przeszłej zmiany ("Popraw zmianę"), a nie
+  // do zaczynania nowej. Tablet Służbowy podaje w lokaleOptions tylko swoje
+  // lokale; zmiana, którą pracownik poprawia, mogła się odbyć gdzie indziej.
+  lokaleWszystkie,
+  stanowiskaWszystkie,
   shifts,
   setShifts,
   showMsg,
@@ -556,16 +561,15 @@ export const EmployeeSessionScreens = ({
     .sort((a, b) => b.start_time - a.start_time)
     .slice(0, 8);
 
-  // Jeśli żadne stanowisko nie pasuje do wybranego lokalu (np. rozjazd
-  // nazwy lokalu w starszych/zmigrowanych danych zmiany), pokazujemy
-  // wszystkie stanowiska zamiast blokować formularz pustą listą.
-  const korektaStanowiskaMatching = stanowiskaOptions.filter(
+  // ⚠️ Stanowiska do korekty bierzemy z PEŁNEJ listy i filtrujemy po wybranym
+  // lokalu — bez awaryjnego "pokaż wszystkie". Ten fallback pozwalał wpisać
+  // zmianie w lokalu B stanowisko z lokalu A: w rejestrze pojawiała się wtedy
+  // godzina pod stanowiskiem, którego tamten lokal nie ma i którego ta osoba
+  // nawet nie ma przypisanego. Pusta lista jest uczciwsza niż zła podpowiedź.
+  const slownikStanowisk = stanowiskaWszystkie || stanowiskaOptions;
+  const korektaStanowiska = slownikStanowisk.filter(
     (s) => s.lokal_name === zgPropLokal
   );
-  const korektaStanowiska =
-    korektaStanowiskaMatching.length > 0
-      ? korektaStanowiskaMatching
-      : stanowiskaOptions;
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
@@ -604,28 +608,20 @@ export const EmployeeSessionScreens = ({
 
   // Poprawiana zmiana mogła się odbyć w lokalu, którego to urządzenie nie
   // obsługuje — osoba wypożyczona pracuje z tabletu lokalu B, a w jej historii
-  // są zmiany z macierzystego A. Bez dołożenia tamtego lokalu <select> miałby
-  // wartość bez opcji, pokazałby się pusty i zapis padłby na "Wypełnij wymagane
-  // pola". Opisujemy przeszłą zmianę, a nie zaczynamy nowej — więc lokal spoza
-  // listy urządzenia jest tu w porządku.
-  const lokaleDoKorekty = (() => {
-    const lista = lokaleOptions || [];
-    if (!zgPropLokal || lista.some((l) => l.name === zgPropLokal)) return lista;
-    return [...lista, { id: `spoza-${zgPropLokal}`, name: zgPropLokal }];
-  })();
+  // są zmiany z macierzystego A. Opisujemy przeszłość, nie zaczynamy nowej
+  // zmiany, więc bierzemy pełny słownik lokali.
+  const lokaleDoKorekty = lokaleWszystkie || lokaleOptions || [];
 
   // ---- to samo dla propozycji lokalu w formularzu "Popraw zmianę" ----
-  // (z tym samym awaryjnym fallbackiem na pełną listę co korektaStanowiska)
+  // Bez awaryjnego "pokaż wszystkie": stanowisko musi należeć do wybranego
+  // lokalu, inaczej korekta tworzy godzinę pod stanowiskiem, którego tam nie ma.
   useEffect(() => {
     if (screen !== "ZGLOS" || zgType !== "correction") return;
-    const matching = stanowiskaOptions.filter(
-      (s) => s.lokal_name === zgPropLokal
-    );
-    const dostepne = matching.length > 0 ? matching : stanowiskaOptions;
+    const dostepne = slownikStanowisk.filter((s) => s.lokal_name === zgPropLokal);
     if (!dostepne.find((s) => s.name === zgPropStanowisko)) {
       setZgPropStanowisko(dostepne.length > 0 ? dostepne[0].name : "");
     }
-  }, [zgPropLokal, stanowiskaOptions, screen, zgType]);
+  }, [zgPropLokal, slownikStanowisk, screen, zgType]);
 
   // ---- oznaczanie powiadomień jako przeczytane ----
   useEffect(() => {

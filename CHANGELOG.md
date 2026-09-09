@@ -5,6 +5,19 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.30.2 — 2026-09-09
+
+- **Raporty i koszty pokazują jedną kartę na osobę**, niezależnie od tego, w ilu
+  lokalach pracowała. Wcześniej pracownik wypożyczony między lokalami pojawiał
+  się dwa razy — w każdej zakładce lokalu z częścią swoich godzin — i żadna nie
+  mówiła, ile mu się w sumie należy. Podział na lokale został tam, gdzie ma
+  sens: w sekcji „Według lokalu”.
+- **Poprawka: „Popraw zmianę” podpowiadała stanowiska z niewłaściwego lokalu.**
+  Na tablecie jednego lokalu dało się wskazać drugi lokal, ale stanowiska
+  zostawały z pierwszego — w rejestrze powstawała godzina pod stanowiskiem,
+  którego tamten lokal w ogóle nie ma. Lista lokali i stanowisk jest teraz pełna
+  i stanowiska idą za wybranym lokalem.
+
 ## 0.30.1 — 2026-09-09
 
 - **Poprawka:** osoba wypożyczona do innego lokalu nie mogła zapisać godzin —

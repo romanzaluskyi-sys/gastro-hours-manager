@@ -1205,6 +1205,7 @@ const ManagerDashboard = ({
             users={users}
             shifts={shifts}
             matchesFilter={matchesLokalFilter}
+            hasAccessToLokal={hasAccessToLokal}
             onEditShift={openEditShift}
             selectedUserId={reportUserId}
             setSelectedUserId={setReportUserId}
