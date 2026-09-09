@@ -31,6 +31,7 @@ const CHANGELOG = [
       "Jedną zmianę można wpisać od razu na kilka dni tygodnia; dni z urlopem lub kolizją są pomijane.",
       "Wymagania obsady można teraz poprawiać, a nie tylko dodawać i kasować.",
       "Widok Miesiąc ma drugi układ wydruku \"Osoby × dni\" — wiersz na osobę, 31 kolumn, gotowy na A4 poziomo.",
+      "W tym układzie pracownik tego lokalu ma cały swój miesiąc, razem ze zmianami w innych lokalach (na szaro), a przy nazwisku sumę godzin i zmian.",
     ],
   },
   {

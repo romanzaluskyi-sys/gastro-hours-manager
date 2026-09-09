@@ -159,6 +159,15 @@ const planTygodnia = [
   // kolejną trójkę zamiast chować drugą zmianę.
   { id: "g5", user_id: "u3", user_name: "Cezary", lokal: "Ceglana",
     stanowisko: "Kucharz", date: dniTygodnia[4], start_time: "21:00", end_time: "23:30", ...opub },
+  // Bo jest z Ceglanej, ale ten dzień robi w Bułce — w wydruku Ceglanej ma
+  // być widoczny (to jego lokal macierzysty, miesiąc musi być kompletny),
+  // a w wydruku Bułki NIE, bo Bułka nie prowadzi jego grafiku.
+  { id: "g6", user_id: "u2", user_name: "Bo", lokal: "Bułka i Jacek",
+    stanowisko: "Kucharz", date: dniTygodnia[2], start_time: "10:00", end_time: "18:00", ...opub },
+  // Ala odwrotnie: z Bułki, wyjątkowo jeden dzień w Ceglanej. W Ceglanej
+  // pokazujemy TYLKO ten jeden dzień.
+  { id: "g7", user_id: "u1", user_name: "Ala", lokal: "Ceglana",
+    stanowisko: "Kelner", date: dniTygodnia[6], start_time: "14:00", end_time: "22:00", ...opub },
 ];
 
 const poprzedniMiesiac = (h) => {

@@ -55,6 +55,19 @@ const shiftMonth = (monthPrefix, delta) => {
 // położyć obok wydruku z marca bez przeliczania, gdzie co stoi.
 const DNI_W_SIATCE = 31;
 
+// Skrót lokalu do znacznika "ta zmiana jest gdzie indziej". Świadomie NIE
+// `getShort` z utils/format: ono bierze pierwsze litery słów, więc
+// jednowyrazowa "Ceglana" schodzi do "C" i myli się z każdym innym lokalem na
+// tę samą literę. Wielowyrazowe zostają inicjałami ("Bułka i Jacek" → "BIJ"),
+// jednowyrazowe biorą trzy pierwsze litery ("Ceglana" → "CEG").
+const lokalSkrot = (nazwa) => {
+  if (!nazwa) return "";
+  const slowa = String(nazwa).trim().split(/\s+/);
+  const skrot =
+    slowa.length > 1 ? slowa.map((w) => w[0]).join("") : slowa[0].slice(0, 3);
+  return skrot.toUpperCase().slice(0, 3);
+};
+
 const PRINT_CSS = `
 @media print {
   @page { size: A4 landscape; margin: 7mm; }
@@ -84,6 +97,8 @@ const PRINT_CSS = `
   /* Trzy linijki czasu przy 6,2 pt i interlinii 1,1 to ~3,3 em; z zapasem na
      obramowania wychodzi 3,6 em. */
   #grafik-osoby .go-min { min-height: 3.6em !important; }
+  #grafik-osoby .go-suma { font-size: 5.5pt; }
+  #grafik-osoby .go-obcy { font-size: 5pt; }
   /* Wiersz osoby nie może się rozpaść na dwie strony w połowie. */
   #grafik-osoby tr { break-inside: avoid; page-break-inside: avoid; }
   #grafik-osoby thead { display: table-header-group; }
@@ -192,10 +207,40 @@ export default function GrafikMiesiac({
   // pracuje, zamiast jak dzień, którego nie ma.
   const kolumnyDni = Array.from({ length: DNI_W_SIATCE }, (_, i) => dni[i] || null);
 
+  // ⚠️ Układ "osoby × dni" pokazuje INNY zakres niż kalendarz i niż nagłówek
+  // nad nim. Dla osoby, której to jest lokal macierzysty, bierzemy WSZYSTKIE
+  // jej zmiany w miesiącu — także te w innych lokalach. Dla osoby wypożyczonej
+  // tutaj — tylko zmiany u nas.
+  //
+  // Powód jest taki, że te dwa wiersze odpowiadają na dwa różne pytania.
+  // Kierownik lokalu macierzystego rozlicza CAŁY miesiąc tej osoby, więc dzień,
+  // w którym pracuje gdzie indziej, musi widzieć — inaczej wygląda na wolny i
+  // dostanie kolejną zmianę. Lokal, do którego ktoś przychodzi wyjątkowo, nie
+  // ma powodu znać reszty cudzego grafiku.
+  const macierzysty = (user) => user.default_lokal === lokal;
+
+  const zmianyOsobyMiesiaca = (user) => {
+    const wszystkie = (planShifts || []).filter(
+      (s) => s.date.startsWith(month) && isSameUser(s, user)
+    );
+    return macierzysty(user) ? wszystkie : wszystkie.filter((s) => s.lokal === lokal);
+  };
+
   const zmianyOsobyDnia = (user, dateStr) =>
-    zmianyLokalu
-      .filter((s) => s.date === dateStr && isSameUser(s, user))
+    zmianyOsobyMiesiaca(user)
+      .filter((s) => s.date === dateStr)
       .sort((a, b) => trimTime(a.start_time).localeCompare(trimTime(b.start_time)));
+
+  // Podsumowanie przy nazwisku. Liczy z tego samego zakresu, który widać w
+  // wierszu — inaczej suma nie zgadzałaby się z tym, co da się policzyć okiem.
+  const podsumowanieOsoby = (user) => {
+    const zm = zmianyOsobyMiesiaca(user);
+    return {
+      godziny: Math.round(zm.reduce((sum, s) => sum + shiftHours(s), 0)),
+      zmian: zm.length,
+      obce: zm.filter((s) => s.lokal !== lokal).length,
+    };
+  };
 
   const ostatniaZmiana = zmianyLokalu
     .map((s) => s.updated_at)
@@ -411,8 +456,30 @@ export default function GrafikMiesiac({
                         wydruk miał raz linijkę, raz trzy, i przestawał wyglądać
                         jak formularz. */}
                     <td className="border-[1px] border-[#171714] px-2 py-1 go-nazwisko font-['Archivo'] font-bold text-[12px] text-center">
-                      <div className="go-min min-h-[40px] flex items-center justify-center">
-                        {u.name}
+                      <div className="go-min min-h-[40px] flex flex-col items-center justify-center">
+                        <span>{u.name}</span>
+                        {(() => {
+                          const p = podsumowanieOsoby(u);
+                          if (p.zmian === 0) return null;
+                          return (
+                            // Sama liczba godzin i zmian — bez dopisku o
+                            // zmianach w innym lokalu. Ten dopisek zawijał
+                            // kolumnę nazwisk na trzy linijki i rozpychał
+                            // wiersz, a to samo widać w wierszu: szare kratki
+                            // ze skrótem lokalu. Pełny opis został w
+                            // podpowiedzi.
+                            <span
+                              className="go-suma block font-normal text-[10px] text-[#6E6E66] leading-tight whitespace-nowrap"
+                              title={
+                                p.obce > 0
+                                  ? `${p.godziny} h w ${p.zmian} zmianach, w tym ${p.obce} w innym lokalu`
+                                  : `${p.godziny} h w ${p.zmian} zmianach`
+                              }
+                            >
+                              {p.godziny} h · {p.zmian} zm.
+                            </span>
+                          );
+                        })()}
                       </div>
                     </td>
                     {kolumnyDni.map((d, i) => {
@@ -439,20 +506,34 @@ export default function GrafikMiesiac({
                               ten układ pochodzi. Druga zmiana tego samego dnia
                               dokłada kolejną trójkę pod spodem, zamiast
                               chować się za "…". */}
-                          {zm.map((sh) => (
-                            <div
-                              key={sh.id}
-                              className={`leading-tight tabular-nums ${
-                                sh.__nieaktywny ? "line-through text-[#8A3A2B]" : ""
-                              }`}
-                            >
-                              <div>{trimTime(sh.start_time)}</div>
-                              <div>{trimTime(sh.end_time)}</div>
-                              <div className="font-bold">
-                                {stanowiskoShort(activeStanowiska, lokal, sh.stanowisko)}
+                          {zm.map((sh) => {
+                            // Zmiana w innym lokalu: te same trzy linijki, ale
+                            // na szaro i z czwartą — skrótem tamtego lokalu.
+                            // Bez tego znacznika dzień wyglądałby jak zwykła
+                            // zmiana u nas i kierownik liczyłby tę osobę do
+                            // swojej obsady, choć jej tu nie ma.
+                            const obcy = sh.lokal !== lokal;
+                            return (
+                              <div
+                                key={sh.id}
+                                className={`leading-tight tabular-nums ${
+                                  sh.__nieaktywny ? "line-through text-[#8A3A2B]" : ""
+                                } ${obcy ? "text-[#8F8E86] italic" : ""}`}
+                                title={obcy ? `Zmiana w lokalu ${sh.lokal}` : ""}
+                              >
+                                <div>{trimTime(sh.start_time)}</div>
+                                <div>{trimTime(sh.end_time)}</div>
+                                <div className="font-bold not-italic">
+                                  {stanowiskoShort(activeStanowiska, sh.lokal, sh.stanowisko)}
+                                </div>
+                                {obcy && (
+                                  <div className="go-obcy text-[8px] font-bold uppercase leading-none">
+                                    {lokalSkrot(sh.lokal)}
+                                  </div>
+                                )}
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                           {abs && (
                             <div className="go-znacznik font-extrabold text-[10px] text-[#6E6E66]">
                               {abs.type === "urlop" ? "URP" : "NIE"}
@@ -471,7 +552,7 @@ export default function GrafikMiesiac({
         <div className="px-4 py-2 border-t-[2px] border-[#171714] flex flex-wrap items-center justify-between gap-2 text-[11px] text-[#6E6E66]">
           <span>
             {uklad === "osoby"
-              ? "W kratce: początek, koniec, skrót stanowiska. URP — zatwierdzony urlop, NIE — zgłoszony brak dostępności. Siatka ma zawsze 31 kolumn, żeby każdy miesiąc drukował się tak samo."
+              ? "W kratce: początek, koniec, skrót stanowiska. Szara, pochylona zmiana ze skrótem lokalu pod spodem to praca w innym lokalu — pokazujemy ją tylko osobom, dla których to jest lokal macierzysty, żeby ich miesiąc był kompletny. URP — zatwierdzony urlop, NIE — zgłoszony brak dostępności. Siatka ma zawsze 31 kolumn, żeby każdy miesiąc drukował się tak samo."
               : "Czerwony numer dnia — obsada poniżej wymagań dla tego lokalu. Skrót przy zmianie to stanowisko."}
           </span>
           {ostatniaZmiana && (

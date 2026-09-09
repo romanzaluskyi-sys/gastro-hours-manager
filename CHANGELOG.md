@@ -28,7 +28,12 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
   jedno pod drugim. Siatka ma zawsze 31 kolumn, więc luty drukuje się w tej
   samej szerokości co marzec i wydruki da się położyć obok siebie. Mieści się
   na A4 poziomo; przełącznik „Kalendarz / Osoby × dni” jest przy przyciskach
-  miesiąca.
+  miesiąca. Przy nazwisku widać sumę godzin i liczbę zmian w miesiącu.
+- **W układzie „Osoby × dni” pracownik tego lokalu ma CAŁY swój miesiąc** —
+  także dni, w które pracuje w innym lokalu (szara, pochylona kratka ze
+  skrótem tamtego lokalu). Dzięki temu nie wygląda na wolnego i nie dostanie
+  drugiej zmiany na ten sam dzień. Osoba przychodząca do nas wyjątkowo ma
+  pokazane tylko zmiany u nas — jej pozostały grafik należy do jej lokalu.
 - Poprawka: w liście wymagań obsady było „2 osób” zamiast „2 osoby”.
 
 ## 0.31.0 — 2026-09-09

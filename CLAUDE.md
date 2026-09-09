@@ -1882,6 +1882,22 @@ Trzy decyzje, których nie zmieniaj bez rozmowy z właścicielem:
   - `overflow-x-auto` z widoku ekranowego MUSI być wyłączone w druku
     (`.go-scroll`), inaczej kolumny od dwudziestej wzwyż nie wychodzą na
     papier.
+  - ⚠️ **Zakres wiersza zależy od tego, CZYJ to lokal macierzysty** — i jest
+    inny niż w układzie kalendarza oraz w nagłówku nad tabelą. Osoba, dla
+    której to jest `default_lokal`, dostaje WSZYSTKIE swoje zmiany miesiąca,
+    także te w innych lokalach (szara, pochylona kratka ze skrótem tamtego
+    lokalu, `lokalSkrot`). Osoba wypożyczona tutaj — tylko zmiany u nas.
+    Powód: kierownik lokalu macierzystego rozlicza CAŁY miesiąc tej osoby,
+    więc dzień pracy gdzie indziej musi widzieć, inaczej wygląda na wolny i
+    dostanie kolejną zmianę. Lokal, do którego ktoś przychodzi wyjątkowo, nie
+    ma powodu znać reszty cudzego grafiku (ustalenie właściciela).
+  - Suma przy nazwisku (`podsumowanieOsoby`) liczy się z **tego samego
+    zakresu, który widać w wierszu** — inaczej nie zgadzałaby się z tym, co da
+    się policzyć okiem. Dopisek o zmianach w innym lokalu siedzi w `title`, a
+    nie w druku: zawijał kolumnę nazwisk na trzy linijki i rozpychał wiersz.
+  - `lokalSkrot` NIE jest `getShort` z `utils/format` — tamto bierze pierwsze
+    litery słów, więc jednowyrazowa "Ceglana" schodzi do "C" i myli się z
+    każdym innym lokalem na tę samą literę.
   - `isSameUser` i `absenceOn` przeniesione z `GrafikTydzien.tsx` do
     `utils/grafik.ts` — używają ich teraz oba widoki.
 
