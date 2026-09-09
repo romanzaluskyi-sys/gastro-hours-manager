@@ -51,6 +51,7 @@ import { activeSwapFor, pendingSwapDelta } from "../../utils/swaps";
 import { addUrlopDirectly, addNiedostepnoscDirectly } from "../../utils/absences";
 import { stanowiskoShort, stanowiskoBadgeStyle } from "../../utils/stanowiska";
 import { normaMiesiaca } from "../../utils/umowy";
+import { ostrzezeniaKodeksu } from "../../utils/kodeks";
 import { countWorkdays, URLOP_HOURS_PER_DAY } from "../../utils/absences";
 import { fetchDailyForecast, describeWeatherCode } from "../../utils/weather";
 
@@ -286,6 +287,15 @@ function LokalSection({
     // ma swoją (patrz utils/umowy.ts).
     const [nrRok, nrMies] = monthPrefix.split("-").map(Number);
     const norma = normaMiesiaca(u, nrRok, nrMies);
+    // Ostrzeżenia o odpoczynku dla OGLĄDANEGO tygodnia. Liczone z pełnego
+    // `planShifts` (wszystkie lokale), bo odpoczynek nie zna granic lokalu.
+    const ostrzezenia = ostrzezeniaKodeksu({
+      planShifts,
+      absences,
+      user: u,
+      od: weekFrom,
+      doDnia: weekTo,
+    });
     const lokaleOsoby = [...new Set(monthShifts.map((s) => s.lokal))];
     const stanowiskaOsoby = [...new Set(monthShifts.map((s) => s.stanowisko).filter(Boolean))];
     return {
@@ -296,6 +306,7 @@ function LokalSection({
       // zatwierdzone — kierownik musi to widzieć przed decyzją.
       swapDelta: pendingSwapDelta(shiftSwaps, planShifts, u, monthPrefix),
       zmian: monthShifts.length,
+      ostrzezenia,
       norma,
       koszt: stawka != null ? hours * stawka : null,
       wieleLokali: lokaleOsoby.length > 1,
@@ -924,6 +935,20 @@ function LokalSection({
                             title="Konto wyłączone — zmiany tej osoby nie liczą się do obsady"
                           >
                             WYŁ.
+                          </span>
+                        )}
+                        {/* Odpoczynek poniżej normy: bursztynowy trójkąt, ten
+                            sam kolor co nadmiar obsady — "wpisano coś, co nie
+                            zgadza się z regułą", nie "brakuje ludzi". Treść w
+                            podpowiedzi, bo w dwuwierszowym wierszu nie ma
+                            miejsca na zdanie, a alarm i tak ma prowadzić do
+                            kliknięcia w zmianę. */}
+                        {meta.ostrzezenia.length > 0 && (
+                          <span
+                            className="text-[#7A5B12] flex-shrink-0 leading-none"
+                            title={meta.ostrzezenia.map((o) => o.tekst).join("\n")}
+                          >
+                            <AlertTriangle size={12} className="inline -mt-0.5" />
                           </span>
                         )}
                       </div>

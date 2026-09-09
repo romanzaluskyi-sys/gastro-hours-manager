@@ -19,7 +19,10 @@ import {
   findBlockingAbsence,
   poOstatnimDniu,
   allowedStanowiskaArr,
+  addDaysYMD,
 } from "../../utils/grafik";
+import { ostrzezeniaKodeksu } from "../../utils/kodeks";
+import { naEtacie } from "../../utils/umowy";
 
 const DZIEN_PELNY = ["ND", "PON", "WT", "ŚR", "CZW", "PT", "SOB"];
 
@@ -256,6 +259,7 @@ export default function GrafikZmianaModal({
   const paryPozostale = wszystkieParty.filter((p) => !wKarcie(p)).sort(sortujPary);
   const obceStanowisko = user && stanowisko && !knowsStanowisko(user, stanowisko);
   const wolneUzytkownika = user ? findBlockingAbsence(absences, user, date) : null;
+
   const poOdejsciu = poOstatnimDniu(user, date);
 
   // Dni do zapisania: wybrany plus zaznaczone dodatkowe, bez duplikatu i
@@ -264,6 +268,35 @@ export default function GrafikZmianaModal({
   const dniZapisu = ctx.shift
     ? [date]
     : [...new Set([date, ...dniDodatkowe])].sort();
+
+  // Ostrzeżenia o odpoczynku liczone dla grafiku Z TĄ ZMIANĄ — kierownik ma
+  // zobaczyć skutek tego, co właśnie zapisuje, a nie stan sprzed. Edytowaną
+  // zmianę wyjmujemy i wstawiamy w nowej wersji, żeby nie policzyć jej dwa razy.
+  const ostrzezeniaOdpoczynku = React.useMemo(() => {
+    if (!user || !start || !end) return [];
+    const bez = (planShifts || []).filter((s) => String(s.id) !== String(ctx.shift?.id));
+    const kandydaci = dniZapisu.map((d) => ({
+      id: `__kandydat-${d}`,
+      user_id: user.id,
+      user_name: user.name,
+      lokal,
+      stanowisko,
+      date: d,
+      start_time: start,
+      end_time: end,
+    }));
+    // Okno z zapasem: reguła tygodniowa potrzebuje sąsiednich dni, żeby
+    // odróżnić prawdziwy brak odpoczynku od krawędzi zakresu.
+    const od = addDaysYMD(dniZapisu[0], -7);
+    const doDnia = addDaysYMD(dniZapisu[dniZapisu.length - 1], 7);
+    return ostrzezeniaKodeksu({
+      planShifts: [...bez, ...kandydaci],
+      absences,
+      user,
+      od,
+      doDnia,
+    });
+  }, [user, start, end, lokal, stanowisko, dniZapisu.join(","), planShifts, absences]);
 
   const zapisz = async (dodajNastepna) => {
     if (!user || !stanowisko || !start || !end) return;
@@ -544,6 +577,26 @@ export default function GrafikZmianaModal({
                   ? `${osobneZmiany(dniZapisu.length)} — te same godziny i stanowisko. Dni z urlopem, kolizją godzin albo po ostatnim dniu pracy zostaną pominięte.`
                   : "Zaznacz kolejne dni, żeby wpisać tę samą zmianę od razu na kilka dni."}
               </p>
+            </div>
+          )}
+
+          {/* ⚠️ Sygnał, nie blokada — przycisk zapisu zostaje aktywny. Kierownik
+              zna sytuacje, których system nie zna, a grafik, którego nie da się
+              zapisać, powstanie obok systemu, w zeszycie. */}
+          {ostrzezeniaOdpoczynku.length > 0 && (
+            <div className="flex items-start gap-2 p-3 rounded border-[2px] border-[#171714] bg-[#FDF3D4]">
+              <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
+              <div className="text-[13px]">
+                <p className="font-bold mb-0.5">
+                  {naEtacie(user) ? "Odpoczynek poniżej normy" : "Długa seria bez wolnego"}
+                </p>
+                {ostrzezeniaOdpoczynku.map((o, i) => (
+                  <p key={i}>{o.tekst}</p>
+                ))}
+                <p className="text-[#6E6E66] mt-1">
+                  Zapisać i tak można — to ostrzeżenie, nie blokada.
+                </p>
+              </div>
             </div>
           )}
 

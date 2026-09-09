@@ -386,6 +386,136 @@ const sprawdz = (nazwa, warunek, szczegol = "") => {
     sprawdz("prognoza = fakt + wysłany grafik", prog.prognoza === 160);
     sprawdz("prognoza mówi, ile zabraknie do normy", prog.roznica === -16, "jest " + prog.roznica);
 
+    // ---------------------------------------------------------------
+    log("");
+    log("kodeks.ts — odpoczynek dobowy, tygodniowy, serie bez wolnego");
+    const KP = await import(await zaladuj("/src/utils/kodeks"));
+
+    const etat = { id: "e1", name: "Etat", typ_umowy: "umowa_o_prace", wymiar_etatu: 1 };
+    const zlec = { id: "z1", name: "Zlecenie", typ_umowy: "zlecenie", stawka: 30 };
+    const zm = (date, od, doG, id) => ({
+      id: id || `${date}-${od}`, user_id: "e1", user_name: "Etat", lokal: "L",
+      stanowisko: "Kucharz", date, start_time: od, end_time: doG,
+      published_at: "2020-01-01T00:00:00Z", deleted_at: null,
+    });
+    const dla = (u, lista) => lista.map((s) => ({ ...s, user_id: u.id, user_name: u.name }));
+
+    // 22:00–06:00, potem 14:00 tego samego dnia. Doba od 22:00: zajęte do
+    // 06:00 i od 14:00 do 22:00, więc najdłuższe wolne to 06:00–14:00 = 8 h.
+    const male = [zm("2026-09-07", "22:00", "06:00"), zm("2026-09-08", "14:00", "22:00")];
+    sprawdz("11 h: odpoczynek 8 h w dobie wykryty",
+      KP.ostrzezeniaKodeksu({
+        planShifts: male, absences: [], user: etat, od: "2026-09-07", doDnia: "2026-09-08",
+      }).some((o) => o.typ === "dobowy" && /8 h/.test(o.tekst)));
+
+    // ⚠️ Zmiana dzielona: 12:00–20:00 i 21:00–23:30 tego samego dnia, potem
+    // wolne do 12:00 następnego. Liczenie po parach dawało tu "1 h odpoczynku"
+    // i alarmowało o normalnej gastronomicznej zmianie; liczenie po dobie
+    // widzi 23:30 → 12:00, czyli 12,5 h, i milczy.
+    sprawdz("11 h: zmiana dzielona NIE jest naruszeniem",
+      KP.ostrzezeniaKodeksu({
+        planShifts: [
+          zm("2026-09-07", "12:00", "20:00", "a"),
+          zm("2026-09-07", "21:00", "23:30", "b"),
+          zm("2026-09-08", "12:00", "20:00", "c"),
+        ],
+        absences: [], user: etat, od: "2026-09-07", doDnia: "2026-09-08",
+      }).filter((o) => o.typ === "dobowy").length === 0);
+
+    // Ta sama doba, ale druga część dopiero o 22:00 — wolne 20:00–22:00 i
+    // 06:00–12:00, czyli najwyżej 6 h. To już naruszenie, mimo że też jest
+    // "dwie zmiany jednego dnia".
+    sprawdz("11 h: druga zmiana po długiej pauzie już jest naruszeniem",
+      KP.ostrzezeniaKodeksu({
+        planShifts: [
+          zm("2026-09-07", "08:00", "16:00", "a"),
+          zm("2026-09-07", "22:00", "06:00", "b"),
+          zm("2026-09-08", "12:00", "20:00", "c"),
+        ],
+        absences: [], user: etat, od: "2026-09-07", doDnia: "2026-09-08",
+      }).filter((o) => o.typ === "dobowy").length >= 1);
+
+    // 14:00–22:00, nazajutrz 10:00 => 12 h, w normie.
+    sprawdz("11 h: 12 h przerwy nie alarmuje",
+      KP.ostrzezeniaKodeksu({
+        planShifts: [zm("2026-09-07", "14:00", "22:00"), zm("2026-09-08", "10:00", "18:00")],
+        absences: [], user: etat, od: "2026-09-07", doDnia: "2026-09-08",
+      }).filter((o) => o.typ === "dobowy").length === 0);
+
+    // ⚠️ Odpoczynek liczy się przez WSZYSTKIE lokale — to jest ten przypadek,
+    // który przy wypożyczaniu ludzi najłatwiej przeoczyć.
+    sprawdz("11 h: zmiana w INNYM lokalu też się liczy",
+      KP.ostrzezeniaKodeksu({
+        planShifts: [
+          zm("2026-09-07", "15:00", "23:00"),
+          { ...zm("2026-09-08", "06:00", "14:00"), lokal: "INNY" },
+        ],
+        absences: [], user: etat, od: "2026-09-07", doDnia: "2026-09-08",
+      }).filter((o) => o.typ === "dobowy").length === 1);
+
+    // Zlecenie: Kodeksu nie stosujemy, więc żadnego "dobowego".
+    sprawdz("zlecenie nie dostaje reguł Kodeksu",
+      KP.ostrzezeniaKodeksu({
+        planShifts: dla(zlec, male), absences: [], user: zlec,
+        od: "2026-09-07", doDnia: "2026-09-08",
+      }).filter((o) => o.typ === "dobowy").length === 0);
+
+    // 35 h: siedem dni po 8 h z przerwami 16 h — najdłuższa przerwa 16 h.
+    const tydzienCiagly = Array.from({ length: 9 }, (_, i) =>
+      zm(G.addDaysYMD("2026-09-06", i), "08:00", "16:00"));
+    sprawdz("35 h: tydzień bez dnia wolnego wykryty",
+      KP.naruszeniaTygodniowe(tydzienCiagly, etat, "2026-09-07").length === 1,
+      JSON.stringify(KP.naruszeniaTygodniowe(tydzienCiagly, etat, "2026-09-07")));
+
+    // Ten sam tydzień, ale środa wolna: przerwa wt 16:00 → czw 08:00 = 40 h.
+    const zWolna = tydzienCiagly.filter((s) => s.date !== "2026-09-09");
+    sprawdz("35 h: jeden dzień wolny w środku wystarcza",
+      KP.naruszeniaTygodniowe(zWolna, etat, "2026-09-07").length === 0);
+
+    // ⚠️ Tygodnia bez danych po obu stronach NIE oceniamy — inaczej każdy
+    // brzeg zakresu dawałby fałszywy alarm.
+    sprawdz("35 h: tydzień widziany tylko z jednej strony jest pomijany",
+      KP.naruszeniaTygodniowe(
+        [zm("2026-09-09", "08:00", "16:00"), zm("2026-09-10", "08:00", "16:00")],
+        etat, "2026-09-07"
+      ).length === 0);
+
+    // Serie: 6 dni × 8 h = 48 h bez wolnego.
+    const seria = Array.from({ length: 6 }, (_, i) =>
+      zm(G.addDaysYMD("2026-09-07", i), "08:00", "16:00"));
+    sprawdz("seria: 48 h bez wolnego wykryte dla zlecenia",
+      KP.ostrzezeniaKodeksu({
+        planShifts: dla(zlec, seria), absences: [], user: zlec,
+        od: "2026-09-07", doDnia: "2026-09-13",
+      }).filter((o) => o.typ === "seria").length === 1);
+
+    sprawdz("seria: 5 dni × 8 h = 40 h jeszcze nie alarmuje",
+      KP.ostrzezeniaKodeksu({
+        planShifts: dla(zlec, seria.slice(0, 5)), absences: [], user: zlec,
+        od: "2026-09-07", doDnia: "2026-09-13",
+      }).filter((o) => o.typ === "seria").length === 0);
+
+    sprawdz("seria: zatwierdzony urlop przerywa serię",
+      KP.ostrzezeniaKodeksu({
+        planShifts: dla(zlec, seria),
+        absences: [{ user_id: "z1", status: "approved", type: "urlop",
+                     start_date: "2026-09-10", end_date: "2026-09-10" }],
+        user: zlec, od: "2026-09-07", doDnia: "2026-09-13",
+      }).filter((o) => o.typ === "seria").length === 0);
+
+    // ⚠️ Etatowiec NIE dostaje ostrzeżenia o serii — miałby dwa komunikaty
+    // o jednym problemie (seria prawie zawsze łamie też odpoczynek tygodniowy).
+    sprawdz("etat nie dostaje osobnego ostrzeżenia o serii",
+      KP.ostrzezeniaKodeksu({
+        planShifts: seria, absences: [], user: etat,
+        od: "2026-09-07", doDnia: "2026-09-13",
+      }).filter((o) => o.typ === "seria").length === 0);
+
+    sprawdz("brak zmian = brak ostrzeżeń",
+      KP.ostrzezeniaKodeksu({
+        planShifts: [], absences: [], user: etat, od: "2026-09-07", doDnia: "2026-09-13",
+      }).length === 0);
+
     log("");
     log(`ZDANYCH ${zdanych}, OBLANYCH ${oblanych}`, oblanych ? "zle" : "ok");
   } catch (e) {
