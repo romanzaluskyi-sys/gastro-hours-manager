@@ -114,3 +114,30 @@ export const kontekstKrotko = (kontekst) =>
     .filter((k) => k.typ !== "weekend")
     .map((k) => k.nazwa)
     .join(" · ");
+
+// Wymiar czasu pracy miesiąca (art. 130 Kodeksu pracy) — ile godzin pracownik
+// pełnoetatowy ma w danym miesiącu do przepracowania.
+//
+// Ustawowo: 40 h × pełne tygodnie + 8 h × pozostałe dni od poniedziałku do
+// piątku − 8 h × święta wypadające w dniu innym niż niedziela. Każdy pełny
+// siedmiodniowy blok zawiera dokładnie pięć dni roboczych, więc pierwsze dwa
+// składniki to po prostu "wszystkie dni pon–pt tego miesiąca × 8".
+//
+// Święta odejmujemy MIMO że gastronomia w święta pracuje (art. 151-10 KP na to
+// pozwala). To nie sprzeczność: normę i tak trzeba odebrać w innym dniu, a bez
+// tego odejmowania wrzesień i grudzień miałyby tę samą normę i miesięczna
+// stawka godzinowa przestałaby się różnić — czyli zniknąłby cały powód, dla
+// którego to liczymy.
+export const wymiarCzasuPracy = (rok, mies) => {
+  const dniWMiesiacu = new Date(rok, mies, 0).getDate(); // mies: 1–12
+  const swieta = swietaRoku(rok);
+  let robocze = 0;
+  let swietaPozaNiedziela = 0;
+  for (let d = 1; d <= dniWMiesiacu; d++) {
+    const data = new Date(rok, mies - 1, d);
+    const dow = data.getDay();
+    if (dow >= 1 && dow <= 5) robocze++;
+    if (swieta[ymd(rok, mies, d)] && dow !== 0) swietaPozaNiedziela++;
+  }
+  return (robocze - swietaPozaNiedziela) * 8;
+};

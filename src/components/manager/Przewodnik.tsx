@@ -23,6 +23,18 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.31.0",
+    date: "2026-09-09",
+    items: [
+      "Karta pracownika przebudowana na bloki; doszły telefon, data urodzenia i początek pracy.",
+      "Typ umowy zamiast pola \"Etat\": zlecenie ma stawkę godzinową, umowa o pracę — wymiar etatu i kwotę miesięczną.",
+      "Miesięczna norma godzin liczy się z kalendarza i zmienia co miesiąc. Pracownik widzi ją w Raporcie razem z prognozą z wysłanego grafiku.",
+      "\"Ten miesiąc\" w karcie pokazuje koszt lokalu i bilans okresu rozliczeniowego.",
+      "Nowe ustawienia lokalu: okres rozliczeniowy i narzut pracodawcy (ZUS).",
+      "Poprawka: \"Dzień wypłaty\" w ustawieniach lokalu nie zapisywał się.",
+    ],
+  },
+  {
     version: "0.30.3",
     date: "2026-09-09",
     items: [
@@ -378,7 +390,7 @@ const SECTIONS = [
   {
     Icon: Users,
     title: "Pracownicy",
-    body: "Lista + karta szczegółów. Klikasz osobę z listy po lewej, edytujesz po prawej. Lokal i stanowisko są wymagane (poza kontem typu „Tablet lokalu”); przy koncie logującym się samodzielnie — też email i PIN. Stawka/etat/notatki są opcjonalne. „PIN blokady na kiosku” dotyczy tylko kont typu „Otwarte Konto” używanych na wspólnym tablecie. Sekcja „Urlop” pozwala od razu wpisać urlop pracownikowi (od-do), bez czekania na wniosek — zatwierdzony automatycznie. Usunięcie na zawsze jest możliwe tylko z zakładki Archiwum — najpierw zarchiwizuj, potem usuń. Lokale i Stanowiska (przyciski przy Aktywni/Archiwum, tylko dla Szefa) to osobny, rzadko używany słownik nazw.",
+    body: "Lista + karta szczegółów. Klikasz osobę z listy po lewej, edytujesz po prawej. Lokal i stanowisko są wymagane (poza kontem typu „Tablet lokalu”); przy koncie logującym się samodzielnie — też email i PIN. Reszta bloków jest opcjonalna. Blok „Umowa i wynagrodzenie” decyduje, jak liczy się koszt: przy zleceniu wpisujesz stawkę godzinową, przy umowie o pracę — wymiar etatu i kwotę z umowy, a normę godzin aplikacja liczy sama z kalendarza. „PIN blokady na kiosku” dotyczy tylko kont typu „Otwarte Konto” używanych na wspólnym tablecie. Sekcja „Urlop” pozwala od razu wpisać urlop pracownikowi (od-do), bez czekania na wniosek — zatwierdzony automatycznie. Usunięcie na zawsze jest możliwe tylko z zakładki Archiwum — najpierw zarchiwizuj, potem usuń. Lokale i Stanowiska (przyciski przy Aktywni/Archiwum, tylko dla Szefa) to osobny, rzadko używany słownik nazw.",
   },
   {
     Icon: BarChart3,

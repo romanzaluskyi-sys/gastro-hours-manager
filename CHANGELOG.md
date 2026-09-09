@@ -5,6 +5,35 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.31.0 — 2026-09-09
+
+- **Karta pracownika przebudowana na bloki** — dane podstawowe, kontakt i
+  logowanie, miejsce pracy, umowa, dokumenty, urlop, koniec współpracy,
+  notatki. Doszły pola: telefon, data urodzenia, początek pracy. Wszystko poza
+  imieniem, typem konta, lokalem i stanowiskiem pozostaje opcjonalne, tak jak
+  było.
+- **Typ umowy zamiast pola „Etat”.** Przy zleceniu wpisujesz stawkę godzinową,
+  przy umowie o pracę — wymiar etatu i kwotę z umowy. Dawne wartości z pola
+  „Etat” przeniosły się same.
+- **Miesięczna norma godzin liczy się z kalendarza** (Kodeks pracy, art. 130),
+  więc zmienia się z miesiąca na miesiąc — nie wpisujesz jej ręcznie. Karta
+  pokazuje też, ile w tym miesiącu wychodzi za godzinę.
+- **„Ten miesiąc” pokazuje koszt lokalu, nie wypłatę pracownika.** Przy umowie
+  o pracę to kwota z umowy niezależnie od przepracowanych godzin — bo tyle
+  lokal wydaje. Pod spodem bilans okresu rozliczeniowego: ile godzin z normy
+  zostało do wypracowania albo ile wyszło ponad. Miesiące bez żadnych
+  zapisanych godzin są pomijane, żeby nie robić alarmu z braku danych.
+- **Pracownik widzi swoją normę w Raporcie**: „24 z 176 h”, ile ma
+  zaplanowane do końca miesiąca i jaka z tego wychodzi prognoza. Liczone z
+  wysłanego grafiku, więc jest czas zareagować przed końcem miesiąca. Przy
+  zleceniu ten blok się nie pokazuje — normy tam nie ma.
+- **Nowe ustawienia lokalu** (Pracownicy → Lokale): okres rozliczeniowy oraz
+  narzut pracodawcy (ZUS itd.) osobno dla umowy o pracę i zlecenia. Puste
+  narzuty = 0, czyli dopóki ich nie wpiszesz, nic się nie zmienia.
+- **Poprawka: „Dzień wypłaty” w ustawieniach lokalu nie zapisywał się.** Pole
+  dało się wypełnić, ale wartość przepadała przy zapisie.
+- Wymaga migracji `0018`.
+
 ## 0.30.3 — 2026-09-09
 
 - **Raporty i koszty: wybór lokalu u góry znów działa** — decyduje, kogo widzisz

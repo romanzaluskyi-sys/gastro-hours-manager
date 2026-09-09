@@ -38,6 +38,7 @@ import RaportyIKoszty from "./manager/RaportyIKoszty";
 import Przewodnik from "./manager/Przewodnik";
 import Grafik from "./manager/Grafik";
 import { resolveSwap } from "../utils/swaps";
+import { typUmowy } from "../utils/umowy";
 import {
   futureShiftsOfUser,
   przepiszZmiany,
@@ -326,8 +327,15 @@ const ManagerDashboard = ({
       sanepid_expiry: "",
       umowa_expiry: "",
       kiosk_pin: "",
+      telefon: "",
+      data_urodzenia: "",
+      data_zatrudnienia: "",
+      // `etat` świadomie NIE jest już inicjalizowany — zastąpiły go
+      // typ_umowy/wymiar_etatu/wynagrodzenie_mies (migracja 0018).
+      typ_umowy: "",
+      wymiar_etatu: "",
+      wynagrodzenie_mies: "",
       stawka: "",
-      etat: "",
       notatki: "",
     });
 
@@ -552,12 +560,24 @@ const ManagerDashboard = ({
       if (!dataToSave.umowa_expiry) dataToSave.umowa_expiry = null;
       if (!dataToSave.puls_do) dataToSave.puls_do = null;
       if (!dataToSave.ostatni_dzien) dataToSave.ostatni_dzien = null;
+      if (!dataToSave.data_urodzenia) dataToSave.data_urodzenia = null;
+      if (!dataToSave.data_zatrudnienia) dataToSave.data_zatrudnienia = null;
       if (dataToSave.umowa_bezterminowa) dataToSave.umowa_expiry = null;
-      // To samo dla stawka (numeric) — pusty string zamiast liczby.
-      dataToSave.stawka =
-        dataToSave.stawka === "" || dataToSave.stawka == null
-          ? null
-          : Number(dataToSave.stawka);
+      // To samo dla kolumn numeric — pusty string zamiast liczby. Wartości
+      // zostają nawet wtedy, gdy nie pasują do wybranego typu umowy (stawka
+      // godzinowa przy umowie o pracę): kierownik bywa w trakcie zmiany typu,
+      // a ciche kasowanie kwoty przy zapisie byłoby najgorszym momentem, żeby
+      // się o tym dowiedzieć.
+      for (const pole of ["stawka", "wymiar_etatu", "wynagrodzenie_mies"]) {
+        dataToSave[pole] =
+          dataToSave[pole] === "" || dataToSave[pole] == null ? null : Number(dataToSave[pole]);
+      }
+      // Konta sprzed migracji 0018 trzymają rodzaj umowy jeszcze w kolumnie
+      // `etat`; formularz pokazuje go poprawnie dzięki fallbackowi w
+      // `typUmowy()`. Utrwalamy to przy pierwszym zapisie karty — inaczej
+      // kierownik widziałby "Umowa zlecenie", zapisał i nic by się nie
+      // zapisało, bo pola nie dotknął.
+      dataToSave.typ_umowy = dataToSave.typ_umowy || typUmowy(dataToSave) || null;
       // Ślad "kto i kiedy ostatnio zmienił notatkę" — tylko gdy notatka
       // faktycznie się zmieniła względem tego, co jest w bazie teraz.
       const existingUser = editingUser.id
@@ -721,6 +741,11 @@ const ManagerDashboard = ({
     }
   };
 
+  // Puste pole liczbowe to null, nie 0 i nie "" — Postgres odrzuca pusty
+  // string dla kolumny numeric, a zero znaczyłoby "zero procent narzutu"
+  // zamiast "nie ustawiono".
+  const num = (v) => (v === "" || v == null || Number.isNaN(Number(v)) ? null : Number(v));
+
   const handleSaveDict = async (e, type) => {
     e.preventDefault();
     try {
@@ -734,6 +759,12 @@ const ManagerDashboard = ({
           dostepne_bloki: Array.isArray(editingDict.dostepne_bloki)
             ? editingDict.dostepne_bloki.join(",")
             : editingDict.dostepne_bloki ?? null,
+          // ⚠️ dzien_wyplaty było w formularzu, ale nie w tym payloadzie —
+          // pole dawało się wpisać i cicho przepadało przy zapisie.
+          dzien_wyplaty: num(editingDict.dzien_wyplaty),
+          okres_rozliczeniowy: num(editingDict.okres_rozliczeniowy),
+          narzut_umowa: num(editingDict.narzut_umowa),
+          narzut_zlecenie: num(editingDict.narzut_zlecenie),
         };
         if (editingDict.id) {
           const l = await api.patch("lokale", editingDict.id, payload);

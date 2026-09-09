@@ -29,6 +29,7 @@ import {
   formatNotificationText,
 } from "../utils/format";
 import { stanowiskoShort, stanowiskoBadgeStyle } from "../utils/stanowiska";
+import { normaMiesiaca, prognozaMiesiaca } from "../utils/umowy";
 import {
   offerSwap,
   withdrawSwap,
@@ -90,6 +91,11 @@ export const BLOKI_WSZYSTKIE = [
   "ZGLOS_PROBLEM",
   "WOLNE",
 ];
+
+// Godziny w bloku normy: bez zbędnego ",0" przy pełnych liczbach. Wiersze
+// pojedynczych zmian zostają przy jednym miejscu po przecinku — tam różnica
+// pół godziny naprawdę bywa istotna, w normie miesiąca nie.
+const godz = (n) => (Math.round((n || 0) * 10) / 10).toString().replace(".", ",");
 
 export const fmtHHMM = (d) =>
   `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(
@@ -555,6 +561,34 @@ export const EmployeeSessionScreens = ({
   const raportUrlop = raportShifts
     .filter((s) => s.is_urlop)
     .reduce((acc, s) => acc + (s.end_time ? (s.end_time - s.start_time) / 3600000 : 0), 0);
+
+  // Norma miesięczna dla umowy o pracę. Pracownicy i tak sprawdzają swoje
+  // godziny w Raporcie — to najlepsze miejsce, żeby zobaczyli, ile z normy
+  // zostało, i zdążyli o tym pogadać PRZED końcem miesiąca. Świadomie bez
+  // czerwieni i bez słowa "zaległe": niedobór godzin to sprawa planowania
+  // grafiku, nie przewinienie pracownika.
+  const raportNorma = normaMiesiaca(employee, raportYear, raportMonth + 1);
+  const raportBiezacyMiesiac =
+    raportYear === new Date().getFullYear() && raportMonth === new Date().getMonth();
+  // Prognoza tylko dla trwającego miesiąca i wyłącznie z tego, co JUŻ stoi w
+  // wysłanym grafiku — żadnych średnich. Pracownik ma zobaczyć dokładnie to,
+  // co mu wpisano.
+  const raportZaplanowane =
+    raportBiezacyMiesiac && raportNorma != null
+      ? publishedShiftsFor(planShifts, employee)
+          .filter((s) => s.date > todayStr && s.date.slice(0, 7) === todayStr.slice(0, 7))
+          .reduce((acc, s) => acc + shiftHours(s), 0)
+      : 0;
+  const raportPrognoza =
+    raportNorma == null
+      ? null
+      : prognozaMiesiaca({
+          user: employee,
+          przepracowane: raportTotal,
+          zaplanowane: raportZaplanowane,
+          rok: raportYear,
+          mies: raportMonth + 1,
+        });
 
   const recentShiftsForZgloszenie = shifts
     .filter((s) => s.user_id === employee.id)
@@ -1944,6 +1978,29 @@ export const EmployeeSessionScreens = ({
             <ChevronDown size={16} className={selectChevronCls} />
           </div>
         </div>
+        {raportPrognoza && (
+          <div className="mt-3.5 border-[2.5px] border-[#171714] rounded-[10px] p-3.5">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className={fieldLabelCls}>Twoja norma</span>
+              <span className="font-['Archivo'] font-extrabold text-[17px] text-[#171714] tabular-nums">
+                {godz(raportTotal)} z {godz(raportPrognoza.norma)} h
+              </span>
+            </div>
+            {raportBiezacyMiesiac && (
+              <div className="text-[12.5px] text-[#6E6E66] mt-2 leading-[1.6]">
+                Zaplanowane do końca miesiąca: {godz(raportZaplanowane)} h
+                <br />
+                Prognoza: <b className="text-[#171714]">{godz(raportPrognoza.prognoza)} h</b>
+                {raportPrognoza.roznica < -0.5
+                  ? ` — do normy zabraknie ${godz(-raportPrognoza.roznica)} h`
+                  : raportPrognoza.roznica > 0.5
+                  ? ` — o ${godz(raportPrognoza.roznica)} h ponad normę`
+                  : " — dokładnie w normie"}
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="flex gap-2 mt-5 pb-2.5 border-b-[1.5px] border-[#B7B6AE]">
           <span className="w-[54px] flex-shrink-0 mr-3 text-[10.5px] font-bold tracking-wider uppercase text-[#8F8E86]">
             Data
