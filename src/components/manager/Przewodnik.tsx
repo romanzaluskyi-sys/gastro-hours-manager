@@ -26,6 +26,7 @@ const CHANGELOG = [
     version: "0.33.0",
     date: "2026-09-09",
     items: [
+      "Aplikacja nazywa się teraz Shiftro; pod nazwą stoi nazwa sieci.",
       "Nazwa sieci widoczna na ekranie logowania i w panelu.",
       "Przygotowanie pod kolejne restauracje: konfiguracja klienta wyszła z kodu do ustawień wdrożenia.",
     ],

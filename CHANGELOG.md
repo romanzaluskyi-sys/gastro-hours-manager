@@ -1,12 +1,15 @@
 # Changelog
 
 Historia widocznych zmian w aplikacji. Numer wersji wyświetla się na
-ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
+ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
 ## 0.33.0 — 2026-09-09
 
+- **Aplikacja nazywa się Shiftro.** Nazwa produktu zastąpiła roboczą "Godziny
+  Gastro" na ekranie logowania, w panelu kierownika i w tytule karty
+  przeglądarki. Pod nią stoi nazwa sieci, żeby było widać, czyje to dane.
 - **Konfiguracja klienta wyszła z kodu do zmiennych środowiskowych.** Adres
   bazy, klucz, nazwa sieci i nazwa produktu były wpisane na sztywno w sześciu
   plikach, więc podłączenie drugiej restauracji wymagałoby skopiowania całego

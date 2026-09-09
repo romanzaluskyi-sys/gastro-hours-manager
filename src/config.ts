@@ -62,8 +62,9 @@ export const GOOGLE_SCRIPT_URL = env(
 export const TENANT = env(jest.REACT_APP_TENANT, "Gastro Emka");
 
 // Nazwa produktu. Osobna od TENANT: produkt nazywa się tak samo u wszystkich,
-// klient jest u każdego inny.
-export const PRODUKT = env(jest.REACT_APP_PRODUKT, "Godziny Gastro");
+// klient jest u każdego inny. Zmienna zostaje mimo to — na wypadek wdrożenia
+// pod cudzą marką.
+export const PRODUKT = env(jest.REACT_APP_PRODUKT, "Shiftro");
 
 export const isConfigured =
   SUPABASE_URL.includes("supabase.co") && SUPABASE_KEY.includes("sb_");

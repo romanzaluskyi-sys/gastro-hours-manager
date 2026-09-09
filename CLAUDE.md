@@ -12,9 +12,15 @@ rozpoczęcie/zakończenie zmiany, kierownicy zarządzają grafikiem i godzinami,
 dane synchronizują się też ze starym systemem opartym na Google Forms +
 Sheets, który był używany przed tą aplikacją.
 
-Produkt nie ma jeszcze nazwy. Cel na tym etapie: dopracować UX i design
-istniejącego MVP, żeby zespół polubił system, zanim dodamy duże nowe moduły
-(patrz Roadmap niżej).
+Produkt nazywa się **Shiftro** (nazwa wybrana 2026-09-09; domeny
+`shiftro.pl` i `shiftro.team`). Nazwa siedzi w `PRODUKT` w `src/config.ts` i
+da się ją nadpisać przez `REACT_APP_PRODUKT` — obok niej stoi `TENANT`, czyli
+nazwa konkretnej sieci-klienta. Nie wpisuj żadnej z nich na sztywno w
+komponentach.
+
+Pierwszym klientem jest sieć "Gastro Emka" (cztery lokale wymienione wyżej);
+drugi klient — pilotaż u innej właścicielki — jest w przygotowaniu, stąd cała
+sekcja "Konfiguracja najemcy" niżej.
 
 ## Stack techniczny
 
