@@ -48,10 +48,64 @@ import {
 import { activeSwapFor, pendingSwapDelta } from "../../utils/swaps";
 import { addUrlopDirectly, addNiedostepnoscDirectly } from "../../utils/absences";
 import { stanowiskoShort, stanowiskoBadgeStyle } from "../../utils/stanowiska";
+import { normaMiesiaca } from "../../utils/umowy";
 import { countWorkdays, URLOP_HOURS_PER_DAY } from "../../utils/absences";
 import { fetchDailyForecast, describeWeatherCode } from "../../utils/weather";
 
+// Szerokości siatki. Dzień jest wąski i STAŁY — mieści "KUCH 10:00 – 18:00"
+// i nic więcej mu nie potrzeba; pracownik szeroki, bo od 0.32 stoi tam też
+// wykorzystanie normy.
+const KOL_PRACOWNIK = 240;
+const KOL_DZIEN = 112;
+
+// ⚠️ `fmtH` (niżej) dokleja jednostkę — tu potrzebna jest sama liczba, bo
+// "128/176 h" ma jedno "h" na końcu, nie dwa w środku.
+const hLiczba = (h) => Math.round((h || 0) * 10) / 10;
+
+// Podpowiedź pod kursorem: to, co wypadło z wiersza przy skracaniu go do
+// dwóch linijek. Nic nie zginęło, tylko przestało zabierać wysokość.
+const opisOsoby = (meta) => {
+  const czesci = [`${hLiczba(meta.hours)} h w miesiącu`, `${meta.zmian} zmian`];
+  if (meta.norma != null) {
+    const r = hLiczba(meta.hours - meta.norma);
+    czesci.push(
+      `norma ${hLiczba(meta.norma)} h — ${
+        Math.abs(r) < 0.05
+          ? "dokładnie w normie"
+          : r > 0
+          ? `o ${r} h ponad normę`
+          : `brakuje ${-r} h`
+      }`
+    );
+  }
+  if (meta.koszt != null) czesci.push(`${Math.round(meta.koszt)} zł`);
+  if (Math.abs(meta.swapDelta) > 0.01) {
+    czesci.push(
+      `${meta.swapDelta > 0 ? "+" : "−"}${hLiczba(Math.abs(meta.swapDelta))} h po zatwierdzeniu zamian z giełdy`
+    );
+  }
+  return czesci.join(" · ");
+};
+
+// Przekroczona norma świeci na bursztynowo — tym samym kolorem co nadmiar
+// obsady w nagłówku dnia, bo to ten sam rodzaj informacji: "wpisano więcej,
+// niż wynika z planu". Czerwień zostaje dla dziur, których nikt nie pokrył.
+const klasaGodzin = (meta) => {
+  if (meta.norma == null) return "text-[#171714]";
+  if (meta.hours > meta.norma + 0.05) return "text-[#7A5B12]";
+  return "text-[#171714]";
+};
+
 const DZIEN_SKROT = ["ND", "PON", "WT", "ŚR", "CZW", "PT", "SOB"];
+
+// Polska odmiana: 1 zmianę, 2–4 zmiany, 5+ zmian (poza 12–14).
+const zmianyLabel = (n) => {
+  const ost = n % 10;
+  const dwie = n % 100;
+  if (n === 1) return "1 zmianę";
+  if (ost >= 2 && ost <= 4 && !(dwie >= 12 && dwie <= 14)) return `${n} zmiany`;
+  return `${n} zmian`;
+};
 
 const fmtDay = (dateStr) =>
   new Date(dateStr + "T00:00:00").toLocaleDateString("pl-PL", {
@@ -234,6 +288,11 @@ function LokalSection({
       monthShifts.reduce((sum, s) => sum + shiftHours(s), 0) +
       urlopHoursInMonth(absences, u, monthPrefix);
     const stawka = u.stawka === "" || u.stawka == null ? null : Number(u.stawka);
+    // Norma tylko dla umowy o pracę z wpisanym wymiarem — zlecenie normy nie
+    // ma i nie wolno mu jej dorabiać. Liczona z kalendarza, więc każdy miesiąc
+    // ma swoją (patrz utils/umowy.ts).
+    const [nrRok, nrMies] = monthPrefix.split("-").map(Number);
+    const norma = normaMiesiaca(u, nrRok, nrMies);
     const lokaleOsoby = [...new Set(monthShifts.map((s) => s.lokal))];
     const stanowiskaOsoby = [...new Set(monthShifts.map((s) => s.stanowisko).filter(Boolean))];
     return {
@@ -244,6 +303,7 @@ function LokalSection({
       // zatwierdzone — kierownik musi to widzieć przed decyzją.
       swapDelta: pendingSwapDelta(shiftSwaps, planShifts, u, monthPrefix),
       zmian: monthShifts.length,
+      norma,
       koszt: stawka != null ? hours * stawka : null,
       wieleLokali: lokaleOsoby.length > 1,
       wieleStanowisk: stanowiskaOsoby.length > 1,
@@ -584,13 +644,27 @@ function LokalSection({
       </div>
 
       <div className="overflow-x-auto">
-        <table className={`w-full border-collapse ${trybDnia ? "min-w-[340px]" : "min-w-[1040px]"}`}>
+        {/* table-fixed + colgroup: bez tego dni "oddychały" — tydzień z jedną
+            gęstą środą rozpychał właśnie ją, a reszta się zwężała, więc siatka
+            wyglądała inaczej w każdym tygodniu. Kolumna pracownika dostała
+            więcej miejsca, bo mieści teraz godziny wobec normy. */}
+        <table
+          className={`w-full border-collapse table-fixed ${
+            trybDnia ? "min-w-[340px]" : "min-w-[1024px]"
+          }`}
+        >
+          <colgroup>
+            <col style={{ width: KOL_PRACOWNIK }} />
+            {weekDays.map((d) => (
+              <col key={d} style={trybDnia ? undefined : { width: KOL_DZIEN }} />
+            ))}
+          </colgroup>
           <thead>
             <tr className="bg-[#F1F1EE]">
-              <th className="text-left px-3 py-2 border-r-[2px] border-[#171714] w-[190px] min-w-[190px] align-top">
+              <th className="text-left px-3 py-2 border-r-[2px] border-[#171714] align-top">
                 <span className={statLabelCls}>Pracownik</span>
                 <div className="text-[11px] text-[#8F8E86] font-normal normal-case">
-                  godziny i zmiany w miesiącu
+                  godziny w miesiącu wobec normy
                 </div>
                 {mode === "edycja" && (
                   <button
@@ -669,7 +743,7 @@ function LokalSection({
             )}
             {sorted.map((meta) => (
               <tr key={meta.user.id} className="border-t-[2px] border-[#E7E7E2]">
-                <td className="px-3 py-2 border-r-[2px] border-[#171714] align-top">
+                <td className="px-3 py-1.5 border-r-[2px] border-[#171714] align-top">
                   <div className="flex items-start gap-1.5">
                     {(meta.wieleLokali || meta.wieleStanowisk) && (
                       <span
@@ -681,37 +755,50 @@ function LokalSection({
                         }
                       />
                     )}
-                    <div className="min-w-0">
-                      <div className="font-['Archivo'] font-bold text-[14px] truncate">
-                        {meta.user.name}
+                    {/* Dwie linijki zamiast pięciu. Liczba zmian i koszt nie
+                        zniknęły — siedzą w podpowiedzi (`title`), bo przy
+                        planowaniu tygodnia decyduje wykorzystanie normy, a nie
+                        one. Krótszy wiersz = więcej osób widocznych naraz, co
+                        było główną prośbą właściciela. */}
+                    <div className="min-w-0" title={opisOsoby(meta)}>
+                      <div className="flex items-baseline gap-1 min-w-0">
+                        <span className="font-['Archivo'] font-bold text-[14px] truncate">
+                          {meta.user.name}
+                        </span>
+                        {meta.wylaczone && (
+                          <span
+                            className="text-[9px] font-extrabold text-[#8A3A2B] bg-[#FAEAE6] rounded px-1 flex-shrink-0"
+                            title="Konto wyłączone — zmiany tej osoby nie liczą się do obsady"
+                          >
+                            WYŁ.
+                          </span>
+                        )}
                       </div>
-                      {meta.wylaczone && (
-                        <div className="text-[10px] font-extrabold text-[#8A3A2B] bg-[#FAEAE6] rounded px-1 inline-block">
-                          KONTO WYŁĄCZONE
-                        </div>
-                      )}
-                      <div className="text-[11px] text-[#6E6E66] truncate">
+                      <div className="text-[11px] text-[#6E6E66] truncate leading-tight">
                         {meta.user.default_stanowisko || "bez stanowiska"}
-                      </div>
-                      <div className="text-[12px] mt-0.5">
-                        <strong>{fmtH(meta.hours)}</strong>{" "}
-                        <span className="text-[#6E6E66]">· {meta.zmian} zmian</span>
+                        {" · "}
+                        <strong className={klasaGodzin(meta)}>
+                          {hLiczba(meta.hours)}
+                          {meta.norma != null ? `/${hLiczba(meta.norma)}` : ""} h
+                        </strong>
                         {Math.abs(meta.swapDelta) > 0.01 && (
                           <span
                             className={`ml-1 font-extrabold ${
                               meta.swapDelta > 0 ? "text-[#2F7A2A]" : "text-[#DE3A22]"
                             }`}
-                            title="Zmiana godzin po zatwierdzeniu oczekujących zamian z giełdy"
                           >
                             {meta.swapDelta > 0 ? "+" : "−"}
-                            {fmtH(Math.abs(meta.swapDelta))}
+                            {hLiczba(Math.abs(meta.swapDelta))}
                           </span>
                         )}
-                      </div>
-                      <div className="text-[11px] text-[#6E6E66]">
-                        {meta.koszt != null
-                          ? `${Math.round(meta.koszt)} zł`
-                          : "brak stawki"}
+                        {/* Zlecenie normy nie ma, więc w tym samym miejscu
+                            stoi liczba, która przy zleceniu naprawdę wynika z
+                            umowy: koszt godzin. Przy umowie o pracę byłaby
+                            myląca — tam kolejna godzina w normie nie kosztuje
+                            nic dodatkowego. */}
+                        {meta.norma == null && meta.koszt != null
+                          ? ` · ${Math.round(meta.koszt)} zł`
+                          : ""}
                       </div>
                     </div>
                   </div>
@@ -825,71 +912,114 @@ export default function GrafikTydzien({
   // jest istotna: najpierw zatwierdzone wolne (twarda odmowa), potem
   // nakładające się godziny. Praca w dwóch lokalach jednego dnia i druga
   // zmiana tego samego dnia są DOZWOLONE — patrz docs/GRAFIK.md.
-  const handleSave = async (data) => {
+  // Co stoi na przeszkodzie, żeby wpisać tę zmianę w TEN dzień. Wydzielone z
+  // handleSave, bo od 0.32 ta sama zmiana może iść na kilka dni naraz i każdy
+  // dzień trzeba sprawdzić osobno.
+  const przeszkodaDnia = (data, dateStr) => {
     const user = (users || []).find((u) => String(u.id) === String(data.user_id));
     // Znany ostatni dzień pracy jest twardszy niż wolne: po nim tej osoby po
     // prostu nie będzie. Sprawdzamy to pierwsze, żeby komunikat mówił o
     // odejściu, a nie o urlopie, który akurat też wypada w tym terminie.
-    if (poOstatnimDniu(user, data.date)) {
-      setBlokada({
-        userName: data.user_name,
+    if (poOstatnimDniu(user, dateStr)) {
+      return {
+        krotko: "koniec pracy",
         tekst: `${data.user_name} kończy pracę ${user.ostatni_dzien} — ta zmiana wypada później.`,
         podpowiedz:
           "Jeśli data odejścia się zmieniła, popraw ją w karcie pracownika (Pracownicy).",
-      });
-      return false;
+      };
     }
-    const wolne = user ? findBlockingAbsence(absences, user, data.date) : null;
+    const wolne = user ? findBlockingAbsence(absences, user, dateStr) : null;
     if (wolne) {
-      setBlokada({
-        userName: data.user_name,
+      return {
+        krotko: wolne.type === "urlop" ? "urlop" : "niedostępność",
         tekst:
           wolne.type === "urlop"
             ? `${data.user_name} ma tego dnia zatwierdzony urlop (${wolne.start_date} – ${wolne.end_date}).`
             : `${data.user_name} zgłosił(a) brak dostępności na ten dzień (${wolne.start_date} – ${wolne.end_date}).`,
         podpowiedz:
           "Dostępność zgłasza pracownik w swojej aplikacji. Aby to obejść, poproś o wycofanie zgłoszenia.",
-      });
-      return false;
+      };
     }
-
     const kolizja = findOverlappingPlanShift(planShifts, {
       user_id: data.user_id,
       user_name: data.user_name,
-      date: data.date,
+      date: dateStr,
       start_time: data.start_time,
       end_time: data.end_time,
       excludeId: data.id,
     });
     if (kolizja) {
-      setBlokada({
-        userName: data.user_name,
+      return {
+        krotko: "kolizja godzin",
         tekst: `${data.user_name} ma już zmianę w lokalu ${kolizja.lokal} (${trimTime(
           kolizja.start_time
         )} – ${trimTime(kolizja.end_time)}, ${kolizja.date}), która nachodzi na te godziny.`,
         podpowiedz:
           "Blokujemy tylko nachodzące godziny — zmianę dzieloną (np. do 14:00 tu, od 14:00 gdzie indziej) można wpisać normalnie.",
-      });
+      };
+    }
+    return null;
+  };
+
+  const handleSave = async (data) => {
+    // Edycja dotyczy jednego wiersza; tylko tworzenie może iść na kilka dni.
+    const dni = data.id
+      ? [data.date]
+      : [...new Set(data.dni && data.dni.length ? data.dni : [data.date])].sort();
+
+    // Jeden dzień = dotychczasowe zachowanie: modal z pełnym wyjaśnieniem,
+    // dlaczego się nie da. Przy kilku dniach pojedyncza przeszkoda nie może
+    // przerwać całej operacji — pomijamy ten dzień i mówimy o tym po zapisie.
+    if (dni.length === 1) {
+      const b = przeszkodaDnia(data, dni[0]);
+      if (b) {
+        setBlokada({ userName: data.user_name, tekst: b.tekst, podpowiedz: b.podpowiedz });
+        return false;
+      }
+    }
+
+    const doZapisu = [];
+    const pominiete = [];
+    for (const d of dni) {
+      const b = dni.length === 1 ? null : przeszkodaDnia(data, d);
+      if (b) pominiete.push(`${DZIEN_SKROT[new Date(d + "T00:00:00").getDay()]} (${b.krotko})`);
+      else doZapisu.push(d);
+    }
+
+    // Wszystkie dni odpadły — to nie jest cichy sukces, kierownik musi wiedzieć.
+    if (doZapisu.length === 0) {
+      showMsg(`Nie dodano żadnej zmiany. Pominięto: ${pominiete.join(", ")}.`, "error");
       return false;
     }
 
     try {
-      const payload = {
+      const bazowy = {
         lokal: data.lokal,
         user_id: data.user_id,
         user_name: data.user_name,
         stanowisko: data.stanowisko,
-        date: data.date,
         start_time: data.start_time,
         end_time: data.end_time,
         updated_at: new Date().toISOString(),
       };
       if (data.id) {
-        const zapisana = await api.patch("grafik_shifts", data.id, payload);
+        const zapisana = await api.patch("grafik_shifts", data.id, {
+          ...bazowy,
+          date: data.date,
+        });
         setPlanShifts((planShifts || []).map((s) => (s.id === zapisana.id ? zapisana : s)));
       } else {
-        const zapisana = await api.post("grafik_shifts", payload);
-        setPlanShifts([...(planShifts || []), zapisana]);
+        const nowe = [];
+        for (const d of doZapisu) {
+          nowe.push(await api.post("grafik_shifts", { ...bazowy, date: d }));
+        }
+        setPlanShifts([...(planShifts || []), ...nowe]);
+        if (nowe.length > 1 || pominiete.length > 0) {
+          showMsg(
+            `Dodano ${zmianyLabel(nowe.length)}.` +
+              (pominiete.length ? ` Pominięto: ${pominiete.join(", ")}.` : "")
+          );
+        }
       }
       if (!data.dodajNastepna) setModalCtx(null);
       return true;

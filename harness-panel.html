@@ -109,6 +109,31 @@ async function zaladuj(sciezka) {
 const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 const wczoraj = ymd(new Date(Date.now() - 86400000));
 const godz = (h) => { const d = new Date(wczoraj + "T00:00:00"); d.setHours(h); return d; };
+// Poniedziałek bieżącego tygodnia i siedem dni od niego — plan grafiku musi
+// trafić w tydzień, który siatka domyślnie pokazuje.
+const poniedzialek = (() => {
+  const d = new Date();
+  const dow = (d.getDay() + 6) % 7;
+  d.setDate(d.getDate() - dow);
+  return ymd(d);
+})();
+const dniTygodnia = Array.from({ length: 7 }, (_, i) => {
+  const d = new Date(poniedzialek + "T00:00:00");
+  d.setDate(d.getDate() + i);
+  return ymd(d);
+});
+const opub = { published_at: "2020-01-01T00:00:00Z", deleted_at: null };
+const planTygodnia = [
+  { id: "g1", user_id: "u1", user_name: "Ala", lokal: "Bułka i Jacek",
+    stanowisko: "Kucharz", date: dniTygodnia[0], start_time: "10:00", end_time: "18:00", ...opub },
+  { id: "g2", user_id: "u1", user_name: "Ala", lokal: "Bułka i Jacek",
+    stanowisko: "Kucharz", date: dniTygodnia[2], start_time: "10:00", end_time: "18:00", ...opub },
+  { id: "g3", user_id: "u2", user_name: "Bo", lokal: "Ceglana",
+    stanowisko: "Kucharz", date: dniTygodnia[1], start_time: "08:00", end_time: "16:00", ...opub },
+  { id: "g4", user_id: "u3", user_name: "Cezary", lokal: "Ceglana",
+    stanowisko: "Kelner", date: dniTygodnia[4], start_time: "12:00", end_time: "20:00", ...opub },
+];
+
 const poprzedniMiesiac = (h) => {
   const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); d.setDate(10); d.setHours(h, 0, 0, 0);
   return d;
@@ -170,7 +195,17 @@ const poprzedniMiesiac = (h) => {
             start_time: godz(8), end_time: godz(16) },
         ],
         issues: [], notifications: [], shiftEdits: [], tasks: [], taskCompletions: [],
-        absences: [], planShifts: [], shiftSwaps: [], staffingRules: [], staffingRuleSets: [],
+        // Plan na bieżący tydzień — bez niego siatka Grafiku jest pusta i nie
+        // widać ani szerokości kolumn, ani wykorzystania normy w wierszu.
+        planShifts: planTygodnia,
+        absences: [
+          // Jeden dzień zablokowany, żeby dało się sprawdzić pomijanie dni
+          // przy wpisywaniu tej samej zmiany na kilka dni naraz.
+          { id: "ab1", user_id: "u2", user_name: "Bo", lokal: "Ceglana",
+            start_date: dniTygodnia[3], end_date: dniTygodnia[3], type: "urlop",
+            status: "approved" },
+        ],
+        shiftSwaps: [], staffingRules: [], staffingRuleSets: [],
         lokaleGodziny: [], grafikWyjatki: [], weatherForecasts: [],
         dayLogs, setDayLogs, dayLogEntries, setDayLogEntries,
         dayLogTemplates, setDayLogTemplates,

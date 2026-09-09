@@ -1809,7 +1809,40 @@ Trzy decyzje, których nie zmieniaj bez rozmowy z właścicielem:
 - **To sygnał, nie zarzut.** Świadomie NIE wykrywamy "nie stawił się" ani
   "pracował poza grafikiem" — rozbieżności są normalne i tak ma zostać.
 
-### 5c. Grafik — świadomie NIE zrobione
+### 5c. Siatka i wpisywanie na kilka dni — od 0.32.0
+
+- **Kolumny mają stałe szerokości** (`table-fixed` + `<colgroup>`,
+  `KOL_PRACOWNIK`/`KOL_DZIEN` w `GrafikTydzien.tsx`). Wcześniej dni
+  "oddychały": tydzień z jedną gęstą środą rozpychał właśnie ją, więc siatka
+  wyglądała inaczej w każdym tygodniu. W widoku "Dzień" jedyna kolumna dnia
+  zostaje elastyczna.
+- **Wiersz pracownika ma dwie linijki, nie pięć**: imię, a pod nim
+  "stanowisko · godziny". Liczba zmian, koszt i różnica z giełdy przeniosły
+  się do podpowiedzi (`opisOsoby`) — nie zniknęły, przestały zabierać
+  wysokość. Głównym powodem była prośba właściciela o więcej osób na ekranie.
+- **W wierszu stoi liczba, która wynika z UMOWY tej osoby**: przy umowie o
+  pracę godziny wobec normy miesiąca (`128/176 h`, przekroczenie na
+  bursztynowo — tym samym kolorem co nadmiar obsady), przy zleceniu godziny i
+  koszt. Świadomie nie odwrotnie: przy umowie o pracę kolejna godzina w
+  ramach normy nie kosztuje nic dodatkowego, więc "godziny × stawka" byłoby
+  tam liczbą myląco wyglądającą na koszt decyzji.
+- **"Powtórz w dniach"** w modalu przypisania (`GrafikZmianaModal.tsx`) —
+  wybór dni bieżącego tygodnia, jak przy zadaniach. ⚠️ To **zwielokrotnione
+  tworzenie, NIE reguła powtarzania**: powstaje N niezależnych wierszy, bez
+  żadnego powiązania między nimi. Gdyby powiązanie istniało, każda późniejsza
+  edycja jednej zmiany rodziłaby pytanie "czy zmieniam wszystkie?", na które
+  nie ma dobrej odpowiedzi. Blok pokazuje się TYLKO przy tworzeniu — przy
+  edycji poprawiamy jeden wiersz.
+- **Dni z przeszkodą są pomijane, nie blokują reszty.** `przeszkodaDnia()`
+  (wydzielone z `handleSave`) sprawdza każdy dzień osobno: po `ostatni_dzien`,
+  urlop/niedostępność, kolizja godzin. Przy JEDNYM dniu zachowanie jest
+  dotychczasowe — modal blokady z pełnym wyjaśnieniem. Przy kilku dniach
+  pojedyncza przeszkoda nie może przerwać całej operacji, więc dzień odpada, a
+  komunikat po zapisie mówi które i dlaczego ("Dodano 2 zmiany. Pominięto:
+  WT (kolizja godzin), CZW (urlop)."). Gdy odpadną wszystkie — komunikat
+  błędu, nigdy cichy sukces.
+
+### 5d. Grafik — świadomie NIE zrobione
 - Drugi wariant druku miesiąca (tabela pracownicy × dni) — odłożony.
 - Potwierdzenia odczytu grafiku przez pracownika ("przeczytało 12 z 14").
 - Etat jako reguła (dziś pokazujemy tylko różnicę godzin przy zamianie,

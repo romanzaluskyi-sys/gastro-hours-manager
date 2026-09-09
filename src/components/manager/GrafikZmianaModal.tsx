@@ -31,6 +31,20 @@ const fmtNaglowek = (dateStr) => {
   })}`;
 };
 
+// Ten sam słownik co w nagłówku siatki (GrafikTydzien) — świadomie
+// zduplikowany zamiast eksportowany, bo to trzy słowa, a nie logika.
+const DNI_SKROT = ["ND", "PON", "WT", "ŚR", "CZW", "PT", "SOB"];
+
+// Polska odmiana: 2–4 "powstaną N osobne zmiany", 5+ "powstanie N osobnych
+// zmian" (poza 12–14).
+const osobneZmiany = (n) => {
+  const ost = n % 10;
+  const dwie = n % 100;
+  return ost >= 2 && ost <= 4 && !(dwie >= 12 && dwie <= 14)
+    ? `Powstaną ${n} osobne zmiany`
+    : `Powstanie ${n} osobnych zmian`;
+};
+
 // Kafelek wyboru "stanowisko + lokal". Lokal dopisujemy tylko wtedy, gdy
 // jest inny niż tabela, z której otwarto modal — inaczej byłby szumem przy
 // każdym kafelku.
@@ -131,6 +145,15 @@ export default function GrafikZmianaModal({
   // Służbowego, a grafik trzeba układać już teraz.
   const [wolneForm, setWolneForm] = useState(null);
   const [zrodloGodzin, setZrodloGodzin] = useState(null);
+  // Dodatkowe dni tygodnia dla TEJ SAMEJ zmiany. Wtorek 10–18 na barze prawie
+  // zawsze znaczy też środę i czwartek, a wpisywanie tego trzy razy było
+  // najczęstszym klikaniem w całym module.
+  //
+  // ⚠️ To jest ZWIELOKROTNIONE TWORZENIE, nie reguła powtarzania: powstaje N
+  // niezależnych wierszy, między którymi nie ma żadnego powiązania. Gdyby
+  // istniało, każda późniejsza edycja jednej zmiany rodziłaby pytanie "czy
+  // zmieniam wszystkie?", na które nie ma dobrej odpowiedzi.
+  const [dniDodatkowe, setDniDodatkowe] = useState([]);
 
   const user = (users || []).find((u) => String(u.id) === String(userId)) || ctx.user;
   const rulesForDay = getRulesForDate(
@@ -232,6 +255,13 @@ export default function GrafikZmianaModal({
   const wolneUzytkownika = user ? findBlockingAbsence(absences, user, date) : null;
   const poOdejsciu = poOstatnimDniu(user, date);
 
+  // Dni do zapisania: wybrany plus zaznaczone dodatkowe, bez duplikatu i
+  // rosnąco. Przy edycji istniejącej zmiany zawsze jeden — poprawiamy wtedy
+  // konkretny wiersz, nie tworzymy nowych.
+  const dniZapisu = ctx.shift
+    ? [date]
+    : [...new Set([date, ...dniDodatkowe])].sort();
+
   const zapisz = async (dodajNastepna) => {
     if (!user || !stanowisko || !start || !end) return;
     setSaving(true);
@@ -242,6 +272,7 @@ export default function GrafikZmianaModal({
       user_name: user.name,
       stanowisko,
       date,
+      dni: dniZapisu,
       start_time: start,
       end_time: end,
       dodajNastepna,
@@ -252,6 +283,7 @@ export default function GrafikZmianaModal({
       setStanowisko("");
       setStart("");
       setEnd("");
+      setDniDodatkowe([]);
     }
   };
 
@@ -467,6 +499,48 @@ export default function GrafikZmianaModal({
                   Dopisz {stanowisko} do umiejętności {user.name}
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* Powtórzenie tej samej zmiany w innych dniach tygodnia — tylko
+              przy TWORZENIU. Przy edycji istniejącej zmiany blok się nie
+              pokazuje: poprawiamy wtedy jeden wiersz, a nie rozsiewamy nowe. */}
+          {!ctx.shift && (weekDays || []).length > 1 && (
+            <div>
+              <label className={statLabelCls}>Powtórz w dniach</label>
+              <div className="flex flex-wrap gap-1.5 mt-1">
+                {(weekDays || []).map((d) => {
+                  const wybranyDzien = d === date;
+                  const zaznaczony = wybranyDzien || dniDodatkowe.includes(d);
+                  return (
+                    <button
+                      key={d}
+                      type="button"
+                      disabled={wybranyDzien}
+                      onClick={() =>
+                        setDniDodatkowe(
+                          dniDodatkowe.includes(d)
+                            ? dniDodatkowe.filter((x) => x !== d)
+                            : [...dniDodatkowe, d]
+                        )
+                      }
+                      className={`px-2.5 py-1.5 rounded border-[2px] text-[13px] font-bold ${
+                        zaznaczony
+                          ? "bg-[#171714] text-white border-[#171714]"
+                          : "bg-white text-[#171714] border-[#B7B6AE] hover:border-[#171714]"
+                      } ${wybranyDzien ? "opacity-70 cursor-default" : ""}`}
+                      title={wybranyDzien ? "Dzień tej zmiany — zawsze zaznaczony" : ""}
+                    >
+                      {DNI_SKROT[new Date(d + "T00:00:00").getDay()]}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[12px] text-[#6E6E66] mt-1">
+                {dniZapisu.length > 1
+                  ? `${osobneZmiany(dniZapisu.length)} — te same godziny i stanowisko. Dni z urlopem, kolizją godzin albo po ostatnim dniu pracy zostaną pominięte.`
+                  : "Zaznacz kolejne dni, żeby wpisać tę samą zmianę od razu na kilka dni."}
+              </p>
             </div>
           )}
 

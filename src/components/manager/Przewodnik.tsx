@@ -23,6 +23,15 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.32.0",
+    date: "2026-09-09",
+    items: [
+      "Siatka Grafiku: stałe szerokości dni i dwuwierszowy wiersz pracownika — więcej osób na ekranie.",
+      "W wierszu widać wykorzystanie umowy: \"128/176 h\" przy umowie o pracę, godziny i koszt przy zleceniu.",
+      "Jedną zmianę można wpisać od razu na kilka dni tygodnia; dni z urlopem lub kolizją są pomijane.",
+    ],
+  },
+  {
     version: "0.31.0",
     date: "2026-09-09",
     items: [

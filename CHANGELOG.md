@@ -5,6 +5,20 @@ ekranie logowania (`Godziny Gastro Emka v{APP_VERSION}` — stała w
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.32.0 — 2026-09-09
+
+- **Siatka Grafiku jest gęstsza.** Kolumny dni mają stałą szerokość, więc
+  tydzień wygląda tak samo niezależnie od tego, w którym dniu jest tłok.
+  Wiersz pracownika zajmuje dwie linijki zamiast pięciu — na ekran wchodzi
+  prawie dwa razy więcej osób.
+- **W wierszu widać wykorzystanie umowy**: przy umowie o pracę „128/176 h”
+  (godziny wobec normy miesiąca, przekroczenie na bursztynowo), przy zleceniu
+  godziny i koszt. Liczba zmian i pozostałe szczegóły są pod kursorem.
+- **Jedną zmianę można wpisać od razu na kilka dni** — w oknie przypisywania
+  doszedł wybór „Powtórz w dniach”, jak przy zadaniach. Powstają zwykłe,
+  niezależne zmiany. Dni z urlopem, kolizją godzin albo po ostatnim dniu pracy
+  są pomijane, a po zapisie aplikacja mówi, które i dlaczego.
+
 ## 0.31.0 — 2026-09-09
 
 - **Karta pracownika przebudowana na bloki** — dane podstawowe, kontakt i
