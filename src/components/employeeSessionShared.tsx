@@ -29,7 +29,7 @@ import {
   formatNotificationText,
 } from "../utils/format";
 import { stanowiskoShort, stanowiskoBadgeStyle } from "../utils/stanowiska";
-import { normaMiesiaca, prognozaMiesiaca } from "../utils/umowy";
+import { normaMiesiaca, prognozaMiesiaca, naZleceniu } from "../utils/umowy";
 import {
   offerSwap,
   withdrawSwap,
@@ -574,7 +574,7 @@ export const EmployeeSessionScreens = ({
   // wysłanym grafiku — żadnych średnich. Pracownik ma zobaczyć dokładnie to,
   // co mu wpisano.
   const raportZaplanowane =
-    raportBiezacyMiesiac && raportNorma != null
+    raportBiezacyMiesiac
       ? publishedShiftsFor(planShifts, employee)
           .filter((s) => s.date > todayStr && s.date.slice(0, 7) === todayStr.slice(0, 7))
           .reduce((acc, s) => acc + shiftHours(s), 0)
@@ -594,6 +594,36 @@ export const EmployeeSessionScreens = ({
           rok: raportYear,
           mies: raportMonth + 1,
         });
+
+  // ZLECENIE nie ma normy, więc blok normy go omija — ale pytanie "ile mi
+  // w tym miesiącu wyjdzie" jest przy zleceniu WAŻNIEJSZE niż przy etacie:
+  // tu każda godzina to pieniądze, a nie wykorzystanie normy. Pokazujemy
+  // dokładnie dwie liczby, o które pyta pracownik: ile już przepracował i ile
+  // jeszcze na niego czeka w wysłanym grafiku.
+  //
+  // Tak samo jak przy etacie: tylko trwający miesiąc i tylko to, co JUŻ stoi
+  // w opublikowanym grafiku — żadnych średnich ani ekstrapolacji. Miesiąc
+  // zamknięty nie dostaje nic, bo wielka liczba w stopce mówi już wszystko, a
+  // drugie zdanie o tym samym miesiącu zawsze wygląda, jakby się z nią nie
+  // zgadzało.
+  const raportZlecenie =
+    naZleceniu(employee) && raportBiezacyMiesiac
+      ? {
+          fakt: Math.round(raportTotal * 10) / 10,
+          zaplanowane: Math.round(raportZaplanowane * 10) / 10,
+          prognoza: Math.round((raportTotal + raportZaplanowane) * 10) / 10,
+        }
+      : null;
+
+  const zlecenieOpis = (() => {
+    if (!raportZlecenie) return null;
+    if (raportZlecenie.zaplanowane <= 0)
+      return "w grafiku nie ma jeszcze zmian do końca miesiąca";
+    return (
+      `fakt ${godz(raportZlecenie.fakt)} h · w grafiku jeszcze ` +
+      `${godz(raportZlecenie.zaplanowane)} h do końca miesiąca`
+    );
+  })();
 
   // Jedno zdanie zamiast trzech linijek. Dla miesiąca zamkniętego mówi o
   // faktach, dla trwającego — o tym, co wyjdzie Z GRAFIKIEM: w połowie
@@ -1953,9 +1983,9 @@ export const EmployeeSessionScreens = ({
                   ramce — pracownik i tak patrzy tu na jedną liczbę, a dwa
                   miejsca mówiące o tym samym miesiącu zawsze wyglądają, jakby
                   się nie zgadzały. */}
-              {normaOpis && (
+              {(normaOpis || zlecenieOpis) && (
                 <div className="text-[12px] text-[#6E6E66] leading-snug mt-0.5">
-                  {normaOpis}
+                  {normaOpis || zlecenieOpis}
                 </div>
               )}
               {raportUrlop > 0 && (
@@ -1969,9 +1999,12 @@ export const EmployeeSessionScreens = ({
               <div className="font-['Archivo'] font-extrabold text-[28px] text-[#171714] tabular-nums leading-none">
                 {raportTotal.toFixed(1).replace(".", ",")} godz.
               </div>
-              {raportPrognoza && (
+              {(raportPrognoza ||
+                (raportZlecenie && raportZlecenie.zaplanowane > 0)) && (
                 <div className="text-[12px] text-[#6E6E66] tabular-nums mt-1">
-                  z {godz(raportPrognoza.norma)} h
+                  {raportPrognoza
+                    ? `z ${godz(raportPrognoza.norma)} h`
+                    : `z grafikiem ${godz(raportZlecenie.prognoza)} h`}
                 </div>
               )}
             </div>

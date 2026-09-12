@@ -5,9 +5,9 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
-## 0.35.2 — 2026-09-12
+## 0.36.0 — 2026-09-12
 
-Trzy poprawki, wszystkie zgłoszone z sali.
+Trzy poprawki zgłoszone z sali i jedna nowa liczba w Raporcie.
 
 - **Rozpoczęcie zmiany nie wymaga już, żeby nie mieć urlopu.** Zmiana bez
   wpisanego końca była liczona jako trwająca w nieskończoność, więc kolidowała
@@ -24,6 +24,12 @@ Trzy poprawki, wszystkie zgłoszone z sali.
 - **Zgłoszenia anonimowe widzi kierownik lokalu**, a nie tylko administrator.
   Przy okazji znaczek przy „Zgłoszenia" pokazuje dokładnie tyle pozycji, ile
   jest na liście — wcześniej liczył także te, których kierownik nie widział.
+
+- **Na zleceniu widać w Raporcie, ile godzin wyjdzie w tym miesiącu.** Pod sumą
+  stoi „z grafikiem X h", a obok zdanie: ile już przepracowano i ile jeszcze
+  czeka w wysłanym grafiku. Liczy się wyłącznie z tego, co naprawdę wpisano —
+  bez średnich i bez zgadywania. Gdy grafiku do końca miesiąca jeszcze nie ma,
+  blok mówi to wprost, zamiast pokazywać prognozę równą temu, co już było.
 
 ## 0.35.1 — 2026-09-09
 
