@@ -23,6 +23,18 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.36.0",
+    date: "2026-09-12",
+    items: [
+      "Rozpoczęcie zmiany nie blokuje się już przez urlop wpisany na przyszły tydzień.",
+      "Komunikat o nakładających się zmianach podaje datę i mówi, gdy tamta zmiana to urlop.",
+      "Przypomnienie o zmianie bez odbicia nie trafia już do osób, które odbiły.",
+      "Zgłoszenia anonimowe widzi kierownik lokalu, nie tylko administrator.",
+      "Na zleceniu Raport pokazuje, ile godzin wyjdzie w miesiącu razem z tym, co stoi w grafiku.",
+      "Moja Praca: najbliższa zmiana, licznik trwającej zmiany wobec grafiku, podsumowanie miesiąca i grafik pod raportem.",
+    ],
+  },
+  {
     version: "0.35.1",
     date: "2026-09-09",
     items: [

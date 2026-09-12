@@ -32,11 +32,24 @@ const ymd = (d) =>
     d.getDate()
   ).padStart(2, "0")}`;
 
+// ⚠️ PostgREST oddaje maksymalnie 1000 wierszy na żądanie i robi to BEZ
+// ostrzeżenia — to jest błąd #1 z CLAUDE.md, ten sam, przed którym pilnuje się
+// api.get() w src/api/supabase.ts. Cron nie może importować z src/, więc
+// paginację trzeba mieć tutaj. Bez niej `shifts` (2937 wierszy) wracało
+// obcięte do 1000, część wczorajszych odbić w ogóle nie docierała i ludzie,
+// którzy normalnie odbili zmianę, dostawali wiadomość, że jej nie odbili.
+const STRONA = 1000;
 const pobierz = async (sciezka) => {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${sciezka}`, { headers });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.message || `Błąd pobierania ${sciezka}`);
-  return json;
+  const wynik = [];
+  for (let od = 0; ; od += STRONA) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${sciezka}`, {
+      headers: { ...headers, Range: `${od}-${od + STRONA - 1}` },
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || `Błąd pobierania ${sciezka}`);
+    wynik.push(...json);
+    if (json.length < STRONA) return wynik;
+  }
 };
 
 // res.ok sprawdzamy zawsze — cichy 400 wyglądałby jak "wszyscy odbili"
@@ -68,7 +81,11 @@ module.exports = async function handler(req, res) {
     if (!plan.length) return res.status(200).json({ dzien: wczoraj, znalezione: 0 });
 
     const [odbicia, users, urlopy] = await Promise.all([
-      pobierz(`shifts?select=user_id,user_name,start_time,is_urlop`),
+      pobierz(
+        `shifts?select=user_id,user_name,start_time,is_urlop` +
+          `&start_time=gte.${ymd(new Date(Date.now() - 2 * 86400000))}` +
+          `&start_time=lt.${ymd(new Date(Date.now() + 86400000))}`
+      ),
       pobierz(`users?select=id,name,default_lokal,active,archived`),
       pobierz(`absences?select=user_id,user_name,start_date,end_date,status`),
     ]);

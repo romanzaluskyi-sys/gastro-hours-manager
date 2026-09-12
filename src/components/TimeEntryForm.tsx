@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import { Clock, CheckCircle, RefreshCw } from "lucide-react";
 import { api } from "../api/supabase";
 import { sendToGoogleSheets } from "../api/googleSheets";
-import { findOverlappingShift, getTodaysShiftsForUser } from "../utils/shifts";
+import { findOverlappingShift, opisKolidujacej, getTodaysShiftsForUser } from "../utils/shifts";
 
 // ==========================================
 // WSPÓLNE KOMPONENTY
@@ -136,14 +136,9 @@ const TimeEntryForm = ({
     const overlapping = findOverlappingShift(shifts, user.id, startD, endD, null);
     if (overlapping) {
       setSaving(false);
-      const fmt = (d) =>
-        d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       return showMsg(
-        `Ta zmiana nakłada się na już zapisaną (${fmt(
-          overlapping.start_time
-        )}–${fmt(
-          overlapping.end_time
-        )}). Jeśli to pomyłka, zgłoś się przez zakładkę "Zgłoś".`,
+        `Ta zmiana nakłada się na już zapisaną (${opisKolidujacej(overlapping)}). ` +
+          'Jeśli to pomyłka, zgłoś się przez zakładkę "Zgłoś".',
         "error"
       );
     }

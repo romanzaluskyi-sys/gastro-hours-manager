@@ -144,6 +144,12 @@ const poprzedniMiesiac = (h) => {
               active: true, archived: false },
       bezDanych: { id: "u4", name: "Dorota", role: "closed", default_lokal: "Ceglana",
               default_stanowisko: "Kucharz", active: true, archived: false },
+      // Zlecenie, ale grafik na resztę miesiąca jeszcze nie ułożony — wtedy
+      // prognoza nie ma z czego powstać i blok ma o tym POWIEDZIEĆ, zamiast
+      // pokazywać sam fakt jako "tyle wyjdzie".
+      zlecenieBezGrafiku: { id: "u5", name: "Ewa", role: "closed", typ_umowy: "zlecenie",
+              stawka: 30, default_lokal: "Ceglana", default_stanowisko: "Kucharz",
+              active: true, archived: false },
     };
 
     function Harness() {
@@ -181,7 +187,7 @@ const poprzedniMiesiac = (h) => {
         tasks: [], taskCompletions: [], setTaskCompletions: () => {},
         absences: [], setAbsences: () => {},
         // Grafik wysłany: dwie przyszłe zmiany po 8 h — prognoza ma je dodać.
-        planShifts: [
+        planShifts: kto === "zlecenieBezGrafiku" ? [] : [
           { id: "p1", user_id: user.id, user_name: user.name, lokal: "Ceglana",
             stanowisko: "Kucharz", date: ymdMies(przyszly), start_time: "10:00",
             end_time: "18:00", published_at: "2020-01-01T00:00:00Z" },

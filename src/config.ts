@@ -71,4 +71,4 @@ export const isConfigured =
 
 // Podbijana przy każdej zmianie widocznej dla użytkownika — historia w
 // CHANGELOG.md. Wyświetlana na ekranie logowania (LoginScreen.tsx).
-export const APP_VERSION = "0.35.1";
+export const APP_VERSION = "0.36.0";
