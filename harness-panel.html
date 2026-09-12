@@ -155,6 +155,19 @@ const planTygodnia = [
     stanowisko: "Kucharz", date: dniTygodnia[1], start_time: "08:00", end_time: "16:00", ...opub },
   { id: "g4", user_id: "u3", user_name: "Cezary", lokal: "Ceglana",
     stanowisko: "Kelner", date: dniTygodnia[4], start_time: "12:00", end_time: "20:00", ...opub },
+  // Grafik kierownika — Moja Praca pokazuje go pod raportem i liczy z niego
+  // prognozę miesiąca.
+  { id: "g5", user_id: "u0", user_name: "Roman", lokal: "Bułka i Jacek",
+    stanowisko: "Kucharz", date: dniTygodnia[0], start_time: "09:00", end_time: "17:00", ...opub },
+  { id: "g6", user_id: "u0", user_name: "Roman", lokal: "Bułka i Jacek",
+    stanowisko: "Kucharz", date: dniTygodnia[5], start_time: "09:00", end_time: "17:00", ...opub },
+  { id: "g7", user_id: "u0", user_name: "Roman", lokal: "Bułka i Jacek",
+    stanowisko: "Kucharz", date: dniTygodnia[6], start_time: "12:00", end_time: "20:00", ...opub },
+  // Wczoraj — pod otwartą zmianę z ?zmiana=trwa. Dzięki temu widać gałąź
+  // "planowany koniec minął X h temu", czyli dokładnie przypadek zmiany, której
+  // ktoś zapomniał zamknąć.
+  { id: "g8", user_id: "u0", user_name: "Roman", lokal: "Bułka i Jacek",
+    stanowisko: "Kucharz", date: dniTygodnia[4], start_time: "06:00", end_time: "14:00", ...opub },
   // Druga zmiana tego samego dnia — w wydruku "osoby × dni" kratka rośnie o
   // kolejną trójkę zamiast chować drugą zmianę.
   { id: "g5", user_id: "u3", user_name: "Cezary", lokal: "Ceglana",
@@ -212,8 +225,12 @@ const poprzedniMiesiac = (h) => {
         // pustym ekranem.
         currentUser:
           new URLSearchParams(location.search).get("rola") === "manager"
-            ? { id: "u0", name: "Roman", role: "manager_lokalu", allowed_lokale: "Bułka i Jacek" }
-            : { id: "u0", name: "Roman", role: "admin", allowed_lokale: "" },
+            ? { id: "u0", name: "Roman", role: "manager_lokalu", allowed_lokale: "Bułka i Jacek",
+                typ_umowy: "zlecenie", stawka: 40, default_lokal: "Bułka i Jacek",
+                default_stanowisko: "Kucharz" }
+            : { id: "u0", name: "Roman", role: "admin", allowed_lokale: "",
+                typ_umowy: "zlecenie", stawka: 40, default_lokal: "Bułka i Jacek",
+                default_stanowisko: "Kucharz" },
         setCurrentView: () => {},
         users: [
           // Zlecenie — stawka godzinowa, koszt = godziny × stawka.
@@ -247,6 +264,12 @@ const poprzedniMiesiac = (h) => {
           { id: "s3", name: "Kelner", lokal_name: "Ceglana", archived: false },
         ],
         shifts: [
+          // ?zmiana=trwa — otwarta zmiana kierownika, żeby dało się zobaczyć
+          // licznik "Na zmianie" i "do końca wg grafiku".
+          ...(new URLSearchParams(location.search).get("zmiana") === "trwa"
+            ? [{ id: "sh0", user_id: "u0", user_name: "Roman", lokal: "Bułka i Jacek",
+                 stanowisko: "Kucharz", start_time: godz(6), end_time: null }]
+            : []),
           { id: "sh1", user_id: "u1", user_name: "Ala", lokal: "Bułka i Jacek", stanowisko: "Kucharz",
             start_time: godz(8), end_time: godz(16) },
           // Bo w poprzednim miesiącu — żeby bilans okresu miał zamknięty miesiąc.

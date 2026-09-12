@@ -223,3 +223,62 @@ export const prognozaMiesiaca = ({ user, przepracowane, zaplanowane, rok, mies }
     roznica: norma == null ? null : Math.round((suma - norma) * 10) / 10,
   };
 };
+
+// Jedno zdanie o miesiącu dla OBU ekranów, które o nim mówią: Raportu
+// pracownika i Mojej Pracy kierownika. Dwie kopie tej samej arytmetyki
+// rozjechałyby się przy pierwszej poprawce, a wtedy pracownik i kierownik
+// widzieliby o tym samym miesiącu co innego.
+//
+// Zwraca { opis, pod }: zdanie pod nazwiskiem i małą liczbę pod sumą godzin.
+// Dla umowy o pracę punktem odniesienia jest norma, dla zlecenia — grafik.
+// Konto bez danych umowy nie dostaje nic, i tak ma być: wymyślona norma jest
+// gorsza niż jej brak.
+export const podsumowanieMiesiaca = ({
+  user,
+  przepracowane,
+  zaplanowane,
+  rok,
+  mies,
+  biezacy,
+}) => {
+  const pusto = { opis: null, pod: null };
+  const fakt = przepracowane || 0;
+  const plan = zaplanowane || 0;
+
+  if (naEtacie(user)) {
+    const norma = normaMiesiaca(user, rok, mies);
+    // ⚠️ Zamknięty miesiąc bez ANI JEDNEJ zmiany zostaje bez normy — "do normy
+    // zabrakło 176 h" za miesiąc, w którym systemu jeszcze nie było, to alarm
+    // o niczym, a pierwszy taki alarm uczy nie czytać następnych.
+    if (norma == null || (!biezacy && fakt <= 0)) return pusto;
+    const roznica = Math.round((fakt + plan - norma) * 10) / 10;
+    const pod = `z ${h(norma)} h`;
+    if (!biezacy) {
+      if (roznica > 0.5) return { opis: `o ${h(roznica)} h ponad normę`, pod };
+      if (roznica < -0.5) return { opis: `do normy zabrakło ${h(roznica)} h`, pod };
+      return { opis: "dokładnie w normie", pod };
+    }
+    if (plan <= 0) return { opis: "w grafiku nie ma jeszcze zmian do końca miesiąca", pod };
+    const prognoza = h(fakt + plan);
+    if (roznica > 0.5)
+      return { opis: `z grafikiem wyjdzie ${prognoza} h — o ${h(roznica)} h ponad normę`, pod };
+    if (roznica < -0.5)
+      return { opis: `z grafikiem wyjdzie ${prognoza} h — zabraknie ${h(roznica)} h`, pod };
+    return { opis: `z grafikiem wyjdzie ${prognoza} h — dokładnie w normie`, pod };
+  }
+
+  // Zlecenie nie ma normy, ale pytanie "ile mi wyjdzie" jest tu ważniejsze niż
+  // przy etacie: każda godzina to pieniądze. Tylko trwający miesiąc — dla
+  // zamkniętego wielka liczba obok mówi już wszystko.
+  if (naZleceniu(user) && biezacy) {
+    if (plan <= 0) return { opis: "w grafiku nie ma jeszcze zmian do końca miesiąca", pod: null };
+    // Liczbę pokazujemy TYLKO gdy jest z czego prognozować. Prognoza równa
+    // faktowi wygląda na informację, a znaczy tylko tyle, że nic nie zaplanowano.
+    return {
+      opis: `w grafiku jeszcze ${h(plan)} h do końca miesiąca`,
+      pod: `z grafikiem ${h(fakt + plan)} h`,
+    };
+  }
+
+  return pusto;
+};

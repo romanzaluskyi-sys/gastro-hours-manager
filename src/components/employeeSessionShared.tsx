@@ -29,7 +29,7 @@ import {
   formatNotificationText,
 } from "../utils/format";
 import { stanowiskoShort, stanowiskoBadgeStyle } from "../utils/stanowiska";
-import { normaMiesiaca, prognozaMiesiaca, naZleceniu } from "../utils/umowy";
+import { podsumowanieMiesiaca } from "../utils/umowy";
 import {
   offerSwap,
   withdrawSwap,
@@ -562,88 +562,27 @@ export const EmployeeSessionScreens = ({
     .filter((s) => s.is_urlop)
     .reduce((acc, s) => acc + (s.end_time ? (s.end_time - s.start_time) / 3600000 : 0), 0);
 
-  // Norma miesięczna dla umowy o pracę. Pracownicy i tak sprawdzają swoje
-  // godziny w Raporcie — to najlepsze miejsce, żeby zobaczyli, ile z normy
-  // zostało, i zdążyli o tym pogadać PRZED końcem miesiąca. Świadomie bez
-  // czerwieni i bez słowa "zaległe": niedobór godzin to sprawa planowania
-  // grafiku, nie przewinienie pracownika.
-  const raportNorma = normaMiesiaca(employee, raportYear, raportMonth + 1);
+  // Zdanie o miesiącu (norma przy etacie, grafik przy zleceniu) liczy
+  // `podsumowanieMiesiaca` w utils/umowy.ts — ten sam kod obsługuje Moją Pracę
+  // kierownika, żeby oba ekrany nie mogły powiedzieć czegoś innego o tym samym
+  // miesiącu.
   const raportBiezacyMiesiac =
     raportYear === new Date().getFullYear() && raportMonth === new Date().getMonth();
-  // Prognoza tylko dla trwającego miesiąca i wyłącznie z tego, co JUŻ stoi w
-  // wysłanym grafiku — żadnych średnich. Pracownik ma zobaczyć dokładnie to,
-  // co mu wpisano.
-  const raportZaplanowane =
-    raportBiezacyMiesiac
-      ? publishedShiftsFor(planShifts, employee)
-          .filter((s) => s.date > todayStr && s.date.slice(0, 7) === todayStr.slice(0, 7))
-          .reduce((acc, s) => acc + shiftHours(s), 0)
-      : 0;
-  // ⚠️ Zamknięty miesiąc bez ANI JEDNEJ zapisanej zmiany zostaje bez normy.
-  // "Do normy zabrakło 176 h" za miesiąc, w którym system jeszcze nie działał
-  // albo umowę uzupełniono wstecz, to alarm o niczym — a pierwszy taki alarm
-  // uczy nie czytać następnych. Ta sama zasada co w bilansie okresu w karcie
-  // pracownika (utils/umowy.ts).
-  const raportPrognoza =
-    raportNorma == null || (!raportBiezacyMiesiac && raportTotal <= 0)
-      ? null
-      : prognozaMiesiaca({
-          user: employee,
-          przepracowane: raportTotal,
-          zaplanowane: raportZaplanowane,
-          rok: raportYear,
-          mies: raportMonth + 1,
-        });
-
-  // ZLECENIE nie ma normy, więc blok normy go omija — ale pytanie "ile mi
-  // w tym miesiącu wyjdzie" jest przy zleceniu WAŻNIEJSZE niż przy etacie:
-  // tu każda godzina to pieniądze, a nie wykorzystanie normy. Pokazujemy
-  // dokładnie dwie liczby, o które pyta pracownik: ile już przepracował i ile
-  // jeszcze na niego czeka w wysłanym grafiku.
-  //
-  // Tak samo jak przy etacie: tylko trwający miesiąc i tylko to, co JUŻ stoi
-  // w opublikowanym grafiku — żadnych średnich ani ekstrapolacji. Miesiąc
-  // zamknięty nie dostaje nic, bo wielka liczba w stopce mówi już wszystko, a
-  // drugie zdanie o tym samym miesiącu zawsze wygląda, jakby się z nią nie
-  // zgadzało.
-  const raportZlecenie =
-    naZleceniu(employee) && raportBiezacyMiesiac
-      ? {
-          fakt: Math.round(raportTotal * 10) / 10,
-          zaplanowane: Math.round(raportZaplanowane * 10) / 10,
-          prognoza: Math.round((raportTotal + raportZaplanowane) * 10) / 10,
-        }
-      : null;
-
-  const zlecenieOpis = (() => {
-    if (!raportZlecenie) return null;
-    if (raportZlecenie.zaplanowane <= 0)
-      return "w grafiku nie ma jeszcze zmian do końca miesiąca";
-    return (
-      `fakt ${godz(raportZlecenie.fakt)} h · w grafiku jeszcze ` +
-      `${godz(raportZlecenie.zaplanowane)} h do końca miesiąca`
-    );
-  })();
-
-  // Jedno zdanie zamiast trzech linijek. Dla miesiąca zamkniętego mówi o
-  // faktach, dla trwającego — o tym, co wyjdzie Z GRAFIKIEM: w połowie
-  // miesiąca "do normy brakuje 152 h" znaczy tylko tyle, że jest połowa
-  // miesiąca, i tak brzmiący komunikat nauczyłby ludzi go nie czytać.
-  const normaOpis = (() => {
-    if (!raportPrognoza) return null;
-    const r = raportPrognoza;
-    if (!raportBiezacyMiesiac) {
-      if (r.roznica > 0.5) return `o ${godz(r.roznica)} h ponad normę`;
-      if (r.roznica < -0.5) return `do normy zabrakło ${godz(-r.roznica)} h`;
-      return "dokładnie w normie";
-    }
-    if (r.zaplanowane <= 0) return "w grafiku nie ma jeszcze zmian do końca miesiąca";
-    if (r.roznica > 0.5)
-      return `z grafikiem wyjdzie ${godz(r.prognoza)} h — o ${godz(r.roznica)} h ponad normę`;
-    if (r.roznica < -0.5)
-      return `z grafikiem wyjdzie ${godz(r.prognoza)} h — zabraknie ${godz(-r.roznica)} h`;
-    return `z grafikiem wyjdzie ${godz(r.prognoza)} h — dokładnie w normie`;
-  })();
+  // Prognoza wyłącznie z tego, co JUŻ stoi w wysłanym grafiku — żadnych
+  // średnich. Pracownik ma zobaczyć dokładnie to, co mu wpisano.
+  const raportZaplanowane = raportBiezacyMiesiac
+    ? publishedShiftsFor(planShifts, employee)
+        .filter((s) => s.date > todayStr && s.date.slice(0, 7) === todayStr.slice(0, 7))
+        .reduce((acc, s) => acc + shiftHours(s), 0)
+    : 0;
+  const raportPodsumowanie = podsumowanieMiesiaca({
+    user: employee,
+    przepracowane: raportTotal,
+    zaplanowane: raportZaplanowane,
+    rok: raportYear,
+    mies: raportMonth + 1,
+    biezacy: raportBiezacyMiesiac,
+  });
 
   const recentShiftsForZgloszenie = shifts
     .filter((s) => s.user_id === employee.id)
@@ -1983,9 +1922,9 @@ export const EmployeeSessionScreens = ({
                   ramce — pracownik i tak patrzy tu na jedną liczbę, a dwa
                   miejsca mówiące o tym samym miesiącu zawsze wyglądają, jakby
                   się nie zgadzały. */}
-              {(normaOpis || zlecenieOpis) && (
+              {raportPodsumowanie.opis && (
                 <div className="text-[12px] text-[#6E6E66] leading-snug mt-0.5">
-                  {normaOpis || zlecenieOpis}
+                  {raportPodsumowanie.opis}
                 </div>
               )}
               {raportUrlop > 0 && (
@@ -1999,12 +1938,9 @@ export const EmployeeSessionScreens = ({
               <div className="font-['Archivo'] font-extrabold text-[28px] text-[#171714] tabular-nums leading-none">
                 {raportTotal.toFixed(1).replace(".", ",")} godz.
               </div>
-              {(raportPrognoza ||
-                (raportZlecenie && raportZlecenie.zaplanowane > 0)) && (
+              {raportPodsumowanie.pod && (
                 <div className="text-[12px] text-[#6E6E66] tabular-nums mt-1">
-                  {raportPrognoza
-                    ? `z ${godz(raportPrognoza.norma)} h`
-                    : `z grafikiem ${godz(raportZlecenie.prognoza)} h`}
+                  {raportPodsumowanie.pod}
                 </div>
               )}
             </div>

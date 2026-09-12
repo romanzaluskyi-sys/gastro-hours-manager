@@ -1863,6 +1863,7 @@ const ManagerDashboard = ({
             stanowiska={activeStanowiska}
             shifts={shifts}
             setShifts={setShifts}
+            planShifts={planShifts}
             showMsg={showMsg}
             onEditShift={openEditShift}
           />

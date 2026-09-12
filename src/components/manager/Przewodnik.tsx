@@ -31,6 +31,7 @@ const CHANGELOG = [
       "Przypomnienie o zmianie bez odbicia nie trafia już do osób, które odbiły.",
       "Zgłoszenia anonimowe widzi kierownik lokalu, nie tylko administrator.",
       "Na zleceniu Raport pokazuje, ile godzin wyjdzie w miesiącu razem z tym, co stoi w grafiku.",
+      "Moja Praca: najbliższa zmiana, licznik trwającej zmiany wobec grafiku, podsumowanie miesiąca i grafik pod raportem.",
     ],
   },
   {

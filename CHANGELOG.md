@@ -26,10 +26,15 @@ Trzy poprawki zgłoszone z sali i jedna nowa liczba w Raporcie.
   jest na liście — wcześniej liczył także te, których kierownik nie widział.
 
 - **Na zleceniu widać w Raporcie, ile godzin wyjdzie w tym miesiącu.** Pod sumą
-  stoi „z grafikiem X h", a obok zdanie: ile już przepracowano i ile jeszcze
-  czeka w wysłanym grafiku. Liczy się wyłącznie z tego, co naprawdę wpisano —
-  bez średnich i bez zgadywania. Gdy grafiku do końca miesiąca jeszcze nie ma,
-  blok mówi to wprost, zamiast pokazywać prognozę równą temu, co już było.
+  stoi „z grafikiem X h", a obok zdanie, ile jeszcze czeka w wysłanym grafiku.
+  Liczy się wyłącznie z tego, co naprawdę wpisano — bez średnich i bez
+  zgadywania. Gdy grafiku do końca miesiąca jeszcze nie ma, blok mówi to
+  wprost, zamiast pokazywać prognozę równą temu, co już było.
+- **Moja Praca kierownika pokazuje to samo co Raport pracownika.** Pod sumą
+  miesiąca stoi norma albo prognoza z grafiku — zależnie od rodzaju umowy — a
+  pod raportem cały grafik na ten miesiąc. Gdy zmiana trwa, widać, ile już
+  jesteś na zmianie i ile zostało wg grafiku (a gdy planowany koniec minął —
+  o ile). Gdy nie trwa, widać najbliższą zmianę z grafiku.
 
 ## 0.35.1 — 2026-09-09
 
