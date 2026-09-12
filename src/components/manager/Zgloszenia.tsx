@@ -10,7 +10,6 @@ import { pageTitleCls, cardCls, btnPrimaryCls, btnSecondaryCls } from "./designT
 export default function Zgloszenia({
   issues,
   users,
-  hasAccessToLokal,
   onResolve,
   tasks,
   onCreateTaskFromIssue,
@@ -18,12 +17,11 @@ export default function Zgloszenia({
 }) {
   const [taskFormIssueId, setTaskFormIssueId] = useState(null);
   const [taskTitle, setTaskTitle] = useState("");
-  const rows = issues
-    .filter((iss) => (iss.type || "problem") !== "correction")
-    .filter((iss) =>
-      hasAccessToLokal(users.find((u) => u.id === iss.user_id)?.default_lokal || "")
-    )
-    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  // Filtrowanie (typ + dostęp do lokalu + anonimowe) siedzi w ManagerDashboard,
+  // żeby znaczek w menu i ta lista nie mogły się rozejść. Tu tylko kolejność.
+  const rows = [...issues].sort(
+    (a, b) => new Date(b.created_at) - new Date(a.created_at)
+  );
 
   const openCount = rows.filter((iss) => iss.status === "nowe").length;
 

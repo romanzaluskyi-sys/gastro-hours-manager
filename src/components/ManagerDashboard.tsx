@@ -19,7 +19,7 @@ import {
 import { api } from "../api/supabase";
 import { sendToGoogleSheets } from "../api/googleSheets";
 import { getShort, getDayOfWeek, getMonthName, getAvailableYears } from "../utils/format";
-import { findOverlappingShift } from "../utils/shifts";
+import { findOverlappingShift, opisKolidujacej } from "../utils/shifts";
 import { isTaskDueOn, findSharedCompletion, toLocalYMD } from "../utils/tasks";
 import { resolveAbsenceRequest, addUrlopDirectly, deleteAbsence } from "../utils/absences";
 import NotificationsPanel from "./NotificationsPanel";
@@ -190,6 +190,23 @@ const ManagerDashboard = ({
 
   const hasAccessToLokal = (lokalName) =>
     !isLocalManager || managerLokaleList.includes(lokalName);
+
+  // Zgłoszenia widoczne dla TEGO kierownika. Liczone RAZ i użyte zarówno przez
+  // znaczek w menu, jak i przez samą zakładkę — wcześniej znaczek liczył
+  // wszystkie zgłoszenia bez filtra lokalu, a lista filtrowała, więc menu
+  // pokazywało "1" nad pustym ekranem.
+  //
+  // ⚠️ Zgłoszenie anonimowe nie ma user_id, więc nie da się z niego odczytać
+  // lokalu — i dotąd wypadało z listy każdemu oprócz admina, czyli trafiało
+  // donikąd. Anonimowość dotyczy OSOBY, nie miejsca: do czasu, aż `issues`
+  // dostanie własną kolumnę `lokal`, takie zgłoszenie widzi każdy kierownik.
+  const widoczneZgloszenia = issues.filter((i) => {
+    if ((i.type || "problem") === "correction") return false;
+    if (!i.user_id) return true;
+    return hasAccessToLokal(
+      users.find((u) => u.id === i.user_id)?.default_lokal || ""
+    );
+  });
 
   // --- POWIADOMIENIA DLA KIEROWNIKA (audience: "manager") ---
   const managerNotifications = notifications.filter(
@@ -423,8 +440,7 @@ const ManagerDashboard = ({
   const shellBadges = {
     zatwierdzanie:
       pendingCorrections.length + pendingAbsences.length + pendingSwaps.length,
-    zgloszenia: issues.filter((i) => i.status === "nowe" && i.type !== "correction")
-      .length,
+    zgloszenia: widoczneZgloszenia.filter((i) => i.status === "nowe").length,
     powiadomienia: unreadManagerCount,
     pracownicy: pracownicyTerminyCount,
     zadania: zadaniaOverdueCount,
@@ -908,12 +924,9 @@ const ManagerDashboard = ({
         editingShift.id
       );
       if (overlapping) {
-        const fmt = (d) =>
-          d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
         const confirmed = window.confirm(
-          `Ta zmiana nakłada się na inną zapisaną zmianę tego pracownika (${fmt(
-            overlapping.start_time
-          )}–${fmt(overlapping.end_time)}). Zapisać mimo to?`
+          `Ta zmiana nakłada się na inną zapisaną zmianę tego pracownika ` +
+            `(${opisKolidujacej(overlapping)}). Zapisać mimo to?`
         );
         if (!confirmed) return;
       }
@@ -1881,9 +1894,8 @@ const ManagerDashboard = ({
 
         {tab === "zgloszenia" && (
           <Zgloszenia
-            issues={issues}
+            issues={widoczneZgloszenia}
             users={users}
-            hasAccessToLokal={hasAccessToLokal}
             onResolve={resolveIssue}
             tasks={tasks}
             onCreateTaskFromIssue={handleCreateTaskFromIssue}

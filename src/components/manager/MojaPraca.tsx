@@ -17,7 +17,7 @@ import React, { useState, useEffect } from "react";
 import { ChevronDown, Edit2 } from "lucide-react";
 import { api } from "../../api/supabase";
 import { sendToGoogleSheets } from "../../api/googleSheets";
-import { findOverlappingShift, getTodaysShiftsForUser } from "../../utils/shifts";
+import { findOverlappingShift, opisKolidujacej, getTodaysShiftsForUser } from "../../utils/shifts";
 import { getDayOfWeek, getMonthName, getAvailableYears } from "../../utils/format";
 import { stanowiskoShort, stanowiskoBadgeStyle } from "../../utils/stanowiska";
 import {
@@ -111,11 +111,8 @@ export default function MojaPraca({
     const overlapping = findOverlappingShift(shifts, currentUser.id, startD, endD, null);
     if (overlapping) {
       setSaving(false);
-      const fmt = (d) => d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       return showMsg(
-        `Ta zmiana nakłada się na już zapisaną (${fmt(overlapping.start_time)}–${fmt(
-          overlapping.end_time
-        )}).`,
+        `Ta zmiana nakłada się na już zapisaną (${opisKolidujacej(overlapping)}).`,
         "error"
       );
     }

@@ -18,7 +18,7 @@ import { api } from "../api/supabase";
 import { sendToGoogleSheets, toLocalYMD } from "../api/googleSheets";
 import { createManagerNotification } from "../api/notifications";
 import { APP_VERSION } from "../config";
-import { findOverlappingShift, getTodaysShiftsForUser } from "../utils/shifts";
+import { findOverlappingShift, opisKolidujacej, getTodaysShiftsForUser } from "../utils/shifts";
 import WeatherBadge from "./WeatherBadge";
 import PulsZmiany, { mozeZamykacPuls } from "./manager/PulsZmiany";
 import PulsPrzypomnienie from "./manager/PulsPrzypomnienie";
@@ -891,14 +891,9 @@ export const EmployeeSessionScreens = ({
     );
     if (overlapping) {
       setSaving(false);
-      const fmt = (d) =>
-        d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       return showMsg(
-        `Ta zmiana nakłada się na już zapisaną (${fmt(
-          overlapping.start_time
-        )}–${fmt(
-          overlapping.end_time
-        )}). Jeśli to pomyłka, zgłoś się przez zakładkę "Zgłoś".`,
+        `Ta zmiana nakłada się na już zapisaną (${opisKolidujacej(overlapping)}). ` +
+          'Jeśli to pomyłka, zgłoś się przez zakładkę "Zgłoś".',
         "error"
       );
     }

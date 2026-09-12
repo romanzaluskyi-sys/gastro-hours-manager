@@ -5,6 +5,26 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.35.2 — 2026-09-12
+
+Trzy poprawki, wszystkie zgłoszone z sali.
+
+- **Rozpoczęcie zmiany nie wymaga już, żeby nie mieć urlopu.** Zmiana bez
+  wpisanego końca była liczona jako trwająca w nieskończoność, więc kolidowała
+  z każdą przyszłą zmianą tej osoby — a odkąd zatwierdzony urlop zapisuje się
+  jako zwykłe godziny, wystarczyło mieć urlop w przyszłym tygodniu, żeby nie dać
+  się odbić w ogóle. Zakaz odbicia w dniu urlopu zostaje bez zmian.
+- **Komunikat o nakładających się zmianach podaje datę** i mówi wprost, gdy
+  tamta zmiana to urlop. Wcześniej pokazywał same godziny, więc kierownik
+  szukał w dzisiejszym dniu zmiany, która była trzy dni później.
+- **Codzienne przypomnienie o zmianie bez odbicia przestaje trafiać do osób,
+  które odbiły.** Sprawdzanie czytało tylko pierwsze 1000 wierszy godzin, więc
+  część odbić po prostu nie docierała do kontroli. 10.09 dostało je sześć osób,
+  które były w pracy i miały zapisane godziny.
+- **Zgłoszenia anonimowe widzi kierownik lokalu**, a nie tylko administrator.
+  Przy okazji znaczek przy „Zgłoszenia" pokazuje dokładnie tyle pozycji, ile
+  jest na liście — wcześniej liczył także te, których kierownik nie widział.
+
 ## 0.35.1 — 2026-09-09
 
 - **Godziny z wymagań obsady jednym kliknięciem.** Przy polach „Od” i „Do” w
