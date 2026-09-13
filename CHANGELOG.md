@@ -5,6 +5,26 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.36.1 — 2026-09-13
+
+- **Prognoza godzin przestała gubić dzisiejszy dzień.** Gdy zmiana trwała,
+  dzisiejszy dzień wypadał z obu stron rachunku naraz: z faktu, bo niezamknięta
+  zmiana ma zero godzin, i z grafiku, bo plan liczył się dopiero od jutra.
+  Liczba rosła dopiero po zamknięciu zmiany, a ludzie oglądają swój raport
+  w trakcie pracy i odczytywali to jako zgubiony dzień gdzieś wstecz. Teraz
+  granica biegnie na początku dzisiejszego dnia: fakt do wczoraj, grafik od
+  dziś — i wynik jest ten sam przed zamknięciem zmiany i po nim. Dotyczyło
+  i umowy o pracę, i zlecenia.
+- **Moja Praca wygląda tak samo jak ekrany pracownika.** Trwająca zmiana ma
+  duży licznik „N godz. M min", pod nim lokal i stanowisko, a czas do końca
+  w osobnej ramce (na czerwono, gdy planowany koniec już minął). Raport
+  i grafik stoją pod blokiem zapisu godzin, w jednej kolumnie i tej samej
+  szerokości.
+- **Grafik miesiąca czyta się z daleka.** Dzień tygodnia stoi nad datą, a nie
+  obok, przy każdej zmianie widać jej godziny, a dni, które już minęły, są
+  wyszarzone.
+- Z godzin grafiku zniknęły sekundy, a „4 zmian" to znowu „4 zmiany".
+
 ## 0.36.0 — 2026-09-12
 
 Trzy poprawki zgłoszone z sali i jedna nowa liczba w Raporcie.

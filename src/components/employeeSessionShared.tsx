@@ -24,7 +24,7 @@ import PulsZmiany, { mozeZamykacPuls } from "./manager/PulsZmiany";
 import PulsPrzypomnienie from "./manager/PulsPrzypomnienie";
 import {
   getDayOfWeek,
-  getMonthName,
+  odmianaZmian, getMonthName,
   getAvailableYears,
   formatNotificationText,
 } from "../utils/format";
@@ -47,7 +47,7 @@ import {
   mondayOf,
   addDaysYMD,
   shiftHours,
-  publishedShiftsFor,
+  faktIPlanMiesiaca, publishedShiftsFor,
   publishedShiftsOnDay,
   nextShiftFrom,
 } from "../utils/grafik";
@@ -565,23 +565,22 @@ export const EmployeeSessionScreens = ({
   // Zdanie o miesiącu (norma przy etacie, grafik przy zleceniu) liczy
   // `podsumowanieMiesiaca` w utils/umowy.ts — ten sam kod obsługuje Moją Pracę
   // kierownika, żeby oba ekrany nie mogły powiedzieć czegoś innego o tym samym
-  // miesiącu.
-  const raportBiezacyMiesiac =
-    raportYear === new Date().getFullYear() && raportMonth === new Date().getMonth();
-  // Prognoza wyłącznie z tego, co JUŻ stoi w wysłanym grafiku — żadnych
-  // średnich. Pracownik ma zobaczyć dokładnie to, co mu wpisano.
-  const raportZaplanowane = raportBiezacyMiesiac
-    ? publishedShiftsFor(planShifts, employee)
-        .filter((s) => s.date > todayStr && s.date.slice(0, 7) === todayStr.slice(0, 7))
-        .reduce((acc, s) => acc + shiftHours(s), 0)
-    : 0;
-  const raportPodsumowanie = podsumowanieMiesiaca({
+  // miesiącu. Rozbicie na fakt i plan robi `faktIPlanMiesiaca`: dzień
+  // dzisiejszy należy do planu, także wtedy, gdy zmiana właśnie trwa.
+  const raportRozbicie = faktIPlanMiesiaca({
+    shifts,
+    planShifts,
     user: employee,
-    przepracowane: raportTotal,
-    zaplanowane: raportZaplanowane,
     rok: raportYear,
     mies: raportMonth + 1,
-    biezacy: raportBiezacyMiesiac,
+  });
+  const raportPodsumowanie = podsumowanieMiesiaca({
+    user: employee,
+    przepracowane: raportRozbicie.fakt,
+    zaplanowane: raportRozbicie.plan,
+    rok: raportYear,
+    mies: raportMonth + 1,
+    biezacy: raportRozbicie.biezacy,
   });
 
   const recentShiftsForZgloszenie = shifts
@@ -1803,7 +1802,7 @@ export const EmployeeSessionScreens = ({
                 {getMonthName(new Date().getMonth())}
               </span>
               <span className="font-['Archivo'] font-extrabold text-sm tabular-nums">
-                {mojeWMiesiacu.length} zmian ·{" "}
+                {mojeWMiesiacu.length} {odmianaZmian(mojeWMiesiacu.length)} ·{" "}
                 {Math.round(mojeWMiesiacu.reduce((a, s) => a + shiftHours(s), 0))} h
               </span>
             </div>

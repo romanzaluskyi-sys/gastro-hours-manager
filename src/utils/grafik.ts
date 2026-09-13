@@ -868,3 +868,46 @@ export const knowsStanowisko = (user, stanowisko) =>
   !stanowisko || allowedStanowiskaArr(user).includes(stanowisko);
 
 export { toLocalYMD };
+
+// Rozbicie miesiąca na to, co JUŻ BYŁO, i to, co DOPIERO BĘDZIE — na potrzeby
+// prognozy godzin w Raporcie pracownika i w Mojej Pracy kierownika.
+//
+// ⚠️ Granica wypada na POCZĄTKU dzisiejszego dnia, nie na jego końcu. Dzień
+// dzisiejszy należy do strony planu, nawet gdy zmiana już trwa — bo dopóki się
+// nie skończy, odbicie ma zero godzin, a grafik wie, ile ich będzie. Wcześniej
+// fakt brał dni <= dziś, a plan dni > dziś, przez co dzień, w którym ktoś
+// właśnie pracował, wypadał z obu stron naraz: prognoza gubiła całą dzisiejszą
+// zmianę i wracała dopiero po jej zamknięciu. Ludzie oglądają swój raport
+// w trakcie pracy i odczytywali to jako zgubiony dzień gdzieś wstecz.
+export const faktIPlanMiesiaca = ({ shifts, planShifts, user, rok, mies, dzis }) => {
+  const klucz = `${rok}-${String(mies).padStart(2, "0")}`;
+  const dzisYMD = toLocalYMD(dzis || new Date());
+  const moje = (shifts || []).filter((s) => s.user_id === user?.id && s.start_time);
+  const wMiesiacu = (s) => toLocalYMD(s.start_time).slice(0, 7) === klucz;
+  const sumaFaktu = (lista) =>
+    lista.reduce(
+      (a, s) => a + (s.end_time ? (s.end_time - s.start_time) / 3600000 : 0),
+      0
+    );
+
+  // Miesiąc zamknięty albo przyszły: nie ma czego prognozować w połowie.
+  if (klucz !== dzisYMD.slice(0, 7)) {
+    return { fakt: sumaFaktu(moje.filter(wMiesiacu)), plan: 0, biezacy: false };
+  }
+
+  const fakt = sumaFaktu(
+    moje.filter((s) => wMiesiacu(s) && toLocalYMD(s.start_time) < dzisYMD)
+  );
+  const odDzis = publishedShiftsFor(planShifts, user).filter(
+    (s) => s.date >= dzisYMD && s.date.slice(0, 7) === klucz
+  );
+  let plan = odDzis.reduce((a, s) => a + shiftHours(s), 0);
+
+  // Praca dziś BEZ wpisu w grafiku nie może wyparować — inaczej ktoś, kto
+  // przyszedł poza grafikiem, widziałby prognozę mniejszą niż własny dzień.
+  if (!odDzis.some((s) => s.date === dzisYMD)) {
+    plan += sumaFaktu(moje.filter((s) => toLocalYMD(s.start_time) === dzisYMD));
+  }
+
+  return { fakt, plan, biezacy: true };
+};
