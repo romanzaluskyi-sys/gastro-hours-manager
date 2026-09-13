@@ -23,6 +23,17 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.36.1",
+    date: "2026-09-13",
+    items: [
+      "Prognoza godzin nie gubi już dzisiejszego dnia, gdy zmiana wciąż trwa.",
+      "Moja Praca wygląda tak samo jak ekrany pracownika — licznik zmiany, czas do końca, raport i grafik w jednej kolumnie.",
+      "Kolejne wysłanie grafiku odświeża nieprzeczytaną wiadomość zamiast dokładać następną.",
+      "Pracownik przewija grafik strzałkami dowolnie daleko — widzi następny miesiąc i może wystawić na giełdę zmianę z przyszłości.",
+      "Grafik na miesiąc wygląda tak samo u pracownika i u kierownika: dzień tygodnia nad datą, godziny dnia, minione dni wyszarzone.",
+    ],
+  },
+  {
     version: "0.36.0",
     date: "2026-09-12",
     items: [

@@ -44,7 +44,26 @@ const API_STUB = stub(`
   // zepsute, choć są w porządku.
   window.__tabele = {};
   export const api = {
-    get: async (tabela) => (window.__tabele[tabela] || []).slice(),
+    get: async (tabela, filtr) => {
+      let rows = (window.__tabele[tabela] || []).slice();
+      // Honorujemy proste "kolumna=eq.wartość" — bez tego kod, który polega
+      // na zawężeniu po stronie bazy, sprawdza się tu na losowym zbiorze.
+      String(filtr || "")
+        .split("&")
+        .filter(Boolean)
+        .forEach((cz) => {
+          const m = cz.match(/^([a-z_]+)=eq\.(.*)$/);
+          if (!m) return;
+          const [, kol, wartosc] = m;
+          const w = decodeURIComponent(wartosc);
+          rows = rows.filter((r) =>
+            w === "true" || w === "false"
+              ? Boolean(r[kol]) === (w === "true")
+              : String(r[kol] ?? "") === w
+          );
+        });
+      return rows;
+    },
     post: async (tabela, dane) => {
       window.__zapisy.push([tabela, dane]);
       // Postgres dokłada domyślne znaczniki czasu — bez nich ekrany renderują
@@ -80,6 +99,9 @@ const PAKIETY = {
 };
 
 const cache = new Map();
+// Wystawione na window, żeby dało się sprawdzić pojedynczą funkcję z konsoli,
+// bez przeklikiwania całego ekranu do miejsca, które ją woła.
+window.__moduly = cache;
 async function zaladuj(sciezka) {
   if (sciezka.endsWith("/api/supabase")) return API_STUB;
   if (cache.has(sciezka)) return cache.get(sciezka);

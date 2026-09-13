@@ -65,3 +65,15 @@ export const formatNotificationText = (n, showEmployeeName) => {
     n.new_end ? "–" + n.new_end : ""
   }`;
 };
+
+// Polska liczba mnoga dla "zmiana": 1 zmiana, 2-4 zmiany, 5+ zmian — z
+// wyjątkiem nastek (12-14 zmian). "4 zmian" w nagłówku grafiku czyta się jak
+// literówka, a ten nagłówek widzi cały zespół.
+export const odmianaZmian = (n) => {
+  const liczba = Math.abs(Math.round(n || 0));
+  if (liczba === 1) return "zmiana";
+  const ost = liczba % 10;
+  const dwie = liczba % 100;
+  if (ost >= 2 && ost <= 4 && !(dwie >= 12 && dwie <= 14)) return "zmiany";
+  return "zmian";
+};

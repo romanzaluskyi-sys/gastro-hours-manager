@@ -5,6 +5,45 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.36.1 — 2026-09-13
+
+- **Prognoza godzin przestała gubić dzisiejszy dzień.** Gdy zmiana trwała,
+  dzisiejszy dzień wypadał z obu stron rachunku naraz: z faktu, bo niezamknięta
+  zmiana ma zero godzin, i z grafiku, bo plan liczył się dopiero od jutra.
+  Liczba rosła dopiero po zamknięciu zmiany, a ludzie oglądają swój raport
+  w trakcie pracy i odczytywali to jako zgubiony dzień gdzieś wstecz. Teraz
+  granica biegnie na początku dzisiejszego dnia: fakt do wczoraj, grafik od
+  dziś — i wynik jest ten sam przed zamknięciem zmiany i po nim. Dotyczyło
+  i umowy o pracę, i zlecenia.
+- **Moja Praca wygląda tak samo jak ekrany pracownika.** Trwająca zmiana ma
+  duży licznik „N godz. M min", pod nim lokal i stanowisko, a czas do końca
+  w osobnej ramce (na czerwono, gdy planowany koniec już minął). Raport
+  i grafik stoją pod blokiem zapisu godzin, w jednej kolumnie i tej samej
+  szerokości.
+- **Grafik miesiąca czyta się z daleka — tak samo u pracownika i u kierownika.**
+  Dzień tygodnia stoi nad datą, a nie obok, przy każdej zmianie widać jej
+  godziny i stanowisko, a dni, które już minęły, są wyszarzone. Obie role
+  oglądają teraz dokładnie ten sam widok.
+- **Grafik da się przewijać dowolnie daleko, a nie tylko o tydzień naprzód.**
+  Zamiast „Ten tydzień / Następny / Miesiąc" są strzałki i przycisk „Dziś":
+  w widoku tygodnia i w widoku miesiąca. To otwiera giełdę zmian na cały
+  wysłany grafik — zasada i tak nigdy nie miała górnej granicy (wystarczy
+  12 godzin przed startem), ale zmiany, której nie było widać, nie dało się
+  wystawić, więc wymiana ruszała dopiero wtedy, gdy trudno już znaleźć
+  chętnego. Wstecz sięgamy do początku poprzedniego miesiąca.
+- **Widać grafik na następny miesiąc, gdy tylko zostanie wysłany.** Wcześniej
+  zakładka „Miesiąc" była przypięta do miesiąca dzisiejszego, więc opublikowany
+  październik był dla pracownika niewidoczny aż do października.
+- Tydzień, którego kierownik jeszcze nie wysłał, mówi to wprost, zamiast
+  pokazywać siedem dni opisanych jako wolne.
+- **Publikacja grafiku nie zasypuje już pracownika wiadomościami.** Kierownik
+  układa grafik tydzień po tygodniu i wysyła po każdym — 13.09 jedna osoba
+  dostała przez to pięć wiadomości w 22 minuty, każdą o innym zakresie dat.
+  Kolejne wysłanie odświeża teraz wiadomość, której pracownik jeszcze nie
+  przeczytał, zamiast dokładać następną. Gdy już ją przeczytał, nowa zmiana
+  dostaje własny wpis — bo o niej jeszcze nie wie.
+- Z godzin grafiku zniknęły sekundy, a „4 zmian" to znowu „4 zmiany".
+
 ## 0.36.0 — 2026-09-12
 
 Trzy poprawki zgłoszone z sali i jedna nowa liczba w Raporcie.

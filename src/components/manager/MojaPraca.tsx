@@ -18,9 +18,15 @@ import { ChevronDown, Edit2 } from "lucide-react";
 import { api } from "../../api/supabase";
 import { sendToGoogleSheets } from "../../api/googleSheets";
 import { findOverlappingShift, opisKolidujacej, getTodaysShiftsForUser } from "../../utils/shifts";
-import { getDayOfWeek, getMonthName, getAvailableYears } from "../../utils/format";
+import { getDayOfWeek, odmianaZmian, getMonthName, getAvailableYears } from "../../utils/format";
 import { stanowiskoShort, stanowiskoBadgeStyle } from "../../utils/stanowiska";
-import { publishedShiftsFor, nextShiftFrom, shiftHours } from "../../utils/grafik";
+import {
+  publishedShiftsFor,
+  nextShiftFrom,
+  shiftHours,
+  faktIPlanMiesiaca,
+  trimTime,
+} from "../../utils/grafik";
 import { podsumowanieMiesiaca } from "../../utils/umowy";
 import {
   fieldLabelCls,
@@ -95,21 +101,22 @@ export default function MojaPraca({
   const dzisYMD = ymdLok(teraz);
   const mojGrafik = publishedShiftsFor(planShifts, currentUser);
 
-  const biezacyMiesiac =
-    raportYear === teraz.getFullYear() && raportMonth === teraz.getMonth();
   const miesiacKlucz = `${raportYear}-${String(raportMonth + 1).padStart(2, "0")}`;
-  const zaplanowaneDoKonca = biezacyMiesiac
-    ? mojGrafik
-        .filter((s) => s.date > dzisYMD && s.date.slice(0, 7) === miesiacKlucz)
-        .reduce((acc, s) => acc + shiftHours(s), 0)
-    : 0;
-  const podsumowanie = podsumowanieMiesiaca({
+  const rozbicie = faktIPlanMiesiaca({
+    shifts,
+    planShifts,
     user: currentUser,
-    przepracowane: raportTotal,
-    zaplanowane: zaplanowaneDoKonca,
     rok: raportYear,
     mies: raportMonth + 1,
-    biezacy: biezacyMiesiac,
+    dzis: teraz,
+  });
+  const podsumowanie = podsumowanieMiesiaca({
+    user: currentUser,
+    przepracowane: rozbicie.fakt,
+    zaplanowane: rozbicie.plan,
+    rok: raportYear,
+    mies: raportMonth + 1,
+    biezacy: rozbicie.biezacy,
   });
 
   // Grafik na oglądany miesiąc — pod raportem, żeby obok tego, co BYŁO,
@@ -135,8 +142,6 @@ export default function MojaPraca({
     if (koniec < openShift.start_time) koniec.setDate(koniec.getDate() + 1);
     return Math.round((koniec - teraz) / 60000);
   })();
-  const hm = (min) =>
-    `${Math.floor(Math.abs(min) / 60)}:${String(Math.abs(min) % 60).padStart(2, "0")}`;
 
   useEffect(() => {
     if (!dostepneStanowiska.find((s) => s.name === stanowisko)) {
@@ -234,27 +239,53 @@ export default function MojaPraca({
   };
 
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="max-w-2xl mx-auto">
       <h2 className={`${pageTitleCls} mb-6`}>Moja Praca</h2>
 
-      <div className="grid md:grid-cols-2 gap-6 items-start">
+      <div className="space-y-6">
         <div className={cardCls}>
           {openShift ? (
             <>
-              <p className="text-[15px] font-bold text-[#171714] mb-1">
-                Trwająca zmiana · {openShift.lokal}
-              </p>
-              <p className="text-[13px] text-[#6E6E66] mb-1">
-                Start {fmtHHMM(openShift.start_time)}
+              {/* Ten sam układ co ekran „Zmiana" u pracownika: duży licznik,
+                  pod nim lokal i stanowisko, a czas do końca w osobnej ramce.
+                  Kierownik ma widzieć swoją zmianę tak samo jak reszta zespołu. */}
+              <div className={sectionLabelCls}>
+                Pracujesz od {fmtHHMM(openShift.start_time)}
+              </div>
+              <div className="h-[2.5px] bg-[#171714] mt-2" />
+              <div className="font-['Archivo'] font-extrabold text-[42px] text-[#171714] mt-4 tabular-nums">
+                {Math.floor(naZmianieMin / 60)} godz. {naZmianieMin % 60} min
+              </div>
+              <div className="text-sm text-[#6E6E66] mt-1">
+                {openShift.lokal}
                 {openShift.stanowisko ? ` · ${openShift.stanowisko}` : ""}
-              </p>
-              <p className="text-[13px] text-[#171714] font-semibold mb-5">
-                Na zmianie {hm(naZmianieMin)} h
-                {doKoncaMin != null &&
-                  (doKoncaMin >= 0
-                    ? ` · do końca wg grafiku ${hm(doKoncaMin)} h`
-                    : ` · planowany koniec minął ${hm(doKoncaMin)} h temu`)}
-              </p>
+              </div>
+              {doKoncaMin != null && (
+                <div
+                  className={`mt-2.5 rounded p-3 border-2 ${
+                    doKoncaMin < 0
+                      ? "border-[#DE3A22] bg-[#FBEAE6]"
+                      : "border-[#B7B6AE] bg-[#F1F1EE]"
+                  }`}
+                >
+                  <div className={sectionLabelCls}>
+                    {doKoncaMin < 0 ? "Po planowanym końcu" : "Do końca zmiany"}
+                  </div>
+                  <div
+                    className={`font-['Archivo'] font-extrabold text-[22px] tabular-nums ${
+                      doKoncaMin < 0 ? "text-[#8A3A2B]" : "text-[#171714]"
+                    }`}
+                  >
+                    {Math.floor(Math.abs(doKoncaMin) / 60)} godz.{" "}
+                    {Math.abs(doKoncaMin) % 60} min
+                  </div>
+                  <div className="text-[13px] text-[#6E6E66]">
+                    Wg grafiku {trimTime(planNaTrwajaca.start_time)} –{" "}
+                    {trimTime(planNaTrwajaca.end_time)}
+                  </div>
+                </div>
+              )}
+              <div className="h-px bg-[#B7B6AE] my-5" />
               <span className={fieldLabelCls}>Zakończenie</span>
               <div className={timePlainCls}>
                 <span className="font-['Archivo'] font-extrabold text-[30px] text-[#171714] tabular-nums">
@@ -283,7 +314,8 @@ export default function MojaPraca({
                   <p className="font-['Archivo'] font-extrabold text-[17px] text-[#171714] mt-1">
                     {najblizszaZmiana.date.slice(8, 10)}.
                     {najblizszaZmiana.date.slice(5, 7)} ·{" "}
-                    {najblizszaZmiana.start_time}–{najblizszaZmiana.end_time}
+                    {trimTime(najblizszaZmiana.start_time)} –{" "}
+                    {trimTime(najblizszaZmiana.end_time)}
                   </p>
                   <p className="text-[13px] text-[#6E6E66]">
                     {najblizszaZmiana.stanowisko} · {najblizszaZmiana.lokal}
@@ -542,33 +574,52 @@ export default function MojaPraca({
             </div>
           </div>
           {/* Grafik na ten sam miesiąc, pod raportem: obok tego, co BYŁO,
-              stoi to, co jeszcze BĘDZIE. Tylko wysłany grafik. */}
+              stoi to, co jeszcze BĘDZIE. Karty takie same jak na ekranie
+              Grafik u pracownika — jeden wygląd dla obu ról. Dzień tygodnia
+              stoi NAD liczbą, bo obok siebie zlewały się w jedno. */}
           {grafikMiesiaca.length > 0 && (
             <div className="mt-6 pt-4 border-t-[2px] border-[#171714]">
-              <span className={sectionLabelCls}>
-                Grafik · {getMonthName(raportMonth)}
-              </span>
-              <div className="mt-2 max-h-[320px] overflow-y-auto">
+              <div className="flex items-baseline justify-between">
+                <span className={sectionLabelCls}>
+                  Grafik · {getMonthName(raportMonth)}
+                </span>
+                <span className="font-['Archivo'] font-extrabold text-sm text-[#171714] tabular-nums">
+                  {grafikMiesiaca.length} {odmianaZmian(grafikMiesiaca.length)} ·{" "}
+                  {grafikMiesiaca
+                    .reduce((a, g) => a + shiftHours(g), 0)
+                    .toFixed(1)
+                    .replace(".", ",")}{" "}
+                  h
+                </span>
+              </div>
+              <div className="mt-3 space-y-2 max-h-[420px] overflow-y-auto pr-0.5">
                 {grafikMiesiaca.map((g) => {
                   const minione = g.date < dzisYMD;
+                  const dzien = new Date(g.date + "T00:00:00");
                   return (
                     <div
                       key={g.id}
-                      className={`flex items-center gap-3 py-2.5 border-b border-[#B7B6AE] ${
-                        minione ? "opacity-50" : ""
+                      className={`flex items-center gap-3 rounded border-2 px-3.5 py-2.5 ${
+                        minione
+                          ? "border-[#B7B6AE] text-[#8F8E86]"
+                          : "border-[#171714] text-[#171714]"
                       }`}
                     >
-                      <span className="w-[54px] flex-shrink-0 font-['Archivo'] font-extrabold text-[14.5px] text-[#171714] tabular-nums">
-                        {g.date.slice(8, 10)}.{g.date.slice(5, 7)}
-                      </span>
-                      <span className="flex-1 min-w-0 text-[13.5px] text-[#171714] truncate">
-                        {g.start_time}–{g.end_time}
-                        <span className="text-[#6E6E66]">
-                          {" "}
-                          · {g.stanowisko} · {g.lokal}
+                      <span className="w-[64px] flex-shrink-0">
+                        <span className="block text-[11px] font-bold uppercase tracking-wider leading-none text-[#8F8E86]">
+                          {g.date === dzisYMD ? "dziś" : getDayOfWeek(dzien)}
+                        </span>
+                        <span className="block font-['Archivo'] font-extrabold text-[15px] leading-tight tabular-nums mt-1">
+                          {g.date.slice(8, 10)}.{g.date.slice(5, 7)}
                         </span>
                       </span>
-                      <span className="flex-shrink-0 text-[13px] text-[#6E6E66] tabular-nums">
+                      <span className="flex-1 min-w-0 text-[14px] tabular-nums">
+                        {trimTime(g.start_time)} – {trimTime(g.end_time)}
+                        <span className="block text-[12.5px] text-[#6E6E66] truncate">
+                          {g.stanowisko} · {g.lokal}
+                        </span>
+                      </span>
+                      <span className="flex-shrink-0 font-['Archivo'] font-extrabold text-[14px] tabular-nums">
                         {shiftHours(g).toFixed(1).replace(".", ",")} h
                       </span>
                     </div>

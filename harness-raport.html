@@ -163,6 +163,24 @@ const poprzedniMiesiac = (h) => {
         id: "sh" + idx, user_id: user.id, user_name: user.name, lokal: "Ceglana",
         stanowisko: "Kucharz", ...wTymMiesiacu(d, 8, 16),
       }));
+      // ?dzis=trwa / ?dzis=zamknieta — ten sam dzień raz jako zmiana w toku,
+      // raz jako zakończona. Prognoza miesiąca MUSI w obu razach pokazać to
+      // samo: wcześniej dzisiejszy dzień wypadał z faktu (bo zmiana nie ma
+      // jeszcze godzin) i z planu (bo plan brał tylko dni PO dzisiejszym),
+      // więc liczba rosła dopiero po zamknięciu zmiany i wyglądało to jak
+      // zgubiony dzień.
+      const trybDzis = new URLSearchParams(location.search).get("dzis");
+      if (trybDzis) {
+        const a = new Date(teraz.getFullYear(), teraz.getMonth(), teraz.getDate(), 9);
+        wszystkieShifts.push({
+          id: "shDzis", user_id: user.id, user_name: user.name, lokal: "Ceglana",
+          stanowisko: "Kucharz", start_time: a,
+          end_time:
+            trybDzis === "zamknieta"
+              ? new Date(teraz.getFullYear(), teraz.getMonth(), teraz.getDate(), 17)
+              : null,
+        });
+      }
       // Poprzedni miesiąc obrobiony ponad normę — jedyny sposób, żeby zobaczyć
       // wariant "o X h ponad normę" (miesiąc zamknięty mówi o faktach, nie o
       // prognozie). Miesiąc PUSTY i zamknięty ma normy nie pokazywać wcale.
@@ -188,6 +206,16 @@ const poprzedniMiesiac = (h) => {
         absences: [], setAbsences: () => {},
         // Grafik wysłany: dwie przyszłe zmiany po 8 h — prognoza ma je dodać.
         planShifts: kto === "zlecenieBezGrafiku" ? [] : [
+          // DZIŚ — dzień, który prognoza gubiła: odbicie jeszcze trwa, więc ma
+          // zero godzin, a plan był odcinany warunkiem "> dziś". 8 h stąd MUSI
+          // być w prognozie niezależnie od tego, czy zmiana jest zamknięta.
+          // Dzień miniony — karty dni, które już były, mają być wyszarzone.
+          { id: "pMin", user_id: user.id, user_name: user.name, lokal: "Ceglana",
+            stanowisko: "Kucharz", date: ymdMies(1),
+            start_time: "08:00", end_time: "16:00", published_at: "2020-01-01T00:00:00Z" },
+          { id: "p0", user_id: user.id, user_name: user.name, lokal: "Ceglana",
+            stanowisko: "Kucharz", date: ymdMies(teraz.getDate()),
+            start_time: "09:00", end_time: "17:00", published_at: "2020-01-01T00:00:00Z" },
           { id: "p1", user_id: user.id, user_name: user.name, lokal: "Ceglana",
             stanowisko: "Kucharz", date: ymdMies(przyszly), start_time: "10:00",
             end_time: "18:00", published_at: "2020-01-01T00:00:00Z" },
