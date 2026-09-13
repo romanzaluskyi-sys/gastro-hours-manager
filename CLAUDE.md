@@ -1492,6 +1492,23 @@ niewysłany i przy najbliższej publikacji nowa osoba dowie się o swoich zmiana
 Dni z wolnym, kolizją albo po `ostatni_dzien` są pomijane i zdejmowane — zmiana
 wpisana komuś niedostępnemu jest gorsza niż brak obsady, bo wygląda na pokrytą.
 
+## Duplikaty godzin i świeżość danych — 0.36.2
+
+Dwa telefony służbowe w jednym lokalu, ten sam profil, strona na drugim
+załadowana przed wpisem z pierwszego — i te same godziny wpisane dwa razy
+(13.09.2026, Natalia i Katia). Przyczyna: `shifts` pobierane raz przy
+montowaniu, a tablet stoi zalogowany tygodniami.
+
+Naprawione dwiema warstwami: `shifts` w pollu co 45 s (okno 21 dni) i
+`znajdzKolizjeWBazie` pytające BAZY tuż przed zapisem.
+⚠️ Te 45 s to NIE okno, w którym duplikat przejdzie — kontrola przy zapisie
+działa niezależnie od pollu. Zostaje tylko wyścig dwóch zapisów w tej samej
+chwili.
+
+Pełny opis, dane i propozycje (unikalny indeks `(user_id, start_time)`,
+`created_by` + osobna tożsamość urządzeń):
+[`docs/DUPLIKATY-I-SWIEZOSC-DANYCH.md`](docs/DUPLIKATY-I-SWIEZOSC-DANYCH.md).
+
 ## Znane błędy — JUŻ NAPRAWIONE, nie wprowadzaj ponownie
 
 1. **Supabase domyślnie zwraca max 1000 wierszy na request.** `api.get()`
