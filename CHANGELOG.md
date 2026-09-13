@@ -24,6 +24,18 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
   Dzień tygodnia stoi nad datą, a nie obok, przy każdej zmianie widać jej
   godziny i stanowisko, a dni, które już minęły, są wyszarzone. Obie role
   oglądają teraz dokładnie ten sam widok.
+- **Grafik da się przewijać dowolnie daleko, a nie tylko o tydzień naprzód.**
+  Zamiast „Ten tydzień / Następny / Miesiąc" są strzałki i przycisk „Dziś":
+  w widoku tygodnia i w widoku miesiąca. To otwiera giełdę zmian na cały
+  wysłany grafik — zasada i tak nigdy nie miała górnej granicy (wystarczy
+  12 godzin przed startem), ale zmiany, której nie było widać, nie dało się
+  wystawić, więc wymiana ruszała dopiero wtedy, gdy trudno już znaleźć
+  chętnego. Wstecz sięgamy do początku poprzedniego miesiąca.
+- **Widać grafik na następny miesiąc, gdy tylko zostanie wysłany.** Wcześniej
+  zakładka „Miesiąc" była przypięta do miesiąca dzisiejszego, więc opublikowany
+  październik był dla pracownika niewidoczny aż do października.
+- Tydzień, którego kierownik jeszcze nie wysłał, mówi to wprost, zamiast
+  pokazywać siedem dni opisanych jako wolne.
 - Z godzin grafiku zniknęły sekundy, a „4 zmian" to znowu „4 zmiany".
 
 ## 0.36.0 — 2026-09-12

@@ -379,7 +379,15 @@ export const EmployeeSessionScreens = ({
   const [raportMonth, setRaportMonth] = useState(new Date().getMonth());
   const [raportYear, setRaportYear] = useState(new Date().getFullYear());
 
-  const [grafikZakres, setGrafikZakres] = useState("ten"); // ten | nast | miesiac
+  // Widok grafiku i PRZESUNIĘCIE względem dziś. Wcześniej były trzy sztywne
+  // zakresy (ten tydzień / następny / miesiąc), przez co horyzont pracownika
+  // kończył się na 14 dniach — a giełda zmian nie ma żadnej górnej granicy
+  // (canOfferSwap pilnuje tylko 12 h przed startem). Zmiany, której nie widać,
+  // nie da się wystawić, więc wymiana ruszała dopiero wtedy, gdy było już za
+  // późno, żeby znaleźć chętnego.
+  const [grafikWidok, setGrafikWidok] = useState("tydzien"); // tydzien | miesiac
+  const [tydzienOffset, setTydzienOffset] = useState(0);
+  const [miesiacOffset, setMiesiacOffset] = useState(0);
   const [grafikWszyscy, setGrafikWszyscy] = useState(false);
   // Który wpis czeka na potwierdzenie wystawienia na giełdę. Duży przycisk
   // na całą szerokość pod każdą zmianą zjadał ekran, więc domyślnie jest
@@ -1552,10 +1560,41 @@ export const EmployeeSessionScreens = ({
   // na telefonie jest nieczytelna. Pracownika interesuje przede wszystkim
   // "kiedy następnym razem pracuję", więc dzień jest tu jednostką.
   if (screen === "GRAFIK") {
-    const startTygodnia = mondayOf(dzisYMD);
-    const bazowy = grafikZakres === "nast" ? addDaysYMD(startTygodnia, 7) : startTygodnia;
+    const bazowy = addDaysYMD(mondayOf(dzisYMD), tydzienOffset * 7);
     const dniTygodnia = [0, 1, 2, 3, 4, 5, 6].map((i) => addDaysYMD(bazowy, i));
-    const miesiacPrefix = dzisYMD.slice(0, 7);
+    // Swobodna nawigacja sprawia, że łatwo trafić na tydzień, którego kierownik
+    // jeszcze nie wysłał. Bez tego siedem dni z napisem "Wolne" czyta się jak
+    // "nie masz zmian", a prawda brzmi "grafiku jeszcze nie ma" — to dwie różne
+    // wiadomości i tylko jedna z nich jest prawdziwa.
+    const tydzienBezGrafiku = dniTygodnia.every(
+      (d) =>
+        publishedShiftsOnDay(planShifts, effectiveAssignment.lokal, d).length === 0
+    );
+    const miesiacData = new Date(
+      Number(dzisYMD.slice(0, 4)),
+      Number(dzisYMD.slice(5, 7)) - 1 + miesiacOffset,
+      1
+    );
+    const miesiacPrefix = `${miesiacData.getFullYear()}-${String(
+      miesiacData.getMonth() + 1
+    ).padStart(2, "0")}`;
+    // W tył puszczamy do początku poprzedniego miesiąca — dalej to już pytanie
+    // do Raportu, nie do grafiku. W przód bez ograniczeń: i tak dalej niż
+    // opublikowany grafik nic tam nie ma.
+    const granicaWstecz = (() => {
+      const d = new Date(Number(dzisYMD.slice(0, 4)), Number(dzisYMD.slice(5, 7)) - 2, 1);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+    })();
+    const mozeWstecz =
+      grafikWidok === "miesiac"
+        ? `${miesiacPrefix}-01` > granicaWstecz
+        : addDaysYMD(bazowy, -7) >= granicaWstecz;
+    const naDzis = grafikWidok === "miesiac" ? miesiacOffset === 0 : tydzienOffset === 0;
+    const dd = (ymd) => `${ymd.slice(8, 10)}.${ymd.slice(5, 7)}`;
+    const etykietaZakresu =
+      grafikWidok === "miesiac"
+        ? `${getMonthName(miesiacData.getMonth())} ${miesiacData.getFullYear()}`
+        : `${dd(dniTygodnia[0])} – ${dd(dniTygodnia[6])}`;
     const mojeWMiesiacu = mojGrafik
       .filter((s) => s.date.startsWith(miesiacPrefix))
       .sort((a, b) => a.date.localeCompare(b.date));
@@ -1775,17 +1814,16 @@ export const EmployeeSessionScreens = ({
         personName={onBack ? employee.name : null}
         title="Grafik"
       >
-        <div className="flex gap-1.5 mb-3">
+        <div className="flex gap-1.5 mb-2">
           {[
-            { key: "ten", label: "Ten tydzień" },
-            { key: "nast", label: "Następny" },
+            { key: "tydzien", label: "Tydzień" },
             { key: "miesiac", label: "Miesiąc" },
           ].map((o) => (
             <button
               key={o.key}
-              onClick={() => setGrafikZakres(o.key)}
+              onClick={() => setGrafikWidok(o.key)}
               className={`flex-1 py-2 rounded border-2 text-[13px] font-bold ${
-                grafikZakres === o.key
+                grafikWidok === o.key
                   ? "bg-[#171714] text-white border-[#171714]"
                   : "bg-white text-[#171714] border-[#B7B6AE]"
               }`}
@@ -1794,13 +1832,54 @@ export const EmployeeSessionScreens = ({
             </button>
           ))}
         </div>
+        {/* Strzałki zamiast sztywnego "ten / następny": bez nich horyzont kończy
+            się na 14 dniach, a zmiany, której nie widać, nie da się wystawić na
+            giełdę. "Dziś" pokazuje się dopiero, gdy jest po co wracać — jego
+            brak sam mówi, że stoisz na bieżącym okresie. */}
+        <div className="flex items-center gap-1.5 mb-3">
+          <button
+            onClick={() =>
+              grafikWidok === "miesiac"
+                ? setMiesiacOffset((v) => v - 1)
+                : setTydzienOffset((v) => v - 1)
+            }
+            disabled={!mozeWstecz}
+            aria-label="Wcześniej"
+            className="w-10 h-10 flex-shrink-0 rounded border-2 border-[#B7B6AE] bg-white font-bold text-[#171714] disabled:opacity-35"
+          >
+            ‹
+          </button>
+          <span className="flex-1 text-center font-['Archivo'] font-extrabold text-[15px] text-[#171714]">
+            {etykietaZakresu}
+          </span>
+          {!naDzis && (
+            <button
+              onClick={() => {
+                setTydzienOffset(0);
+                setMiesiacOffset(0);
+              }}
+              className="flex-shrink-0 h-10 px-3 rounded border-2 border-[#171714] bg-white text-[13px] font-bold text-[#171714]"
+            >
+              Dziś
+            </button>
+          )}
+          <button
+            onClick={() =>
+              grafikWidok === "miesiac"
+                ? setMiesiacOffset((v) => v + 1)
+                : setTydzienOffset((v) => v + 1)
+            }
+            aria-label="Później"
+            className="w-10 h-10 flex-shrink-0 rounded border-2 border-[#B7B6AE] bg-white font-bold text-[#171714]"
+          >
+            ›
+          </button>
+        </div>
 
-        {grafikZakres === "miesiac" ? (
+        {grafikWidok === "miesiac" ? (
           <>
             <div className="flex items-baseline justify-between">
-              <span className={sectionLabelCls}>
-                {getMonthName(new Date().getMonth())}
-              </span>
+              <span className={sectionLabelCls}>{etykietaZakresu}</span>
               <span className="font-['Archivo'] font-extrabold text-sm tabular-nums">
                 {mojeWMiesiacu.length} {odmianaZmian(mojeWMiesiacu.length)} ·{" "}
                 {mojeWMiesiacu
@@ -1813,7 +1892,9 @@ export const EmployeeSessionScreens = ({
             <div className={ruleStrongCls} />
             {mojeWMiesiacu.length === 0 ? (
               <div className="text-[15px] text-[#8F8E86] italic mt-4">
-                Brak zmian w tym miesiącu.
+                {miesiacPrefix > dzisYMD.slice(0, 7)
+                  ? "Kierownik nie wysłał jeszcze grafiku na ten miesiąc."
+                  : "Brak zmian w tym miesiącu."}
               </div>
             ) : (
               <div className="mt-3 space-y-2">
@@ -1860,6 +1941,12 @@ export const EmployeeSessionScreens = ({
             >
               {grafikWszyscy ? "Pokaż tylko moje" : "Pokaż wszystkich w lokalu"}
             </button>
+            {tydzienBezGrafiku && tydzienOffset > 0 && (
+              <div className="mb-3 rounded border-2 border-[#B7B6AE] bg-[#F1F1EE] p-3 text-[13.5px] text-[#6E6E66] leading-relaxed">
+                Grafik na ten tydzień nie został jeszcze wysłany. Dni niżej będą
+                pokazywać się jako wolne, dopóki kierownik go nie opublikuje.
+              </div>
+            )}
             {dniTygodnia.map(renderDzien)}
             {mojGrafik.length === 0 && (
               <div className="text-[13.5px] text-[#6E6E66] leading-relaxed">
