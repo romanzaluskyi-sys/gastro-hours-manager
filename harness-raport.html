@@ -209,6 +209,10 @@ const poprzedniMiesiac = (h) => {
           // DZIŚ — dzień, który prognoza gubiła: odbicie jeszcze trwa, więc ma
           // zero godzin, a plan był odcinany warunkiem "> dziś". 8 h stąd MUSI
           // być w prognozie niezależnie od tego, czy zmiana jest zamknięta.
+          // Dzień miniony — karty dni, które już były, mają być wyszarzone.
+          { id: "pMin", user_id: user.id, user_name: user.name, lokal: "Ceglana",
+            stanowisko: "Kucharz", date: ymdMies(1),
+            start_time: "08:00", end_time: "16:00", published_at: "2020-01-01T00:00:00Z" },
           { id: "p0", user_id: user.id, user_name: user.name, lokal: "Ceglana",
             stanowisko: "Kucharz", date: ymdMies(teraz.getDate()),
             start_time: "09:00", end_time: "17:00", published_at: "2020-01-01T00:00:00Z" },

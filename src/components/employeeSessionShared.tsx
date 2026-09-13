@@ -1803,7 +1803,11 @@ export const EmployeeSessionScreens = ({
               </span>
               <span className="font-['Archivo'] font-extrabold text-sm tabular-nums">
                 {mojeWMiesiacu.length} {odmianaZmian(mojeWMiesiacu.length)} ·{" "}
-                {Math.round(mojeWMiesiacu.reduce((a, s) => a + shiftHours(s), 0))} h
+                {mojeWMiesiacu
+                  .reduce((a, s) => a + shiftHours(s), 0)
+                  .toFixed(1)
+                  .replace(".", ",")}{" "}
+                h
               </span>
             </div>
             <div className={ruleStrongCls} />
@@ -1813,20 +1817,38 @@ export const EmployeeSessionScreens = ({
               </div>
             ) : (
               <div className="mt-3 space-y-2">
-                {mojeWMiesiacu.map((s) => (
-                  <div
-                    key={s.id}
-                    className="flex items-center justify-between border-2 border-[#B7B6AE] rounded p-3"
-                  >
-                    <span className="font-['Archivo'] font-bold text-[15px]">
-                      {opisDnia(s.date)}
-                    </span>
-                    <span className="text-[14px] tabular-nums">
-                      {trimTime(s.start_time)} – {trimTime(s.end_time)}
-                    </span>
-                    <span className="text-[12px] text-[#6E6E66]">{s.lokal}</span>
-                  </div>
-                ))}
+                {mojeWMiesiacu.map((s) => {
+                  const minione = s.date < dzisYMD;
+                  const dzien = new Date(s.date + "T00:00:00");
+                  return (
+                    <div
+                      key={s.id}
+                      className={`flex items-center gap-3 rounded border-2 px-3.5 py-2.5 ${
+                        minione
+                          ? "border-[#B7B6AE] text-[#8F8E86]"
+                          : "border-[#171714] text-[#171714]"
+                      }`}
+                    >
+                      <span className="w-[64px] flex-shrink-0">
+                        <span className="block text-[11px] font-bold uppercase tracking-wider leading-none text-[#8F8E86]">
+                          {s.date === dzisYMD ? "dziś" : getDayOfWeek(dzien)}
+                        </span>
+                        <span className="block font-['Archivo'] font-extrabold text-[15px] leading-tight tabular-nums mt-1">
+                          {s.date.slice(8, 10)}.{s.date.slice(5, 7)}
+                        </span>
+                      </span>
+                      <span className="flex-1 min-w-0 text-[14px] tabular-nums">
+                        {trimTime(s.start_time)} – {trimTime(s.end_time)}
+                        <span className="block text-[12.5px] text-[#6E6E66] truncate">
+                          {s.stanowisko} · {s.lokal}
+                        </span>
+                      </span>
+                      <span className="flex-shrink-0 font-['Archivo'] font-extrabold text-[14px] tabular-nums">
+                        {shiftHours(s).toFixed(1).replace(".", ",")} h
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </>

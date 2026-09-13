@@ -20,9 +20,10 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
   w osobnej ramce (na czerwono, gdy planowany koniec już minął). Raport
   i grafik stoją pod blokiem zapisu godzin, w jednej kolumnie i tej samej
   szerokości.
-- **Grafik miesiąca czyta się z daleka.** Dzień tygodnia stoi nad datą, a nie
-  obok, przy każdej zmianie widać jej godziny, a dni, które już minęły, są
-  wyszarzone.
+- **Grafik miesiąca czyta się z daleka — tak samo u pracownika i u kierownika.**
+  Dzień tygodnia stoi nad datą, a nie obok, przy każdej zmianie widać jej
+  godziny i stanowisko, a dni, które już minęły, są wyszarzone. Obie role
+  oglądają teraz dokładnie ten sam widok.
 - Z godzin grafiku zniknęły sekundy, a „4 zmian" to znowu „4 zmiany".
 
 ## 0.36.0 — 2026-09-12
