@@ -18,7 +18,7 @@ import { api } from "../api/supabase";
 import { sendToGoogleSheets, toLocalYMD } from "../api/googleSheets";
 import { createManagerNotification } from "../api/notifications";
 import { APP_VERSION } from "../config";
-import { findOverlappingShift, opisKolidujacej, getTodaysShiftsForUser } from "../utils/shifts";
+import { findOverlappingShift, opisKolidujacej, znajdzKolizjeWBazie, getTodaysShiftsForUser } from "../utils/shifts";
 import WeatherBadge from "./WeatherBadge";
 import PulsZmiany, { mozeZamykacPuls } from "./manager/PulsZmiany";
 import PulsPrzypomnienie from "./manager/PulsPrzypomnienie";
@@ -869,6 +869,24 @@ export const EmployeeSessionScreens = ({
       setSaving(false);
       return showMsg(
         `Ta zmiana nakłada się na już zapisaną (${opisKolidujacej(overlapping)}). ` +
+          'Jeśli to pomyłka, zgłoś się przez zakładkę "Zgłoś".',
+        "error"
+      );
+    }
+
+    // Druga kontrola, tym razem W BAZIE. Lokalna lista bywa nieaktualna —
+    // tablet stoi zalogowany tygodniami, a kierownik może wpisywać to samo
+    // z panelu. Patrz komentarz przy znajdzKolizjeWBazie.
+    const wBazie = await znajdzKolizjeWBazie({
+      userId: employee.id,
+      start: startD,
+      end: endD,
+      excludeId: null,
+    });
+    if (wBazie) {
+      setSaving(false);
+      return showMsg(
+        `Ta zmiana jest już zapisana (${opisKolidujacej(wBazie)}). ` +
           'Jeśli to pomyłka, zgłoś się przez zakładkę "Zgłoś".',
         "error"
       );

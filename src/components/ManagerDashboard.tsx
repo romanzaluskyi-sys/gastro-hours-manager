@@ -19,7 +19,7 @@ import {
 import { api } from "../api/supabase";
 import { sendToGoogleSheets } from "../api/googleSheets";
 import { getShort, getDayOfWeek, getMonthName, getAvailableYears } from "../utils/format";
-import { findOverlappingShift, opisKolidujacej } from "../utils/shifts";
+import { findOverlappingShift, opisKolidujacej, znajdzKolizjeWBazie } from "../utils/shifts";
 import { isTaskDueOn, findSharedCompletion, toLocalYMD } from "../utils/tasks";
 import { resolveAbsenceRequest, addUrlopDirectly, deleteAbsence } from "../utils/absences";
 import NotificationsPanel from "./NotificationsPanel";
@@ -923,10 +923,21 @@ const ManagerDashboard = ({
         endD,
         editingShift.id
       );
-      if (overlapping) {
+      // Kierownik naprawia też niespójne dane, więc tu zostaje ostrzeżenie, nie
+      // blokada — ale pytamy również BAZY, bo jego lista bywa równie
+      // nieaktualna jak lista na tablecie.
+      const kolizja =
+        overlapping ||
+        (await znajdzKolizjeWBazie({
+          userId: shiftForm.userId || editingShift.user_id,
+          start: startD,
+          end: endD,
+          excludeId: editingShift.id,
+        }));
+      if (kolizja) {
         const confirmed = window.confirm(
           `Ta zmiana nakłada się na inną zapisaną zmianę tego pracownika ` +
-            `(${opisKolidujacej(overlapping)}). Zapisać mimo to?`
+            `(${opisKolidujacej(kolizja)}). Zapisać mimo to?`
         );
         if (!confirmed) return;
       }
