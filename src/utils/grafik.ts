@@ -8,7 +8,7 @@
 // Pełna specyfikacja modułu: docs/GRAFIK.md.
 import { toLocalYMD } from "../api/googleSheets";
 import { api } from "../api/supabase";
-import { createEmployeeNotification } from "../api/notifications";
+import { upsertGrafikNotification } from "../api/notifications";
 
 // --- CZAS ---------------------------------------------------------------
 // PostgREST zwraca kolumny `time` jako "09:00:00", a <input type="time">
@@ -761,12 +761,14 @@ export const publishGrafik = async ({ planShifts, lokaleNames, from, actorName }
           .join(", ")}`
       );
     }
-    await createEmployeeNotification(
+    const podpis = actorName ? ` Wysłał(a): ${actorName}.` : "";
+    // upsert, nie post: kolejne "Wyślij" w tej samej sesji odświeża
+    // nieprzeczytaną wiadomość zamiast dokładać następną — patrz komentarz
+    // przy upsertGrafikNotification w api/notifications.ts.
+    await upsertGrafikNotification(
       name,
-      `Grafik zaktualizowany — ${czesci.join("; ")}. Sprawdź zakładkę Grafik.${
-        actorName ? ` Wysłał(a): ${actorName}.` : ""
-      }`,
-      "grafik"
+      `Grafik zaktualizowany — ${czesci.join("; ")}. Sprawdź zakładkę Grafik.${podpis}`,
+      `Grafik zaktualizowany — masz nowe zmiany. Sprawdź zakładkę Grafik.${podpis}`
     );
   }
   return { updated, usuniete, powiadomieni: names.length };

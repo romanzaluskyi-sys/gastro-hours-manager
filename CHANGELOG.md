@@ -36,6 +36,12 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
   październik był dla pracownika niewidoczny aż do października.
 - Tydzień, którego kierownik jeszcze nie wysłał, mówi to wprost, zamiast
   pokazywać siedem dni opisanych jako wolne.
+- **Publikacja grafiku nie zasypuje już pracownika wiadomościami.** Kierownik
+  układa grafik tydzień po tygodniu i wysyła po każdym — 13.09 jedna osoba
+  dostała przez to pięć wiadomości w 22 minuty, każdą o innym zakresie dat.
+  Kolejne wysłanie odświeża teraz wiadomość, której pracownik jeszcze nie
+  przeczytał, zamiast dokładać następną. Gdy już ją przeczytał, nowa zmiana
+  dostaje własny wpis — bo o niej jeszcze nie wie.
 - Z godzin grafiku zniknęły sekundy, a „4 zmian" to znowu „4 zmiany".
 
 ## 0.36.0 — 2026-09-12
