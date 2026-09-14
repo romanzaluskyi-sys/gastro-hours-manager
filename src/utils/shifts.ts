@@ -1,5 +1,6 @@
 // @ts-nocheck
 // --- LOGIKA ZMIAN (nakładanie się, zmiany "dziś") ---
+import { api } from "../api/supabase";
 
 // Zwraca istniejącą zmianę danego pracownika, która nakłada się czasowo na
 // [start, end) — albo null.
@@ -57,4 +58,38 @@ export const getTodaysShiftsForUser = (shifts, userId) => {
   return shifts
     .filter((s) => s.user_id === userId && s.start_time.toDateString() === today)
     .sort((a, b) => a.start_time - b.start_time);
+};
+
+// To samo pytanie co findOverlappingShift, ale zadane BAZIE, tuż przed
+// zapisem — bo lokalna lista odbić potrafi być nieaktualna.
+//
+// Tablet Służbowy stoi w lokalu zalogowany tygodniami, a druga osoba może
+// wpisywać tę samą zmianę z panelu kierownika w tej samej minucie. 13.09
+// skończyło się to dwiema identycznymi zmianami dla Natalii i Katii, wpisanymi
+// z dwóch sesji w odstępie 29 minut: żadna z nich nie widziała wpisu drugiej,
+// więc kontrola kolizji nie miała na czym zadziałać.
+//
+// Okno ±1 dzień, bo zmiana może przechodzić przez północ.
+//
+// ⚠️ Błąd sieci NIE blokuje zapisu. Niezapisana zmiana to czyjeś godziny i
+// czyjeś pieniądze; ewentualny duplikat jest odwracalny jednym kliknięciem
+// kierownika, a utracone odbicie trzeba odtwarzać z pamięci.
+export const znajdzKolizjeWBazie = async ({ userId, start, end, excludeId }) => {
+  if (!userId || !start) return null;
+  const od = new Date(start.getFullYear(), start.getMonth(), start.getDate() - 1);
+  const doKiedy = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 2);
+  try {
+    const wiersze = await api.get(
+      "shifts",
+      `user_id=eq.${userId}&start_time=gte.${od.toISOString()}&start_time=lt.${doKiedy.toISOString()}`
+    );
+    const parsed = (Array.isArray(wiersze) ? wiersze : []).map((s) => ({
+      ...s,
+      start_time: new Date(s.start_time),
+      end_time: s.end_time ? new Date(s.end_time) : null,
+    }));
+    return findOverlappingShift(parsed, userId, start, end, excludeId);
+  } catch (e) {
+    return null;
+  }
 };

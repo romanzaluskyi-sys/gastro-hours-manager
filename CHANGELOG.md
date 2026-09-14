@@ -5,6 +5,20 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.36.2 — 2026-09-13
+
+- **Ta sama zmiana nie da się już zapisać dwa razy.** 13.09 Natalia i Katia
+  miały po dwa identyczne wpisy na ten sam dzień, zrobione z dwóch sesji w
+  odstępie 29 minut. Kontrola kolizji czytała tylko to, co dana przeglądarka
+  pobrała przy otwarciu strony, więc druga sesja nie wiedziała o pierwszym
+  wpisie. Teraz przed zapisem pytamy bazy, a nie tylko własnej kopii danych.
+- **Odbicia odświeżają się w otwartej sesji.** Lista przepracowanych godzin
+  była pobierana raz, przy wejściu, i nigdy więcej — a Tablet Służbowy stoi
+  w lokalu zalogowany tygodniami. Przez to „Dziś już zarejestrowano…" nie
+  pokazywało wpisów zrobionych gdzie indziej i ludzie wpisywali zmianę drugi
+  raz, bo nie widzieli dowodu, że pierwsza jest. Odświeżają się teraz co 45
+  sekund, tak jak wiadomości.
+
 ## 0.36.1 — 2026-09-13
 
 - **Prognoza godzin przestała gubić dzisiejszy dzień.** Gdy zmiana trwała,

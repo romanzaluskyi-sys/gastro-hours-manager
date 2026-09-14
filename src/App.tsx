@@ -245,11 +245,50 @@ export default function App() {
     };
     loadGrafik();
 
+    // ⚠️ Odbicia też muszą się odświeżać, nie tylko powiadomienia.
+    //
+    // `shifts` były pobierane RAZ, przy montowaniu, i nigdy więcej — a Tablet
+    // Służbowy z założenia stoi w lokalu zalogowany tygodniami. Jego kopia
+    // odbić pochodziła więc z ostatniego przeładowania strony, przez co
+    // WSZYSTKIE zabezpieczenia czytające ten stan były ślepe na to, co zapisano
+    // gdzie indziej: findOverlappingShift nie widział kolizji, a "Dziś już
+    // zarejestrowano..." nie pokazywało niczego. 13.09 skończyło się to dwiema
+    // zmianami wpisanymi po raz drugi (Natalia i Katia, 29 minut później, z
+    // innej sesji) — człowiek nie zobaczył dowodu, że pierwszy wpis istnieje.
+    //
+    // Pobieramy tylko OKNO ostatnich trzech tygodni: tyle wystarczy wszystkim
+    // kontrolom, a cała tabela to prawie trzy tysiące wierszy i ciągnięcie jej
+    // co 45 s na każdym urządzeniu byłoby rozrzutnością.
+    const OKNO_ODSWIEZANIA_DNI = 21;
+    const loadShifts = () => {
+      const od = new Date(Date.now() - OKNO_ODSWIEZANIA_DNI * 86400000);
+      const granica = od.toISOString();
+      api
+        .get("shifts", `start_time=gte.${granica}`)
+        .then((sh) => {
+          const swieze = (Array.isArray(sh) ? sh : []).map((shift) => ({
+            ...shift,
+            start_time: new Date(shift.start_time),
+            end_time: shift.end_time ? new Date(shift.end_time) : null,
+          }));
+          // Wiersze SPRZED okna zostają nietknięte (raport miesięczny i
+          // Raporty i koszty sięgają dalej wstecz). Wewnątrz okna świeży wynik
+          // zastępuje stary w całości — dzięki temu wiersz usunięty przez
+          // kierownika naprawdę znika, zamiast zostać na ekranie do końca sesji.
+          setShifts((stare) => [
+            ...stare.filter((s) => s.start_time < od),
+            ...swieze,
+          ]);
+        })
+        .catch(() => {});
+    };
+
     // Odświeżamy co 45s, żeby już otwarta sesja też widziała zmiany bez
     // konieczności przeładowania strony.
     const pollInterval = setInterval(() => {
       loadNotifications();
       loadIssues();
+      loadShifts();
     }, 45000);
     return () => clearInterval(pollInterval);
   }, []);

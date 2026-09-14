@@ -23,6 +23,14 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.36.2",
+    date: "2026-09-13",
+    items: [
+      "Tej samej zmiany nie da się zapisać dwa razy — przed zapisem pytamy bazy, nie tylko własnej kopii danych.",
+      "Przepracowane godziny odświeżają się w otwartej sesji co 45 sekund, więc tablet nie pokazuje już stanu sprzed tygodnia.",
+    ],
+  },
+  {
     version: "0.36.1",
     date: "2026-09-13",
     items: [

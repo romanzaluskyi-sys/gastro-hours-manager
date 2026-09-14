@@ -17,7 +17,7 @@ import React, { useState, useEffect } from "react";
 import { ChevronDown, Edit2 } from "lucide-react";
 import { api } from "../../api/supabase";
 import { sendToGoogleSheets } from "../../api/googleSheets";
-import { findOverlappingShift, opisKolidujacej, getTodaysShiftsForUser } from "../../utils/shifts";
+import { findOverlappingShift, opisKolidujacej, znajdzKolizjeWBazie, getTodaysShiftsForUser } from "../../utils/shifts";
 import { getDayOfWeek, odmianaZmian, getMonthName, getAvailableYears } from "../../utils/format";
 import { stanowiskoShort, stanowiskoBadgeStyle } from "../../utils/stanowiska";
 import {
@@ -181,6 +181,20 @@ export default function MojaPraca({
       setSaving(false);
       return showMsg(
         `Ta zmiana nakłada się na już zapisaną (${opisKolidujacej(overlapping)}).`,
+        "error"
+      );
+    }
+
+    const wBazie = await znajdzKolizjeWBazie({
+      userId: currentUser.id,
+      start: startD,
+      end: endD,
+      excludeId: null,
+    });
+    if (wBazie) {
+      setSaving(false);
+      return showMsg(
+        `Ta zmiana jest już zapisana (${opisKolidujacej(wBazie)}).`,
         "error"
       );
     }
