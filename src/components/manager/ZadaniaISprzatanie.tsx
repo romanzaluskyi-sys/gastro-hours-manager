@@ -38,8 +38,9 @@ import {
 } from "../../utils/tasks";
 import { wartoscPolaTekst } from "../../utils/pola";
 import { publishedShiftsOnDay } from "../../utils/grafik";
-import { znajdzKarte } from "../../utils/dziennik";
+import { znajdzKarte, opisPoprawki } from "../../utils/dziennik";
 import ModalWpisu from "./ModalWpisu";
+import SladPoprawki from "./SladPoprawki";
 import ZadaniaKonfiguracja from "./ZadaniaKonfiguracja";
 import {
   pageTitleCls,
@@ -473,6 +474,9 @@ export default function ZadaniaISprzatanie({
                                 style={{ color: COLORS.accent }}
                               />
                             )}
+                            <SladPoprawki
+                              opis={opisPoprawki(item.wpis, dayLogEntries, item.pola)}
+                            />
                           </div>
                         )}
                         <div className="text-[12px] text-[#8F8E86] mt-0.5">

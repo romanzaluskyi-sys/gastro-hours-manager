@@ -853,6 +853,17 @@ Podział ról: **Zadania = zbieranie w ciągu zmiany. Puls = zapis dnia.**
   błąd). Jedyna droga to „Popraw", która pisze nowy wiersz z `corrected_from` i
   powodem, i przestawia `entry_id`. Ta sama zasada co
   `poprawZamknietyDzien()` w Pulsie.
+- ⚠️ **Poprawka MUSI być widoczna, nie tylko zapisana.** `wpisyDlaDnia` pokazuje
+  wyłącznie wersję aktualną, więc poprawiona wartość wygląda dokładnie jak
+  wpisana za pierwszym razem — ślad leży w bazie, ale dla celu, dla którego
+  powstał (dowód HACCP), nie istnieje. Robi to `opisPoprawki()` w
+  `utils/dziennik.ts` + komponent
+  [`manager/SladPoprawki.tsx`](src/components/manager/SladPoprawki.tsx),
+  wpięty w CZTERECH miejscach pokazujących wartość pomiaru: karta dnia (pozycje
+  dziennika i „Z checklisty"), ekran kierownika zmiany, panel zadań i
+  checklista pracownika. Dokładając piąte miejsce z wartością wpisu, dołóż tam
+  i ten podpis. ⚠️ `opisPoprawki` dostaje PEŁNĄ listę wpisów, nie wynik
+  `wpisyDlaDnia()` — ta odfiltrowuje właśnie poprzednie wersje.
 
 ### Panel kierownika
 

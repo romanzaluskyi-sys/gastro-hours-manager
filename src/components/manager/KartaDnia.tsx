@@ -56,6 +56,7 @@ import {
   trafnoscPrognozy,
   prognozaNaDzien,
   wartoscPola,
+  opisPoprawki,
   przesun,
   POWODY_UTARGU,
   POLA_KOREKTY,
@@ -68,6 +69,7 @@ import { czyWpisZadania, zadanieWpisu, polaZadania } from "../../utils/tasks";
 import { pozaNormaPola } from "../../utils/pola";
 import ZdarzenieModal from "./ZdarzenieModal";
 import ModalWpisu from "./ModalWpisu";
+import SladPoprawki from "./SladPoprawki";
 
 const inputCls =
   "w-full border-[2px] border-[#171714] rounded px-3 py-2 text-[15px] bg-white disabled:bg-[#F1F1EE] disabled:text-[#6E6E66]";
@@ -509,6 +511,9 @@ export default function KartaDnia({
           {szablony.map((s) => {
             const wpis = wpisDlaSzablonu(s.klucz);
             const alarm = wpis && pozaNorma(s, wpis.payload);
+            // Poprawiona wartość bez śladu wygląda jak wpisana za pierwszym
+            // razem — a wtedy zapis HACCP przestaje być dowodem czegokolwiek.
+            const poprawka = opisPoprawki(wpis, wszystkieWpisy, polaSzablonu(s));
             return (
               <div
                 key={s.id}
@@ -555,6 +560,7 @@ export default function KartaDnia({
                     Wpisz
                   </button>
                 )}
+                {poprawka && <SladPoprawki opis={poprawka} />}
               </div>
             );
           })}
@@ -584,6 +590,7 @@ export default function KartaDnia({
               const zad = zadanieWpisu(w, tasks);
               const pola = zad ? polaZadania(zad, wszystkieSzablony) : [];
               const alarm = pozaNormaPola(pola, w.payload || {});
+              const poprawka = opisPoprawki(w, wszystkieWpisy, pola);
               return (
                 <div
                   key={w.id}
@@ -614,6 +621,7 @@ export default function KartaDnia({
                     {w.recorded_by || "?"}
                     {w.recorded_at ? " · " + String(w.recorded_at).slice(11, 16) : ""}
                   </span>
+                  {poprawka && <SladPoprawki opis={poprawka} />}
                 </div>
               );
             })}

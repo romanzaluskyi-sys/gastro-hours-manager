@@ -480,6 +480,49 @@ export const poprawWpis = async ({ stary, payload, powod, kto, entries, setEntri
   return wpis;
 };
 
+
+// --- POPRAWKI WPISÓW ----------------------------------------------------
+// Korekta wpisu to NOWY wiersz wskazujący na stary (corrected_from) — w widoku
+// pokazujemy tylko wersję aktualną, więc bez tych funkcji poprawiona wartość
+// wygląda dokładnie jak wpisana za pierwszym razem. Ślad jest w bazie, ale nikt
+// go nie widzi, czyli dla celu, dla którego powstał (dowód HACCP), nie istnieje.
+//
+// ⚠️ Podawaj tu PEŁNĄ listę wpisów, nie wynik wpisyDlaDnia() — ta odfiltrowuje
+// wersje poprzednie, czyli dokładnie te, których tu szukamy.
+export const poprzedniaWersja = (wpis, entries) =>
+  wpis && wpis.corrected_from
+    ? (entries || []).find((w) => String(w.id) === String(wpis.corrected_from)) || null
+    : null;
+
+export const liczbaPoprawek = (wpis, entries) => {
+  let ile = 0;
+  let biezacy = wpis;
+  while (biezacy && biezacy.corrected_from) {
+    const starszy = poprzedniaWersja(biezacy, entries);
+    if (!starszy) break;
+    ile += 1;
+    biezacy = starszy;
+  }
+  return ile;
+};
+
+// Podpis pod poprawioną wartością: co było, dlaczego i kto zmienił.
+// Zwraca null dla wpisu, którego nikt nie poprawiał — wtedy nic nie rysujemy.
+export const opisPoprawki = (wpis, entries, pola) => {
+  const stary = poprzedniaWersja(wpis, entries);
+  if (!stary) return null;
+  return {
+    bylo: (pola || []).map((p) => wartoscPolaTekst(p, stary.payload || {})).join(" / "),
+    // Dwie różne osoby i dlatego dwa pola: kto wpisał pierwotną wartość i kto
+    // ją zmienił. Bez rozróżnienia podpis powtarzałby to, co i tak stoi w
+    // wierszu obok, albo gubił autora poprawki.
+    ktoStary: stary.recorded_by || "",
+    kto: wpis.recorded_by || "",
+    powod: wpis.corrected_reason || "",
+    ile: liczbaPoprawek(wpis, entries),
+  };
+};
+
 // --- PROGNOZA UTARGU I ZESTAWIENIA ---------------------------------------
 
 // Najprostsza prognoza, jaka ma jakikolwiek sens: średnia z tego samego dnia

@@ -19,9 +19,10 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 - **Żadnego mierzenia dwa razy.** Zadanie można podpiąć pod pozycję z
   konfiguracji Pulsu — wtedy pomiar zrobiony w trakcie zmiany zamyka tę pozycję
   na karcie dnia i nikt nie pyta o nią ponownie przy zamykaniu.
-- **Pomiaru nie da się odznaczyć, da się go poprawić.** Poprawka zostaje w
-  dzienniku razem z poprzednią wartością i powodem — zapis, który da się cicho
-  przepisać, nie jest dowodem niczego.
+- **Pomiaru nie da się odznaczyć, da się go poprawić.** Poprawiona wartość ma
+  przy sobie podpis „poprawione — było X (kto wpisał) · poprawił/a Y · powód",
+  widoczny i w Pulsie, i w zadaniach. Zapis, który da się cicho przepisać, nie
+  jest dowodem niczego — ale ślad, którego nikt nie widzi, też nim nie jest.
 - **Do zadania można dopisać opis albo procedurę** („piec na 220°C, bemar na
   2") — pracownik widzi ją pod tytułem. Pole jest nieobowiązkowe.
 - **U pracownika Pulpit pokazuje same bloki z licznikiem**, a kliknięcie w blok

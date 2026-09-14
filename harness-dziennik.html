@@ -545,6 +545,39 @@ const sprawdz = (nazwa, warunek, szczegol = "") => {
       }).length === 0);
 
     log("");
+    log("— ślad poprawki wpisu —");
+    // Korekta to nowy wiersz wskazujący na stary. Widok pokazuje tylko wersję
+    // aktualną, więc bez tego podpisu poprawiona wartość wygląda dokładnie jak
+    // wpisana za pierwszym razem — ślad jest w bazie, ale nikt go nie widzi.
+    const polaTemp = [{ klucz: "temp", label: "Temperatura", typ: "number", jednostka: "°C" }];
+    const wpisStary = { id: "w1", lokal: "L", date: "2026-09-14", template_key: "lodowka",
+      payload: { temp: 12 }, recorded_by: "Ala" };
+    const wpisNowy = { id: "w2", lokal: "L", date: "2026-09-14", template_key: "lodowka",
+      payload: { temp: 4 }, recorded_by: "Bo", corrected_from: "w1",
+      corrected_reason: "zły czujnik" };
+    const wpisTrzeci = { id: "w3", lokal: "L", date: "2026-09-14", template_key: "lodowka",
+      payload: { temp: 5 }, recorded_by: "Bo", corrected_from: "w2", corrected_reason: "odczyt" };
+    const wszystkieWpisy = [wpisStary, wpisNowy, wpisTrzeci];
+
+    sprawdz("widok pokazuje tylko ostatnią wersję",
+      D.wpisyDlaDnia(wszystkieWpisy, "L", "2026-09-14").length === 1);
+    sprawdz("poprzednia wersja znaleziona",
+      D.poprzedniaWersja(wpisNowy, wszystkieWpisy).id === "w1");
+    sprawdz("wpis bez poprawki nie ma poprzedniej",
+      D.poprzedniaWersja(wpisStary, wszystkieWpisy) === null);
+    sprawdz("łańcuch dwóch poprawek policzony",
+      D.liczbaPoprawek(wpisTrzeci, wszystkieWpisy) === 2);
+    const opPopr = D.opisPoprawki(wpisNowy, wszystkieWpisy, polaTemp);
+    sprawdz("opis niesie starą wartość", opPopr && opPopr.bylo === "12°C", JSON.stringify(opPopr));
+    sprawdz("opis niesie powód", opPopr && opPopr.powod === "zły czujnik");
+    sprawdz("opis niesie autora poprawki", opPopr && opPopr.kto === "Bo");
+    sprawdz("opis niesie autora PIERWOTNEGO wpisu", opPopr && opPopr.ktoStary === "Ala",
+      "bez tego podpis powtarza nazwisko z wiersza obok albo gubi jedną z dwóch osób");
+    sprawdz("wpis bez poprawki nie dostaje opisu",
+      D.opisPoprawki(wpisStary, wszystkieWpisy, polaTemp) === null,
+      "inaczej każdy wpis miałby napis o poprawce");
+
+    log("");
     log(`ZDANYCH ${zdanych}, OBLANYCH ${oblanych}`, oblanych ? "zle" : "ok");
   } catch (e) {
     log("WYJĄTEK: " + (e && e.message), "zle");

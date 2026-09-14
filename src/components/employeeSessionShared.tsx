@@ -28,6 +28,8 @@ import PulsPrzypomnienie from "./manager/PulsPrzypomnienie";
 // Ten sam modal, co w karcie dnia i na ekranie kierownika zmiany — wpisanie
 // pomiaru to ta sama czynność i ma wyglądać tak samo wszędzie.
 import ModalWpisu from "./manager/ModalWpisu";
+import SladPoprawki from "./manager/SladPoprawki";
+import { opisPoprawki } from "../utils/dziennik";
 import { wartoscPolaTekst } from "../utils/pola";
 import {
   getDayOfWeek,
@@ -1181,6 +1183,7 @@ export const EmployeeSessionScreens = ({
                     {item.alarm ? " — poza normą" : ""}
                   </span>
                 )}
+
                 <span className="block text-[12px] text-[#8F8E86] mt-0.5">
                   {item.done
                     ? `${item.completion?.user_name || "?"}${
@@ -1203,6 +1206,9 @@ export const EmployeeSessionScreens = ({
                 </span>
               )}
             </button>
+            {item.pomiar && item.wpis && (
+              <SladPoprawki opis={opisPoprawki(item.wpis, dayLogEntries, item.pola)} />
+            )}
             {item.pomiar && item.done && item.wpis && (
               <button
                 onClick={() => setPomiarZadania({ item, poprawka: true })}

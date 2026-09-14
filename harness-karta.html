@@ -126,6 +126,11 @@ const g = (h) => { const d = new Date(wczoraj + "T00:00:00"); d.setHours(h); ret
           payload: { t: 12 }, recorded_by: "Ala", recorded_at: new Date().toISOString() },
         { id: "w2", lokal: "Bułka i Jacek", date: wczoraj, typ: "temperatura", template_key: "zad:t2",
           payload: { temp: 55 }, recorded_by: "Bo", recorded_at: new Date().toISOString() },
+        // Poprawka wpisu w1 — karta ma pokazać NOWĄ wartość plus ślad, że była
+        // zmieniana. Bez śladu poprawiony pomiar wygląda jak wpisany od razu.
+        { id: "w3", lokal: "Bułka i Jacek", date: wczoraj, typ: "temperatura", template_key: "temp_lodowka",
+          payload: { t: 4 }, recorded_by: "Bo", recorded_at: new Date().toISOString(),
+          corrected_from: "w1", corrected_reason: "zły czujnik, odczyt z drugiego termometru" },
       ],
       setDayLogEntries: () => {},
       setDayLogTemplates: () => {},
