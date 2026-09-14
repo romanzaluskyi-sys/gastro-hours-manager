@@ -20,7 +20,7 @@ import { api } from "../api/supabase";
 import { sendToGoogleSheets } from "../api/googleSheets";
 import { getShort, getDayOfWeek, getMonthName, getAvailableYears } from "../utils/format";
 import { findOverlappingShift, opisKolidujacej, znajdzKolizjeWBazie } from "../utils/shifts";
-import { isTaskDueOn, findSharedCompletion, toLocalYMD } from "../utils/tasks";
+import { zadaniaNaDzien, toLocalYMD } from "../utils/tasks";
 import { resolveAbsenceRequest, addUrlopDirectly, deleteAbsence } from "../utils/absences";
 import NotificationsPanel from "./NotificationsPanel";
 import ZatwierdzanieZmian from "./manager/ZatwierdzanieZmian";
@@ -89,6 +89,8 @@ const ManagerDashboard = ({
   setShiftEdits,
   tasks,
   setTasks,
+  taskBlocks,
+  setTaskBlocks,
   taskCompletions,
   setTaskCompletions,
   dayLogs,
@@ -421,20 +423,26 @@ const ManagerDashboard = ({
     return overdue("sanepid_expiry") || overdue("umowa_expiry");
   }).length;
 
-  // Tylko zadania wspólne dla lokalu (scope="lokal"), po terminie, bez
-  // wykonania — świadomie NIE rozbite po pracownikach, żeby jedno
-  // przeterminowane zadanie nie zawyżało licznika przez wielu ludzi.
+  // Zadania po terminie i bez wykonania — świadomie NIE rozbite po
+  // pracownikach, żeby jedno przeterminowane zadanie nie zawyżało licznika
+  // przez wielu ludzi (wykonanie jest i tak wspólne, patrz utils/tasks.ts).
   const todayStrForBadge = toLocalYMD(new Date());
+  // Termin zadania: własny, a gdy go nie ma — domyślny termin bloku.
+  const terminPozycji = (i) =>
+    (i.task.deadline_time || i.blok.deadline_time || "").slice(0, 5) || null;
   const nowTimeStr = new Date().toTimeString().slice(0, 5);
-  const zadaniaOverdueCount = tasks.filter(
-    (t) =>
-      !t.for_manager &&
-      !t.archived &&
-      hasAccessToLokal(t.lokal) &&
-      t.deadline_time &&
-      t.deadline_time.slice(0, 5) < nowTimeStr &&
-      isTaskDueOn(t, taskCompletions, todayStrForBadge) &&
-      !findSharedCompletion(taskCompletions, t.id, todayStrForBadge)
+  const zadaniaOverdueCount = zadaniaNaDzien({
+    tasks,
+    blocks: taskBlocks,
+    completions: taskCompletions,
+    dateStr: todayStrForBadge,
+    forManager: false,
+  }).filter(
+    (i) =>
+      hasAccessToLokal(i.task.lokal) &&
+      !i.done &&
+      terminPozycji(i) &&
+      terminPozycji(i) < nowTimeStr
   ).length;
 
   const shellBadges = {
@@ -1259,6 +1267,7 @@ const ManagerDashboard = ({
             shifts={shifts}
             issues={issues}
             tasks={tasks}
+            taskBlocks={taskBlocks}
             taskCompletions={taskCompletions}
             absences={absences}
             matchesFilter={matchesLokalFilter}
@@ -1290,8 +1299,16 @@ const ManagerDashboard = ({
             currentUser={currentUser}
             tasks={tasks}
             setTasks={setTasks}
+            taskBlocks={taskBlocks}
+            setTaskBlocks={setTaskBlocks}
             taskCompletions={taskCompletions}
             setTaskCompletions={setTaskCompletions}
+            dayLogs={dayLogs}
+            dayLogEntries={dayLogEntries}
+            setDayLogEntries={setDayLogEntries}
+            dayLogTemplates={dayLogTemplates}
+            planShifts={planShifts}
+            users={users}
             matchesFilter={matchesLokalFilter}
             availableLokale={availableLokaleForManager}
             activeStanowiska={activeStanowiska}
@@ -1311,6 +1328,7 @@ const ManagerDashboard = ({
             users={users}
             setUsers={setUsers}
             tasks={tasks}
+            taskBlocks={taskBlocks}
             taskCompletions={taskCompletions}
             staffingRules={staffingRules}
             staffingRuleSets={staffingRuleSets}

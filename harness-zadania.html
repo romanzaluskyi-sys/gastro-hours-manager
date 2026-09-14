@@ -1,0 +1,226 @@
+<meta charset="utf-8">
+<title>Sprawdzian zadań</title>
+<style>
+  body { font: 14px/1.6 ui-monospace, Menlo, monospace; padding: 24px; background: #FBFAF9; color: #17120F; }
+  h1 { font: 700 18px/1.2 system-ui, sans-serif; }
+  h2 { font: 700 14px/1.2 system-ui, sans-serif; margin: 18px 0 4px; }
+  .ok { color: #2C6A4F; } .zle { color: #DE3A22; font-weight: 700; }
+  pre { background: #F1EEEB; padding: 10px; overflow-x: auto; }
+</style>
+<h1>Sprawdzian utils/tasks.ts — bloki zadań</h1>
+<div id="out">ładowanie…</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js"></script>
+<script>
+const out = document.getElementById("out");
+const log = (txt, cls = "") => {
+  const d = document.createElement("div");
+  d.className = cls; d.textContent = txt; out.appendChild(d);
+};
+
+// Ten sam loader co w harness-dziennik.html.
+const cache = new Map();
+async function zaladuj(sciezka) {
+  if (cache.has(sciezka)) return cache.get(sciezka);
+  const p = new Promise(async (resolve, reject) => {
+    try {
+      let kod = null;
+      for (const ext of [".ts", ".tsx", ""]) {
+        const r = await fetch(sciezka + ext + "?cb=" + Date.now());
+        if (r.ok) { kod = await r.text(); break; }
+      }
+      if (kod === null) throw new Error("nie znaleziono " + sciezka);
+      const specyfikatory = [...kod.matchAll(/from\s+"(\.[^"]+)"/g)].map((m) => m[1]);
+      const baza = sciezka.slice(0, sciezka.lastIndexOf("/"));
+      const mapa = {};
+      for (const s of specyfikatory) {
+        const url = new URL(baza + "/" + s, location.origin).pathname;
+        mapa[s] = await zaladuj(url);
+      }
+      kod = kod.replace(/from\s+"(\.[^"]+)"/g, (m, s) => `from "${mapa[s]}"`);
+      const js = Babel.transform(kod, { presets: [["typescript", { allExtensions: true, isTSX: true }]] }).code;
+      resolve(URL.createObjectURL(new Blob([js], { type: "text/javascript" })));
+    } catch (e) { reject(e); }
+  });
+  cache.set(sciezka, p);
+  return p;
+}
+
+let zdanych = 0, oblanych = 0;
+const sprawdz = (nazwa, warunek, szczegol = "") => {
+  if (warunek) { zdanych++; log("  OK   " + nazwa, "ok"); }
+  else { oblanych++; log("  ŹLE  " + nazwa + (szczegol ? " — " + szczegol : ""), "zle"); }
+};
+
+(async () => {
+  try {
+    out.textContent = "";
+    const T = await import(await zaladuj("/src/utils/tasks"));
+    log("moduł załadowany razem z pola.ts i api/*", "ok");
+
+    // 2026-09-14 to PONIEDZIAŁEK, 2026-09-13 niedziela, 2026-09-12 sobota.
+    const PN = "2026-09-14", ND = "2026-09-13", SO = "2026-09-12";
+
+    const blokCodzienny = { id: "b1", lokal: "L", nazwa: "Otwarcie", schedule_type: "poranne" };
+    const blokRobocze = { id: "b2", lokal: "L", nazwa: "HACCP", schedule_type: "ogolne", days_of_week: "1,2,3,4,5" };
+    const blokCykliczny = { id: "b3", lokal: "L", nazwa: "Mycie", schedule_type: "cykliczne", cycle_days: 3 };
+    const blokKucharza = { id: "b4", lokal: "L", nazwa: "Kuchnia", schedule_type: "ogolne", stanowiska: "Kucharz" };
+    const blokKierownika = { id: "b5", lokal: "L", nazwa: "Kontrola", schedule_type: "ogolne", for_manager: true };
+    const bloki = [blokCodzienny, blokRobocze, blokCykliczny, blokKucharza, blokKierownika];
+
+    const z = (id, block_id, extra = {}) => ({
+      id, block_id, lokal: "L", title: "Zadanie " + id, priority: "sredni",
+      active: true, archived: false, pola: [], ...extra,
+    });
+    const zadania = [
+      z("t1", "b1"),
+      z("t2", "b2"),
+      z("t3", "b3"),
+      z("t4", "b4"),
+      z("t5", "b5"),
+      z("t6", "b1", { cycle_days: 7 }),      // własny cykl wewnątrz codziennego bloku
+    ];
+
+    log("");
+    log("— dni tygodnia —");
+    const bezWykonan = [];
+    const dnia = (dateStr, opts = {}) => T.blokiNaDzien({
+      tasks: zadania, blocks: bloki, completions: opts.completions || bezWykonan,
+      entries: opts.entries || [], templates: opts.templates || [],
+      lokal: "L", dateStr, stanowisko: opts.stanowisko,
+      tryb: opts.tryb || "all", forManager: opts.forManager === undefined ? false : opts.forManager,
+    });
+    const nazwy = (g) => g.map((x) => x.blok.nazwa);
+
+    sprawdz("blok bez days_of_week jest w poniedziałek", nazwy(dnia(PN)).includes("Otwarcie"));
+    sprawdz("blok bez days_of_week jest TEŻ w niedzielę (null = codziennie)",
+      nazwy(dnia(ND)).includes("Otwarcie"), "null musi znaczyć codziennie, nie nigdy");
+    sprawdz("blok pn–pt jest w poniedziałek", nazwy(dnia(PN)).includes("HACCP"));
+    sprawdz("blok pn–pt NIE ma go w niedzielę", !nazwy(dnia(ND)).includes("HACCP"));
+
+    log("");
+    log("— cykl bloku i cykl zadania —");
+    const wykonanie = (task_id, date, extra = {}) => ({ id: task_id + date, task_id, date, user_name: "Ala", ...extra });
+    const cyklZrobiony = [wykonanie("t3", "2026-09-12")];
+    sprawdz("blok co 3 dni, zrobiony 12.09 — 13.09 nieaktywny",
+      !nazwy(dnia(ND, { completions: cyklZrobiony })).includes("Mycie"));
+    sprawdz("blok co 3 dni, zrobiony 12.09 — 15.09 znowu aktywny",
+      nazwy(dnia("2026-09-15", { completions: cyklZrobiony })).includes("Mycie"));
+    sprawdz("blok cykliczny bez żadnego wykonania jest od razu",
+      nazwy(dnia(PN)).includes("Mycie"));
+
+    const zadanieCoTydzien = [wykonanie("t6", "2026-09-13")];
+    const otwarcie = (dateStr, completions) =>
+      dnia(dateStr, { completions }).find((g) => g.blok.nazwa === "Otwarcie");
+    sprawdz("zadanie co 7 dni znika z bloku dzień po wykonaniu",
+      otwarcie(PN, zadanieCoTydzien).items.length === 1);
+    sprawdz("…i wraca po siedmiu dniach",
+      otwarcie("2026-09-20", zadanieCoTydzien).items.length === 2);
+    sprawdz("cykl zadania nie chowa całego bloku",
+      !!otwarcie(PN, zadanieCoTydzien), "blok ma zostać, bo ma drugie zadanie");
+
+    log("");
+    log("— dla kogo —");
+    sprawdz("blok Kucharza widzi kucharz",
+      nazwy(dnia(PN, { tryb: "own", stanowisko: "Kucharz" })).includes("Kuchnia"));
+    sprawdz("blok Kucharza NIE jest dla baristy",
+      !nazwy(dnia(PN, { tryb: "own", stanowisko: "Barista" })).includes("Kuchnia"));
+    sprawdz("blok bez stanowisk jest dla każdego",
+      nazwy(dnia(PN, { tryb: "own", stanowisko: "Barista" })).includes("Otwarcie"));
+    sprawdz("tryb 'all' pokazuje cudze bloki (kiosk)",
+      nazwy(dnia(PN, { tryb: "all", stanowisko: "Barista" })).includes("Kuchnia"));
+    sprawdz("blok kierownika nie trafia do pracownika",
+      !nazwy(dnia(PN)).includes("Kontrola"));
+    sprawdz("blok kierownika jest w widoku kierownika",
+      nazwy(dnia(PN, { forManager: true })).includes("Kontrola"));
+
+    log("");
+    log("— zadanie bez bloku (siatka bezpieczeństwa) —");
+    const sierota = z("t9", null, { stanowisko: "Kucharz" });
+    const zSierota = T.blokiNaDzien({
+      tasks: [...zadania, sierota], blocks: bloki, completions: [], entries: [], templates: [],
+      lokal: "L", dateStr: ND, tryb: "all", forManager: false,
+    });
+    sprawdz("zadanie bez bloku nie znika — dostaje blok 'Bez bloku'",
+      zSierota.some((g) => g.blok.nazwa.startsWith("Bez bloku")));
+
+    log("");
+    log("— liczniki i kolejność —");
+    const zrobioneT1 = [wykonanie("t1", PN)];
+    const gOtw = otwarcie(PN, zrobioneT1);
+    sprawdz("licznik bloku 1/2", gOtw.done === 1 && gOtw.total === 2, JSON.stringify([gOtw.done, gOtw.total]));
+    sprawdz("zostało 1", gOtw.zostalo === 1);
+    sprawdz("poranne przed ogólnym",
+      nazwy(dnia(PN)).indexOf("Otwarcie") < nazwy(dnia(PN)).indexOf("HACCP"));
+    sprawdz("splaszczBloki daje płaską listę pozycji",
+      T.splaszczBloki(dnia(PN)).length === T.zadaniaNaDzien({
+        tasks: zadania, blocks: bloki, completions: [], lokal: "L", dateStr: PN, forManager: false,
+      }).length);
+
+    log("");
+    log("— pomiar —");
+    const szablon = {
+      lokal: "L", klucz: "lodowka", nazwa: "Lodówka", archived: false, typ: "temperatura",
+      pola: [{ klucz: "temp", label: "Temperatura", typ: "number", jednostka: "°C", min: 0, max: 5 }],
+    };
+    const zPomiarem = z("t7", "b2", { typ: "temperatura", pola: [{ klucz: "kwota", label: "Kwota", typ: "number" }] });
+    const zSzablonu = z("t8", "b2", { template_key: "lodowka" });
+    sprawdz("pola własne czytane z zadania", T.polaZadania(zPomiarem, []).length === 1);
+    sprawdz("pola z podpiętego szablonu Pulsu",
+      T.polaZadania(zSzablonu, [szablon])[0].label === "Temperatura",
+      "definicja ma być JEDNA — w szablonie");
+    sprawdz("klucz wpisu podpiętego = klucz szablonu (bez duplikatu na karcie dnia)",
+      T.kluczWpisuZadania(zSzablonu) === "lodowka");
+    sprawdz("klucz wpisu własnego = zad:<id>", T.kluczWpisuZadania(zPomiarem) === "zad:t7");
+    sprawdz("wpis z checklisty rozpoznawalny", T.czyWpisZadania({ template_key: "zad:t7" }));
+    sprawdz("wpis szablonu to NIE wpis checklisty", !T.czyWpisZadania({ template_key: "lodowka" }));
+    sprawdz("12 °C przy normie 0–5 to alarm",
+      T.pozaNormaZadania(zSzablonu, [szablon], { payload: { temp: 12 } }));
+    sprawdz("4 °C przy normie 0–5 jest w normie",
+      !T.pozaNormaZadania(zSzablonu, [szablon], { payload: { temp: 4 } }));
+
+    const wpis = { id: "w1", template_key: "lodowka", payload: { temp: 4 } };
+    const zWpisem = [wykonanie("t8", PN, { entry_id: "w1" })];
+    const grupyZPomiarem = T.blokiNaDzien({
+      tasks: [...zadania, zSzablonu], blocks: bloki, completions: zWpisem,
+      entries: [wpis], templates: [szablon], lokal: "L", dateStr: PN, tryb: "all", forManager: false,
+    });
+    const poz = T.splaszczBloki(grupyZPomiarem).find((i) => i.task.id === "t8");
+    sprawdz("pozycja z pomiarem niesie swój wpis", poz && poz.wpis && poz.wpis.id === "w1");
+    sprawdz("pozycja z pomiarem jest oznaczona jako pomiar", poz && poz.pomiar === true);
+
+    let rzucilo = false;
+    try {
+      await T.toggleTaskCompletion({
+        task: zSzablonu, dateStr: PN,
+        existingCompletion: { id: 1, entry_id: "w1" },
+        actorName: "Ala",
+      });
+    } catch (e) { rzucilo = true; }
+    sprawdz("wykonania z pomiarem NIE da się odznaczyć", rzucilo,
+      "zapis HACCP nie może dać się skasować jednym kliknięciem");
+
+    log("");
+    log("— etykiety —");
+    sprawdz("7 dni = brak etykiety", T.dniBlokuLabel({ days_of_week: "0,1,2,3,4,5,6" }) === null);
+    sprawdz("brak dni = brak etykiety (codziennie)", T.dniBlokuLabel({}) === null);
+    sprawdz("dwa dni opisane skrótami", T.dniBlokuLabel({ days_of_week: "1,2" }) === "Pon, Wt");
+
+    log("");
+    log("— zestaw startowy —");
+    sprawdz("sześć gotowych bloków", T.BLOKI_STARTOWE.length === 6);
+    sprawdz("każdy blok ma zadania", T.BLOKI_STARTOWE.every((b) => b.zadania.length > 0));
+    sprawdz("HACCP ma pomiary z normami",
+      T.BLOKI_STARTOWE.find((b) => b.nazwa.includes("HACCP")).zadania
+        .some((z) => (z.pola || []).some((p) => p.min != null || p.max != null)));
+
+    log("");
+    log(`${zdanych} zdanych, ${oblanych} oblanych`, oblanych ? "zle" : "ok");
+  } catch (e) {
+    log("BŁĄD: " + (e && e.message), "zle");
+    const pre = document.createElement("pre");
+    pre.textContent = (e && e.stack) || String(e);
+    out.appendChild(pre);
+  }
+})();
+</script>

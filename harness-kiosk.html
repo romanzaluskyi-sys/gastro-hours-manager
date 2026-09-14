@@ -33,7 +33,7 @@ const pokazBlad = (e) => {
 window.addEventListener("error", (ev) => pokazBlad(ev.error || ev.message));
 window.addEventListener("unhandledrejection", (ev) => pokazBlad(ev.reason));
 
-const IKONY = ["AlertCircle", "AlertTriangle", "Archive", "ArchiveRestore", "ArrowLeft", "ArrowLeftRight", "ArrowRight", "BarChart3", "Bell", "BookOpen", "Briefcase", "Calendar", "CalendarCheck", "CalendarDays", "CalendarRange", "Check", "CheckCircle", "CheckCircle2", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "ClipboardCheck", "ClipboardList", "ClipboardPlus", "Clock", "Cloud", "Construction", "Copy", "CopyPlus", "Delete", "Download", "Edit2", "Eye", "FileText", "Flag", "HelpCircle", "History", "Home", "Info", "Lock", "LogIn", "LogOut", "Mail", "MapPin", "MoreHorizontal", "Palmtree", "Pencil", "Plus", "Printer", "RefreshCw", "Save", "Send", "SlidersHorizontal", "Trash2", "User", "UserPlus", "Users", "WifiOff", "X"];
+const IKONY = ["AlertCircle", "AlertTriangle", "Archive", "ArchiveRestore", "ArrowLeft", "ArrowLeftRight", "ArrowRight", "BarChart3", "Bell", "BookOpen", "Briefcase", "Calendar", "CalendarCheck", "CalendarDays", "CalendarRange", "Check", "CheckCircle", "CheckCircle2", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "ClipboardCheck", "ClipboardList", "ClipboardPlus", "Clock", "Cloud", "Construction", "Copy", "CopyPlus", "Delete", "Download", "Edit2", "Eye", "FileText", "Flag", "HelpCircle", "History", "Home", "Info", "Lock", "LogIn", "LogOut", "Mail", "MapPin", "MoreHorizontal", "Palmtree", "Pencil", "Plus", "Printer", "RefreshCw", "Save", "Send", "SlidersHorizontal", "Thermometer", "Trash2", "User", "UserPlus", "Users", "WifiOff", "X"];
 const stub = (kod) => URL.createObjectURL(new Blob([kod], { type: "text/javascript" }));
 
 // Atrapa Supabase — nic nie leci do sieci, każdy zapis wraca z wymyślonym id.
@@ -184,6 +184,32 @@ const poprzedniMiesiac = (h) => {
       const [shifts, setShifts] = useState([]);
       const [issues, setIssues] = useState([]);
       const [notifications, setNotifications] = useState([]);
+      // Zadania: trzy bloki — dla wszystkich, z pomiarem i tylko dla kucharza.
+      // Ostatni sprawdza przełącznik "Twoje stanowisko / Wszystkie", który na
+      // tablecie jest jedyną drogą do cudzej checklisty.
+      const [taskCompletions, setTaskCompletions] = useState([]);
+      const [dayLogEntries, setDayLogEntries] = useState([]);
+      const taskBlocks = [
+        { id: "bk1", lokal: "Ceglana", nazwa: "Otwarcie lokalu", schedule_type: "poranne",
+          deadline_time: "10:00", kolejnosc: 0, active: true, archived: false },
+        { id: "bk2", lokal: "Ceglana", nazwa: "Bezpieczeństwo żywności", schedule_type: "ogolne",
+          kolejnosc: 1, active: true, archived: false },
+        { id: "bk3", lokal: "Ceglana", nazwa: "Sala", schedule_type: "ogolne",
+          stanowiska: "Kelner", kolejnosc: 2, active: true, archived: false },
+      ];
+      const tasks = [
+        { id: "zt1", block_id: "bk1", lokal: "Ceglana", title: "Otworzyć lokal, wyłączyć alarm",
+          priority: "sredni", kolejnosc: 0, pola: [], active: true, archived: false },
+        { id: "zt2", block_id: "bk1", lokal: "Ceglana", title: "Włączyć piec i bemar",
+          description: "Piec na 220°C, bemar na 2 — woda do kreski.",
+          priority: "wysoki", kolejnosc: 1, pola: [], active: true, archived: false },
+        { id: "zt3", block_id: "bk2", lokal: "Ceglana", title: "Temperatura lodówki",
+          priority: "sredni", kolejnosc: 0, typ: "temperatura",
+          pola: [{ klucz: "temp", label: "Temperatura", typ: "number", jednostka: "°C", min: 0, max: 5 }],
+          active: true, archived: false },
+        { id: "zt4", block_id: "bk3", lokal: "Ceglana", title: "Toalety — kontrola",
+          priority: "sredni", kolejnosc: 0, pola: [], active: true, archived: false },
+      ];
       const props = {
         currentUser: {
           id: "k1", name: "Tablet Ceglana", role: "kiosk",
@@ -207,7 +233,8 @@ const poprzedniMiesiac = (h) => {
         ],
         issues, setIssues,
         notifications, setNotifications,
-        tasks: [], taskCompletions: [], setTaskCompletions: () => {},
+        tasks, taskBlocks, taskCompletions, setTaskCompletions,
+        dayLogs: [], dayLogEntries, setDayLogEntries, dayLogTemplates: [],
         absences: [], setAbsences: () => {},
         planShifts: [], shiftSwaps: [], setShiftSwaps: () => {},
         showMsg: (m, t) => console.log("showMsg:", t, m),

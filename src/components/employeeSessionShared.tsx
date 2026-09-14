@@ -11,8 +11,11 @@ import {
   Flag,
   ChevronLeft,
   ChevronDown,
+  ChevronRight,
+  ChevronUp,
   Check,
   BookOpen,
+  Thermometer,
 } from "lucide-react";
 import { api } from "../api/supabase";
 import { sendToGoogleSheets, toLocalYMD } from "../api/googleSheets";
@@ -22,6 +25,10 @@ import { findOverlappingShift, opisKolidujacej, znajdzKolizjeWBazie, getTodaysSh
 import WeatherBadge from "./WeatherBadge";
 import PulsZmiany, { mozeZamykacPuls } from "./manager/PulsZmiany";
 import PulsPrzypomnienie from "./manager/PulsPrzypomnienie";
+// Ten sam modal, co w karcie dnia i na ekranie kierownika zmiany — wpisanie
+// pomiaru to ta sama czynność i ma wyglądać tak samo wszędzie.
+import ModalWpisu from "./manager/ModalWpisu";
+import { wartoscPolaTekst } from "../utils/pola";
 import {
   getDayOfWeek,
   odmianaZmian, getMonthName,
@@ -52,10 +59,15 @@ import {
   nextShiftFrom,
 } from "../utils/grafik";
 import {
-  buildEmployeeChecklist,
+  buildEmployeeBlocks,
+  splaszczBloki,
   getEffectiveAssignmentForDate,
   toggleTaskCompletion,
-  cyclicalProgress,
+  zapiszWykonanieZPomiarem,
+  poprawPomiarZadania,
+  kluczWpisuZadania,
+  dniBlokuLabel,
+  poraLabel,
   weeklyChecklistStats,
 } from "../utils/tasks";
 
@@ -136,16 +148,10 @@ export const sumHours = (arr) =>
     0
   );
 
-// Odznaka na wierszu zadania: dla cyklicznych częstotliwość/postęp, dla
-// reszty przypisane stanowisko ("wszyscy", gdy brak — zadanie dla całego
-// lokalu).
-const taskBadgeLabel = (task, completions, dateStr) => {
-  if (task.schedule_type === "cykliczne") {
-    const prog = cyclicalProgress(task, completions, dateStr);
-    return prog ? `${prog.daysSince}/${prog.cycleDays} dni` : `co ${task.cycle_days || 1} dni`;
-  }
-  return task.stanowisko || "wszyscy";
-};
+// Odznaka na wierszu zadania. Pora, dni i adresat stoją w nagłówku bloku, więc
+// w wierszu zostaje tylko to, co dotyczy tej jednej pozycji: jej własny cykl.
+const taskBadgeLabel = (task) =>
+  task.cycle_days ? `co ${task.cycle_days} dni` : null;
 
 // --- klasy Tailwind wspólne dla wielu ekranów (język designu z prototypu:
 // grube 2/2.5px obramowania, pogrubione nagłówki Archivo, czerwony akcent) ---
@@ -329,8 +335,13 @@ export const EmployeeSessionScreens = ({
   issues,
   setIssues,
   tasks,
+  taskBlocks,
   taskCompletions,
   setTaskCompletions,
+  dayLogs,
+  dayLogEntries,
+  setDayLogEntries,
+  dayLogTemplates,
   absences,
   setAbsences,
   planShifts,
@@ -447,21 +458,22 @@ export const EmployeeSessionScreens = ({
     employee,
     openShift ? [openShift] : todaysClosedShifts
   );
-  const myChecklistOwn = buildEmployeeChecklist(
+  const daneZadan = {
     tasks,
-    taskCompletions,
-    effectiveAssignment,
-    todayStr,
-    "own"
-  );
-  const myChecklistAll = buildEmployeeChecklist(
-    tasks,
-    taskCompletions,
-    effectiveAssignment,
-    todayStr,
-    "all"
-  );
+    blocks: taskBlocks,
+    completions: taskCompletions,
+    entries: dayLogEntries,
+    templates: dayLogTemplates,
+  };
+  const myBlocksOwn = buildEmployeeBlocks(daneZadan, effectiveAssignment, todayStr, "own");
+  const myBlocksAll = buildEmployeeBlocks(daneZadan, effectiveAssignment, todayStr, "all");
+  const myChecklistOwn = splaszczBloki(myBlocksOwn);
   const taskBadgeCount = myChecklistOwn.filter((i) => !i.done).length;
+  // Który blok jest rozwinięty na ekranie Zadania. Kliknięcie bloku na Pulpicie
+  // otwiera właśnie ten — pracownik dostaje od razu listę, w którą celował,
+  // zamiast szukać jej ponownie w pełnym spisie.
+  const [openBlockId, setOpenBlockId] = useState(null);
+  const [pomiarZadania, setPomiarZadania] = useState(null); // { item, poprawka }
 
   // Pracownik widzi tylko OPUBLIKOWANY grafik — wersja robocza kierownika
   // nie może tu przeciekać (filtruje publishedShiftsFor w utils/grafik.ts).
@@ -545,8 +557,7 @@ export const EmployeeSessionScreens = ({
     return d;
   })();
   const myWeeklyStats = weeklyChecklistStats(
-    tasks,
-    taskCompletions,
+    daneZadan,
     employee,
     shifts.filter((s) => s.user_id === employee.id),
     todayStr
@@ -1026,76 +1037,284 @@ export const EmployeeSessionScreens = ({
     setZgSaving(false);
   };
 
-  // ---- odhaczenie/odznaczenie zadania — jedyny konsument toggleTaskCompletion tutaj ----
-  const handleToggleTask = async (item) => {
-    try {
-      const result = await toggleTaskCompletion({
-        task: item.task,
-        dateStr: todayStr,
-        existingCompletion: item.completion,
-        actorId: employee.id,
-        actorName: employee.name,
-        shiftId: openShift ? openShift.id : null,
-      });
-      if (result.removedId) {
-        setTaskCompletions((prev) =>
-          prev.filter((c) => c.id !== result.removedId)
-        );
-      } else if (result.created) {
-        setTaskCompletions((prev) => [...prev, result.created]);
-      }
-    } catch (err) {
-      showMsg("Błąd zapisu zadania!", "error");
+  // ---- odhaczenie zadania i zapis pomiaru — jedyne miejsce w tym pliku ----
+  const zapiszWynikZadania = (result) => {
+    if (result.removedId) {
+      setTaskCompletions((prev) => prev.filter((c) => c.id !== result.removedId));
+    } else if (result.created) {
+      setTaskCompletions((prev) => [...prev, result.created]);
+    }
+    if (result.updated) {
+      setTaskCompletions((prev) =>
+        // Scalamy, nie podmieniamy: patch zwraca pełny wiersz, ale gdyby
+        // kiedykolwiek wrócił niepełny, podmiana zgubiłaby task_id i wykonanie
+        // po cichu zniknęłoby z checklisty.
+        prev.map((c) => (c.id === result.updated.id ? { ...c, ...result.updated } : c))
+      );
+    }
+    // Wpis dziennika trzymamy też lokalnie, żeby wartość pokazała się w wierszu
+    // od razu — bez tego pracownik wpisuje temperaturę i widzi pustą pozycję.
+    if (result.wpis && typeof setDayLogEntries === "function") {
+      setDayLogEntries((prev) => [...(prev || []), result.wpis]);
     }
   };
 
-  // ---- checklista zadań — wspólny renderer dla Pulpit (przed i w trakcie
-  // zmiany) oraz zakładki Zadania, żeby nie duplikować JSX w trzech miejscach ----
+  const handleToggleTask = async (item) => {
+    // Zadanie z polami nie odhacza się jednym kliknięciem — najpierw pomiar.
+    if (item.pomiar && !item.done) return setPomiarZadania({ item, poprawka: false });
+    try {
+      zapiszWynikZadania(
+        await toggleTaskCompletion({
+          task: item.task,
+          dateStr: todayStr,
+          existingCompletion: item.completion,
+          actorId: employee.id,
+          actorName: employee.name,
+          shiftId: openShift ? openShift.id : null,
+        })
+      );
+    } catch (err) {
+      showMsg(err.message || "Błąd zapisu zadania!", "error");
+    }
+  };
+
+  const handleZapiszPomiarZadania = async (typ, klucz, wartosci, powod) => {
+    const { item, poprawka } = pomiarZadania;
+    try {
+      if (poprawka) {
+        zapiszWynikZadania(
+          await poprawPomiarZadania({
+            task: item.task,
+            completion: item.completion,
+            staryWpis: item.wpis,
+            payload: wartosci,
+            powod,
+            actorName: employee.name,
+          })
+        );
+        showMsg("Poprawka zapisana.");
+      } else {
+        const karta = (dayLogs || []).find(
+          (k) => k.lokal === item.task.lokal && k.date === todayStr
+        );
+        zapiszWynikZadania(
+          await zapiszWykonanieZPomiarem({
+            task: item.task,
+            dateStr: todayStr,
+            payload: wartosci,
+            dayLogId: karta ? karta.id : null,
+            actorId: employee.id,
+            actorName: employee.name,
+            shiftId: openShift ? openShift.id : null,
+          })
+        );
+      }
+      setPomiarZadania(null);
+    } catch (err) {
+      showMsg(err.message || "Błąd zapisu pomiaru!", "error");
+    }
+  };
+
+  // ---- checklista zadań — wspólny renderer dla Pulpitu, ekranu Zmiana i
+  // zakładki Zadania, żeby nie duplikować JSX w trzech miejscach ----
   const renderTaskChecklist = (list) => (
     <div className="space-y-2">
-      {list.map((item) => (
-        <button
-          key={item.task.id}
-          onClick={() => handleToggleTask(item)}
-          className={`${checkboxRowCls(item.done)} ${item.done ? "opacity-60" : ""}`}
-        >
-          <span className="w-5 h-5 border-2 border-[#B7B6AE] rounded-[3px] flex-shrink-0 flex items-center justify-center">
-            {item.done && (
-              <span className="w-[9px] h-[9px] bg-[#DE3A22] rounded-[1px]" />
-            )}
-          </span>
-          <span className="flex-1 text-left">
-            <span
-              className={`block text-[15px] font-semibold ${
-                item.done ? "line-through text-[#6E6E66]" : "text-[#171714]"
-              }`}
+      {list.map((item) => {
+        const termin = (
+          item.task.deadline_time ||
+          (item.blok && item.blok.deadline_time) ||
+          ""
+        ).slice(0, 5);
+        const odznaka = taskBadgeLabel(item.task);
+        return (
+          <div
+            key={item.task.id}
+            className={`${checkboxRowCls(item.done)} ${
+              item.done ? "opacity-60" : ""
+            } flex-col items-stretch gap-2`}
+          >
+            <button
+              onClick={() => handleToggleTask(item)}
+              className="flex items-start gap-3 w-full text-left"
             >
-              {item.task.title}
-              {!item.done && item.task.priority === "wysoki" && (
-                <span className="ml-2 text-[11px] font-bold text-[#DE3A22] no-underline">
-                  Ważne
+              <span className="w-5 h-5 mt-0.5 border-2 border-[#B7B6AE] rounded-[3px] flex-shrink-0 flex items-center justify-center">
+                {item.done && (
+                  <span className="w-[9px] h-[9px] bg-[#DE3A22] rounded-[1px]" />
+                )}
+              </span>
+              <span className="flex-1">
+                <span
+                  className={`block text-[15px] font-semibold ${
+                    item.done ? "line-through text-[#6E6E66]" : "text-[#171714]"
+                  }`}
+                >
+                  {item.task.title}
+                  {!item.done && item.task.priority === "wysoki" && (
+                    <span className="ml-2 text-[11px] font-bold text-[#DE3A22] no-underline">
+                      Ważne
+                    </span>
+                  )}
+                  {item.pomiar && (
+                    <Thermometer
+                      size={13}
+                      className="inline ml-1.5 -mt-0.5 text-[#8F8E86]"
+                    />
+                  )}
+                </span>
+                {item.task.description && (
+                  <span className="block text-[12.5px] text-[#6E6E66] mt-1 whitespace-pre-line">
+                    {item.task.description}
+                  </span>
+                )}
+                {item.pomiar && item.wpis && (
+                  <span
+                    className={`block text-[13px] mt-1 ${
+                      item.alarm ? "font-bold text-[#DE3A22]" : "text-[#171714]"
+                    }`}
+                  >
+                    {item.pola
+                      .map(
+                        (pole) =>
+                          `${pole.label}: ${wartoscPolaTekst(pole, item.wpis.payload || {})}`
+                      )
+                      .join(" · ")}
+                    {item.alarm ? " — poza normą" : ""}
+                  </span>
+                )}
+                <span className="block text-[12px] text-[#8F8E86] mt-0.5">
+                  {item.done
+                    ? `${item.completion?.user_name || "?"}${
+                        item.completion?.completed_at
+                          ? " · " + fmtHHMM(new Date(item.completion.completed_at))
+                          : ""
+                      }`
+                    : item.pomiar
+                    ? termin
+                      ? `wpisz pomiar · do ${termin}`
+                      : "wpisz pomiar"
+                    : termin
+                    ? `do ${termin}`
+                    : " "}
+                </span>
+              </span>
+              {odznaka && (
+                <span className="flex-shrink-0 text-[11px] font-semibold px-2 py-1 rounded bg-[#E7E7E2] text-[#6E6E66]">
+                  {odznaka}
                 </span>
               )}
-            </span>
-            <span className="block text-[12px] text-[#8F8E86] mt-0.5">
-              {item.done
-                ? `${item.completion?.user_name || "?"}${
-                    item.completion?.completed_at
-                      ? " · " + fmtHHMM(new Date(item.completion.completed_at))
-                      : ""
-                  }`
-                : item.task.deadline_time
-                ? `do ${item.task.deadline_time.slice(0, 5)}`
-                : " "}
-            </span>
-          </span>
-          <span className="flex-shrink-0 text-[11px] font-semibold px-2 py-1 rounded bg-[#E7E7E2] text-[#6E6E66]">
-            {taskBadgeLabel(item.task, taskCompletions, todayStr)}
-          </span>
-        </button>
-      ))}
+            </button>
+            {item.pomiar && item.done && item.wpis && (
+              <button
+                onClick={() => setPomiarZadania({ item, poprawka: true })}
+                className="self-start text-[12.5px] underline text-[#6E6E66]"
+              >
+                Popraw pomiar
+              </button>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
+
+  // Karty bloków. `zwiniete` = same nagłówki z licznikiem (Pulpit: kliknięcie
+  // przenosi na ekran Zadania i otwiera ten blok) — pełna lista wszystkich
+  // zadań na Pulpicie robiła z niego ścianę tekstu, przez którą nie było widać
+  // zmiany ani grafiku.
+  const renderBlockCards = (grupy, { zwiniete = false } = {}) => {
+    // Bez wyboru rozwijamy pierwszy blok, w którym coś zostało — ekran, na
+    // którym trzeba najpierw kliknąć, żeby cokolwiek zobaczyć, wygląda jak
+    // pusty.
+    const domyslny = (grupy.find((g) => g.zostalo > 0) || grupy[0] || {}).blok;
+    return (
+    <div className="space-y-3">
+      {grupy.map((g) => {
+        const otwarty =
+          !zwiniete &&
+          (openBlockId
+            ? openBlockId === g.blok.id
+            : !!domyslny && domyslny.id === g.blok.id);
+        const dni = dniBlokuLabel(g.blok);
+        return (
+          <div
+            key={g.blok.id}
+            className={`border-2 rounded ${
+              g.zostalo === 0 ? "border-[#B7B6AE] opacity-70" : "border-[#171714]"
+            }`}
+          >
+            <button
+              onClick={() => {
+                if (zwiniete) {
+                  setOpenBlockId(g.blok.id);
+                  setScreen("ZADANIA");
+                } else {
+                  setOpenBlockId(otwarty ? null : g.blok.id);
+                }
+              }}
+              className="w-full text-left p-3.5 flex items-center gap-3"
+            >
+              <span className="flex-1">
+                <span className="block font-['Archivo'] font-extrabold text-[16px] text-[#171714]">
+                  {g.blok.nazwa}
+                  {g.pilne && (
+                    <span className="ml-2 text-[11px] font-bold text-[#DE3A22]">Ważne</span>
+                  )}
+                </span>
+                <span className="block text-[12px] text-[#8F8E86] mt-0.5">
+                  {poraLabel(g.blok.schedule_type)}
+                  {dni ? ` · tylko ${dni}` : ""}
+                  {g.blok.deadline_time ? ` · do ${g.blok.deadline_time.slice(0, 5)}` : ""}
+                  {g.alarm ? " · pomiar poza normą" : ""}
+                </span>
+              </span>
+              <span
+                className={`font-['Archivo'] font-extrabold text-[15px] tabular-nums ${
+                  g.zostalo === 0 ? "text-[#6E6E66]" : "text-[#171714]"
+                }`}
+              >
+                {g.done}/{g.total}
+              </span>
+              {zwiniete ? (
+                <ChevronRight size={18} className="text-[#8F8E86]" />
+              ) : otwarty ? (
+                <ChevronUp size={18} className="text-[#8F8E86]" />
+              ) : (
+                <ChevronDown size={18} className="text-[#8F8E86]" />
+              )}
+            </button>
+            <div className="px-3.5 pb-3">
+              <div className="h-2 rounded-full bg-[#E7E7E2] overflow-hidden">
+                <div
+                  className="h-full bg-[#DE3A22]"
+                  style={{ width: `${g.total ? (g.done / g.total) * 100 : 0}%` }}
+                />
+              </div>
+            </div>
+            {otwarty && <div className="px-3.5 pb-3.5">{renderTaskChecklist(g.items)}</div>}
+          </div>
+        );
+      })}
+      {pomiarZadania && (
+        <ModalWpisu
+          szablon={{
+            nazwa: pomiarZadania.item.task.title,
+            typ: pomiarZadania.item.task.typ || "inne",
+            klucz: kluczWpisuZadania(pomiarZadania.item.task),
+            pola: pomiarZadania.item.pola,
+          }}
+          wartosciStartowe={
+            pomiarZadania.poprawka && pomiarZadania.item.wpis
+              ? { ...(pomiarZadania.item.wpis.payload || {}) }
+              : null
+          }
+          powodWymagany={pomiarZadania.poprawka}
+          onClose={() => setPomiarZadania(null)}
+          onSave={handleZapiszPomiarZadania}
+        />
+      )}
+    </div>
+    );
+  };
 
   // ---- fragmenty UI wspólne dla kilku ekranów ----
   const renderShiftInProgress = () => {
@@ -1166,7 +1385,7 @@ export const EmployeeSessionScreens = ({
                 />
               ))}
             </div>
-            <div className="mt-3">{renderTaskChecklist(myChecklistOwn)}</div>
+            <div className="mt-3">{renderBlockCards(myBlocksOwn)}</div>
             {myChecklistOwn.some((i) => !i.done) && (
               <div className="bg-[#FBEAE6] border-l-4 border-[#DE3A22] text-[#8A3A2B] text-sm p-3.5 rounded-sm mt-3.5">
                 Zostały {myChecklistOwn.filter((i) => !i.done).length}{" "}
@@ -1520,7 +1739,9 @@ export const EmployeeSessionScreens = ({
                   </span>
                 </div>
                 <div className={ruleSoftCls} />
-                <div className="mt-3">{renderTaskChecklist(myChecklistOwn)}</div>
+                <div className="mt-3">
+                  {renderBlockCards(myBlocksOwn, { zwiniete: true })}
+                </div>
               </>
             )}
             <div className="flex-1" />
@@ -2192,7 +2413,7 @@ export const EmployeeSessionScreens = ({
   // EKRAN: ZADANIA (Roadmap p.2)
   // ==========================================
   if (screen === "ZADANIA") {
-    const taskList = taskViewMode === "all" ? myChecklistAll : myChecklistOwn;
+    const grupyZadan = taskViewMode === "all" ? myBlocksAll : myBlocksOwn;
     return (
       <Shell
         screen={screen}
@@ -2244,13 +2465,13 @@ export const EmployeeSessionScreens = ({
             Wszystkie
           </button>
         </div>
-        {taskList.length === 0 && (
+        {grupyZadan.length === 0 && (
           <div className="text-center py-10 text-[#8F8E86]">
             <ClipboardCheck className="mx-auto mb-2 opacity-40" size={40} />
             Brak zadań na dziś.
           </div>
         )}
-        {renderTaskChecklist(taskList)}
+        {renderBlockCards(grupyZadan)}
       </Shell>
     );
   }

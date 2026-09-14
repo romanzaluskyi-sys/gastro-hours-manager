@@ -18,7 +18,20 @@ import {
   timeToMin,
   minToTime,
 } from "./grafik";
-import { isTaskDueOn, findSharedCompletion, parseDaysOfWeek } from "./tasks";
+import { zadaniaNaDzien, findSharedCompletion, parseDaysOfWeek } from "./tasks";
+import {
+  TYPY_POLA,
+  slugKlucza,
+  polaSzablonu,
+  opisNormy,
+  wartoscPolaTekst,
+  pozaNormaPola,
+} from "./pola";
+
+// Definicja pól wpisu jest wspólna z zadaniami z pomiarem (utils/pola.ts) —
+// re-eksport, żeby dotychczasowe importy z tego pliku dalej działały.
+export { TYPY_POLA, slugKlucza, polaSzablonu, opisNormy };
+export const wartoscPola = wartoscPolaTekst;
 
 // Każda z tych funkcji dostaje stan i jego setter z góry, przez cztery
 // poziomy propsów (App -> ManagerDashboard -> KartaDnia -> PulsSzablony).
@@ -88,48 +101,12 @@ export const szablonyNaDzien = (templates, lokal, dateStr) => {
     .sort((a, b) => (a.kolejnosc || 0) - (b.kolejnosc || 0));
 };
 
-export const polaSzablonu = (szablon) => {
-  try {
-    const p = typeof szablon.pola === "string" ? JSON.parse(szablon.pola) : szablon.pola;
-    return Array.isArray(p) ? p : [];
-  } catch {
-    return [];
-  }
-};
-
-// Wartość poza normą z definicji szablonu (min/max) — lodówka na 12 °C ma się
-// rzucać w oczy, a nie leżeć w tabeli jako zwykła liczba.
+// Wartość poza normą z definicji szablonu — sprawdzenie żyje w utils/pola.ts,
+// bo tak samo działa dla pól zadania z pomiarem.
 export const pozaNorma = (szablon, payload) =>
-  polaSzablonu(szablon).some((pole) => {
-    const v = payload && payload[pole.klucz];
-    if (v === "" || v == null || pole.typ !== "number") return false;
-    const n = Number(v);
-    if (Number.isNaN(n)) return false;
-    return (pole.min != null && n < pole.min) || (pole.max != null && n > pole.max);
-  });
-
-// Podpis normy pod nazwą wpisu. Sam myślnik ("–4 °C") czytał się jak liczba
-// ujemna, gdy zdefiniowano tylko górną granicę.
-export const opisNormy = (pole) => {
-  const j = pole.jednostka || "";
-  // Przy wartościach ujemnych "-25–-18" jest nieczytelne — myślnik zlewa się
-  // z minusem. Wtedy piszemy słowami.
-  if (pole.min != null && pole.max != null)
-    return pole.min < 0 || pole.max < 0
-      ? `od ${pole.min}${j} do ${pole.max}${j}`
-      : `${pole.min}–${pole.max}${j}`;
-  if (pole.max != null) return `do ${pole.max}${j}`;
-  if (pole.min != null) return `od ${pole.min}${j}`;
-  return "";
-};
+  pozaNormaPola(polaSzablonu(szablon), payload);
 
 // --- SZABLONY WPISÓW ----------------------------------------------------
-
-export const TYPY_POLA = [
-  { key: "number", label: "Liczba" },
-  { key: "text", label: "Tekst" },
-  { key: "bool", label: "Tak / nie" },
-];
 
 // Gotowy zestaw startowy. Wpisanie sześciu pozycji ręcznie dla każdego lokalu
 // to dokładnie ta praca, przez którą wdrożenie u nowego klienta rozciąga się
@@ -190,18 +167,6 @@ export const SZABLONY_STARTOWE = [
   },
 ];
 
-// Klucz pola robimy z etykiety, żeby kierownik nigdy go nie widział ani nie
-// wymyślał. Musi być stabilny — po nim czytamy wartości z payloadu.
-export const slugKlucza = (tekst) => {
-  const zamiany = { ą: "a", ć: "c", ę: "e", ł: "l", ń: "n", ó: "o", ś: "s", ź: "z", ż: "z" };
-  return (tekst || "")
-    .toLowerCase()
-    .replace(/[ąćęłńóśźż]/g, (z) => zamiany[z])
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .slice(0, 40) || "pole";
-};
-
 export const zapiszSzablon = async ({ szablon, lokal, templates, setTemplates }) => {
   wymagajSettera(setTemplates, "setDayLogTemplates");
   const dane = {
@@ -232,13 +197,6 @@ export const archiwizujSzablon = async ({ szablon, templates, setTemplates }) =>
   const zapisany = await api.patch("day_log_templates", szablon.id, { archived: true });
   setTemplates((templates || []).map((s) => (s.id === szablon.id ? zapisany : s)));
   return zapisany;
-};
-
-export const wartoscPola = (pole, payload) => {
-  const v = payload ? payload[pole.klucz] : undefined;
-  if (v === "" || v == null) return "—";
-  if (pole.typ === "bool") return v === true || v === "true" ? "tak" : "nie";
-  return `${v}${pole.jednostka || ""}`;
 };
 
 // Zamknięta lista — po powodach będziemy filtrować i liczyć, więc wolny tekst
@@ -316,6 +274,7 @@ export const autoPodsumowanie = ({
   planShifts,
   users,
   tasks,
+  taskBlocks,
   taskCompletions,
   staffingRules,
   staffingRuleSets,
@@ -372,13 +331,16 @@ export const autoPodsumowanie = ({
     return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   };
 
-  const zadaniaDnia = (tasks || []).filter(
-    (t) =>
-      t.lokal === lokal &&
-      t.active &&
-      !t.archived &&
-      isTaskDueOn(t, taskCompletions, dateStr)
-  );
+  // Co było dziś do zrobienia — liczy to blokami utils/tasks.ts, jedyne
+  // miejsce znające rozkład (od 0.37.0 siedzi on na bloku, nie na zadaniu).
+  const zadaniaDnia = zadaniaNaDzien({
+    tasks,
+    blocks: taskBlocks,
+    completions: taskCompletions,
+    lokal,
+    dateStr,
+    forManager: null,
+  }).map((i) => i.task);
   const zrobione = zadaniaDnia.filter((t) =>
     findSharedCompletion(taskCompletions, t.id, dateStr)
   ).length;
@@ -550,12 +512,12 @@ export const prognozaUtargu = (dayLogs, lokal, dateStr) => {
 // Wiersz listy dni. Pomijamy kontrolę obsady — dla dnia, który już był, nie
 // zmienia decyzji kierownika, a liczy się najdrożej z całego podsumowania.
 export const wierszDnia = ({
-  shifts, planShifts, users, tasks, taskCompletions,
+  shifts, planShifts, users, tasks, taskBlocks, taskCompletions,
   dayLogs, dayLogEntries, dayLogTemplates, weatherForecasts,
   lokal, miasto, dateStr,
 }) => {
   const auto = autoPodsumowanie({
-    shifts, planShifts, users, tasks, taskCompletions,
+    shifts, planShifts, users, tasks, taskBlocks, taskCompletions,
     staffingRules: [], staffingRuleSets: [], grafikWyjatki: [],
     lokal, dateStr,
   });

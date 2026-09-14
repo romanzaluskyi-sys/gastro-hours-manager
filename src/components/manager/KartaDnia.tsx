@@ -64,6 +64,8 @@ import {
   poprawZamknietyDzien,
 } from "../../utils/dziennik";
 import { kontekstDnia, kontekstKrotko } from "../../utils/kalendarz";
+import { czyWpisZadania, zadanieWpisu, polaZadania } from "../../utils/tasks";
+import { pozaNormaPola } from "../../utils/pola";
 import ZdarzenieModal from "./ZdarzenieModal";
 import ModalWpisu from "./ModalWpisu";
 
@@ -76,7 +78,7 @@ const znak = (n, j = "") =>
 
 export default function KartaDnia({
   currentUser, lokal, lokalRow, miasto, dzis,
-  shifts, planShifts, users, tasks, taskCompletions,
+  shifts, planShifts, users, tasks, taskBlocks, taskCompletions,
   staffingRules, staffingRuleSets, grafikWyjatki,
   karty, wpisy: wszystkieWpisy, szablony: wszystkieSzablony, weatherForecasts,
   setKarty, setWpisy, odswiez, showMsg,
@@ -107,11 +109,11 @@ export default function KartaDnia({
   const auto = useMemo(
     () =>
       autoPodsumowanie({
-        shifts, planShifts, users, tasks, taskCompletions,
+        shifts, planShifts, users, tasks, taskBlocks, taskCompletions,
         staffingRules, staffingRuleSets, grafikWyjatki,
         lokal, dateStr: data,
       }),
-    [shifts, planShifts, users, tasks, taskCompletions, staffingRules, staffingRuleSets, grafikWyjatki, lokal, data]
+    [shifts, planShifts, users, tasks, taskBlocks, taskCompletions, staffingRules, staffingRuleSets, grafikWyjatki, lokal, data]
   );
 
   const fakt = prognozaNaDzien(weatherForecasts, miasto, data, 0);
@@ -568,6 +570,55 @@ export default function KartaDnia({
           </div>
         </div>
       </div>
+
+      {wpisy.filter((w) => czyWpisZadania(w)).length > 0 && (
+        <div className={sectionCardCls}>
+          <div className={sectionHeaderCls}>Z checklisty</div>
+          {wpisy
+            .filter((w) => czyWpisZadania(w))
+            .map((w) => {
+              // Pomiar zebrany przez zadanie z blokiem — ta sama wartość co w
+              // dzienniku, tylko wpisana w trakcie zmiany, a nie przy zamknięciu
+              // dnia. Pozycje podpięte pod szablon Pulsu stoją wyżej, w liście
+              // wymaganych wpisów, i nie powtarzają się tutaj.
+              const zad = zadanieWpisu(w, tasks);
+              const pola = zad ? polaZadania(zad, wszystkieSzablony) : [];
+              const alarm = pozaNormaPola(pola, w.payload || {});
+              return (
+                <div
+                  key={w.id}
+                  className="px-4 py-3 border-b-[2px] border-[#171714] last:border-b-0 flex flex-wrap items-center gap-x-3 gap-y-1"
+                >
+                  <span className="text-[15px] font-semibold">
+                    {zad ? zad.title : "Pomiar z zadania"}
+                  </span>
+                  <span
+                    className={`text-[15px] tabular-nums ${
+                      alarm ? "font-bold" : "text-[#171714]"
+                    }`}
+                    style={alarm ? { color: COLORS.accent } : undefined}
+                  >
+                    {pola.length
+                      ? pola.map((pole) => wartoscPola(pole, w.payload || {})).join(" · ")
+                      : "—"}
+                  </span>
+                  {alarm && (
+                    <span
+                      className="text-[11px] font-bold uppercase tracking-wider rounded px-2 py-0.5 text-white"
+                      style={{ backgroundColor: COLORS.accent }}
+                    >
+                      poza normą
+                    </span>
+                  )}
+                  <span className="text-[12px] text-[#6E6E66] ml-auto">
+                    {w.recorded_by || "?"}
+                    {w.recorded_at ? " · " + String(w.recorded_at).slice(11, 16) : ""}
+                  </span>
+                </div>
+              );
+            })}
+        </div>
+      )}
 
       {wpisy.filter((w) => !w.template_key).length > 0 && (
         <div className={sectionCardCls}>
