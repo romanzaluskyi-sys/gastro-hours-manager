@@ -27,6 +27,7 @@ const CHANGELOG = [
     date: "2026-09-14",
     items: [
       "Zadania układają się w bloki — checklisty typu „Otwarcie lokalu\" czy „Bezpieczeństwo żywności\". Porę, dni tygodnia i stanowiska ustawia się raz dla całego bloku.",
+      "W jednym bloku zadania mogą się zmieniać dniami tygodnia — okap w poniedziałek, lodówka w środę. Blok jest nadrzędny: dni zadania tylko zawężają dni bloku.",
       "Zadanie może prosić o wpisanie wartości (temperatura, kwota, tak/nie) z normą — wpis trafia do dziennika dnia w Pulsie.",
       "Zadanie podpięte pod pozycję z konfiguracji Pulsu zamyka ją na karcie dnia, więc nikt nie mierzy tego samego dwa razy.",
       "Pomiaru nie da się odznaczyć — da się go poprawić, a przy wartości widać „poprawione: było X, powód\" (także w Pulsie).",

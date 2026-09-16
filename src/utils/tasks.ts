@@ -14,13 +14,20 @@
 //             (lista stanowisk; puste = wszyscy na zmianie)
 //   zadanie = jeden wiersz checklisty: tytuł, opcjonalny opis/procedura,
 //             opcjonalne POLA do wpisania (temperatura, kwota, tak/nie),
-//             opcjonalny WŁASNY cykl ("okna co 7 dni" w codziennym bloku)
+//             opcjonalny WŁASNY cykl ("okna co 7 dni" w codziennym bloku) i
+//             opcjonalne WŁASNE DNI ("okap w poniedziałki" w bloku pon–pt)
 //
 // ⚠️ Rozkład i adresat mieszkają TYLKO na bloku. Kolumny tasks.schedule_type /
 // days_of_week / stanowisko / for_manager zostały w bazie z danymi (migracja
 // 0019 przepisała je na bloki), ale kod ich NIE czyta — dwa źródła odpowiedzi
-// na to samo pytanie to gwarantowany rozjazd. Jedyne, co zostało na zadaniu z
-// harmonogramu, to `cycle_days`: cykl WEWNĄTRZ bloku.
+// na to samo pytanie to gwarantowany rozjazd. Na zadaniu zostały tylko dwa
+// ZAWĘŻENIA wewnątrz bloku: `cycle_days` (co ile dni) i
+// `days_of_week` (które dni z dni bloku).
+//
+// ⚠️ BLOK JEST WAŻNIEJSZY (ustalenie właściciela). Dni zadania mogą zbiór dni
+// bloku tylko ZAWĘZIĆ, nigdy rozszerzyć: zadanie z sobotą w bloku pon–pt nie
+// pokaże się w sobotę. Inaczej "kiedy ten blok jest" przestałoby mieć
+// odpowiedź, bo każde zadanie mogłoby ją unieważnić.
 //
 // ⚠️ Wykonanie jest ZAWSZE wspólne, jeden wiersz na (zadanie, dzień) —
 // findSharedCompletion, bez wyjątków. Pierwsza wersja (2026-09-02/03) miała
@@ -75,11 +82,23 @@ export const PORY_BLOKU = [
 export const DNI_SKROT = ["Nd", "Pon", "Wt", "Śr", "Czw", "Pt", "Sob"];
 
 // Podpis dni tylko wtedy, gdy są faktycznie ograniczone — "codziennie" nie
-// potrzebuje etykiety.
-export const dniBlokuLabel = (blok) => {
-  const dni = parseDaysOfWeek(blok);
+// potrzebuje etykiety. Ta sama funkcja dla bloku i dla zadania: oba trzymają
+// dni w tym samym formacie, tylko znaczą co innego (blok — kiedy w ogóle jest,
+// zadanie — które z dni bloku).
+export const dniBlokuLabel = (obiekt) => {
+  const dni = parseDaysOfWeek(obiekt);
   if (!dni || dni.length === 7) return null;
   return dni.map((i) => DNI_SKROT[i]).join(", ");
+};
+
+// Dni, w których ta pozycja faktycznie się pokaże: przecięcie dni zadania z
+// dniami bloku. Puste przecięcie znaczy, że zadanie nie pokaże się NIGDY — i
+// to jest jedyna sytuacja, o której trzeba kierownikowi powiedzieć wprost.
+export const dniSkuteczne = (task, blok) => {
+  const dniBloku = parseDaysOfWeek(blok) || [0, 1, 2, 3, 4, 5, 6];
+  const dniZadania = parseDaysOfWeek(task);
+  if (!dniZadania) return dniBloku;
+  return dniBloku.filter((d) => dniZadania.includes(d));
 };
 
 export const poraLabel = (key) =>
@@ -356,7 +375,15 @@ export const blokiNaDzien = ({
     .map((blok) => {
       const zadania = zadaniaBloku(wszystkie, blok);
       if (!isBlockDueOn(blok, zadania, completions, dateStr)) return null;
+      const dow = getDayOfWeekIndex(dateStr);
       const items = zadania
+        // Własne dni zadania ZAWĘŻAJĄ dni bloku — blok już przepuścił ten
+        // dzień, więc tu zostaje tylko pytanie, czy ta konkretna pozycja
+        // wypada właśnie dziś. Brak dni = wszystkie dni bloku.
+        .filter((t) => {
+          const dni = parseDaysOfWeek(t);
+          return !dni || dni.includes(dow);
+        })
         .filter((t) => !t.cycle_days || isCyclicalDueOn(t, completions, dateStr))
         .map((task) => {
           const completion = findSharedCompletion(completions, task.id, dateStr);
@@ -516,11 +543,20 @@ export const zapiszZadanie = async (zadanie) => {
     priority: zadanie.priority || "sredni",
     deadline_time: zadanie.deadline_time || null,
     cycle_days: zadanie.cycle_days ? Number(zadanie.cycle_days) : null,
+    // Puste albo pełny tydzień = "wszystkie dni bloku". Nie zapisujemy 7/7 jako
+    // listy, bo wtedy późniejsza zmiana dni bloku nie miałaby jak się przełożyć
+    // na zadania (ta sama zasada co null w blokach).
+    days_of_week:
+      Array.isArray(zadanie.days_of_week) &&
+      zadanie.days_of_week.length > 0 &&
+      zadanie.days_of_week.length < 7
+        ? [...zadanie.days_of_week].sort().join(",")
+        : null,
     kolejnosc: zadanie.kolejnosc ?? 0,
     pola: zadanie.template_key ? [] : zadanie.pola || [],
     typ: (zadanie.pola || []).length || zadanie.template_key ? zadanie.typ || "inne" : null,
     template_key: zadanie.template_key || null,
-    // Stare kolumny rozkładu zostają puste — rozkład mieszka na bloku.
+    // Pora i adresat mieszkają na bloku — te kolumny zostają martwe.
     schedule_type: "ogolne",
     for_manager: !!zadanie.for_manager,
   };

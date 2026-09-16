@@ -798,6 +798,7 @@ powtórzonymi dniami tygodnia — osiem miejsc, w których można się pomylić,
 blok    = KIEDY (pora + dni tygodnia, ewentualnie cykl) i DLA KOGO (stanowiska)
 zadanie = jeden wiersz checklisty: tytuł, opcjonalny opis/procedura,
           opcjonalne POLA do wpisania, opcjonalny WŁASNY cykl
+          i opcjonalne WŁASNE DNI (które z dni bloku)
 ```
 
 Cała logika żyje w [`utils/tasks.ts`](src/utils/tasks.ts) — wołają ją
@@ -807,13 +808,30 @@ Cała logika żyje w [`utils/tasks.ts`](src/utils/tasks.ts) — wołają ją
 (Tablet Służbowy, tablet z PIN-em, prywatny telefon — jeden kod, trzy
 powierzchnie). Nie duplikuj tego w komponentach.
 
-⚠️ **Rozkład i adresat mieszkają TYLKO na bloku.** Kolumny
-`tasks.schedule_type` / `days_of_week` / `stanowisko` / `for_manager` zostały w
-bazie z danymi (migracja `0019` przepisała je na bloki), ale kod ich NIE czyta —
-dwa źródła odpowiedzi na to samo pytanie to gwarantowany rozjazd. Jedyne, co
-zostało na zadaniu z harmonogramu, to `cycle_days`: cykl WEWNĄTRZ bloku („okna
-raz na 7 dni" w codziennym bloku). Bloki są kategoriami, zadania podzadaniami —
-lokal ustawia je raz pod swój proces i zmienia wyjątkowo.
+⚠️ **Pora i adresat mieszkają TYLKO na bloku.** Kolumny `tasks.schedule_type` /
+`stanowisko` / `for_manager` / `day_of_week` zostały w bazie z danymi (migracja
+`0019` przepisała je na bloki), ale kod ich NIE czyta — dwa źródła odpowiedzi na
+to samo pytanie to gwarantowany rozjazd. Na zadaniu żyją tylko dwa ZAWĘŻENIA
+wewnątrz bloku: `cycle_days` (co ile dni) i `days_of_week` (które z dni bloku).
+Bloki są kategoriami, zadania podzadaniami — lokal ustawia je raz pod swój
+proces i zmienia wyjątkowo.
+
+⚠️ **BLOK JEST WAŻNIEJSZY** (ustalenie właściciela). Dni zadania mogą zbiór dni
+bloku tylko ZAWĘZIĆ, nigdy rozszerzyć: zadanie z sobotą w bloku pon–pt nie
+pokaże się w sobotę. Inaczej „kiedy ten blok jest" przestałoby mieć odpowiedź,
+bo każde zadanie mogłoby ją unieważnić. W formularzu dni spoza bloku są
+WYŁĄCZONE (nie ukryte) — hierarchia ma być widoczna, a konfiguracji, która
+nigdy nie zadziała, nie da się zapisać (`dniSkuteczne()` liczy przecięcie i
+blokuje zapis przy pustym). Po co to w ogóle: jeden blok „Mycie i dezynfekcja"
+stoi cały tydzień, ale w poniedziałek myje się okap, a w środę lodówkę —
+wcześniej wymagało to dwóch bloków o tej samej nazwie, czyli dokładnie tego
+rozdrabniania, przed którym bloki miały chronić.
+
+⚠️ **`tasks.days_of_week` zmieniło znaczenie w migracji `0020`.** Do 0019
+trzymało rozkład zadania (przeniesiony potem na blok i zostawiony jako martwa
+kopia), od 0020 znaczy „które dni z dni bloku", a puste = wszystkie dni bloku.
+Migracja czyści stare kopie — bez tego kierownik przestawiłby dni bloku na
+weekend, a zadania po cichu by zniknęły, bo wciąż miałyby w sobie „pon–pt".
 
 ⚠️ **Nazwa „blok" jest w tym repo zajęta dwa razy.** `lokale.dostepne_bloki` to
 BLOKI INTERFEJSU widoczne na prywatnym telefonie (`WPISY`, `RAPORT`, `ZADANIA`…)
@@ -876,8 +894,8 @@ pasek postępu i pozycje z wartościami pomiaru oraz „Popraw".
 układ co Konfiguracja w Grafiku i w Pulsie) — bloki z zadaniami, kolejność
 strzałkami (w projekcie nie ma biblioteki drag-and-drop i nie dokładaj jej),
 archiwizacja zamiast kasowania. Formularz zadania: tytuł, opis/procedura,
-priorytet, termin, własny cykl i „Co zapisujemy przy wykonaniu" (bez pomiaru /
-pozycja z Pulsu / własne pola).
+priorytet, termin, własny cykl, dni tygodnia (z wyłączonymi dniami spoza bloku)
+i „Co zapisujemy przy wykonaniu" (bez pomiaru / pozycja z Pulsu / własne pola).
 
 **`BLOKI_STARTOWE`** w `utils/tasks.ts` — sześć gotowych bloków (Otwarcie,
 HACCP, Mycie i dezynfekcja, Zamknięcie, Sala i goście, Kontrola kierownika) z
@@ -917,11 +935,16 @@ ma. `renderBlockCards(grupy, { zwiniete })` rysuje karty bloków,
   bloku**; cykl zadania — od ostatniego wykonania tego zadania. Oba od
   FAKTYCZNEGO wykonania, nie od kotwicy w kalendarzu, więc pominięty cykl
   zostaje zaległy zamiast po cichu przeskoczyć.
+- ⚠️ Dni zadania wczytywane do formularza mają tę samą pułapkę co dni bloku:
+  `null` znaczy „wszystkie dni bloku" i musi wrócić jako PEŁNY tydzień, inaczej
+  wejście w edycję po cichu odznaczy wszystko, a zapis zawęzi zadanie do
+  niczego. Zapis robi drogę powrotną: 7/7 zapisuje jako `null`, żeby zadanie
+  dalej szło za blokiem, gdy ktoś zmieni dni bloku.
 - `utils/pola.ts` trzyma definicję pól wspólną dla dziennika i dla zadań —
   osobny plik, bo `utils/dziennik.ts` importuje z `utils/tasks.ts` i sięgnięcie w
   drugą stronę zrobiłoby cykl importów.
 - `harness-zadania.html` sprawdza całą arytmetykę bloków na ręcznie policzonych
-  przykładach (38 przypadków). Dokładając logikę, dopisz przypadek zamiast
+  przykładach (47 przypadków, w tym dziewięć na dni zadania wewnątrz bloku). Dokładając logikę, dopisz przypadek zamiast
   zgadywać.
 - **Sprzątanie jako osobny, rozbudowany proces HACCP** (sprzęt jako encja, logi
   temperatur per urządzenie, oceny jakości) **wciąż jest świadomie ODŁOŻONE** —
@@ -1124,8 +1147,8 @@ zakresem — wymaga Grafiku, którego nie ma.
   schedule_type (text: 'poranne'|'obiadowe'|'wieczorne'|'ogolne'|
   'cykliczne'), cycle_days (int, null — od 0.37.0 WŁASNY cykl zadania
   wewnątrz bloku, jedyna pozostałość rozkładu na zadaniu), day_of_week
-  (int, null — MARTWE), days_of_week (text, null — MARTWE od 0.37.0,
-  rozkład siedzi na bloku),
+  (int, null — MARTWE), days_of_week (text, null — od migracji 0020 KTÓRE DNI Z DNI BLOKU,
+  puste = wszystkie; NIE mylić ze starym znaczeniem sprzed 0019),
   scope (text: 'lokal'|'pracownik', default 'lokal' — NIEUŻYWANE w
   logice od 2026-09-04, zostaje w bazie z automatycznym defaultem, nie
   czytaj/nie pisz go, patrz "Zadania — bloki i pomiary" wyżej), stanowisko
@@ -1146,9 +1169,8 @@ zakresem — wymaga Grafiku, którego nie ma.
   gdy ustawione, zadanie zbiera pozycję z konfiguracji Pulsu o tym kluczu:
   pola biorą się z szablonu, a wpis dostaje ten sam template_key, więc
   karta dnia nie prosi o nią drugi raz)`.
-  ⚠️ `schedule_type`, `days_of_week`, `day_of_week`, `stanowisko`,
-  `for_manager`, `scope`, `owner_label` — kolumny z danymi, których kod
-  NIE czyta. RLS: otwarta polityka, jak reszta.
+  ⚠️ `schedule_type`, `day_of_week`, `stanowisko`, `for_manager`, `scope`,
+  `owner_label` — kolumny z danymi, których kod NIE czyta. RLS: otwarta polityka, jak reszta.
 - **task_completions** — log wykonań zadań, patrz "Zadania — bloki i pomiary"
   wyżej. `id (bigint identity), task_id (text — luźne odwołanie do
   tasks.id, bez FK, ten sam wzorzec co shift_edits), date (date), user_id

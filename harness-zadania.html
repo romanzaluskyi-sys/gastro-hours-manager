@@ -120,6 +120,44 @@ const sprawdz = (nazwa, warunek, szczegol = "") => {
       !!otwarcie(PN, zadanieCoTydzien), "blok ma zostać, bo ma drugie zadanie");
 
     log("");
+    log("— dni zadania wewnątrz bloku —");
+    // Jeden blok "Mycie", ale okap w poniedziałki, a lodówka w środy.
+    const blokMycie = { id: "bm", lokal: "L", nazwa: "Mycie", schedule_type: "wieczorne",
+      days_of_week: "1,2,3,4,5" };
+    const okap = z("m1", "bm", { days_of_week: "1" });        // tylko poniedziałek
+    const lodowka = z("m2", "bm", { days_of_week: "3" });     // tylko środa
+    const podloga = z("m3", "bm");                            // wszystkie dni bloku
+    const sobotni = z("m4", "bm", { days_of_week: "6" });     // sobota — blok jej nie ma
+    const mycieBloki = [blokMycie];
+    const mycieZadania = [okap, lodowka, podloga, sobotni];
+    const mycieDnia = (dateStr) => {
+      const g = T.blokiNaDzien({
+        tasks: mycieZadania, blocks: mycieBloki, completions: [], entries: [], templates: [],
+        lokal: "L", dateStr, tryb: "all", forManager: false,
+      })[0];
+      return g ? g.items.map((i) => i.task.id) : [];
+    };
+    sprawdz("w poniedziałek okap i podłoga",
+      JSON.stringify(mycieDnia(PN)) === JSON.stringify(["m1", "m3"]), JSON.stringify(mycieDnia(PN)));
+    sprawdz("w środę lodówka i podłoga",
+      JSON.stringify(mycieDnia("2026-09-16")) === JSON.stringify(["m2", "m3"]),
+      JSON.stringify(mycieDnia("2026-09-16")));
+    sprawdz("zadanie bez dni idzie za blokiem", mycieDnia(PN).includes("m3"));
+    sprawdz("BLOK JEST WAŻNIEJSZY: sobotnie zadanie nie wychodzi w sobotę",
+      mycieDnia(SO).length === 0, "blok ma tylko pn–pt, więc w sobotę nie ma nic");
+    sprawdz("dni zadania nie rozszerzają dni bloku",
+      !mycieDnia(ND).includes("m4"));
+    sprawdz("przecięcie dni liczone wprost",
+      JSON.stringify(T.dniSkuteczne(okap, blokMycie)) === JSON.stringify([1]));
+    sprawdz("puste przecięcie widać jako brak dni",
+      T.dniSkuteczne(sobotni, blokMycie).length === 0,
+      "to jedyny przypadek, o którym trzeba powiedzieć kierownikowi wprost");
+    sprawdz("zadanie bez własnych dni dziedziczy cały zbiór bloku",
+      JSON.stringify(T.dniSkuteczne(podloga, blokMycie)) === JSON.stringify([1, 2, 3, 4, 5]));
+    sprawdz("etykieta dni działa tak samo dla zadania co dla bloku",
+      T.dniBlokuLabel(okap) === "Pon");
+
+    log("");
     log("— dla kogo —");
     sprawdz("blok Kucharza widzi kucharz",
       nazwy(dnia(PN, { tryb: "own", stanowisko: "Kucharz" })).includes("Kuchnia"));

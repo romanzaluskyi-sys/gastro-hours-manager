@@ -22,6 +22,8 @@ import {
   polaZadania,
   PORY_BLOKU,
   dniBlokuLabel,
+  dniSkuteczne,
+  parseDaysOfWeek,
 } from "../../utils/tasks";
 import { TYPY_POLA, slugKlucza, opisNormy } from "../../utils/pola";
 import { TYPY_WPISU } from "../../utils/dziennik";
@@ -55,11 +57,15 @@ const pustyBlok = (lokal) => ({
 const pusteZadanie = (blok) => ({
   lokal: blok.lokal,
   block_id: blok.id,
+  blok,
   title: "",
   description: "",
   priority: "sredni",
   deadline_time: "",
   cycle_days: "",
+  // Domyślnie pełny tydzień = "wszystkie dni bloku". Zapis i tak zamienia 7/7
+  // na null, więc zadanie idzie za blokiem, dopóki ktoś go nie zawęzi.
+  days_of_week: [...WSZYSTKIE_DNI],
   typ: "temperatura",
   template_key: "",
   pomiarTryb: "brak", // brak | szablon | wlasne
@@ -178,6 +184,21 @@ export default function ZadaniaKonfiguracja({
     if (zadanieForm.pomiarTryb === "szablon" && !zadanieForm.template_key) {
       return showMsg("Wybierz pozycję z konfiguracji Pulsu.", "error");
     }
+    // Puste przecięcie dni zadania i dni bloku znaczy, że pozycja nie pokaże
+    // się nigdy. Zapis bez ostrzeżenia wyglądałby na udany.
+    if (
+      zadanieForm.days_of_week.length > 0 &&
+      zadanieForm.days_of_week.length < 7 &&
+      dniSkuteczne(
+        { days_of_week: zadanieForm.days_of_week.join(",") },
+        zadanieForm.blok || {}
+      ).length === 0
+    ) {
+      return showMsg(
+        "Przy tych dniach zadanie nie pokazałoby się nigdy — blok obejmuje inne dni.",
+        "error"
+      );
+    }
     // Przy pozycji z Pulsu typ wpisu bierzemy z SZABLONU — inaczej ten sam
     // pomiar trafiałby do dziennika raz jako 'temperatura', raz jako to, co
     // akurat zostało w formularzu.
@@ -262,6 +283,14 @@ export default function ZadaniaKonfiguracja({
         : [...f.days_of_week, d].sort(),
     }));
 
+  const przelaczDzienZadania = (d) =>
+    setZadanieForm((f) => ({
+      ...f,
+      days_of_week: f.days_of_week.includes(d)
+        ? f.days_of_week.filter((x) => x !== d)
+        : [...f.days_of_week, d].sort(),
+    }));
+
   const przelaczStanowisko = (nazwa) =>
     setBlokForm((f) => ({
       ...f,
@@ -292,6 +321,13 @@ export default function ZadaniaKonfiguracja({
       description: t.description || "",
       deadline_time: t.deadline_time ? t.deadline_time.slice(0, 5) : "",
       cycle_days: t.cycle_days || "",
+      blok,
+      // ⚠️ null znaczy "wszystkie dni bloku" — do formularza musi wrócić jako
+      // PEŁNY tydzień, inaczej wejście w edycję po cichu odznaczyłoby wszystko,
+      // a zapis zawęziłby zadanie do niczego (ta sama pułapka co przy blokach).
+      days_of_week: t.days_of_week
+        ? String(t.days_of_week).split(",").map(Number)
+        : [...WSZYSTKIE_DNI],
       template_key: t.template_key || "",
       typ: t.typ || "temperatura",
       pomiarTryb: t.template_key ? "szablon" : pola.length ? "wlasne" : "brak",
@@ -585,6 +621,7 @@ export default function ZadaniaKonfiguracja({
                       </div>
                     )}
                     <div className="text-[12px] text-[#8F8E86] mt-0.5 flex flex-wrap gap-x-2">
+                      {dniBlokuLabel(t) && <span>tylko {dniBlokuLabel(t)}</span>}
                       {t.cycle_days && <span>co {t.cycle_days} dni</span>}
                       {t.deadline_time && <span>do {t.deadline_time.slice(0, 5)}</span>}
                       {t.priority === "wysoki" && <span>ważne</span>}
@@ -695,6 +732,61 @@ export default function ZadaniaKonfiguracja({
                   />
                 </div>
               </div>
+
+              {(() => {
+                // Dni, których nie ma blok, są WYŁĄCZONE — blok jest ważniejszy,
+                // więc zaznaczenie soboty w bloku pon–pt nic by nie dało, a
+                // wyglądałoby na ustawione. Lepiej pokazać hierarchię wprost niż
+                // pozwolić zapisać konfigurację, która nigdy nie zadziała.
+                const blokForm = zadanieForm.blok || {};
+                const dniBloku = parseDaysOfWeek(blokForm) || WSZYSTKIE_DNI;
+                const zawezone = zadanieForm.days_of_week.length < 7;
+                const skuteczne = dniSkuteczne(
+                  { days_of_week: zawezone ? zadanieForm.days_of_week.join(",") : null },
+                  blokForm
+                );
+                return (
+                  <div>
+                    <label className={labelCls}>
+                      Dni tygodnia {zawezone ? "" : "— jak blok"}
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        className={lokalTabCls(!zawezone)}
+                        onClick={() =>
+                          setZadanieForm({ ...zadanieForm, days_of_week: [...WSZYSTKIE_DNI] })
+                        }
+                      >
+                        Jak blok
+                      </button>
+                      {DNI.map((d, i) => (
+                        <button
+                          key={d}
+                          disabled={!dniBloku.includes(i)}
+                          title={
+                            dniBloku.includes(i)
+                              ? ""
+                              : `Blok „${blokForm.nazwa || ""}" nie obejmuje tego dnia`
+                          }
+                          className={`${lokalTabCls(
+                            zawezone && zadanieForm.days_of_week.includes(i)
+                          )} ${dniBloku.includes(i) ? "" : "opacity-30 cursor-not-allowed"}`}
+                          onClick={() => dniBloku.includes(i) && przelaczDzienZadania(i)}
+                        >
+                          {d}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[12px] text-[#6E6E66] mt-1">
+                      {skuteczne.length === 0
+                        ? "Przy tym wyborze zadanie nie pokaże się w żadnym dniu."
+                        : zawezone
+                        ? `Pokaże się w: ${skuteczne.map((i) => DNI[i]).join(", ")}.`
+                        : `Idzie za blokiem: ${skuteczne.map((i) => DNI[i]).join(", ")}.`}
+                    </p>
+                  </div>
+                );
+              })()}
 
               <div>
                 <label className={labelCls}>Co zapisujemy przy wykonaniu</label>

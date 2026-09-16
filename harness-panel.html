@@ -226,8 +226,10 @@ const blokiStartowe = [
     deadline_time: "10:00", kolejnosc: 0, active: true, archived: false },
   { id: "bk2", lokal: "Bułka i Jacek", nazwa: "Bezpieczeństwo żywności", schedule_type: "ogolne",
     kolejnosc: 1, active: true, archived: false },
+  // Blok pon–pt: w formularzu zadania sobota i niedziela mają być WYŁĄCZONE,
+  // bo blok jest ważniejszy i zaznaczenie ich nic by nie dało.
   { id: "bk3", lokal: "Bułka i Jacek", nazwa: "Kuchnia — zamknięcie", schedule_type: "wieczorne",
-    stanowiska: "Kucharz", kolejnosc: 2, active: true, archived: false },
+    stanowiska: "Kucharz", days_of_week: "1,2,3,4,5", kolejnosc: 2, active: true, archived: false },
   { id: "bk4", lokal: "Bułka i Jacek", nazwa: "Mycie okapu", schedule_type: "cykliczne",
     cycle_days: 3, kolejnosc: 3, active: true, archived: false },
 ];
@@ -245,6 +247,12 @@ const zadaniaStartowe = [
     priority: "sredni", kolejnosc: 0, pola: [], active: true, archived: false },
   { id: "zt5", block_id: "bk4", lokal: "Bułka i Jacek", title: "Okap i filtry",
     priority: "niski", kolejnosc: 0, pola: [], active: true, archived: false },
+  // Jeden blok, a zadania rozjeżdżają się po dniach tygodnia: to jest ta
+  // sytuacja, dla której dni zeszły na poziom zadania.
+  { id: "zt6", block_id: "bk3", lokal: "Bułka i Jacek", title: "Mycie lodówki",
+    days_of_week: "3", priority: "sredni", kolejnosc: 1, pola: [], active: true, archived: false },
+  { id: "zt7", block_id: "bk3", lokal: "Bułka i Jacek", title: "Mycie okapu",
+    days_of_week: "1", priority: "sredni", kolejnosc: 2, pola: [], active: true, archived: false },
 ];
 // Pozycja dziennika, pod którą podpięte jest zadanie zt3 — definicja pól jest
 // TU, a nie w zadaniu.

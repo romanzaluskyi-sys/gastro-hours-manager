@@ -438,6 +438,11 @@ export default function ZadaniaISprzatanie({
                           {item.pomiar && (
                             <Thermometer size={13} className="text-[#8F8E86]" />
                           )}
+                          {dniBlokuLabel(item.task) && (
+                            <span className="text-[11px] text-[#8F8E86]">
+                              tylko {dniBlokuLabel(item.task)}
+                            </span>
+                          )}
                           {item.task.cycle_days && (
                             <span className="text-[11px] text-[#8F8E86]">
                               co {item.task.cycle_days} dni

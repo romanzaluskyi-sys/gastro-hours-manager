@@ -12,6 +12,12 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
   sprzętu", „Zamknięcie lokalu". Blok mówi, kiedy się pojawia (pora, dni
   tygodnia, ewentualnie co ile dni) i kogo dotyczy (stanowiska albo wszyscy) —
   ustawia się to raz dla całego bloku, a nie osobno przy każdym zadaniu.
+- **W jednym bloku zadania mogą się zmieniać dniami tygodnia.** Blok
+  „Mycie i dezynfekcja" stoi cały tydzień, a w poniedziałek myje się okap, w
+  środę lodówkę. Wcześniej wymagało to dwóch bloków o tej samej nazwie. Blok
+  jest nadrzędny: dni zadania mogą zawęzić dni bloku, ale nie rozszerzyć — w
+  formularzu dni spoza bloku są wyszarzone i widać, kiedy zadanie faktycznie
+  wypadnie.
 - **Zadanie może prosić o wpisanie wartości.** Temperatura lodówki, stan kasy,
   temperatura dostawy, tak/nie — z normą, więc wartość poza zakresem od razu
   świeci na czerwono. Wpis trafia do dziennika dnia w Pulsie, czyli tam, gdzie
