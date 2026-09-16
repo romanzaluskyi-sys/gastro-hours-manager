@@ -748,10 +748,12 @@ odpadają. Zamiast tego dwa pliki w katalogu głównym, uruchamiane przez
   zlecenie, konto bez żadnych danych o umowie. Powstał dla normy w Raporcie —
   każda liczba w tym bloku ma przypadek, w którym jej NIE MA, i wtedy blok ma
   zniknąć, a nie pokazać "null h";
-- `harness-zadania.html` — sprawdza arytmetykę bloków zadań: dni tygodnia, cykl
+- `harness-zadania.html` — sprawdza arytmetykę bloków zadań (dni tygodnia, cykl
   bloku i cykl zadania osobno, widoczność po stanowiskach, pola pomiaru i klucz
-  wpisu (ten, który nie pozwala powstać duplikatowi w Pulsie). To on pilnuje, że
-  `null` w dniach tygodnia dalej znaczy „codziennie";
+  wpisu, który nie pozwala powstać duplikatowi w Pulsie) ORAZ giełdy zmian (kto
+  widzi ofertę skierowaną, kto jest kandydatem przy oddaniu, a kto przy
+  zamianie, i jak liczą się godziny po obu stronach). To on pilnuje, że `null`
+  w dniach tygodnia dalej znaczy „codziennie";
 - `harness-panel.html` — montuje CAŁY `ManagerDashboard` z propsami takimi,
   jakie podaje `App.tsx`, z PODMIENIONYM `api/supabase` (nic nie leci do sieci,
   można klikać wszystko). To jedyny sprawdzian, który łapie propsy gubione
@@ -1969,6 +1971,49 @@ uzasadnieniami. Poniżej tylko to, o co najłatwiej się potknąć:
   (`planWeek.find`). Osoba wypożyczona po południu gdzie indziej wyglądała
   więc na wolną cały dzień. Dziś `gdzieIndziej` to `filter` po wszystkich
   zmianach dnia poza tym lokalem, renderowany w każdej gałęzi komórki.
+
+### 5e. Giełda zmian — trzy tryby (0.38.0)
+
+Ten sam przycisk „na giełdę", a za nim trzy drogi. Cała logika w
+[`utils/swaps.ts`](src/utils/swaps.ts) — jedyne miejsce piszące do
+`shift_swaps` i przepisujące zmianę na innego pracownika.
+
+| Tryb | Kto widzi ofertę | Co się przepisuje |
+|---|---|---|
+| `gielda` | wszyscy uprawnieni i wolni | jedna zmiana → chętny |
+| `oddanie` | **jedna wskazana osoba** | jedna zmiana → adresat |
+| `zamiana` | jedna wskazana osoba | **dwie zmiany**, w obie strony |
+
+⚠️ **Tryb zmienia tylko to, KTO widzi ofertę i CO się przepisuje.** Stan
+(`na_gieldzie` → `przyjeta` → `zatwierdzona`/`odrzucona`/`wycofana`) i to, że
+ostatnie słowo ma kierownik, są wspólne — osobna maszyna stanów na tryb to
+trzy miejsca, w których można zapomnieć o kierowniku.
+
+- ⚠️ **`target_*` (komu zaproponowano) to NIE `taker_*` (kto wziął).** Zlanie
+  ich w jedno dałoby ofertę wyglądającą na przyjętą, zanim ktokolwiek ją
+  zobaczył. `offersForUser` pokazuje ofertę skierowaną wyłącznie adresatowi, a
+  `acceptSwap` sprawdza to drugi raz — filtr w UI to za mało, bo od tego zależy,
+  czy „oddałem Marcie" cokolwiek znaczy.
+- **Kto może wziąć zmianę, liczy JEDEN predykat** (`mozeWziac`) — ten sam dla
+  listy ofert, listy kandydatów przy oddaniu i przy zamianie. Inaczej ktoś
+  widoczny w jednym miejscu znikałby w drugim bez wyjaśnienia.
+- **Przy `zamiana` kandydatem jest też ktoś, kto pracuje tego samego dnia** —
+  bo oddaje wtedy własną zmianę (`pomijajZmianeId`). Przy `oddanie` taka osoba
+  kandydatem nie jest.
+- **Obie strony zamiany sprawdzamy przy PRZYJĘCIU, nie u kierownika.**
+  Propozycja, której z góry nie da się zrealizować, zajmuje miejsce w kolejce i
+  kończy się odmową bez powodu.
+- **Godziny liczymy po obu stronach** (`pendingSwapDelta`): zamiana 8 h za 8 h
+  to zero różnicy, a nie +8 h dla przejmującego. Przy etatowcu ta różnica
+  decyduje o tym, czy kierownik się zgodzi.
+- **Zatwierdzenie zamiany to DWA przepisania `grafik_shifts`.** Jedno bez
+  drugiego zostawia dzień z dwiema osobami i dzień bez nikogo — dlatego gdy
+  druga zmiana zniknęła z grafiku, przycisk „Zatwierdź" jest wyłączony.
+- Ekrany pracownika potrzebują listy współpracowników, więc `users` idzie teraz
+  także do `PersonalDashboard` (kiosk miał je wcześniej). Nazwiska i tak widać
+  w grafiku („Z tobą: …"), więc nic nowego się nie odsłania.
+- Migracja `0021`. Sprawdziany: `harness-zadania.html` (21 przypadków na samą
+  giełdę — kto widzi ofertę, kto jest kandydatem, jak liczą się godziny).
 
 ### 5b. Plan vs fakt — od 0.25.0
 

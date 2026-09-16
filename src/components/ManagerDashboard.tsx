@@ -37,7 +37,7 @@ import Pracownicy from "./manager/Pracownicy";
 import RaportyIKoszty from "./manager/RaportyIKoszty";
 import Przewodnik from "./manager/Przewodnik";
 import Grafik from "./manager/Grafik";
-import { resolveSwap } from "../utils/swaps";
+import { resolveSwap, wzajemnaZmiana } from "../utils/swaps";
 import { typUmowy } from "../utils/umowy";
 import {
   futureShiftsOfUser,
@@ -256,11 +256,17 @@ const ManagerDashboard = ({
         planShift,
         decision,
         editorName: currentUser.name,
+        // Przy zamianie przepisują się DWIE zmiany — druga musi dojść tutaj,
+        // inaczej zatwierdzenie zostawia dzień z dwiema osobami naraz.
+        wzajemna: wzajemnaZmiana(swap, planShifts),
       });
       setShiftSwaps((shiftSwaps || []).map((s) => (s.id === res.swap.id ? res.swap : s)));
-      if (res.planShift) {
+      const zapisane = [res.planShift, res.wzajemna].filter(Boolean);
+      if (zapisane.length > 0) {
         setPlanShifts(
-          (planShifts || []).map((p) => (p.id === res.planShift.id ? res.planShift : p))
+          (planShifts || []).map(
+            (p) => zapisane.find((z) => String(z.id) === String(p.id)) || p
+          )
         );
       }
       showMsg(

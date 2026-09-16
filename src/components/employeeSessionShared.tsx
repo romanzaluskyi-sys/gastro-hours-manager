@@ -43,6 +43,12 @@ import {
   offerSwap,
   withdrawSwap,
   acceptSwap,
+  TYPY_WYMIANY,
+  typWymiany,
+  statusLabelFor,
+  kandydaciNaZmiane,
+  zmianyDoZamiany,
+  wzajemnaZmiana,
   activeSwapFor,
   canOfferSwap,
   hoursUntilStart,
@@ -327,6 +333,7 @@ export const EmployeeSessionScreens = ({
   // lokale; zmiana, którą pracownik poprawia, mogła się odbyć gdzie indziej.
   lokaleWszystkie,
   stanowiskaWszystkie,
+  users = [],
   shifts,
   setShifts,
   showMsg,
@@ -406,6 +413,12 @@ export const EmployeeSessionScreens = ({
   // na całą szerokość pod każdą zmianą zjadał ekran, więc domyślnie jest
   // mały link z boku, a pełny przycisk pojawia się dopiero po kliknięciu.
   const [swapConfirmId, setSwapConfirmId] = useState(null);
+  // Kreator wymiany: najpierw tryb, potem (dla trybów skierowanych) osoba, a
+  // przy zamianie jeszcze jej zmiana. Trzymane osobno od swapConfirmId, żeby
+  // zamknięcie kreatora zerowało wszystko jednym setSwapConfirmId(null).
+  const [swapTyp, setSwapTyp] = useState(null);
+  const [swapTarget, setSwapTarget] = useState(null);
+  const [swapWzajemna, setSwapWzajemna] = useState(null);
 
   const [zgType, setZgType] = useState("problem"); // "correction" | "problem"
   const [zgAnon, setZgAnon] = useState(false);
@@ -737,11 +750,31 @@ export const EmployeeSessionScreens = ({
     setScreen("ZGLOS");
   };
 
-  const handleOfferSwap = async (planShift) => {
+  const zamknijKreatorWymiany = () => {
+    setSwapConfirmId(null);
+    setSwapTyp(null);
+    setSwapTarget(null);
+    setSwapWzajemna(null);
+  };
+
+  const handleOfferSwap = async (planShift, { typ, target, wzajemnaShift } = {}) => {
     try {
-      const sw = await offerSwap({ planShift, author: employee });
+      const sw = await offerSwap({
+        planShift,
+        author: employee,
+        typ: typ || "gielda",
+        target: target || null,
+        wzajemnaShift: wzajemnaShift || null,
+      });
       setShiftSwaps([...(shiftSwaps || []), sw]);
-      showMsg("Zmiana wystawiona na giełdę.");
+      showMsg(
+        typ === "zamiana"
+          ? `Propozycja zamiany wysłana do: ${target.name}.`
+          : typ === "oddanie"
+          ? `Zmiana zaproponowana osobie: ${target.name}.`
+          : "Zmiana wystawiona na giełdę."
+      );
+      zamknijKreatorWymiany();
     } catch (err) {
       showMsg(err.message || "Nie udało się wystawić zmiany.", "error");
     }
@@ -769,6 +802,7 @@ export const EmployeeSessionScreens = ({
         taker: employee,
         planShifts,
         absences,
+        wzajemna: wzajemnaZmiana(swap, planShifts),
       });
       setShiftSwaps((shiftSwaps || []).map((x) => (x.id === up.id ? up : x)));
       showMsg("Zgłoszenie wysłane — czeka na zgodę kierownika.");
@@ -1953,7 +1987,7 @@ export const EmployeeSessionScreens = ({
                         return (
                           <div className="mt-2.5 flex items-center gap-2 flex-wrap">
                             <span className="text-[12px] font-extrabold px-2 py-1 rounded bg-[#E7E7E2] text-[#6E6E66]">
-                              {STATUS_LABEL[oferta.status]}
+                              {statusLabelFor(oferta)}
                             </span>
                             {oferta.taker_user_name && (
                               <span className="text-[13px] text-[#6E6E66]">
@@ -1972,19 +2006,144 @@ export const EmployeeSessionScreens = ({
                         );
                       }
                       if (!canOfferSwap(s) || swapConfirmId !== s.id) return null;
+                      // Kreator wymiany. Jedna kropka wejścia ("na giełdę"),
+                      // a dopiero za nią trzy drogi — wystawić wszystkim,
+                      // oddać jednej osobie, zamienić się. Dla pracownika to
+                      // ta sama decyzja "nie mogę tego dnia", więc trzy
+                      // osobne przyciski w wierszu zmiany byłyby trzema
+                      // pytaniami zamiast jednego.
+                      const kandydaci = swapTyp
+                        ? kandydaciNaZmiane({
+                            users,
+                            planShifts,
+                            absences,
+                            planShift: s,
+                            author: employee,
+                            typ: swapTyp,
+                          })
+                        : [];
+                      const zmianyKandydata =
+                        swapTyp === "zamiana" && swapTarget
+                          ? zmianyDoZamiany({
+                              planShifts,
+                              absences,
+                              kandydat: swapTarget,
+                              author: employee,
+                              mojaZmiana: s,
+                            })
+                          : [];
+                      const gotowe =
+                        swapTyp === "gielda" ||
+                        (swapTyp === "oddanie" && swapTarget) ||
+                        (swapTyp === "zamiana" && swapTarget && swapWzajemna);
                       return (
                         <div className="mt-2.5">
+                          {!swapTyp && (
+                            <div className="space-y-1.5">
+                              {TYPY_WYMIANY.map((t) => (
+                                <button
+                                  key={t.key}
+                                  onClick={() => {
+                                    setSwapTyp(t.key);
+                                    setSwapTarget(null);
+                                    setSwapWzajemna(null);
+                                  }}
+                                  className="w-full border-2 border-[#B7B6AE] rounded p-2.5 text-left"
+                                >
+                                  <span className="block text-[14px] font-extrabold text-[#171714]">
+                                    {t.label}
+                                  </span>
+                                  <span className="block text-[12px] text-[#6E6E66]">
+                                    {t.opis}
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {swapTyp && swapTyp !== "gielda" && !swapTarget && (
+                            <div>
+                              <div className={`${sectionLabelCls} mb-1.5`}>
+                                {swapTyp === "zamiana" ? "Z kim się zamieniasz" : "Komu oddajesz"}
+                              </div>
+                              {kandydaci.length === 0 ? (
+                                <div className="text-[13px] text-[#8F8E86] italic">
+                                  Nikt inny nie może wziąć tej zmiany — brak wolnych
+                                  osób z tym stanowiskiem.
+                                </div>
+                              ) : (
+                                <div className="space-y-1.5">
+                                  {kandydaci.map((u) => (
+                                    <button
+                                      key={u.id}
+                                      onClick={() => setSwapTarget(u)}
+                                      className="w-full border-2 border-[#B7B6AE] rounded p-2.5 text-left text-[14px] font-bold"
+                                    >
+                                      {u.name}
+                                      <span className="block text-[12px] font-normal text-[#6E6E66]">
+                                        {u.default_stanowisko || ""}
+                                      </span>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {swapTyp === "zamiana" && swapTarget && !swapWzajemna && (
+                            <div>
+                              <div className={`${sectionLabelCls} mb-1.5`}>
+                                Którą zmianę bierzesz od: {swapTarget.name}
+                              </div>
+                              {zmianyKandydata.length === 0 ? (
+                                <div className="text-[13px] text-[#8F8E86] italic">
+                                  {swapTarget.name} nie ma zmiany, którą mógłbyś/mogłabyś
+                                  wziąć — albo masz wtedy własną, albo to nie Twoje
+                                  stanowisko.
+                                </div>
+                              ) : (
+                                <div className="space-y-1.5">
+                                  {zmianyKandydata.map((p2) => (
+                                    <button
+                                      key={p2.id}
+                                      onClick={() => setSwapWzajemna(p2)}
+                                      className="w-full border-2 border-[#B7B6AE] rounded p-2.5 text-left"
+                                    >
+                                      <span className="block text-[14px] font-extrabold">
+                                        {opisDnia(p2.date)} · {trimTime(p2.start_time)}–
+                                        {trimTime(p2.end_time)}
+                                      </span>
+                                      <span className="block text-[12px] text-[#6E6E66]">
+                                        {p2.stanowisko} · {p2.lokal}
+                                      </span>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {gotowe && (
+                            <button
+                              onClick={() =>
+                                handleOfferSwap(s, {
+                                  typ: swapTyp,
+                                  target: swapTarget,
+                                  wzajemnaShift: swapWzajemna,
+                                })
+                              }
+                              className="w-full border-[2.5px] border-[#171714] rounded py-2.5 text-[14px] font-extrabold mt-2"
+                            >
+                              {swapTyp === "gielda"
+                                ? "Wystaw na giełdę"
+                                : swapTyp === "oddanie"
+                                ? `Oddaj: ${swapTarget.name}`
+                                : `Wyślij propozycję do: ${swapTarget.name}`}
+                            </button>
+                          )}
+
                           <button
-                            onClick={async () => {
-                              await handleOfferSwap(s);
-                              setSwapConfirmId(null);
-                            }}
-                            className="w-full border-[2.5px] border-[#171714] rounded py-2.5 text-[14px] font-extrabold"
-                          >
-                            Wystaw na giełdę
-                          </button>
-                          <button
-                            onClick={() => setSwapConfirmId(null)}
+                            onClick={zamknijKreatorWymiany}
                             className="mt-1.5 text-[13px] font-bold underline text-[#6E6E66]"
                           >
                             Anuluj
@@ -2202,32 +2361,59 @@ export const EmployeeSessionScreens = ({
 
             {mojeOferty.length > 0 && (
               <>
-                <div className={sectionLabelCls}>Giełda — możesz wziąć</div>
+                <div className={sectionLabelCls}>Do wzięcia</div>
                 <div className={ruleStrongCls} />
                 <div className="mt-3 space-y-2">
-                  {mojeOferty.map(({ sw, ps }) => (
-                    <div
-                      key={sw.id}
-                      className={`border-[2.5px] border-[#171714] rounded p-3.5 ${SWAP_TLO.propozycja}`}
-                    >
-                      <div className="font-['Archivo'] font-extrabold text-[16px]">
-                        {opisDnia(ps.date)} · {trimTime(ps.start_time)} –{" "}
-                        {trimTime(ps.end_time)}
-                      </div>
-                      <div className="text-[13px] text-[#6E6E66]">
-                        {ps.stanowisko} · {ps.lokal} · od: {sw.author_user_name}
-                      </div>
-                      {sw.note && (
-                        <div className="text-[13px] text-[#6E6E66] mt-1">{sw.note}</div>
-                      )}
-                      <button
-                        onClick={() => handleAcceptSwap(sw)}
-                        className="mt-2.5 w-full border-[2.5px] border-[#171714] rounded py-2 text-[14px] font-extrabold bg-white"
+                  {mojeOferty.map(({ sw, ps }) => {
+                    const typ = typWymiany(sw);
+                    const wz = wzajemnaZmiana(sw, planShifts);
+                    return (
+                      <div
+                        key={sw.id}
+                        className={`border-[2.5px] border-[#171714] rounded p-3.5 ${SWAP_TLO.propozycja}`}
                       >
-                        Wezmę tę zmianę
-                      </button>
-                    </div>
-                  ))}
+                        {typ !== "gielda" && (
+                          <div className="text-[11px] font-extrabold uppercase tracking-wider text-[#8A3A2B] mb-1">
+                            {typ === "zamiana" ? "Propozycja zamiany" : "Oddane Tobie"}
+                          </div>
+                        )}
+                        <div className="font-['Archivo'] font-extrabold text-[16px]">
+                          {opisDnia(ps.date)} · {trimTime(ps.start_time)} –{" "}
+                          {trimTime(ps.end_time)}
+                        </div>
+                        <div className="text-[13px] text-[#6E6E66]">
+                          {ps.stanowisko} · {ps.lokal} · od: {sw.author_user_name}
+                        </div>
+                        {/* Przy zamianie druga połowa jest równie ważna co
+                            pierwsza — bez niej widać tylko, co się dostaje. */}
+                        {typ === "zamiana" && (
+                          <div className="text-[13px] mt-1.5 border-t-2 border-[#B7B6AE] pt-1.5">
+                            {wz ? (
+                              <>
+                                <span className="font-bold">Oddajesz swoją: </span>
+                                {opisDnia(wz.date)} · {trimTime(wz.start_time)}–
+                                {trimTime(wz.end_time)} · {wz.stanowisko}
+                              </>
+                            ) : (
+                              <span className="text-[#8A3A2B] font-bold">
+                                Zmiana, którą miałbyś/miałabyś oddać, już nie istnieje.
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        {sw.note && (
+                          <div className="text-[13px] text-[#6E6E66] mt-1">{sw.note}</div>
+                        )}
+                        <button
+                          onClick={() => handleAcceptSwap(sw)}
+                          disabled={typ === "zamiana" && !wz}
+                          className="mt-2.5 w-full border-[2.5px] border-[#171714] rounded py-2 text-[14px] font-extrabold bg-white disabled:opacity-40"
+                        >
+                          {typ === "zamiana" ? "Zgadzam się na zamianę" : "Wezmę tę zmianę"}
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               </>
             )}

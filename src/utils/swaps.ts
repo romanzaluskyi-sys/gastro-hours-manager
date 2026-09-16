@@ -1,8 +1,21 @@
 // @ts-nocheck
-// Giełda zmian — pracownik wystawia swoją zmianę, ktoś wolny ją przejmuje,
-// kierownik zatwierdza. Jedyne miejsce, które pisze do shift_swaps i które
-// przepisuje zmianę na nowego pracownika; nie duplikuj tego w komponentach
-// (ten sam wzorzec co utils/corrections.ts i utils/absences.ts).
+// Giełda zmian — pracownik oddaje swoją zmianę, ktoś ją bierze, kierownik
+// zatwierdza. Jedyne miejsce, które pisze do shift_swaps i które przepisuje
+// zmianę na nowego pracownika; nie duplikuj tego w komponentach (ten sam
+// wzorzec co utils/corrections.ts i utils/absences.ts).
+//
+// TRZY TRYBY (0.38.0), jeden stan i jedna ścieżka decyzji:
+//   'gielda'  — widzą wszyscy uprawnieni, bierze pierwszy chętny
+//   'oddanie' — oferta idzie do JEDNEJ wskazanej osoby, nikt inny jej nie widzi
+//   'zamiana' — ja biorę twoją zmianę, ty moją; obie przepisują się naraz
+//
+// ⚠️ Tryb zmienia tylko to, KTO widzi ofertę i CO się przepisuje po
+// zatwierdzeniu. Stan (na_gieldzie → przyjeta → zatwierdzona/odrzucona/
+// wycofana) i to, że ostatnie słowo ma kierownik, są wspólne — osobna maszyna
+// stanów na tryb to trzy miejsca, w których można zapomnieć o kierowniku.
+//
+// ⚠️ `target_*` (komu zaproponowano) to NIE `taker_*` (kto wziął). Zlanie ich
+// dałoby ofertę wyglądającą na przyjętą, zanim ktokolwiek ją zobaczył.
 //
 // Pełny opis przepływu: docs/GRAFIK.md, Runda 2.
 import { api } from "../api/supabase";
@@ -22,12 +35,42 @@ import {
 // przed jej rozpoczęciem — bez tego ktoś wystawiałby zmianę o 8:50 na 9:00.
 export const SWAP_MIN_HOURS = 12;
 
+export const TYPY_WYMIANY = [
+  {
+    key: "gielda",
+    label: "Wystaw na giełdę",
+    opis: "Zobaczą wszyscy, którzy mogą wziąć tę zmianę.",
+  },
+  {
+    key: "oddanie",
+    label: "Oddaj konkretnej osobie",
+    opis: "Ofertę zobaczy tylko ta jedna osoba.",
+  },
+  {
+    key: "zamiana",
+    label: "Zamień się zmianami",
+    opis: "Bierzesz jej zmianę, ona Twoją.",
+  },
+];
+
+export const typWymiany = (swap) => (swap && swap.typ) || "gielda";
+
 export const STATUS_LABEL = {
   na_gieldzie: "Na giełdzie",
   przyjeta: "Czeka na kierownika",
   zatwierdzona: "Zamieniona",
   odrzucona: "Odrzucona",
   wycofana: "Wycofana",
+};
+
+// Etykieta stanu zależy od trybu: "Na giełdzie" przy ofercie dla wszystkich
+// nie znaczy tego samego, co oferta leżąca u jednej konkretnej osoby — a
+// autor musi wiedzieć, na kogo czeka.
+export const statusLabelFor = (swap) => {
+  if (swap.status === "na_gieldzie" && swap.target_user_name) {
+    return `Czeka na: ${swap.target_user_name}`;
+  }
+  return STATUS_LABEL[swap.status] || swap.status;
 };
 
 export const shiftStartAt = (planShift) => {
@@ -70,10 +113,18 @@ export const pendingSwapDelta = (swaps, planShifts, user, monthPrefix) => {
         (p) => String(p.id) === String(sw.grafik_shift_id)
       );
       if (!ps) return delta;
-      if (monthPrefix && !ps.date.startsWith(monthPrefix)) return delta;
-      const h = shiftHours(ps);
-      if (String(sw.taker_user_id) === String(user.id)) return delta + h;
-      if (String(sw.author_user_id) === String(user.id)) return delta - h;
+      // Przy zamianie każda strona i coś oddaje, i coś bierze — liczenie
+      // samej przejmowanej zmiany pokazywałoby etatowcowi wzrost o 8 h tam,
+      // gdzie realnie nic się nie zmienia.
+      const wz =
+        typWymiany(sw) === "zamiana"
+          ? (planShifts || []).find((p) => String(p.id) === String(sw.wzajemna_shift_id))
+          : null;
+      const wMiesiacu = (x) => x && (!monthPrefix || x.date.startsWith(monthPrefix));
+      const h = wMiesiacu(ps) ? shiftHours(ps) : 0;
+      const hw = wMiesiacu(wz) ? shiftHours(wz) : 0;
+      if (String(sw.taker_user_id) === String(user.id)) return delta + h - hw;
+      if (String(sw.author_user_id) === String(user.id)) return delta - h + hw;
       return delta;
     }, 0);
 };
@@ -101,6 +152,68 @@ export const swapsForUser = (swaps, user) =>
         String(sw.taker_user_id) === String(user?.id))
   );
 
+// Czy ta osoba realnie może wziąć tę zmianę. JEDEN predykat dla wszystkich
+// trzech trybów: lista ofert na giełdzie, lista kandydatów przy oddaniu i
+// lista kandydatów przy zamianie muszą pokazywać ten sam zbiór ludzi —
+// inaczej ktoś widoczny w jednym miejscu znikałby w drugim bez wyjaśnienia.
+export const mozeWziac = (user, planShift, { planShifts, absences, pomijajZmianeId } = {}) => {
+  if (!user || !planShift) return false;
+  // Na giełdę idzie konkretna PRACA, nie same godziny — propozycja ma sens
+  // tylko dla kogoś, kto ma to stanowisko w swojej karcie.
+  if (!knowsStanowisko(user, planShift.stanowisko)) return false;
+  if (findBlockingAbsence(absences, user, planShift.date)) return false;
+  const maJuzCos = (planShifts || []).some(
+    (p) =>
+      p.date === planShift.date &&
+      String(p.id) !== String(pomijajZmianeId) &&
+      !p.deleted_at &&
+      (p.user_id && user.id
+        ? String(p.user_id) === String(user.id)
+        : p.user_name === user.name)
+  );
+  return !maJuzCos;
+};
+
+// Kto może dostać tę zmianę — lista do wyboru przy "oddaj" i "zamień się".
+// Przy zamianie nie wymagamy wolnego dnia: kandydat oddaje wtedy swoją zmianę,
+// więc kolizję rozstrzyga dopiero wybór konkretnej zmiany (zmianyDoZamiany).
+export const kandydaciNaZmiane = ({ users, planShifts, absences, planShift, author, typ = "oddanie" }) =>
+  (users || [])
+    .filter((u) => u.active && !u.archived && u.role !== "kiosk")
+    .filter((u) => String(u.id) !== String(author?.id) && u.name !== author?.name)
+    .filter((u) =>
+      typ === "zamiana"
+        ? knowsStanowisko(u, planShift.stanowisko) &&
+          !findBlockingAbsence(absences, u, planShift.date)
+        : mozeWziac(u, planShift, { planShifts, absences })
+    )
+    .sort((a, b) => String(a.name).localeCompare(String(b.name), "pl"));
+
+// Zmiany kandydata, które autor mógłby wziąć w zamian. Sprawdzamy je z punktu
+// widzenia AUTORA (to on je przejmie), bo to jego kalendarz decyduje, czy
+// zamiana ma sens — kandydat zwalnia swój dzień, oddając tę właśnie zmianę.
+export const zmianyDoZamiany = ({ planShifts, absences, kandydat, author, mojaZmiana }) =>
+  (planShifts || [])
+    .filter((p) => p.published_at && !p.deleted_at)
+    .filter((p) => String(p.id) !== String(mojaZmiana?.id))
+    .filter((p) =>
+      p.user_id && kandydat.id
+        ? String(p.user_id) === String(kandydat.id)
+        : p.user_name === kandydat.name
+    )
+    .filter((p) => canOfferSwap(p))
+    .filter((p) =>
+      mozeWziac(author, p, { planShifts, absences, pomijajZmianeId: mojaZmiana?.id })
+    )
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+// Zmiana idąca w drugą stronę przy zamianie — do pokazania u obu stron i u
+// kierownika.
+export const wzajemnaZmiana = (swap, planShifts) =>
+  swap && swap.wzajemna_shift_id
+    ? (planShifts || []).find((p) => String(p.id) === String(swap.wzajemna_shift_id)) || null
+    : null;
+
 // Oferty, które dana osoba realnie może wziąć: cudze, wciąż wolne, w
 // terminie (12 h), w dzień bez własnej zmiany i bez zatwierdzonego wolnego.
 // Jedno miejsce dla obu konsumentów — zakładki Grafik pracownika i listy
@@ -110,23 +223,27 @@ export const offersForUser = ({ swaps, planShifts, absences, user }) =>
     .filter(
       (sw) =>
         sw.status === "na_gieldzie" &&
-        String(sw.author_user_id) !== String(user?.id)
+        String(sw.author_user_id) !== String(user?.id) &&
+        // Oferta skierowana ('oddanie'/'zamiana') należy do jednej osoby —
+        // dla reszty nie istnieje. To jest cała różnica między trybami po
+        // stronie odbiorcy.
+        (!sw.target_user_id || String(sw.target_user_id) === String(user?.id))
     )
     .map((sw) => ({
       sw,
       ps: (planShifts || []).find((p) => String(p.id) === String(sw.grafik_shift_id)),
     }))
     .filter(({ ps }) => ps && canOfferSwap(ps))
-    // Na giełdę idzie konkretna PRACA, nie same godziny — propozycja ma
-    // sens tylko dla kogoś, kto ma to stanowisko w swojej karcie.
-    .filter(({ ps }) => knowsStanowisko(user, ps.stanowisko))
-    .filter(
-      ({ ps }) =>
-        !(planShifts || []).some(
-          (p) => p.date === ps.date && String(p.user_id) === String(user?.id)
-        )
+    // Przy zamianie autor oddaje adresatowi swoją zmianę, a bierze jego —
+    // więc dzień adresata nie musi być wolny, o ile zwalnia go właśnie ta
+    // zmiana, którą oddaje.
+    .filter(({ sw, ps }) =>
+      mozeWziac(user, ps, {
+        planShifts,
+        absences,
+        pomijajZmianeId: typWymiany(sw) === "zamiana" ? sw.wzajemna_shift_id : null,
+      })
     )
-    .filter(({ ps }) => !findBlockingAbsence(absences, user, ps.date))
     .sort((a, b) => a.ps.date.localeCompare(b.ps.date));
 
 // Zmiany, które ta osoba przejęła i które czekają na decyzję kierownika —
@@ -143,10 +260,31 @@ export const claimedByUser = ({ swaps, planShifts, user }) =>
     }))
     .filter(({ ps }) => ps);
 
-export const offerSwap = async ({ planShift, author, note }) => {
+export const offerSwap = async ({
+  planShift,
+  author,
+  note,
+  typ = "gielda",
+  target = null,
+  wzajemnaShift = null,
+}) => {
   if (!canOfferSwap(planShift)) {
     throw new Error(
       `Zmianę można wystawić najpóźniej ${SWAP_MIN_HOURS} godzin przed jej rozpoczęciem.`
+    );
+  }
+  if (typ !== "gielda" && !target) {
+    throw new Error("Wybierz osobę, której oddajesz zmianę.");
+  }
+  if (typ === "zamiana" && !wzajemnaShift) {
+    throw new Error("Wybierz zmianę, którą bierzesz w zamian.");
+  }
+  // Przy zamianie autor przejmie zmianę adresata — sprawdzamy to TERAZ, a nie
+  // dopiero u kierownika. Propozycja, której z góry nie da się zrealizować,
+  // zajmuje miejsce w kolejce i kończy się odmową bez powodu.
+  if (typ === "zamiana" && !canOfferSwap(wzajemnaShift)) {
+    throw new Error(
+      `Zmiana, którą chcesz wziąć, zaczyna się za mniej niż ${SWAP_MIN_HOURS} godzin.`
     );
   }
   const swap = await api.post("shift_swaps", {
@@ -157,12 +295,39 @@ export const offerSwap = async ({ planShift, author, note }) => {
     author_user_name: author.name,
     status: "na_gieldzie",
     note: note || null,
+    typ,
+    target_user_id: target ? target.id : null,
+    target_user_name: target ? target.name : null,
+    wzajemna_shift_id: wzajemnaShift ? String(wzajemnaShift.id) : null,
   });
+
+  const zakres = `${planShift.date} ${trimTime(planShift.start_time)}–${trimTime(
+    planShift.end_time
+  )} (${planShift.stanowisko})`;
+
+  if (typ === "gielda") {
+    await createManagerNotification(
+      planShift.lokal,
+      `${author.name} wystawił(a) na giełdę zmianę ${zakres}.`,
+      "swap_offer"
+    );
+    return swap;
+  }
+
+  // Tryby skierowane budzą przede wszystkim ADRESATA — to on ma teraz coś do
+  // zrobienia. Kierownik dowie się przy przyjęciu, tak jak przy giełdzie.
+  const opis =
+    typ === "zamiana" && wzajemnaShift
+      ? `${author.name} proponuje zamianę: bierzesz ${zakres}, oddajesz swoją ${
+          wzajemnaShift.date
+        } ${trimTime(wzajemnaShift.start_time)}–${trimTime(wzajemnaShift.end_time)}.`
+      : `${author.name} chce oddać Ci zmianę ${zakres}.`;
+  await createEmployeeNotification(target.name, opis, "swap");
   await createManagerNotification(
     planShift.lokal,
-    `${author.name} wystawił(a) na giełdę zmianę ${planShift.date} ${trimTime(
-      planShift.start_time
-    )}–${trimTime(planShift.end_time)} (${planShift.stanowisko}).`,
+    typ === "zamiana"
+      ? `${author.name} zaproponował(a) zamianę zmianami z: ${target.name} (${zakres}).`
+      : `${author.name} chce oddać zmianę ${zakres} osobie: ${target.name}.`,
     "swap_offer"
   );
   return swap;
@@ -170,10 +335,15 @@ export const offerSwap = async ({ planShift, author, note }) => {
 
 export const withdrawSwap = async (swap) => {
   const updated = await api.patch("shift_swaps", swap.id, { status: "wycofana" });
-  if (swap.taker_user_name) {
+  // Adresat oferty skierowanej mógł jej jeszcze nie przyjąć, a i tak ma ją na
+  // ekranie — bez tego zniknęłaby mu bez słowa.
+  const doPowiadomienia = [swap.taker_user_name, swap.target_user_name].filter(
+    (n, i, arr) => n && arr.indexOf(n) === i
+  );
+  for (const kto of doPowiadomienia) {
     await createEmployeeNotification(
-      swap.taker_user_name,
-      `${swap.author_user_name} wycofał(a) z giełdy zmianę z ${swap.date} — nie przejmujesz jej.`,
+      kto,
+      `${swap.author_user_name} wycofał(a) propozycję zmiany z ${swap.date}.`,
       "swap"
     );
   }
@@ -183,36 +353,79 @@ export const withdrawSwap = async (swap) => {
 // Przejęcie zmiany przez innego pracownika. Sprawdzamy to samo, co przy
 // ręcznym wpisywaniu przez kierownika: zatwierdzone wolne i kolizję godzin.
 // Niezgodne stanowisko NIE blokuje — decyduje kierownik przy zatwierdzeniu.
-export const acceptSwap = async ({ swap, planShift, taker, planShifts, absences }) => {
+export const acceptSwap = async ({
+  swap,
+  planShift,
+  taker,
+  planShifts,
+  absences,
+  wzajemna = null,
+}) => {
+  // Oferta skierowana jest cudza dla wszystkich poza adresatem. Filtr w
+  // offersForUser i tak jej nie pokaże, ale zapis musi bronić się sam —
+  // od tego zależy, czy "oddałem Marcie" znaczy cokolwiek.
+  if (swap.target_user_id && String(swap.target_user_id) !== String(taker.id)) {
+    throw new Error("Ta zmiana jest zaproponowana innej osobie.");
+  }
   if (findBlockingAbsence(absences, taker, planShift.date)) {
     throw new Error("Masz na ten dzień zatwierdzone wolne.");
   }
+  const typ = typWymiany(swap);
   const kolizja = findOverlappingPlanShift(planShifts, {
     user_id: taker.id,
     user_name: taker.name,
     date: planShift.date,
     start_time: planShift.start_time,
     end_time: planShift.end_time,
-    excludeId: planShift.id,
+    // Przy zamianie kolidować może własna zmiana, którą właśnie oddaję — to
+    // nie jest przeszkoda, tylko druga połowa tej samej operacji.
+    excludeId: typ === "zamiana" && wzajemna ? wzajemna.id : planShift.id,
   });
   if (kolizja) {
     throw new Error("Masz już w tych godzinach inną zmianę.");
   }
+  // Druga strona zamiany: autor przejmie zmianę adresata, więc jego kalendarz
+  // też musi ją unieść. Sprawdzamy przed przyjęciem, nie u kierownika.
+  if (typ === "zamiana" && wzajemna) {
+    const autor = { id: swap.author_user_id, name: swap.author_user_name };
+    if (findBlockingAbsence(absences, autor, wzajemna.date)) {
+      throw new Error(`${swap.author_user_name} ma na ten dzień zatwierdzone wolne.`);
+    }
+    const kolizjaAutora = findOverlappingPlanShift(planShifts, {
+      user_id: autor.id,
+      user_name: autor.name,
+      date: wzajemna.date,
+      start_time: wzajemna.start_time,
+      end_time: wzajemna.end_time,
+      excludeId: planShift.id,
+    });
+    if (kolizjaAutora) {
+      throw new Error(`${swap.author_user_name} ma już w tych godzinach inną zmianę.`);
+    }
+  }
+
   const updated = await api.patch("shift_swaps", swap.id, {
     status: "przyjeta",
     taker_user_id: taker.id,
     taker_user_name: taker.name,
   });
+  const zakres = `${planShift.date} ${trimTime(planShift.start_time)}–${trimTime(
+    planShift.end_time
+  )}`;
   await createManagerNotification(
     planShift.lokal,
-    `${taker.name} chce przejąć zmianę ${planShift.date} ${trimTime(
-      planShift.start_time
-    )}–${trimTime(planShift.end_time)} od: ${swap.author_user_name}. Czeka na Twoją decyzję.`,
+    typ === "zamiana" && wzajemna
+      ? `${taker.name} i ${swap.author_user_name} chcą zamienić się zmianami: ${zakres} za ${
+          wzajemna.date
+        } ${trimTime(wzajemna.start_time)}–${trimTime(wzajemna.end_time)}. Czeka na Twoją decyzję.`
+      : `${taker.name} chce przejąć zmianę ${zakres} od: ${swap.author_user_name}. Czeka na Twoją decyzję.`,
     "swap_accepted"
   );
   await createEmployeeNotification(
     swap.author_user_name,
-    `${taker.name} zgłosił(a) się po Twoją zmianę z ${planShift.date}. Czeka na zgodę kierownika.`,
+    typ === "zamiana"
+      ? `${taker.name} zgodził(a) się na zamianę zmianami. Czeka na zgodę kierownika.`
+      : `${taker.name} zgłosił(a) się po Twoją zmianę z ${planShift.date}. Czeka na zgodę kierownika.`,
     "swap"
   );
   return updated;
@@ -221,13 +434,29 @@ export const acceptSwap = async ({ swap, planShift, taker, planShifts, absences 
 // Decyzja kierownika. Zatwierdzenie PRZEPISUJE zmianę na nowego pracownika
 // (to jedyne miejsce, które to robi); odmowa zostawia ją u autora — inaczej
 // w dniu zmiany nikt by nie przyszedł.
-export const resolveSwap = async ({ swap, planShift, decision, editorName }) => {
+export const resolveSwap = async ({
+  swap,
+  planShift,
+  decision,
+  editorName,
+  wzajemna = null,
+}) => {
   if (decision === "approve") {
     const zapisana = await api.patch("grafik_shifts", planShift.id, {
       user_id: swap.taker_user_id,
       user_name: swap.taker_user_name,
       updated_at: new Date().toISOString(),
     });
+    // Zamiana to DWA przepisania. Kolejność jest obojętna, ale obu musi być —
+    // jedno bez drugiego zostawia dzień z dwiema osobami i dzień bez nikogo.
+    let zapisanaWzajemna = null;
+    if (typWymiany(swap) === "zamiana" && wzajemna) {
+      zapisanaWzajemna = await api.patch("grafik_shifts", wzajemna.id, {
+        user_id: swap.author_user_id,
+        user_name: swap.author_user_name,
+        updated_at: new Date().toISOString(),
+      });
+    }
     const updated = await api.patch("shift_swaps", swap.id, {
       status: "zatwierdzona",
       decided_by: editorName || null,
@@ -236,21 +465,25 @@ export const resolveSwap = async ({ swap, planShift, decision, editorName }) => 
     const zakres = `${planShift.date} ${trimTime(planShift.start_time)}–${trimTime(
       planShift.end_time
     )}`;
+    const zakresWzajemny = zapisanaWzajemna
+      ? `${wzajemna.date} ${trimTime(wzajemna.start_time)}–${trimTime(wzajemna.end_time)}`
+      : null;
+    const kto = editorName || "Kierownik";
     await createEmployeeNotification(
       swap.author_user_name,
-      `${editorName || "Kierownik"} zatwierdził(a) zamianę — zmianę ${zakres} przejmuje ${
-        swap.taker_user_name
-      }.`,
+      zakresWzajemny
+        ? `${kto} zatwierdził(a) zamianę — oddajesz ${zakres}, pracujesz ${zakresWzajemny}.`
+        : `${kto} zatwierdził(a) zamianę — zmianę ${zakres} przejmuje ${swap.taker_user_name}.`,
       "swap"
     );
     await createEmployeeNotification(
       swap.taker_user_name,
-      `${editorName || "Kierownik"} zatwierdził(a) zamianę — pracujesz ${zakres} w lokalu ${
-        planShift.lokal
-      }.`,
+      zakresWzajemny
+        ? `${kto} zatwierdził(a) zamianę — pracujesz ${zakres}, oddajesz ${zakresWzajemny}.`
+        : `${kto} zatwierdził(a) zamianę — pracujesz ${zakres} w lokalu ${planShift.lokal}.`,
       "swap"
     );
-    return { swap: updated, planShift: zapisana };
+    return { swap: updated, planShift: zapisana, wzajemna: zapisanaWzajemna };
   }
 
   const updated = await api.patch("shift_swaps", swap.id, {
@@ -263,12 +496,13 @@ export const resolveSwap = async ({ swap, planShift, decision, editorName }) => 
     `${editorName || "Kierownik"} nie zgodził(a) się na zamianę zmiany z ${swap.date} — zmiana zostaje u Ciebie.`,
     "swap"
   );
-  if (swap.taker_user_name) {
+  const druga = swap.taker_user_name || swap.target_user_name;
+  if (druga) {
     await createEmployeeNotification(
-      swap.taker_user_name,
+      druga,
       `${editorName || "Kierownik"} nie zgodził(a) się na przejęcie zmiany z ${swap.date}.`,
       "swap"
     );
   }
-  return { swap: updated, planShift: null };
+  return { swap: updated, planShift: null, wzajemna: null };
 };
