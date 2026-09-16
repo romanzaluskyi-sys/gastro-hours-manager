@@ -33,7 +33,7 @@ const pokazBlad = (e) => {
 window.addEventListener("error", (ev) => pokazBlad(ev.error || ev.message));
 window.addEventListener("unhandledrejection", (ev) => pokazBlad(ev.reason));
 
-const IKONY = ["AlertCircle", "AlertTriangle", "Archive", "ArchiveRestore", "ArrowLeft", "ArrowLeftRight", "ArrowRight", "BarChart3", "Bell", "BookOpen", "Briefcase", "Calendar", "CalendarCheck", "CalendarDays", "CalendarRange", "Check", "CheckCircle", "CheckCircle2", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "ClipboardCheck", "ClipboardList", "ClipboardPlus", "Clock", "Cloud", "Construction", "Copy", "CopyPlus", "Delete", "Download", "Edit2", "Eye", "FileText", "Flag", "HelpCircle", "History", "Home", "Info", "Lock", "LogIn", "LogOut", "Mail", "MapPin", "MoreHorizontal", "Palmtree", "Pencil", "Plus", "Printer", "RefreshCw", "Save", "Send", "SlidersHorizontal", "Trash2", "User", "UserPlus", "Users", "WifiOff", "X"];
+const IKONY = ["AlertCircle", "AlertTriangle", "Archive", "ArchiveRestore", "ArrowLeft", "ArrowLeftRight", "ArrowRight", "BarChart3", "Bell", "BookOpen", "Briefcase", "Calendar", "CalendarCheck", "CalendarDays", "CalendarRange", "Check", "CheckCircle", "CheckCircle2", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "ClipboardCheck", "ClipboardList", "ClipboardPlus", "Clock", "Cloud", "Construction", "Copy", "CopyPlus", "Delete", "Download", "Edit2", "Eye", "FileText", "Flag", "HelpCircle", "History", "Home", "Info", "Lock", "LogIn", "LogOut", "Mail", "MapPin", "MoreHorizontal", "Palmtree", "Pencil", "Plus", "Printer", "RefreshCw", "Save", "Send", "SlidersHorizontal", "Thermometer", "Trash2", "User", "UserPlus", "Users", "WifiOff", "X"];
 const stub = (kod) => URL.createObjectURL(new Blob([kod], { type: "text/javascript" }));
 
 // Atrapa Supabase — nic nie leci do sieci, każdy zapis wraca z wymyślonym id.
@@ -216,6 +216,64 @@ const planTygodnia = [
   })),
 ];
 
+
+// --- Zadania: bloki, pozycje i jeden zapisany pomiar ---------------------
+// Cztery bloki, bo każdy sprawdza co innego: codzienny dla wszystkich,
+// HACCP z pomiarem podpiętym pod pozycję dziennika (ten sam wpis, żadnego
+// duplikatu), blok tylko dla kucharza i blok cykliczny co 3 dni.
+const blokiStartowe = [
+  { id: "bk1", lokal: "Bułka i Jacek", nazwa: "Otwarcie lokalu", schedule_type: "poranne",
+    deadline_time: "10:00", kolejnosc: 0, active: true, archived: false },
+  { id: "bk2", lokal: "Bułka i Jacek", nazwa: "Bezpieczeństwo żywności", schedule_type: "ogolne",
+    kolejnosc: 1, active: true, archived: false },
+  // Blok pon–pt: w formularzu zadania sobota i niedziela mają być WYŁĄCZONE,
+  // bo blok jest ważniejszy i zaznaczenie ich nic by nie dało.
+  { id: "bk3", lokal: "Bułka i Jacek", nazwa: "Kuchnia — zamknięcie", schedule_type: "wieczorne",
+    stanowiska: "Kucharz", days_of_week: "1,2,3,4,5", kolejnosc: 2, active: true, archived: false },
+  { id: "bk4", lokal: "Bułka i Jacek", nazwa: "Mycie okapu", schedule_type: "cykliczne",
+    cycle_days: 3, kolejnosc: 3, active: true, archived: false },
+];
+const zadaniaStartowe = [
+  { id: "zt1", block_id: "bk1", lokal: "Bułka i Jacek", title: "Otworzyć lokal, wyłączyć alarm",
+    priority: "sredni", kolejnosc: 0, pola: [], active: true, archived: false },
+  { id: "zt2", block_id: "bk1", lokal: "Bułka i Jacek", title: "Stan kasy na start",
+    description: "Policz gotówkę i wpisz kwotę.", priority: "wysoki", kolejnosc: 1, typ: "inne",
+    pola: [{ klucz: "kwota", label: "Kwota w kasie", typ: "number", jednostka: "zł" }],
+    active: true, archived: false },
+  { id: "zt3", block_id: "bk2", lokal: "Bułka i Jacek", title: "Temperatura lodówki",
+    priority: "sredni", kolejnosc: 0, typ: "temperatura", template_key: "lodowka",
+    pola: [], active: true, archived: false },
+  { id: "zt4", block_id: "bk3", lokal: "Bułka i Jacek", title: "Piec wyczyszczony",
+    priority: "sredni", kolejnosc: 0, pola: [], active: true, archived: false },
+  { id: "zt5", block_id: "bk4", lokal: "Bułka i Jacek", title: "Okap i filtry",
+    priority: "niski", kolejnosc: 0, pola: [], active: true, archived: false },
+  // Jeden blok, a zadania rozjeżdżają się po dniach tygodnia: to jest ta
+  // sytuacja, dla której dni zeszły na poziom zadania.
+  { id: "zt6", block_id: "bk3", lokal: "Bułka i Jacek", title: "Mycie lodówki",
+    days_of_week: "3", priority: "sredni", kolejnosc: 1, pola: [], active: true, archived: false },
+  { id: "zt7", block_id: "bk3", lokal: "Bułka i Jacek", title: "Mycie okapu",
+    days_of_week: "1", priority: "sredni", kolejnosc: 2, pola: [], active: true, archived: false },
+];
+// Pozycja dziennika, pod którą podpięte jest zadanie zt3 — definicja pól jest
+// TU, a nie w zadaniu.
+const szablonyStartowe = [
+  { id: "sz1", lokal: "Bułka i Jacek", klucz: "lodowka", nazwa: "Lodówka kuchnia",
+    typ: "temperatura", pora: "poranne", wymagany: true, kolejnosc: 0, archived: false,
+    pola: [{ klucz: "temp", label: "Temperatura", typ: "number", jednostka: "°C", min: 0, max: 5 }] },
+];
+// Pomiar już zapisany i POZA NORMĄ — sprawdza czerwony alert w wierszu zadania,
+// przycisk "Popraw" i sekcję "Z checklisty" na karcie dnia.
+const dzisYMD = (() => { const d = new Date(); return [d.getFullYear(), String(d.getMonth()+1).padStart(2,"0"), String(d.getDate()).padStart(2,"0")].join("-"); })();
+const wpisyStartowe = [
+  { id: "we1", lokal: "Bułka i Jacek", date: dzisYMD, typ: "temperatura",
+    template_key: "lodowka", payload: { temp: 12 }, recorded_by: "Ala",
+    recorded_at: dzisYMD + "T08:12:00Z" },
+];
+const wykonaniaStartowe = [
+  { id: 1, task_id: "zt3", date: dzisYMD, user_name: "Ala", entry_id: "we1",
+    completed_at: dzisYMD + "T08:12:00Z" },
+];
+
 const poprzedniMiesiac = (h) => {
   const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); d.setDate(10); d.setHours(h, 0, 0, 0);
   return d;
@@ -229,9 +287,12 @@ const poprzedniMiesiac = (h) => {
     function Harness() {
       // Stan trzymany tak jak w App.tsx — dzięki temu widać, czy setter
       // faktycznie dociera i czy lista rośnie po zapisie.
-      const [dayLogTemplates, setDayLogTemplates] = useState([]);
+      const [dayLogTemplates, setDayLogTemplates] = useState(szablonyStartowe);
       const [dayLogs, setDayLogs] = useState([]);
-      const [dayLogEntries, setDayLogEntries] = useState([]);
+      const [dayLogEntries, setDayLogEntries] = useState(wpisyStartowe);
+      const [tasks, setTasks] = useState(zadaniaStartowe);
+      const [taskBlocks, setTaskBlocks] = useState(blokiStartowe);
+      const [taskCompletions, setTaskCompletions] = useState(wykonaniaStartowe);
       // Prawdziwy stan, nie zaślepka: bez tego widać tylko, ŻE poszedł zapis,
       // a nie czy lista po nim pokazuje nową wartość — a to jest właśnie ten
       // rodzaj błędu, dla którego ten harness powstał.
@@ -313,7 +374,8 @@ const poprzedniMiesiac = (h) => {
           { id: "i3", type: "problem", status: "nowe", is_anonymous: false,
             user_id: "u5", user_name: "Ewa", issue_text: "Zepsuty ekspres na Ceglanej.",
             created_at: "2026-09-11T08:00:00Z" },
-        ], notifications: [], shiftEdits: [], tasks: [], taskCompletions: [],
+        ], notifications: [], shiftEdits: [],
+        tasks, setTasks, taskBlocks, setTaskBlocks, taskCompletions, setTaskCompletions,
         // Plan na bieżący tydzień — bez niego siatka Grafiku jest pusta i nie
         // widać ani szerokości kolumn, ani wykorzystania normy w wierszu.
         planShifts, setPlanShifts,
@@ -341,7 +403,7 @@ const poprzedniMiesiac = (h) => {
         dayLogTemplates, setDayLogTemplates,
         showMsg: (m, t) => console.log("showMsg:", t, m),
       };
-      "setUsers setLokale setStanowiska setShifts setIssues setNotifications setShiftEdits setTasks setTaskCompletions setAbsences setShiftSwaps setLokaleGodziny setGrafikWyjatki"
+      "setUsers setLokale setStanowiska setShifts setIssues setNotifications setShiftEdits setAbsences setShiftSwaps setLokaleGodziny setGrafikWyjatki"
         .split(" ").forEach((k) => { props[k] = () => {}; });
 
       window.__stanSzablonow = dayLogTemplates;

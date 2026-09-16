@@ -16,7 +16,7 @@ import {
   sectionHeaderCls,
   pageTitleCls,
 } from "./designTokens";
-import { isTaskDueOn, findSharedCompletion, toLocalYMD } from "../../utils/tasks";
+import { blokiNaDzien, toLocalYMD } from "../../utils/tasks";
 import { countWorkdays } from "../../utils/absences";
 import {
   shiftHours,
@@ -79,6 +79,7 @@ export default function PulpitHome({
   shifts,
   issues,
   tasks,
+  taskBlocks,
   taskCompletions,
   absences = [],
   matchesFilter, // (lokalName) => bool — hasAccessToLokal + wybrany lokal z paska
@@ -303,17 +304,22 @@ export default function PulpitHome({
   );
   const lokaleWithTasks = [...new Set(tasksInScopeForPulpit.map((t) => t.lokal))];
   const lokalTaskStats = lokaleWithTasks.map((lokalName) => {
-    const dueTasks = tasksInScopeForPulpit.filter(
-      (t) => t.lokal === lokalName && isTaskDueOn(t, taskCompletions, todayStrForTasks)
-    );
-    const done = dueTasks.filter((t) =>
-      findSharedCompletion(taskCompletions, t.id, todayStrForTasks)
-    ).length;
+    const grupy = blokiNaDzien({
+      tasks: tasksInScopeForPulpit,
+      blocks: taskBlocks,
+      completions: taskCompletions,
+      lokal: lokalName,
+      dateStr: todayStrForTasks,
+      forManager: false,
+    });
+    const total = grupy.reduce((s, g) => s + g.total, 0);
+    const done = grupy.reduce((s, g) => s + g.done, 0);
     return {
       lokal: lokalName,
       done,
-      total: dueTasks.length,
-      pct: dueTasks.length > 0 ? Math.round((done / dueTasks.length) * 100) : null,
+      total,
+      bloki: grupy.length,
+      pct: total > 0 ? Math.round((done / total) * 100) : null,
     };
   });
 

@@ -47,7 +47,7 @@ const Pole = ({ Icon, etykieta, wartosc, pod, kolorPod }) => (
 
 export default function PulsDni({
   lokal, miasto, dzis,
-  shifts, planShifts, users, tasks, taskCompletions,
+  shifts, planShifts, users, tasks, taskBlocks, taskCompletions,
   karty, wpisy, szablony, weatherForecasts, lokalRow,
   onOtworzDzien,
 }) {
@@ -60,12 +60,12 @@ export default function PulsDni({
     for (let i = 1; i <= ile; i += 1) dni.push(przesun(dzis, -i));
     return dni.map((dateStr) =>
       wierszDnia({
-        shifts, planShifts, users, tasks, taskCompletions,
+        shifts, planShifts, users, tasks, taskBlocks, taskCompletions,
         dayLogs: karty, dayLogEntries: wpisy, dayLogTemplates: szablony,
         weatherForecasts, lokal, miasto, dateStr,
       })
     );
-  }, [ile, dzis, shifts, planShifts, users, tasks, taskCompletions, karty, wpisy, szablony, weatherForecasts, lokal, miasto]);
+  }, [ile, dzis, shifts, planShifts, users, tasks, taskBlocks, taskCompletions, karty, wpisy, szablony, weatherForecasts, lokal, miasto]);
 
   return (
     <div className={sectionCardCls}>

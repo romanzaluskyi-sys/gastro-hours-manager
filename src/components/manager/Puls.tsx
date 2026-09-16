@@ -37,6 +37,7 @@ export default function Puls({
   users,
   setUsers,
   tasks,
+  taskBlocks,
   taskCompletions,
   staffingRules,
   staffingRuleSets,
@@ -100,7 +101,7 @@ export default function Puls({
 
   const wspolne = {
     currentUser, lokal, lokalRow, miasto, dzis,
-    shifts, planShifts, users, tasks, taskCompletions,
+    shifts, planShifts, users, tasks, taskBlocks, taskCompletions,
     staffingRules, staffingRuleSets, grafikWyjatki,
     karty, wpisy, szablony, weatherForecasts,
     setKarty: setKartyLokalne,

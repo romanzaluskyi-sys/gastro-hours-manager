@@ -179,15 +179,22 @@ src/
     swaps.ts                    giełda zmian — jedyne miejsce piszące do
                                   shift_swaps i przepisujące zmianę na
                                   innego pracownika (resolveSwap)
-    tasks.ts                    isTaskDueOn/toggleTaskCompletion/
-                                  buildEmployeeChecklist/
-                                  getEffectiveAssignmentForDate/
-                                  weeklyChecklistStats/PRIORITY_META —
-                                  cała logika modułu Zadania i sprzątanie,
-                                  patrz sekcja "Zadania i sprzątanie" niżej.
-                                  NIE duplikuj tej logiki w
-                                  ZadaniaISprzatanie.tsx ani w
+    tasks.ts                    bloki zadań i pomiary: blokiNaDzien/
+                                  zadaniaNaDzien/buildEmployeeBlocks/
+                                  toggleTaskCompletion/
+                                  zapiszWykonanieZPomiarem/
+                                  poprawPomiarZadania/BLOKI_STARTOWE —
+                                  cała logika modułu Zadania, patrz sekcja
+                                  "Zadania — bloki i pomiary" niżej. NIE
+                                  duplikuj jej w ZadaniaISprzatanie.tsx,
+                                  ZadaniaKonfiguracja.tsx ani w
                                   employeeSessionShared.tsx.
+    pola.ts                     definicja PÓL do wpisania (parsePola,
+                                  polaSzablonu, pozaNormaPola, opisNormy,
+                                  slugKlucza) — wspólna dla dziennika i dla
+                                  zadań z pomiarem. Osobny plik, bo
+                                  dziennik.ts importuje z tasks.ts i
+                                  sięgnięcie w drugą stronę zrobiłoby cykl.
   components/
     LoginScreen.tsx             redesign 2026-09-02, ten sam język wizualny
                                   co reszta apki (patrz niżej)
@@ -249,9 +256,13 @@ src/
                                     kierownika" niżej po szczegóły nawigacji
       WBudowie.tsx                  wspólny placeholder dla zakładek bez
                                     jeszcze własnej treści (obecnie: Grafik)
-      ZadaniaISprzatanie.tsx        zakładka "Zadania i sprzątanie" —
-                                    "Kontrola wykonania po osobach", patrz
-                                    sekcja "Zadania i sprzątanie" niżej
+      ZadaniaISprzatanie.tsx        zakładka Zadania, widok dnia: karty
+                                    bloków z obsadą z grafiku, postępem i
+                                    pomiarami — patrz "Zadania — bloki i
+                                    pomiary" niżej
+      ZadaniaKonfiguracja.tsx       ustawienia bloków i zadań (przycisk
+                                    "Konfiguracja", ten sam układ co
+                                    Konfiguracja w Grafiku i w Pulsie)
       Grafik.tsx                    host zakładki Grafik: tydzień/miesiąc/
                                     konfiguracja, tryb Podgląd/Edycja,
                                     przycisk publikacji
@@ -427,8 +438,9 @@ zmianie"/"Terminy i dokumenty"), **Zatwierdzanie zmian**
 (`ZatwierdzanieZmian.tsx`, patrz niżej), **Rejestr Godzin**
 (`RejestrGodzin.tsx` — grupowanie po stanowisku, jeden pasek wyszukiwania,
 "+ Dodaj wpis", CSV, "Historia" per wiersz), **Aktywni** (`Aktywni.tsx` —
-żywy licznik czasu trwania zmiany, "Zakończ zmianę"), **Zadania i
-Grafik** (świadomie nadal placeholder — patrz Roadmap), **Zgłoszenia**
+żywy licznik czasu trwania zmiany, "Zakończ zmianę"), **Zadania**
+(`ZadaniaISprzatanie.tsx` + `ZadaniaKonfiguracja.tsx` — checklisty w blokach,
+patrz niżej), **Grafik**, **Zgłoszenia**
 (`Zgloszenia.tsx`, tylko `type !== "correction"`), **Powiadomienia** (patrz
 niżej, bez zmian w logice), **Pracownicy** (`Pracownicy.tsx`, patrz niżej),
 **Raporty i koszty** (`RaportyIKoszty.tsx`, patrz niżej), **Przewodnik**
@@ -570,7 +582,7 @@ górnym pasku lokalu (`selectedLokal`) — przy "Cała sieć"/"Wszystkie moje"
 spada na pierwszy dostępny lokal (`weatherLokalName` w
 `ManagerDashboard.tsx`), bo nie ma miejsca na kilka miast naraz. Na
 Pulpicie pracownika pogoda dotyczy jego `effectiveAssignment.lokal`
-(patrz `getEffectiveAssignmentForDate` w sekcji "Zadania i sprzątanie"
+(patrz `getEffectiveAssignmentForDate` w sekcji "Zadania — bloki i pomiary"
 niżej — ten sam mechanizm "otwarta/najnowsza zmiana dziś nad statycznym
 default_lokal"). Brak `miasto` dla lokalu albo błąd sieci = cichy fallback
 na "--°C" (`WeatherBadge`) — to dekoracja paska, nie coś krytycznego, więc
@@ -736,6 +748,10 @@ odpadają. Zamiast tego dwa pliki w katalogu głównym, uruchamiane przez
   zlecenie, konto bez żadnych danych o umowie. Powstał dla normy w Raporcie —
   każda liczba w tym bloku ma przypadek, w którym jej NIE MA, i wtedy blok ma
   zniknąć, a nie pokazać "null h";
+- `harness-zadania.html` — sprawdza arytmetykę bloków zadań: dni tygodnia, cykl
+  bloku i cykl zadania osobno, widoczność po stanowiskach, pola pomiaru i klucz
+  wpisu (ten, który nie pozwala powstać duplikatowi w Pulsie). To on pilnuje, że
+  `null` w dniach tygodnia dalej znaczy „codziennie";
 - `harness-panel.html` — montuje CAŁY `ManagerDashboard` z propsami takimi,
   jakie podaje `App.tsx`, z PODMIENIONYM `api/supabase` (nic nie leci do sieci,
   można klikać wszystko). To jedyny sprawdzian, który łapie propsy gubione
@@ -770,166 +786,170 @@ da się tego nadrobić później. `scripts/backfill-pogoda.py` uzupełnia tylko
 horyzonty 1–7 i pisze z `ignore-duplicates`, żeby nie nadpisywać tego, co
 zebrał cron.
 
-## Zadania i sprzątanie (Roadmap p.2) — zaimplementowane 2026-09-02..04
+## Zadania — bloki i pomiary (Roadmap p.2) — przebudowane 2026-09-14 (0.37.0)
 
-Zbudowane w trzech rundach: pierwsza wersja (schemat + panel kierownika +
-checklisty pracownika) 2026-09-02, druga (priorytet, dowolne dni tygodnia,
-typ "Ogólne", drill-down "Niewykonane dzisiaj", pełna lista z filtrami,
-kafelek na Pulpicie, "Zgłoszenie → zadanie") 2026-09-03, trzecia
-(2026-09-04, po kolejnej rundzie testowania) — **uproszczenie modelu
-danych: usunięcie rozróżnienia `scope='lokal'` vs `scope='pracownik'`,
-patrz niżej**, plus reorganizacja formularza i odłączenie postępu na
-Pulpicie od tego, czy ktoś odbił zmianę. **Moduł Sprzątanie jako osobny,
-rozbudowany proces (HACCP: obladnannia/sprzęt, logi temperatur, oceny
-jakości) jest świadomie odłożony** — to, co jest zbudowane teraz,
-obsługuje tylko "zwykłe" zadania (w tym cykliczne), nie elektroniczny
-dziennik HACCP. Właściciel zdecyduje o zakresie tego drugiego etapu
-osobno; do tego czasu NIE projektuj tabeli `equipment`/`cleaning_logs` z
-własnej inicjatywy.
+Trzy rundy w 2026-09-02..04 zbudowały płaską listę zadań; 0.37.0 podniosła ją o
+poziom wyżej, do BLOKÓW. Powód: rozkład i adresat siedziały na KAŻDYM zadaniu
+osobno, więc „poranne otwarcie dla kucharza" było ośmioma zadaniami z ręcznie
+powtórzonymi dniami tygodnia — osiem miejsc, w których można się pomylić, i
+żadnego miejsca, w którym widać proces.
 
-Cała logika "czy zadanie jest dziś do zrobienia" i zapis/kasowanie
-wykonań żyje w [`utils/tasks.ts`](src/utils/tasks.ts) — jedyne miejsce,
-wywoływane i z [`ZadaniaISprzatanie.tsx`](src/components/manager/ZadaniaISprzatanie.tsx)
-(panel kierownika), i z
-[`employeeSessionShared.tsx`](src/components/employeeSessionShared.tsx)
-(Pulpit/Zmiana/Zadania pracownika, kiosk i konto osobiste). Nie duplikuj
-tej logiki w żadnym z tych dwóch miejsc.
+```
+blok    = KIEDY (pora + dni tygodnia, ewentualnie cykl) i DLA KOGO (stanowiska)
+zadanie = jeden wiersz checklisty: tytuł, opcjonalny opis/procedura,
+          opcjonalne POLA do wpisania, opcjonalny WŁASNY cykl
+          i opcjonalne WŁASNE DNI (które z dni bloku)
+```
 
-**Model danych** — dwie tabele (schemat pełny w sekcji "Schemat Supabase"
-niżej): `tasks` (definicje, tworzone przez kierownika) i
-`task_completions` (log wykonań — brak wiersza = niezrobione, jeden
-checkbox = jeden insert/delete, bez wstępnego materializowania "przypisane
-ale niezrobione"). ⚠️ **Wykonanie jest ZAWSZE wspólne, jeden wiersz na
-(zadanie, dzień)** — `findSharedCompletion()`, bez wyjątków. `tasks.scope`
-(`'lokal'`/`'pracownik'`) to relikt pierwszej wersji: kolumna wciąż
-istnieje w bazie (default `'lokal'`, ustawiany automatycznie przez
-Postgres — kod aplikacji już go nigdzie nie czyta ani nie zapisuje), ale
-**nie ma żadnego znaczenia w logice** — nie odtwarzaj rozróżnienia
-"osobne wykonanie per pracownik". Pierwsza wersja (2026-09-02/03) miała
-dla zadań przypisanych do stanowiska (`scope='pracownik'`) osobne
-wykonanie na każdego pracownika — okazało się to mylące w praktyce: dwie
-osoby na tym samym stanowisku widziały niezależne stany tego samego
-zadania, mimo że w rzeczywistości to jedna czynność do zrobienia przez
-kogokolwiek na zmianie. Jedyna zmienna, która realnie różnicuje zadania,
-to `stanowisko` (`null` = cały lokal/"wszyscy", inaczej konkretne
-stanowisko) — decyduje WIDOCZNOŚĆ (kto widzi zadanie na swojej liście),
-nie liczbę wymaganych wykonań. Na kiosku, jeśli dana osoba nie pracuje
-danego dnia, nikt i tak nie wchodzi na jej stronę, więc brak odznaczenia
-nie generuje fałszywego alarmu.
+Cała logika żyje w [`utils/tasks.ts`](src/utils/tasks.ts) — wołają ją
+[`manager/ZadaniaISprzatanie.tsx`](src/components/manager/ZadaniaISprzatanie.tsx)
+(widok dnia), [`manager/ZadaniaKonfiguracja.tsx`](src/components/manager/ZadaniaKonfiguracja.tsx)
+(ustawienia) i [`employeeSessionShared.tsx`](src/components/employeeSessionShared.tsx)
+(Tablet Służbowy, tablet z PIN-em, prywatny telefon — jeden kod, trzy
+powierzchnie). Nie duplikuj tego w komponentach.
 
-**`schedule_type`**: `ogolne` (dowolna pora dnia — **domyślny typ** w
-formularzu tworzenia, dodane 2026-09-03 bo pierwsza wersja nie miała
-kategorii "po prostu zrobić w ciągu dnia" innej niż cykliczne) /
-`poranne`/`obiadowe`/`wieczorne` / `cykliczne` (co N dni, `cycle_days`,
-liczone od **ostatniego faktycznego wykonania**, nie od stałej kotwicy w
-kalendarzu — pominięty cykl zostaje zaległy zamiast po cichu przeskoczyć
-dalej, patrz `isCyclicalDueOn` w `utils/tasks.ts`).
+⚠️ **Pora i adresat mieszkają TYLKO na bloku.** Kolumny `tasks.schedule_type` /
+`stanowisko` / `for_manager` / `day_of_week` zostały w bazie z danymi (migracja
+`0019` przepisała je na bloki), ale kod ich NIE czyta — dwa źródła odpowiedzi na
+to samo pytanie to gwarantowany rozjazd. Na zadaniu żyją tylko dwa ZAWĘŻENIA
+wewnątrz bloku: `cycle_days` (co ile dni) i `days_of_week` (które z dni bloku).
+Bloki są kategoriami, zadania podzadaniami — lokal ustawia je raz pod swój
+proces i zmienia wyjątkowo.
 
-**Dni tygodnia**: `days_of_week` (text, lista indeksów po przecinku, np.
-`"1,2,3,4,5"` — `0=niedziela..6=sobota`, zwykłe JS `Date.getDay()`, bez
-własnego mapowania) pozwala wybrać DOWOLNY podzbiór dni zamiast jednego —
-dodane 2026-09-03 na prośbę właściciela ("codziennie oprócz niedzieli"
-wymagało wcześniej 6 osobnych zadań z pojedynczym `day_of_week`).
-Formularz (`ZadaniaISprzatanie.tsx`, sekcja "Powtarzalność") domyślnie
-zaznacza wszystkie 7 dni (przycisk "Cały tydzień" też ustawia/czyści
-wszystkie naraz) — kierownik odznacza tylko wyjątki, nie zaznacza od
-zera. 7/7 zaznaczonych dni jest równoważne "codziennie" (`daysOfWeekLabel`
-pokazuje podpowiedź "tylko ..." wyłącznie gdy zaznaczono 1-6 dni, nie 7).
-Stary `day_of_week` (int, pojedynczy dzień) zostaje w schemacie tylko dla
-wstecznej zgodności z zadaniami utworzonymi przed tą zmianą — `isTaskDueOn`
-honoruje `days_of_week`, jeśli jest ustawione, inaczej spada na
-`day_of_week`.
+⚠️ **BLOK JEST WAŻNIEJSZY** (ustalenie właściciela). Dni zadania mogą zbiór dni
+bloku tylko ZAWĘZIĆ, nigdy rozszerzyć: zadanie z sobotą w bloku pon–pt nie
+pokaże się w sobotę. Inaczej „kiedy ten blok jest" przestałoby mieć odpowiedź,
+bo każde zadanie mogłoby ją unieważnić. W formularzu dni spoza bloku są
+WYŁĄCZONE (nie ukryte) — hierarchia ma być widoczna, a konfiguracji, która
+nigdy nie zadziała, nie da się zapisać (`dniSkuteczne()` liczy przecięcie i
+blokuje zapis przy pustym). Po co to w ogóle: jeden blok „Mycie i dezynfekcja"
+stoi cały tydzień, ale w poniedziałek myje się okap, a w środę lodówkę —
+wcześniej wymagało to dwóch bloków o tej samej nazwie, czyli dokładnie tego
+rozdrabniania, przed którym bloki miały chronić.
 
-**Priorytet** (`priority`: `niski`/`sredni`/`wysoki`, default `sredni`,
-dodane 2026-09-03) — czysto informacyjny, nie zmienia logiki "co jest do
-zrobienia". `wysoki` dostaje czerwony tag "Ważne" przy niedokończonym
-zadaniu (Pulpit, Zmiana, zakładka Zadania) i sortuje się na górę
-checklisty (`buildEmployeeChecklist`).
+⚠️ **`tasks.days_of_week` zmieniło znaczenie w migracji `0020`.** Do 0019
+trzymało rozkład zadania (przeniesiony potem na blok i zostawiony jako martwa
+kopia), od 0020 znaczy „które dni z dni bloku", a puste = wszystkie dni bloku.
+Migracja czyści stare kopie — bez tego kierownik przestawiłby dni bloku na
+weekend, a zadania po cichu by zniknęły, bo wciąż miałyby w sobie „pon–pt".
 
-**Formularz "Nowe zadanie"** (`ZadaniaISprzatanie.tsx`, reorganizowany
-2026-09-04): Tytuł, Opis, potem **Lokal i "Dla kogo" (stanowisko albo
-"Wszyscy") obok siebie** — jedno pole wyboru odbiorcy zamiast dawnego
-`scope` + osobnego selecta stanowiska. Sekcja "Powtarzalność" grupuje
-WSZYSTKO co dotyczy częstotliwości w jednym bloku: przycisk "Cały
-tydzień" + 7 przełączników dni + pole "Termin" (godzina, opcjonalna) —
-świadomie przeniesione tu z osobnych miejsc formularza, żeby cała
-konfiguracja "kiedy" żyła w jednym miejscu. Pole `owner_label` ("Kto ma
-zrobić", wolny tekst) zostało **usunięte z formularza** (kolumna w bazie
-zostaje, nieużywana) — było zbędne po tym, jak odbiorcą zadania stało się
-wprost stanowisko zamiast luźnej podpowiedzi tekstowej.
+⚠️ **Nazwa „blok" jest w tym repo zajęta dwa razy.** `lokale.dostepne_bloki` to
+BLOKI INTERFEJSU widoczne na prywatnym telefonie (`WPISY`, `RAPORT`, `ZADANIA`…)
+— zupełnie inna rzecz niż `task_blocks`. Nie myl ich przy czytaniu kodu.
 
-**Panel kierownika** (`ZadaniaISprzatanie.tsx`) — pigułki filtrów
-Poranne/Obiadowe/Wieczorne/Ogólne/Cykliczne + osobny przełącznik "Zadania
-kierownika" (`for_manager=true`, ortogonalna flaga — zadanie może być
-jednocześnie np. wieczorne I dla kierownika). Nawigacja dat z przyciskiem
-"Dziś" (szybki skok). ⚠️ Od 2026-09-04 **jedna, spójna lista** "Zadania na
-dziś" (filtrowana pigułkami + opcjonalnie stanowiskiem) zamiast
-poprzedniego podziału na dwa panele ("Wspólne dla całego lokalu" /
-"Postęp po osobach") — ten podział miał sens tylko przy modelu z osobnym
-wykonaniem per pracownik, którego już nie ma. Sekcja "Niewykonane
-dzisiaj" (zwijana) to płaska lista zaległych zadań (tytuł, priorytet,
-stanowisko/lokal) — **bez** rozbicia po pracownikach/godzinach zmian (to
-też było zależne od starego modelu). Sekcja "Wszystkie zadania w tym
-lokalu" (zwijana) to pełny katalog zadań (niezależnie od tego, czy są
-dziś "due"), z filtrem po lokalu i stanowisku oraz przyciskiem
-"Archiwizuj" (`tasks.archived=true` — **jedyna** dostępna dziś operacja
-edycji istniejącego zadania; nie ma UI do zmiany tytułu/harmonogramu już
-utworzonego zadania — trzeba zarchiwizować i stworzyć nowe).
+⚠️ **Wykonanie jest ZAWSZE wspólne, jeden wiersz na (zadanie, dzień)** —
+`findSharedCompletion`, bez wyjątków (decyzja z 2026-09-04, pierwsza wersja
+miała osobne wykonanie per pracownik i było mylące). Stanowiska bloku decydują o
+WIDOCZNOŚCI, nie o liczbie wykonań. Kto ma je wykonać, wynika z grafiku:
+panel pokazuje przy bloku „Dziś wg grafiku: Ala, Marek" (`publishedShiftsOnDay`
++ stanowiska bloku). Blok, którego nikt dziś nie obsadza, dostaje podpis, ale
+NADAL liczy się do procentu dnia — drugie reguła liczenia byłaby gorsza niż
+jeden mylący wiersz.
 
-**Kafelek "Zadania dziś" na Pulpicie** ([`PulpitHome.tsx`](src/components/manager/PulpitHome.tsx),
-4. kolumna) — pierścień postępu (`ProgressRing`, SVG) per lokal. ⚠️ Od
-2026-09-04 liczony **wyłącznie z `tasks`/`task_completions`**, NIE z
-`shifts` — pierwsza wersja pokazywała postęp tylko dla pracowników, którzy
-danego dnia odbili zmianę, co dawało mylące "0 zadań" na starcie dnia,
-zanim ktokolwiek się zalogował (zespół jeszcze nie ma nawyku odbijania
-zmiany od razu po przyjściu). Lista lokali do pokazania = lokale mające
-choć jedno nieaktywne-nie-archiwalne zadanie zdefiniowane, niezależnie od
-obsady.
+### Pomiar — zadanie, które prosi o wartość
 
-**Zgłoszenie → zadanie** (`Zgloszenia.tsx`, dodane 2026-09-03) — przycisk
-"Utwórz zadanie" przy zgłoszeniu typu `problem` tworzy `tasks` wiersz z
-`for_manager=true`, `schedule_type='ogolne'`, `source_issue_id=issue.id`
-(text, luźne odwołanie bez FK — ten sam wzorzec co
-`shift_edits.shift_id`/`issue_id`, patrz błędy #12/#13 niżej). Tytuł jest
-edytowalny inline przed zapisem (podpowiedź = pierwsze 80 znaków treści
-zgłoszenia). Po utworzeniu przycisk zamienia się w odznakę "Zadanie
-utworzone" (sprawdzane przez `tasks.some(t => t.source_issue_id ===
-iss.id)`, przeżywa odświeżenie strony).
+`tasks.pola` (jsonb, ten sam kształt co `day_log_templates.pola`) zamienia
+checkbox w pomiar: temperatura, kwota, tak/nie, z normą `min`/`max`. Wartość
+**nie jest przechowywana przy zadaniu** — leci do `day_log_entries`, czyli tam,
+gdzie i tak mieszka cały dziennik HACCP, a `task_completions.entry_id` tylko na
+nią wskazuje. Dzięki temu za darmo działają: kontrola normy (`pozaNormaPola`),
+poprawka przez NOWY wiersz (`corrected_from`) i widok na karcie dnia.
 
-**Pracownik** (`employeeSessionShared.tsx`) — `buildEmployeeChecklist`
-liczy checklistę widoczną dla pracownika na dany dzień (filtr: lokal +
-stanowisko dopasowane albo "wszyscy"), preferując lokal/stanowisko z
-otwartej albo najnowszej zmiany danego dnia nad statycznym
-`default_lokal`/`default_stanowisko` (`getEffectiveAssignmentForDate`) —
-to dotyczy tylko tego, co pracownik WIDZI, nie wykonania (które jest
-wspólne, patrz "Model danych" wyżej). Wspólny renderer
-`renderTaskChecklist()` (jedna funkcja, trzy miejsca użycia — nie
-duplikuj, od 2026-09-04 używana też przez zakładkę Zadania zamiast
-własnej kopii JSX) rysuje checklistę z klikalnym checkboxem: gdy zadanie
-wykonane, wiersz jest wizualnie "lżejszy" (`opacity-60`) z przekreślonym
-tytułem (`line-through`) i podpisem kto/kiedy wykonał — działa tak samo
-(1) na Pulpit **przed** rozpoczęciem zmiany (pełna klikalna lista, nie
-tylko link — dodane 2026-09-03/04 po feedbacku testowym), (2) na
-Pulpit/Zmiana **w trakcie** zmiany (sekcja "Zadania na zmianę" +
-niewymuszający banner "Zostały N zadań..." — zamknięcie zmiany działa
-bez ograniczeń niezależnie od stanu zadań), (3) w zakładce Zadania (z
-przełącznikiem "Twoje stanowisko"/"Wszystkie" — "Wszystkie" przydatne
-głównie na kiosku, gdzie kilka ról dzieli jeden tablet; odhaczenie
-zadania spoza własnego stanowiska w tym trybie jest dozwolone i zapisuje
-się pod tożsamością klikającej osoby, świadoma decyzja). Zakładka Zadania
-ma też banner "Masz N niewykonanych zadań" i mini-raport
-`weeklyChecklistStats()` — "Ostatnie 7 dni: X z Y zadań", liczony TYLKO z
-dni, w które pracownik faktycznie miał jakąś zmianę (przybliżenie, nie
-audyt — patrz komentarz w `utils/tasks.ts`; ten wskaźnik dotyczy widoku
-JEDNEGO pracownika, więc zależność od jego własnych zmian ma sens —
-inaczej niż kafelek kierownika na Pulpicie opisany wyżej). Odznaka z
-liczbą niewykonanych zadań na ikonie zakładki "Zadania" w `Shell`
-(`taskBadgeCount`, ten sam wzorzec co `unreadCount` na "Więcej" —
-przekazywany przez WSZYSTKIE 7 wywołań `<Shell>` w tym pliku).
+Podział ról: **Zadania = zbieranie w ciągu zmiany. Puls = zapis dnia.**
 
-`App.tsx` ładuje `tasks`/`task_completions` jako dwa osobne, nieblokujące
-fetche (ten sam wzorzec co `shift_edits`) — błąd tu nie blokuje reszty
-apki.
+- `tasks.template_key` podpina zadanie pod pozycję z konfiguracji Pulsu. Wtedy
+  definicja pól pochodzi z SZABLONU (jedno źródło), a wpis dostaje jego
+  `template_key` — karta dnia widzi pozycję jako wypełnioną i nie prosi o nią
+  drugi raz. To jest ten konektor, przez który nie powstają duplikaty.
+- Pomiar własny zadania zapisuje się z kluczem `zad:<id>` i ląduje na karcie dnia
+  w sekcji **„Z checklisty"**. ⚠️ Klucz MUSI być — wpisy bez `template_key` karta
+  dnia pokazuje w sekcji „Zdarzenia", gdzie pomiar wyszedłby jako „(bez opisu)".
+- ⚠️ **Zapis idzie w kolejności: najpierw wpis, potem wykonanie.** Odwrotnie
+  zostawiłby „zrobione" bez pomiaru, czyli dokładnie to, przed czym ten moduł
+  chroni.
+- ⚠️ **Wykonania z pomiarem NIE da się odznaczyć** (`toggleTaskCompletion` rzuca
+  błąd). Jedyna droga to „Popraw", która pisze nowy wiersz z `corrected_from` i
+  powodem, i przestawia `entry_id`. Ta sama zasada co
+  `poprawZamknietyDzien()` w Pulsie.
+- ⚠️ **Poprawka MUSI być widoczna, nie tylko zapisana.** `wpisyDlaDnia` pokazuje
+  wyłącznie wersję aktualną, więc poprawiona wartość wygląda dokładnie jak
+  wpisana za pierwszym razem — ślad leży w bazie, ale dla celu, dla którego
+  powstał (dowód HACCP), nie istnieje. Robi to `opisPoprawki()` w
+  `utils/dziennik.ts` + komponent
+  [`manager/SladPoprawki.tsx`](src/components/manager/SladPoprawki.tsx),
+  wpięty w CZTERECH miejscach pokazujących wartość pomiaru: karta dnia (pozycje
+  dziennika i „Z checklisty"), ekran kierownika zmiany, panel zadań i
+  checklista pracownika. Dokładając piąte miejsce z wartością wpisu, dołóż tam
+  i ten podpis. ⚠️ `opisPoprawki` dostaje PEŁNĄ listę wpisów, nie wynik
+  `wpisyDlaDnia()` — ta odfiltrowuje właśnie poprzednie wersje.
+
+### Panel kierownika
+
+**Widok dnia** (`ZadaniaISprzatanie.tsx`) — kafelki (wykonane / bloki / po
+terminie / pomiary poza normą), pigułki pory + przełącznik „Zadania kierownika",
+a pod nimi karty bloków: nazwa, pora, dni, lokal, stanowiska, obsada z grafiku,
+pasek postępu i pozycje z wartościami pomiaru oraz „Popraw".
+
+**Konfiguracja** (`ZadaniaKonfiguracja.tsx`, przycisk „Konfiguracja" — ten sam
+układ co Konfiguracja w Grafiku i w Pulsie) — bloki z zadaniami, kolejność
+strzałkami (w projekcie nie ma biblioteki drag-and-drop i nie dokładaj jej),
+archiwizacja zamiast kasowania. Formularz zadania: tytuł, opis/procedura,
+priorytet, termin, własny cykl, dni tygodnia (z wyłączonymi dniami spoza bloku)
+i „Co zapisujemy przy wykonaniu" (bez pomiaru / pozycja z Pulsu / własne pola).
+
+**`BLOKI_STARTOWE`** w `utils/tasks.ts` — sześć gotowych bloków (Otwarcie,
+HACCP, Mycie i dezynfekcja, Zamknięcie, Sala i goście, Kontrola kierownika) z
+zadaniami i normami. Ten sam powód co `SZABLONY_STARTOWE` w Pulsie: w
+gastronomii proces jest wszędzie podobny, a kwadrans wpisywania per lokal to
+dokładnie ta praca, która rozciąga wdrożenie u klienta.
+
+### Pracownik (Tablet Służbowy, tablet z PIN-em, konto prywatne)
+
+Jeden kod w `employeeSessionShared.tsx`, trzy powierzchnie — różnic w logice nie
+ma. `renderBlockCards(grupy, { zwiniete })` rysuje karty bloków,
+`renderTaskChecklist(items)` pozycje w środku.
+
+- **Pulpit** — same nagłówki bloków z licznikiem („Otwarcie lokalu · 0/2").
+  Kliknięcie przenosi do zakładki **Zadania** i otwiera TEN blok (`openBlockId`).
+  Pełna lista zadań stała wcześniej wprost na Pulpicie i zasłaniała zmianę oraz
+  grafik.
+- **Zmiana** (zmiana w toku) — te same karty, rozwijane na miejscu, plus
+  dotychczasowy niewymuszający banner „Zostały N zadań…".
+- **Zadania** — karty + przełącznik „Twoje stanowisko / Wszystkie" (na kiosku
+  jedyna droga do cudzej checklisty) + mini-raport `weeklyChecklistStats`.
+- Bez wyboru rozwinięty jest pierwszy blok, w którym coś zostało — ekran, na
+  którym trzeba najpierw kliknąć, żeby cokolwiek zobaczyć, wygląda jak pusty.
+- Pomiar otwiera **ten sam `ModalWpisu`**, co karta dnia i ekran kierownika
+  zmiany. To ta sama czynność i ma wyglądać tak samo wszędzie.
+
+### Siatka bezpieczeństwa i pułapki
+
+- **Zadanie bez `block_id` nie znika** — dostaje blok wirtualny „Bez bloku"
+  (codziennie, adresat ze starych kolumn zadania), a konfiguracja pokazuje to
+  wprost. Po migracji `0019` ma tam być pusto.
+- ⚠️ `parseDaysOfWeek` zwraca `null`, gdy dni nie ustawiono, i to znaczy
+  **CODZIENNIE**, nie „nigdy". Przy wczytywaniu bloku do formularza `null` musi
+  wrócić jako PEŁNY tydzień — inaczej wejście w edycję po cichu odznaczy
+  wszystkie dni. Ta sama pułapka co w `GrafikWymagania.tsx`.
+- **Cykl bloku liczy się od ostatniego dnia, w którym wykonano cokolwiek z tego
+  bloku**; cykl zadania — od ostatniego wykonania tego zadania. Oba od
+  FAKTYCZNEGO wykonania, nie od kotwicy w kalendarzu, więc pominięty cykl
+  zostaje zaległy zamiast po cichu przeskoczyć.
+- ⚠️ Dni zadania wczytywane do formularza mają tę samą pułapkę co dni bloku:
+  `null` znaczy „wszystkie dni bloku" i musi wrócić jako PEŁNY tydzień, inaczej
+  wejście w edycję po cichu odznaczy wszystko, a zapis zawęzi zadanie do
+  niczego. Zapis robi drogę powrotną: 7/7 zapisuje jako `null`, żeby zadanie
+  dalej szło za blokiem, gdy ktoś zmieni dni bloku.
+- `utils/pola.ts` trzyma definicję pól wspólną dla dziennika i dla zadań —
+  osobny plik, bo `utils/dziennik.ts` importuje z `utils/tasks.ts` i sięgnięcie w
+  drugą stronę zrobiłoby cykl importów.
+- `harness-zadania.html` sprawdza całą arytmetykę bloków na ręcznie policzonych
+  przykładach (47 przypadków, w tym dziewięć na dni zadania wewnątrz bloku). Dokładając logikę, dopisz przypadek zamiast
+  zgadywać.
+- **Sprzątanie jako osobny, rozbudowany proces HACCP** (sprzęt jako encja, logi
+  temperatur per urządzenie, oceny jakości) **wciąż jest świadomie ODŁOŻONE** —
+  bloki z pomiarami pokrywają dużą część tej potrzeby, ale nie projektuj tabeli
+  `equipment`/`cleaning_logs` z własnej inicjatywy.
 
 ## Zgłoszenia i powiadomienia — pełna mapa (ustalone 2026-08-31)
 
@@ -1115,16 +1135,23 @@ zakresem — wymaga Grafiku, którego nie ma.
     Postgresa. Potwierdzone działające — obie funkcje są już głównym,
     wielokrotnie używanym kanałem powiadomień (patrz "Zgłoszenia i
     powiadomienia" wyżej).
-- **tasks** — definicje zadań, patrz "Zadania i sprzątanie" wyżej.
+- **task_blocks** — bloki zadań (checklisty), patrz "Zadania — bloki i pomiary"
+  wyżej. `id (uuid), lokal, nazwa, opis, stanowiska (text, lista nazw po
+  przecinku — konwencja allowed_lokale, puste = wszyscy), schedule_type
+  ('poranne'|'obiadowe'|'wieczorne'|'ogolne'|'cykliczne'), cycle_days (int),
+  days_of_week (text, "1,2,3,4,5" — null = CODZIENNIE), deadline_time (time),
+  for_manager (bool), kolejnosc (int), active, archived, created_at`.
+  Migracja `0019`. RLS: otwarta polityka jak reszta.
+- **tasks** — definicje zadań, patrz "Zadania — bloki i pomiary" wyżej.
   `id (uuid), lokal (text), title (text), description (text, null),
   schedule_type (text: 'poranne'|'obiadowe'|'wieczorne'|'ogolne'|
-  'cykliczne'), cycle_days (int, null — tylko cykliczne), day_of_week
-  (int, null, 0-6 — STARE, zastąpione przez days_of_week, zostaje tylko
-  dla wstecznej zgodności), days_of_week (text, null — lista indeksów po
-  przecinku np. "1,2,3,4,5", 0=niedziela..6=sobota, dodane 2026-09-03),
+  'cykliczne'), cycle_days (int, null — od 0.37.0 WŁASNY cykl zadania
+  wewnątrz bloku, jedyna pozostałość rozkładu na zadaniu), day_of_week
+  (int, null — MARTWE), days_of_week (text, null — od migracji 0020 KTÓRE DNI Z DNI BLOKU,
+  puste = wszystkie; NIE mylić ze starym znaczeniem sprzed 0019),
   scope (text: 'lokal'|'pracownik', default 'lokal' — NIEUŻYWANE w
   logice od 2026-09-04, zostaje w bazie z automatycznym defaultem, nie
-  czytaj/nie pisz go, patrz "Zadania i sprzątanie" wyżej), stanowisko
+  czytaj/nie pisz go, patrz "Zadania — bloki i pomiary" wyżej), stanowisko
   (text, null — decyduje widoczność: null="wszyscy"/cały lokal, inaczej
   konkretne stanowisko; wykonanie zawsze wspólne bez względu na tę
   wartość), owner_label (text, null — pole z pierwszej wersji formularza,
@@ -1134,8 +1161,17 @@ zakresem — wymaga Grafiku, którego nie ma.
   false), source_issue_id (text, null — luźne odwołanie do issues.id gdy
   zadanie powstało z przycisku "Utwórz zadanie" w Zgłoszeniach, dodane
   2026-09-03), active (boolean, default true), archived (boolean, default
-  false), created_at (timestamptz)`. RLS: otwarta polityka, jak reszta.
-- **task_completions** — log wykonań zadań, patrz "Zadania i sprzątanie"
+  false), created_at (timestamptz)`. Od 0.37.0 (migracja `0019`):
+  `block_id (text — luźne odwołanie do task_blocks.id), kolejnosc (int),
+  pola (jsonb, default '[]' — definicja pól pomiaru, ten sam kształt co
+  day_log_templates.pola; pusta tablica = zwykły checkbox), typ (text —
+  słownik day_log_entries.typ, tylko gdy są pola), template_key (text —
+  gdy ustawione, zadanie zbiera pozycję z konfiguracji Pulsu o tym kluczu:
+  pola biorą się z szablonu, a wpis dostaje ten sam template_key, więc
+  karta dnia nie prosi o nią drugi raz)`.
+  ⚠️ `schedule_type`, `day_of_week`, `stanowisko`, `for_manager`, `scope`,
+  `owner_label` — kolumny z danymi, których kod NIE czyta. RLS: otwarta polityka, jak reszta.
+- **task_completions** — log wykonań zadań, patrz "Zadania — bloki i pomiary"
   wyżej. `id (bigint identity), task_id (text — luźne odwołanie do
   tasks.id, bez FK, ten sam wzorzec co shift_edits), date (date), user_id
   (text, null), user_name (text, null), completed_at (timestamptz),
@@ -1800,9 +1836,9 @@ zmiany kodu (patrz "Panel kierownika" wyżej). Codzienna weryfikacja
 kierownika ORAZ pracownika: miesiąc przed, 2 tygodnie przed, codziennie w
 ostatnim tygodniu, i codziennie po przekroczeniu terminu aż do poprawy.
 
-### 2. Zadania + Sprzątanie — **ZADANIA ZROBIONE, Sprzątanie jako osobny proces ODŁOŻONE**
+### 2. Zadania + Sprzątanie — **ZADANIA ZROBIONE (przebudowane na bloki w 0.37.0), Sprzątanie jako osobny proces ODŁOŻONE**
 ⚠️ Zaimplementowana część NIE odpowiada już dokładnie opisowi niżej —
-patrz sekcja "Zadania i sprzątanie" wyżej po pełny, aktualny opis. Skrót:
+patrz sekcja "Zadania — bloki i pomiary" wyżej po pełny, aktualny opis. Skrót:
 
 - **Zadania** — ZROBIONE (2026-09-02/03). Zadania tworzone przez
   kierownika (poranne/obiadowe/wieczorne/ogólne/cykliczne, priorytet,

@@ -42,7 +42,12 @@ const KioskDashboard = ({
   notifications,
   setNotifications,
   tasks,
+  taskBlocks,
   taskCompletions,
+  dayLogs,
+  dayLogEntries,
+  setDayLogEntries,
+  dayLogTemplates,
   setTaskCompletions,
   absences,
   planShifts,
@@ -464,7 +469,12 @@ const KioskDashboard = ({
         issues={issues}
         setIssues={setIssues}
         tasks={tasks}
+        taskBlocks={taskBlocks}
         taskCompletions={taskCompletions}
+        dayLogs={dayLogs}
+        dayLogEntries={dayLogEntries}
+        setDayLogEntries={setDayLogEntries}
+        dayLogTemplates={dayLogTemplates}
         setTaskCompletions={setTaskCompletions}
         absences={absences}
         planShifts={planShifts}

@@ -5,6 +5,40 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.37.0 — 2026-09-14
+
+- **Zadania układają się w bloki.** Zamiast listy luźnych pozycji lokal ma
+  teraz checklisty: „Otwarcie lokalu", „Bezpieczeństwo żywności", „Mycie
+  sprzętu", „Zamknięcie lokalu". Blok mówi, kiedy się pojawia (pora, dni
+  tygodnia, ewentualnie co ile dni) i kogo dotyczy (stanowiska albo wszyscy) —
+  ustawia się to raz dla całego bloku, a nie osobno przy każdym zadaniu.
+- **W jednym bloku zadania mogą się zmieniać dniami tygodnia.** Blok
+  „Mycie i dezynfekcja" stoi cały tydzień, a w poniedziałek myje się okap, w
+  środę lodówkę. Wcześniej wymagało to dwóch bloków o tej samej nazwie. Blok
+  jest nadrzędny: dni zadania mogą zawęzić dni bloku, ale nie rozszerzyć — w
+  formularzu dni spoza bloku są wyszarzone i widać, kiedy zadanie faktycznie
+  wypadnie.
+- **Zadanie może prosić o wpisanie wartości.** Temperatura lodówki, stan kasy,
+  temperatura dostawy, tak/nie — z normą, więc wartość poza zakresem od razu
+  świeci na czerwono. Wpis trafia do dziennika dnia w Pulsie, czyli tam, gdzie
+  i tak mieszka cała dokumentacja HACCP.
+- **Żadnego mierzenia dwa razy.** Zadanie można podpiąć pod pozycję z
+  konfiguracji Pulsu — wtedy pomiar zrobiony w trakcie zmiany zamyka tę pozycję
+  na karcie dnia i nikt nie pyta o nią ponownie przy zamykaniu.
+- **Pomiaru nie da się odznaczyć, da się go poprawić.** Poprawiona wartość ma
+  przy sobie podpis „poprawione — było X (kto wpisał) · poprawił/a Y · powód",
+  widoczny i w Pulsie, i w zadaniach. Zapis, który da się cicho przepisać, nie
+  jest dowodem niczego — ale ślad, którego nikt nie widzi, też nim nie jest.
+- **Do zadania można dopisać opis albo procedurę** („piec na 220°C, bemar na
+  2") — pracownik widzi ją pod tytułem. Pole jest nieobowiązkowe.
+- **U pracownika Pulpit pokazuje same bloki z licznikiem**, a kliknięcie w blok
+  otwiera go od razu w zakładce Zadania. Wcześniej cała lista zadań stała na
+  Pulpicie i zasłaniała zmianę i grafik.
+- **Nowy lokal ustawia zadania na kilka kliknięć** — sześć gotowych bloków z
+  zadaniami i normami czeka w „Szybkim starcie" w konfiguracji.
+- Panel kierownika pokazuje przy każdym bloku, kto go dziś obsadza według
+  grafiku, ile pozycji zostało i które pomiary wypadły poza normę.
+
 ## 0.36.2 — 2026-09-13
 
 - **Ta sama zmiana nie da się już zapisać dwa razy.** 13.09 Natalia i Katia

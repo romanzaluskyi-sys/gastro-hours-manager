@@ -51,6 +51,7 @@ export default function App() {
   const [notifications, setNotifications] = useState([]);
   const [shiftEdits, setShiftEdits] = useState([]);
   const [tasks, setTasks] = useState([]);
+  const [taskBlocks, setTaskBlocks] = useState([]);
   const [taskCompletions, setTaskCompletions] = useState([]);
   const [absences, setAbsences] = useState([]);
   // Dziennik dnia ("Puls") — karta, wpisy i szablony wpisów.
@@ -181,6 +182,12 @@ export default function App() {
       .then((t) => setTasks(Array.isArray(t) ? t : []))
       .catch((err) => {
         console.error("Błąd pobierania zadań:", err.message || err);
+      });
+    api
+      .get("task_blocks")
+      .then((b) => setTaskBlocks(Array.isArray(b) ? b : []))
+      .catch((err) => {
+        console.error("Błąd pobierania bloków zadań:", err.message || err);
       });
     api
       .get("task_completions")
@@ -334,6 +341,11 @@ export default function App() {
           notifications={notifications}
           setNotifications={setNotifications}
           tasks={tasks}
+          taskBlocks={taskBlocks}
+          dayLogEntries={dayLogEntries}
+          setDayLogEntries={setDayLogEntries}
+          dayLogTemplates={dayLogTemplates}
+          dayLogs={dayLogs}
           taskCompletions={taskCompletions}
           setTaskCompletions={setTaskCompletions}
           absences={absences}
@@ -358,6 +370,11 @@ export default function App() {
           notifications={notifications}
           setNotifications={setNotifications}
           tasks={tasks}
+          taskBlocks={taskBlocks}
+          dayLogEntries={dayLogEntries}
+          setDayLogEntries={setDayLogEntries}
+          dayLogTemplates={dayLogTemplates}
+          dayLogs={dayLogs}
           taskCompletions={taskCompletions}
           setTaskCompletions={setTaskCompletions}
           absences={absences}
@@ -387,6 +404,8 @@ export default function App() {
           shiftEdits={shiftEdits}
           setShiftEdits={setShiftEdits}
           tasks={tasks}
+          taskBlocks={taskBlocks}
+          setTaskBlocks={setTaskBlocks}
           setTasks={setTasks}
           taskCompletions={taskCompletions}
           setTaskCompletions={setTaskCompletions}

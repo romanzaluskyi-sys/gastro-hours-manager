@@ -12,9 +12,20 @@ const inputCls =
   "w-full border-[2px] border-[#171714] rounded px-3 py-2 text-[15px] bg-white";
 const labelCls = "text-[11px] font-bold tracking-wider uppercase text-[#8F8E86] mb-1 block";
 
-export default function ModalWpisu({ szablon, onClose, onSave }) {
+// `wartosciStartowe` i `powodWymagany` dokładają tryb POPRAWKI (zadania z
+// pomiarem, 0.37.0): wartość już jest, zmieniamy ją i musimy powiedzieć
+// dlaczego. Poprawka zapisuje się jako nowy wiersz wpisu wskazujący na stary —
+// zapis HACCP, który da się cicho przepisać, nie jest dowodem niczego.
+export default function ModalWpisu({
+  szablon,
+  onClose,
+  onSave,
+  wartosciStartowe,
+  powodWymagany = false,
+}) {
   const pola = polaSzablonu(szablon);
-  const [wartosci, setWartosci] = useState({});
+  const [wartosci, setWartosci] = useState(wartosciStartowe || {});
+  const [powod, setPowod] = useState("");
   const [zapisuje, setZapisuje] = useState(false);
 
   // Pola tak/nie są zawsze "odpowiedziane" — niezaznaczone znaczy "nie".
@@ -23,12 +34,12 @@ export default function ModalWpisu({ szablon, onClose, onSave }) {
   const brakujace = pola.filter(
     (p) => p.typ !== "bool" && !String(wartosci[p.klucz] ?? "").trim()
   );
-  const kompletny = !brakujace.length;
+  const kompletny = !brakujace.length && (!powodWymagany || !!powod.trim());
 
   const zapisz = async () => {
     if (!kompletny) return;
     setZapisuje(true);
-    await onSave(szablon.typ, szablon.klucz, wartosci);
+    await onSave(szablon.typ, szablon.klucz, wartosci, powod.trim());
     setZapisuje(false);
   };
 
@@ -65,10 +76,25 @@ export default function ModalWpisu({ szablon, onClose, onSave }) {
               )}
             </div>
           ))}
+          {powodWymagany && (
+            <div>
+              <label className={labelCls}>Powód poprawki</label>
+              <input
+                className={inputCls}
+                value={powod}
+                onChange={(e) => setPowod(e.target.value)}
+                placeholder="np. pomyłka przy odczycie"
+              />
+            </div>
+          )}
           <div className="flex flex-wrap gap-2 justify-end items-center pt-1">
             {!kompletny && (
               <span className="text-[13px] text-[#6E6E66] mr-auto">
-                Wypełnij: {brakujace.map((p) => p.label).join(", ")}
+                Wypełnij:{" "}
+                {[
+                  ...brakujace.map((p) => p.label),
+                  ...(powodWymagany && !powod.trim() ? ["powód poprawki"] : []),
+                ].join(", ")}
               </span>
             )}
             <button className={btnSecondaryCls} onClick={onClose}>

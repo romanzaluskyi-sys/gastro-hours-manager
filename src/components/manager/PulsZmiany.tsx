@@ -36,10 +36,12 @@ import {
   zapiszKarte,
   zamknijDzien,
   zapiszWpis,
+  opisPoprawki,
   POWODY_UTARGU,
   toLocalYMD,
 } from "../../utils/dziennik";
 import ModalWpisu from "./ModalWpisu";
+import SladPoprawki from "./SladPoprawki";
 import ZdarzenieModal from "./ZdarzenieModal";
 
 const inputCls =
@@ -258,6 +260,9 @@ export default function PulsZmiany({ currentUser, lokal, showMsg, onBack }) {
         {naDzis.map((s) => {
           const wpis = wpisDlaSzablonu(s.klucz);
           const alarm = wpis && pozaNorma(s, wpis.payload);
+          // ⚠️ pełna lista wpisów, nie wpisyDnia — ta odfiltrowuje właśnie
+          // poprzednie wersje, czyli to, czego tu szukamy.
+          const poprawka = opisPoprawki(wpis, wpisy, polaSzablonu(s));
           return (
             <div
               key={s.id}
@@ -295,6 +300,7 @@ export default function PulsZmiany({ currentUser, lokal, showMsg, onBack }) {
                   Wpisz
                 </button>
               )}
+              {poprawka && <SladPoprawki opis={poprawka} />}
             </div>
           );
         })}

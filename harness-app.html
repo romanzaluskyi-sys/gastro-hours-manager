@@ -25,7 +25,7 @@ const pokazBlad = (e) => {
 window.addEventListener("error", (ev) => pokazBlad(ev.error || ev.message));
 window.addEventListener("unhandledrejection", (ev) => pokazBlad(ev.reason));
 
-const IKONY = ["AlertCircle", "AlertTriangle", "Archive", "ArchiveRestore", "ArrowLeft", "ArrowLeftRight", "ArrowRight", "BarChart3", "Bell", "BookOpen", "Briefcase", "Calendar", "CalendarCheck", "CalendarDays", "CalendarRange", "Check", "CheckCircle", "CheckCircle2", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "ClipboardCheck", "ClipboardList", "ClipboardPlus", "Clock", "Cloud", "Construction", "Copy", "CopyPlus", "Delete", "Download", "Edit2", "Eye", "FileText", "Flag", "HelpCircle", "History", "Home", "Info", "Lock", "LogIn", "LogOut", "Mail", "MapPin", "MoreHorizontal", "Palmtree", "Pencil", "Plus", "Printer", "RefreshCw", "Save", "Send", "SlidersHorizontal", "Trash2", "User", "UserPlus", "Users", "WifiOff", "X"];
+const IKONY = ["AlertCircle", "AlertTriangle", "Archive", "ArchiveRestore", "ArrowLeft", "ArrowLeftRight", "ArrowRight", "BarChart3", "Bell", "BookOpen", "Briefcase", "Calendar", "CalendarCheck", "CalendarDays", "CalendarRange", "Check", "CheckCircle", "CheckCircle2", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "ClipboardCheck", "ClipboardList", "ClipboardPlus", "Clock", "Cloud", "Construction", "Copy", "CopyPlus", "Delete", "Download", "Edit2", "Eye", "FileText", "Flag", "HelpCircle", "History", "Home", "Info", "Lock", "LogIn", "LogOut", "Mail", "MapPin", "MoreHorizontal", "Palmtree", "Pencil", "Plus", "Printer", "RefreshCw", "Save", "Send", "SlidersHorizontal", "Thermometer", "Trash2", "User", "UserPlus", "Users", "WifiOff", "X"];
 const stub = (kod) => URL.createObjectURL(new Blob([kod], { type: "text/javascript" }));
 
 const dzis = new Date();
@@ -49,6 +49,14 @@ window.__tabele = {
   ],
   day_logs: [{ id: "k1", lokal: "Bułka i Jacek", date: wczoraj, obrot: 4800, status: "otwarty" }],
   day_log_entries: [],
+  // Blok zadań z jedną pozycją — sprawdza, czy taskBlocks wychodzi z App i
+  // dociera do zakładek (dokładnie ten rodzaj błędu, dla którego ten harness
+  // powstał: props wstawiony w sąsiedztwo nazw, ale do złego dashboardu).
+  task_blocks: [{ id: "bk1", lokal: "Bułka i Jacek", nazwa: "Otwarcie lokalu",
+    schedule_type: "poranne", kolejnosc: 0, active: true, archived: false }],
+  tasks: [{ id: "zt1", block_id: "bk1", lokal: "Bułka i Jacek", title: "Otworzyć lokal",
+    priority: "sredni", kolejnosc: 0, pola: [], active: true, archived: false }],
+  task_completions: [],
   weather_forecasts: [],
   // Zmiana z grafiku sprzed dwóch dni, której nikt nie odbił — pozycja dla
   // kolejki "był w grafiku, nie odbił".
