@@ -911,6 +911,17 @@ Jeden kod w `employeeSessionShared.tsx`, trzy powierzchnie — różnic w logice
 ma. `renderBlockCards(grupy, { zwiniete })` rysuje karty bloków,
 `renderTaskChecklist(items)` pozycje w środku.
 
+- ⚠️ **Zadania widzi tylko ten, kto dziś pracuje** (`pracujeTegoDnia` +
+  `buildEmployeeBlocks(..., { pracuje })`, od 0.38.0): stoi w OPUBLIKOWANYM
+  grafiku albo faktycznie odbił zmianę. Wcześniej checklistę dostawał każdy, kto
+  ma dany lokal w karcie, więc w dniu wolnym wyglądała jak zaległość. **Odbicie
+  liczy się na równi z grafikiem** — w gastronomii ktoś wchodzi na zastępstwo
+  bez wpisu, a osoba stojąca na sali przy pustej checkliście uzna system za
+  zepsuty. Pusty ekran mówi wprost, czemu jest pusty.
+  ⚠️ To dotyczy WYŁĄCZNIE widoku pracownika. Panel kierownika i pierścień na
+  Pulpicie liczą zadania lokalu niezależnie od obsady (`blokiNaDzien` bez tego
+  filtra) — inaczej blok znikałby kierownikowi z dnia tylko dlatego, że nikt go
+  jeszcze nie obsadził (ta sama zasada co przy naprawie z 2026-09-04).
 - **Pulpit** — same nagłówki bloków z licznikiem („Otwarcie lokalu · 0/2").
   Kliknięcie przenosi do zakładki **Zadania** i otwiera TEN blok (`openBlockId`).
   Pełna lista zadań stała wcześniej wprost na Pulpicie i zasłaniała zmianę oraz

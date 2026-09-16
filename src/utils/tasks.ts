@@ -454,30 +454,49 @@ export const getEffectiveAssignmentForDate = (employee, shiftsForUserOnDate) => 
   };
 };
 
+// Czy ta osoba ma dziś cokolwiek wspólnego z lokalem: stoi w OPUBLIKOWANYM
+// grafiku albo faktycznie odbiła zmianę. Odbicie liczy się na równi z
+// grafikiem, bo w gastronomii ktoś wchodzi na zastępstwo bez wpisu — a osoba,
+// która stoi na sali i widzi pustą checklistę, uzna system za zepsuty.
+export const pracujeTegoDnia = ({ grafikOsoby, shiftsOsoby, dateStr }) =>
+  (grafikOsoby || []).some((s) => s.date === dateStr) ||
+  (shiftsOsoby || []).length > 0;
+
 // Checklista JEDNEGO pracownika na dany dzień, pogrupowana w bloki. Zadania
 // kierownika (blok z for_manager) są celowo pomijane.
+//
+// ⚠️ `pracuje: false` zwraca PUSTO — zadania dostaje ten, kto dziś pracuje, a
+// nie każdy, kto ma w karcie ten lokal. Wcześniej checklistę widział każdy, i
+// wyglądało to jak zaległość ("masz 8 niewykonanych zadań") w dniu wolnym.
+// ⚠️ Dotyczy WYŁĄCZNIE widoku pracownika. Panel kierownika liczy zadania lokalu
+// niezależnie od obsady (blokiNaDzien bez tego filtra) — inaczej blok znikałby
+// kierownikowi z dnia tylko dlatego, że nikt go jeszcze nie obsadził. Ta sama
+// zasada co przy pierścieniu na Pulpicie (2026-09-04).
 export const buildEmployeeBlocks = (
   { tasks, blocks, completions, entries, templates },
   { lokal, stanowisko },
   dateStr,
-  viewMode = "own"
+  viewMode = "own",
+  { pracuje = true } = {}
 ) =>
-  blokiNaDzien({
-    tasks,
-    blocks,
-    completions,
-    entries,
-    templates,
-    lokal,
-    dateStr,
-    stanowisko,
-    tryb: viewMode === "all" ? "all" : "own",
-    forManager: false,
-  });
+  !pracuje
+    ? []
+    : blokiNaDzien({
+        tasks,
+        blocks,
+        completions,
+        entries,
+        templates,
+        lokal,
+        dateStr,
+        stanowisko,
+        tryb: viewMode === "all" ? "all" : "own",
+        forManager: false,
+      });
 
 // Ta sama checklista, ale płasko — używane przez liczniki i mini-raport.
-export const buildEmployeeChecklist = (dane, przypisanie, dateStr, viewMode = "own") =>
-  splaszczBloki(buildEmployeeBlocks(dane, przypisanie, dateStr, viewMode));
+export const buildEmployeeChecklist = (dane, przypisanie, dateStr, viewMode = "own", opcje) =>
+  splaszczBloki(buildEmployeeBlocks(dane, przypisanie, dateStr, viewMode, opcje));
 
 // Mini-raport "ostatnie N dni" — liczy się TYLKO dni, w które pracownik
 // faktycznie miał jakąś zmianę (brak zmiany = brak oczekiwanych zadań tego dnia,

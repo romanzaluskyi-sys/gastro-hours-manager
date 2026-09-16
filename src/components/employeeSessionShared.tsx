@@ -68,6 +68,7 @@ import {
 } from "../utils/grafik";
 import {
   buildEmployeeBlocks,
+  pracujeTegoDnia,
   splaszczBloki,
   getEffectiveAssignmentForDate,
   toggleTaskCompletion,
@@ -464,6 +465,12 @@ export const EmployeeSessionScreens = ({
     (s) => s.end_time
   );
 
+  // Pracownik widzi tylko OPUBLIKOWANY grafik — wersja robocza kierownika
+  // nie może tu przeciekać (filtruje publishedShiftsFor w utils/grafik.ts).
+  const dzisYMD = toLocalYMD(new Date());
+  const mojGrafik = publishedShiftsFor(planShifts, employee);
+  const mojeDzis = mojGrafik.filter((s) => s.date === dzisYMD);
+
   // Checklisty zadań na dziś — "own" (własne stanowisko + wszyscy) do A7/A8
   // i domyślnego widoku Zadania, "all" tylko dla przełącznika na ekranie
   // Zadania. Wolno preferujemy otwartą zmianę nad statycznym default_lokal,
@@ -480,8 +487,21 @@ export const EmployeeSessionScreens = ({
     entries: dayLogEntries,
     templates: dayLogTemplates,
   };
-  const myBlocksOwn = buildEmployeeBlocks(daneZadan, effectiveAssignment, todayStr, "own");
-  const myBlocksAll = buildEmployeeBlocks(daneZadan, effectiveAssignment, todayStr, "all");
+  // Zadania dostaje ten, kto dziś pracuje — stoi w grafiku ALBO odbił zmianę.
+  // Wcześniej checklistę widział każdy, kto ma ten lokal w karcie, więc w dniu
+  // wolnym wyglądało to jak zaległość ("masz 8 niewykonanych zadań").
+  const pracujeDzis = pracujeTegoDnia({
+    grafikOsoby: mojGrafik,
+    shiftsOsoby: openShift ? [openShift] : todaysClosedShifts,
+    dateStr: todayStr,
+  });
+  const opcjeZadan = { pracuje: pracujeDzis };
+  const myBlocksOwn = buildEmployeeBlocks(
+    daneZadan, effectiveAssignment, todayStr, "own", opcjeZadan
+  );
+  const myBlocksAll = buildEmployeeBlocks(
+    daneZadan, effectiveAssignment, todayStr, "all", opcjeZadan
+  );
   const myChecklistOwn = splaszczBloki(myBlocksOwn);
   const taskBadgeCount = myChecklistOwn.filter((i) => !i.done).length;
   // Który blok jest rozwinięty na ekranie Zadania. Kliknięcie bloku na Pulpicie
@@ -490,11 +510,6 @@ export const EmployeeSessionScreens = ({
   const [openBlockId, setOpenBlockId] = useState(null);
   const [pomiarZadania, setPomiarZadania] = useState(null); // { item, poprawka }
 
-  // Pracownik widzi tylko OPUBLIKOWANY grafik — wersja robocza kierownika
-  // nie może tu przeciekać (filtruje publishedShiftsFor w utils/grafik.ts).
-  const dzisYMD = toLocalYMD(new Date());
-  const mojGrafik = publishedShiftsFor(planShifts, employee);
-  const mojeDzis = mojGrafik.filter((s) => s.date === dzisYMD);
   const najblizszaZmiana = nextShiftFrom(planShifts, employee, dzisYMD);
   // Propozycje, które mogę wziąć, i zmiany, które już przejąłem/przejęłam,
   // a które czekają na zgodę kierownika (u mnie nie ma ich jeszcze w
@@ -2660,7 +2675,19 @@ export const EmployeeSessionScreens = ({
         {grupyZadan.length === 0 && (
           <div className="text-center py-10 text-[#8F8E86]">
             <ClipboardCheck className="mx-auto mb-2 opacity-40" size={40} />
-            Brak zadań na dziś.
+            {/* Pusty ekran bez powodu wygląda jak awaria — mówimy wprost,
+                czemu nic tu nie ma (ta sama zasada co "za późno na giełdę"). */}
+            {pracujeDzis ? (
+              "Brak zadań na dziś."
+            ) : (
+              <>
+                Nie masz dziś zmiany w grafiku.
+                <span className="block mt-1 text-[13px]">
+                  Zadania pokażą się w dniu Twojej zmiany albo zaraz po jej
+                  rozpoczęciu.
+                </span>
+              </>
+            )}
           </div>
         )}
         {renderBlockCards(grupyZadan)}

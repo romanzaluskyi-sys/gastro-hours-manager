@@ -19,6 +19,12 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
   kolejce decyzji widzi, o który tryb chodzi, a przy zamianie — obie zmiany
   naraz i to, jak wyjdą godziny każdej ze stron (zamiana 8 h za 8 h to zero
   różnicy, a nie nagły wzrost).
+- **Zadania widzi ten, kto dziś pracuje.** Do tej pory checklistę dostawał
+  każdy, kto ma dany lokal w karcie — również w dniu wolnym, gdzie wyglądało to
+  jak zaległość („masz 8 niewykonanych zadań"). Teraz zadania pokazują się
+  osobom, które mają dziś zmianę w grafiku, a także każdemu zaraz po
+  rozpoczęciu zmiany — żeby zastępstwo wchodzące bez wpisu w grafiku nie
+  zostało z pustym ekranem.
 - Przy zamianie kandydatem jest też osoba, która pracuje tego samego dnia —
   bo przecież oddaje wtedy swoją zmianę. Przy zwykłym oddaniu takiej osoby na
   liście nie ma.

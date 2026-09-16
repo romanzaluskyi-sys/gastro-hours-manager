@@ -30,6 +30,7 @@ const CHANGELOG = [
       "Oferta skierowana jest widoczna tylko dla wskazanej osoby — reszta zespołu jej nie widzi.",
       "Przy zamianie kierownik widzi obie zmiany naraz i godziny po obu stronach (8 h za 8 h to zero różnicy).",
       "Każdy z trzech trybów kończy się tak samo: decyzją kierownika.",
+      "Zadania widzi pracownik, który ma dziś zmianę w grafiku — albo każdy zaraz po rozpoczęciu zmiany. W dniu wolnym checklisty nie ma.",
     ],
   },
   {

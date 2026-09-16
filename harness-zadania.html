@@ -253,6 +253,31 @@ const sprawdz = (nazwa, warunek, szczegol = "") => {
         .some((z) => (z.pola || []).some((p) => p.min != null || p.max != null)));
 
 
+
+    log("");
+    log("— zadania tylko dla pracujących dziś —");
+    // Reguła dotyczy WYŁĄCZNIE ekranu pracownika. Panel kierownika liczy
+    // zadania lokalu niezależnie od obsady.
+    const daneZad = { tasks: zadania, blocks: bloki, completions: [], entries: [], templates: [] };
+    const przypisanie = { lokal: "L", stanowisko: "Kucharz" };
+    const zBlokami = (opcje) =>
+      T.buildEmployeeBlocks(daneZad, przypisanie, PN, "all", opcje).length;
+    sprawdz("pracuje dziś — widzi bloki", zBlokami({ pracuje: true }) > 0);
+    sprawdz("nie pracuje — nie widzi nic", zBlokami({ pracuje: false }) === 0);
+    sprawdz("brak opcji = po staremu (panel kierownika)", zBlokami(undefined) > 0,
+      "domyślne `pracuje` musi zostać prawdą, inaczej znika też widok kierownika");
+
+    const grafikDzis = [{ date: PN }];
+    sprawdz("wpis w grafiku wystarczy",
+      T.pracujeTegoDnia({ grafikOsoby: grafikDzis, shiftsOsoby: [], dateStr: PN }));
+    sprawdz("grafik na inny dzień nie liczy się dziś",
+      !T.pracujeTegoDnia({ grafikOsoby: [{ date: ND }], shiftsOsoby: [], dateStr: PN }));
+    sprawdz("odbicie bez grafiku też wystarczy",
+      T.pracujeTegoDnia({ grafikOsoby: [], shiftsOsoby: [{ id: "s1" }], dateStr: PN }),
+      "zastępstwo wchodzi bez wpisu — pusta checklista wyglądałaby na awarię");
+    sprawdz("ani grafiku, ani odbicia = dzień wolny",
+      !T.pracujeTegoDnia({ grafikOsoby: [], shiftsOsoby: [], dateStr: PN }));
+
     log("");
     log("— giełda: trzy tryby —");
     const S = await import(await zaladuj("/src/utils/swaps"));
