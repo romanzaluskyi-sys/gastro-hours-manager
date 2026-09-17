@@ -65,6 +65,7 @@ import {
   poprawZamknietyDzien,
 } from "../../utils/dziennik";
 import { kontekstDnia, kontekstKrotko } from "../../utils/kalendarz";
+import { celDnia, zapiszNadpisanieDnia, zl as zlBudzet, pct0 } from "../../utils/budzet";
 import { czyWpisZadania, zadanieWpisu, polaZadania } from "../../utils/tasks";
 import { pozaNormaPola } from "../../utils/pola";
 import ZdarzenieModal from "./ZdarzenieModal";
@@ -83,6 +84,7 @@ export default function KartaDnia({
   shifts, planShifts, users, tasks, taskBlocks, taskCompletions,
   staffingRules, staffingRuleSets, grafikWyjatki,
   karty, wpisy: wszystkieWpisy, szablony: wszystkieSzablony, weatherForecasts,
+  budzetCele, budzetDni, setBudzetDni,
   setKarty, setWpisy, odswiez, showMsg,
   data, setData,
 }) {
@@ -91,6 +93,12 @@ export default function KartaDnia({
   const [nowyWpis, setNowyWpis] = useState(null); // { szablon }
   const [zdarzenie, setZdarzenie] = useState(false);
   const [korekta, setKorekta] = useState(null); // { pole }
+  // Plan finansowy dnia trzymamy w osobnym stanie od reszty karty, bo idzie do
+  // INNEJ tabeli (grafik_budzet_dni) i zapisuje się od razu, a nie przyciskiem
+  // "Zapisz" karty. Jedno pole naraz — dwa otwarte dałyby dwa zapisy do tej
+  // samej daty i drugi skasowałby pierwszy.
+  const [planEdycja, setPlanEdycja] = useState(null); // { pole, wartosc }
+  const [planZapis, setPlanZapis] = useState(false);
 
   const karta = znajdzKarte(karty, lokal, data);
   const zamkniety = karta && karta.status === "zamkniety";
@@ -131,6 +139,50 @@ export default function KartaDnia({
   const czek = sredniCzek(pole("obrot"), pole("liczba_paragonow"));
   const lcPct = labourCostPct(auto.koszt, pole("obrot"));
   const prognoza = prognozaUtargu(karty, lokal, data);
+  // ⚠️ To są DWIE różne liczby i nie wolno ich zlepić. `prognoza` to średnia z
+  // czterech ostatnich takich dni tygodnia — co zwykle wychodzi. `cel` to plan
+  // wpisany przez kierownika w Grafik → Konfiguracja → Budżet — czego oczekuje.
+  // Jedno jest obserwacją, drugie decyzją; dzień, w którym się rozjeżdżają,
+  // jest właśnie tym, o którym warto porozmawiać.
+  const cel = celDnia({ cele: budzetCele, budzetDni }, lokal, data);
+  const celPct = cel && cel.pct != null ? cel.pct : null;
+
+  // Zapis planu idzie do tej samej tabeli i tą samą funkcją co ołówek w siatce
+  // Grafiku — to jedna rzecz wpisywana z dwóch miejsc, nie dwie kopie.
+  const zapiszPlan = async () => {
+    if (!planEdycja || planZapis) return;
+    const { pole: ktore, wartosc } = planEdycja;
+    const liczba = (() => {
+      const t = String(wartosc || "").replace(/\s/g, "").replace(",", ".");
+      if (t === "") return null;
+      const n = Number(t);
+      return Number.isNaN(n) ? null : n;
+    })();
+    const nadpis = cel && cel.nadpisRow ? cel.nadpisRow : null;
+    const baza = cel ? cel.baza : { utarg: null, pct: null };
+    const bazowa = ktore === "utarg" ? baza.utarg : baza.pct;
+    // Wartość równa tej z zestawu nie jest nadpisaniem — inaczej dzień
+    // dostawałby podpis "zmienione na ten dzień" mimo że nic się nie zmieniło.
+    const rowna = liczba != null && bazowa != null && Math.abs(liczba - bazowa) < 0.0001;
+    setPlanZapis(true);
+    try {
+      await zapiszNadpisanieDnia({
+        lokal,
+        dateStr: data,
+        oczekiwany_utarg:
+          ktore === "utarg" ? (rowna ? null : liczba) : nadpis ? nadpis.oczekiwany_utarg : null,
+        cel_koszt_pct:
+          ktore === "pct" ? (rowna ? null : liczba) : nadpis ? nadpis.cel_koszt_pct : null,
+        autor: currentUser?.name,
+        budzetDni,
+        setBudzetDni,
+      });
+      setPlanEdycja(null);
+    } catch (err) {
+      showMsg(`Błąd zapisu planu dnia: ${err.message || "nieznany błąd"}`, "error");
+    }
+    setPlanZapis(false);
+  };
   const obrotLiczba = pole("obrot") === "" ? null : Number(pole("obrot"));
 
   const polaDoZapisu = () => ({
@@ -281,14 +333,28 @@ export default function KartaDnia({
             zmienia niczyjej decyzji. Jej miejsce zajmuje liczba, która zmienia. */}
         <div className={statTileCls}>
           <div className={statLabelCls}>Koszt pracy / utarg</div>
+          {/* Próg bierzemy z celu tego lokalu i tego dnia tygodnia (Grafik →
+              Konfiguracja → Budżet), a nie ze sztywnych 35% — lokal, który
+              założył sobie 28% w sobotę, nie ma się dowiadywać od systemu, że
+              33% jest w porządku. Bez wpisanego celu zostaje dotychczasowy,
+              ogólny zakres: lepiej podać orientacyjny, niż nie podać żadnego. */}
           <div
             className={statValueCls}
-            style={{ color: lcPct != null && lcPct > 35 ? COLORS.accent : COLORS.ink }}
+            style={{
+              color:
+                lcPct != null && lcPct > (celPct != null ? celPct : 35)
+                  ? COLORS.accent
+                  : COLORS.ink,
+            }}
           >
             {lcPct != null ? `${lcPct}%` : "—"}
           </div>
           <div className={statSubCls}>
-            {lcPct != null ? "zdrowy zakres 25–35%" : "wpisz utarg, policzę"}
+            {lcPct == null
+              ? "wpisz utarg, policzę"
+              : celPct != null
+              ? `cel ${pct0(celPct)} — z konfiguracji Grafiku`
+              : "zdrowy zakres 25–35%"}
           </div>
         </div>
         <div className={statTileCls}>
@@ -386,6 +452,128 @@ export default function KartaDnia({
               </button>
             )}
           </div>
+          {/* Plan finansowy dnia — TA SAMA tabela, którą wypełnia Grafik →
+              Konfiguracja → Budżet (utils/budzet.ts). Wpisane tu widać w
+              siatce Grafiku i odwrotnie; drugiej kopii tych liczb nie ma.
+              Osobna ramka, bo te dwa pola zapisują się od razu, a nie
+              przyciskiem "Zapisz" karty — różne zachowanie ma być widoczne,
+              zanim ktoś kliknie. */}
+          <div className="mx-4 mt-4 border-[2px] border-[#B7B6AE] rounded-xl bg-[#F1F1EE]">
+            <div className="px-3 py-2 flex flex-wrap items-baseline gap-x-2 border-b-[2px] border-[#B7B6AE]">
+              <span className="font-['Archivo'] font-bold text-[13px]">Plan finansowy dnia</span>
+              <span className="text-[11px] text-[#6E6E66]">
+                {cel && cel.zestawOd
+                  ? `z konfiguracji Grafiku (zestaw od ${cel.zestawOd.slice(0, 7)})`
+                  : "brak celu — wpisz go w Grafik → Konfiguracja → Budżet"}
+              </span>
+              {!zamkniety && (
+                <span className="text-[11px] text-[#8F8E86] ml-auto">zapisuje się od razu</span>
+              )}
+            </div>
+            <div className="p-3 grid md:grid-cols-2 gap-3">
+              {[
+                {
+                  pole: "utarg",
+                  label: "Prognozowany utarg (zł)",
+                  wartosc: cel ? cel.utarg : null,
+                  tekst: cel && cel.utarg != null ? zlBudzet(cel.utarg) : "—",
+                  nadpisane: cel && cel.nadpisane.utarg,
+                  baza: cel && cel.baza.utarg,
+                  jednostka: "zł",
+                },
+                {
+                  pole: "pct",
+                  label: "Docelowy % kosztu pracy",
+                  wartosc: celPct,
+                  tekst: celPct != null ? pct0(celPct) : "—",
+                  nadpisane: cel && cel.nadpisane.pct,
+                  baza: cel && cel.baza.pct,
+                  jednostka: "%",
+                },
+              ].map((f) => (
+                <div key={f.pole}>
+                  <label className={labelCls}>{f.label}</label>
+                  {planEdycja && planEdycja.pole === f.pole ? (
+                    <input
+                      autoFocus
+                      className={inputCls}
+                      inputMode="decimal"
+                      value={planEdycja.wartosc}
+                      onChange={(e) => setPlanEdycja({ ...planEdycja, wartosc: e.target.value })}
+                      onBlur={zapiszPlan}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") zapiszPlan();
+                        if (e.key === "Escape") setPlanEdycja(null);
+                      }}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={zamkniety}
+                      onClick={() =>
+                        setPlanEdycja({
+                          pole: f.pole,
+                          wartosc: f.wartosc == null ? "" : String(f.wartosc),
+                        })
+                      }
+                      className="w-full text-left"
+                      title={
+                        zamkniety
+                          ? "Dzień jest zamknięty — planu nie zmieniamy po fakcie"
+                          : "Kliknij, aby zmienić tę wartość tylko na ten dzień"
+                      }
+                    >
+                      <span
+                        className={`font-['Archivo'] font-extrabold text-[20px] ${
+                          f.nadpisane ? "text-[#DE3A22]" : "text-[#171714]"
+                        } ${zamkniety ? "" : "border-b-[2px] border-dashed border-[#B7B6AE]"}`}
+                      >
+                        {f.tekst}
+                      </span>
+                      {!zamkniety && (
+                        <Pencil size={12} className="inline -mt-0.5 ml-1.5 text-[#B7B6AE]" />
+                      )}
+                    </button>
+                  )}
+                  {f.nadpisane && (
+                    <div className="text-[11px] text-[#DE3A22] leading-tight mt-0.5">
+                      zmienione na ten dzień
+                      {f.baza != null &&
+                        ` — w zestawie ${
+                          f.pole === "utarg" ? zlBudzet(f.baza) : pct0(f.baza)
+                        }`}
+                    </div>
+                  )}
+                </div>
+              ))}
+              {/* Do czego to prowadzi: limit kosztu pracy na ten dzień i to, czy
+                  faktyczny koszt się w nim zmieścił. Bez tej linijki kierownik
+                  musiałby mnożyć w pamięci, a wtedy nikt nie mnoży. */}
+              {cel && cel.utarg != null && celPct != null && (
+                <div className="md:col-span-2 text-[12px] text-[#6E6E66] leading-snug">
+                  Cel kosztu pracy na ten dzień:{" "}
+                  <strong className="text-[#171714]">
+                    {zlBudzet((cel.utarg * celPct) / 100)}
+                  </strong>
+                  {auto.koszt > 0 && (
+                    <>
+                      {" · "}
+                      <strong
+                        style={{
+                          color:
+                            auto.koszt > (cel.utarg * celPct) / 100 ? COLORS.accent : "#2F7A2A",
+                        }}
+                      >
+                        {auto.koszt > (cel.utarg * celPct) / 100 ? "przekroczony o " : "zapas "}
+                        {zlBudzet(Math.abs((cel.utarg * celPct) / 100 - auto.koszt))}
+                      </strong>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="p-4 grid md:grid-cols-2 gap-4">
             <div>
               <label className={labelCls}>Utarg brutto (zł)</label>
@@ -396,6 +584,11 @@ export default function KartaDnia({
                 value={pole("obrot")}
                 onChange={(e) => ustaw("obrot", e.target.value)}
               />
+              {/* Dwie linijki, bo to dwie różne rzeczy: "zwykle" to obserwacja
+                  z ostatnich czterech takich dni tygodnia, "plan" to liczba,
+                  którą kierownik sam wpisał w Grafiku. Zlepienie ich w jedną
+                  wartość ukryłoby dokładnie ten dzień, o którym warto
+                  porozmawiać — ten, w którym się rozjeżdżają. */}
               {prognoza && (
                 <div
                   className="text-[12px] mt-1"
@@ -408,6 +601,20 @@ export default function KartaDnia({
                 >
                   zwykle {zl(prognoza.kwota)}
                   {obrotLiczba != null && ` · ${znak(obrotLiczba - prognoza.kwota, " zł")}`}
+                </div>
+              )}
+              {cel && cel.utarg != null && (
+                <div
+                  className="text-[12px] leading-tight"
+                  style={{
+                    color:
+                      obrotLiczba != null && obrotLiczba < cel.utarg
+                        ? COLORS.accent
+                        : COLORS.muted,
+                  }}
+                >
+                  plan {zlBudzet(cel.utarg)}
+                  {obrotLiczba != null && ` · ${znak(obrotLiczba - cel.utarg, " zł")}`}
                 </div>
               )}
             </div>

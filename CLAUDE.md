@@ -2121,6 +2121,25 @@ Szczegóły, które łatwo zepsuć:
   ekranu, gdzie każde zaoszczędzone 8 px to jeden więcej widoczny wiersz
   pracownika. Zaokrąglenie zostaje takie samo jak w reszcie panelu
   (`rounded-xl`) — kanciaste zostaje tylko znak Shiftro.
+- **Cel dnia jest jeden i wpisuje się go z DWÓCH miejsc**: Grafik →
+  Konfiguracja → Budżet (reguła na dzień tygodnia) i karta dnia w Pulsie, sekcja
+  "Utarg i notatki" (nadpisanie na ten jeden dzień). Oba piszą przez
+  `zapiszNadpisanieDnia` do `grafik_budzet_dni`, więc wpisane w jednym miejscu
+  widać w drugim od razu. Drugie wejście istnieje, bo o utargu myśli się przy
+  zamykaniu dnia, a nie przy planowaniu obsady.
+  - ⚠️ W Pulsie te dwa pola zapisują się OD RAZU, a nie przyciskiem "Zapisz"
+    karty — idą do innej tabeli niż `day_logs`. Dlatego stoją we własnej ramce z
+    podpisem "zapisuje się od razu": różne zachowanie ma być widoczne, zanim
+    ktoś kliknie.
+  - ⚠️ W karcie dnia są teraz DWIE liczby o utargu i nie wolno ich zlepić.
+    `prognozaUtargu` ("zwykle X zł") to średnia z czterech ostatnich takich dni
+    tygodnia — obserwacja. `celDnia().utarg` ("plan X zł") to liczba wpisana
+    przez kierownika — decyzja. Dzień, w którym się rozjeżdżają, jest właśnie
+    tym, o którym warto porozmawiać.
+  - ⚠️ **Zamknięty dzień ma plan tylko do odczytu.** Zmiana celu po zamknięciu
+    przepisywałaby, czego oczekiwano — ta sama zasada co przy `poprawZamknietyDzien`.
+  - Kafelek "Koszt pracy / utarg" bierze próg z celu tego lokalu i dnia tygodnia;
+    sztywne "zdrowy zakres 25–35%" zostaje tylko wtedy, gdy celu nie wpisano.
 - **Budżetu nie widzi pracownik** — ani na tablecie, ani na prywatnym telefonie.
   Ta sama zasada co przy `PulsZmiany`: koszty i stawki nie są informacją dla tej
   roli.

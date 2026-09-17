@@ -35,6 +35,7 @@ const CHANGELOG = [
       "Przy nazwisku w siatce widać różnicę wobec normy: „do normy: 16 h\" albo „+4,5 h ponad normą\" (tylko umowa o pracę).",
       "Przycisk „Zobacz, co czeka na wysłanie\" pod siatką pokazuje pełną listę zmian w wersji roboczej, zanim polecą powiadomienia.",
       "Zestaw konfiguracji — wymagań obsady albo celu finansowego — da się teraz usunąć.",
+      "Prognozowany utarg i docelowy % kosztu pracy widać i wpisuje się w dwóch miejscach: w konfiguracji Grafiku i w karcie dnia w Pulsie. To jedna liczba, nie dwie kopie.",
     ],
   },
   {

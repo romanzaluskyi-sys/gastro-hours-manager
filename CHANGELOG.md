@@ -44,6 +44,19 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
   wersji roboczej, dzień po dniu, z zaznaczeniem, które są nowe, które
   zmienione, a które zdejmowane z grafiku. Wysyłka obejmuje wszystko od dziś w
   przód, ze wszystkich lokali, więc teraz da się to najpierw obejrzeć.
+- **Prognozowany utarg i docelowy % widać też w Pulsie** — w karcie dnia, w
+  sekcji „Utarg i notatki", jako blok „Plan finansowy dnia". Da się je tam
+  wpisać albo poprawić na ten jeden dzień, i działa to w obie strony: wpisane w
+  Grafiku widać w Pulsie, wpisane w Pulsie widać w siatce Grafiku. To jedna
+  liczba, nie dwie kopie.
+- Przy polu utargu stoją obok siebie dwie informacje: „zwykle" (średnia z
+  czterech ostatnich takich dni tygodnia) i „plan" (to, czego oczekiwałeś). Pod
+  spodem — cel kosztu pracy na ten dzień w złotych i czy się w nim zmieściliśmy.
+- Kafelek „Koszt pracy / utarg" w karcie dnia porównuje się teraz z celem tego
+  lokalu, a nie ze sztywnym zakresem 25–35%. Bez wpisanego celu zostaje
+  dotychczasowy, ogólny zakres.
+- Zamknięty dzień pokazuje plan, ale nie pozwala go zmienić — po zamknięciu nie
+  przepisujemy tego, czego się oczekiwało.
 - **Zestaw konfiguracji da się usunąć** — i wymagań obsady, i celu finansowego.
   Zestaw utworzony na zły miesiąc zostawał wcześniej na liście na zawsze.
   Potwierdzenie mówi wprost, co się stanie: który zestaw zacznie obowiązywać
