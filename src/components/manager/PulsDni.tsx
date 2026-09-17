@@ -62,7 +62,7 @@ export default function PulsDni({
       wierszDnia({
         shifts, planShifts, users, tasks, taskBlocks, taskCompletions,
         dayLogs: karty, dayLogEntries: wpisy, dayLogTemplates: szablony,
-        weatherForecasts, lokal, miasto, dateStr,
+        weatherForecasts, lokal, lokalRow, miasto, dateStr,
       })
     );
   }, [ile, dzis, shifts, planShifts, users, tasks, taskBlocks, taskCompletions, karty, wpisy, szablony, weatherForecasts, lokal, miasto]);

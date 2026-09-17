@@ -114,6 +114,10 @@ const ManagerDashboard = ({
   setLokaleGodziny,
   grafikWyjatki,
   setGrafikWyjatki,
+  budzetCele,
+  setBudzetCele,
+  budzetDni,
+  setBudzetDni,
   showMsg,
 }) => {
   const [tab, setTab] = useState("pulpit");
@@ -1376,6 +1380,11 @@ const ManagerDashboard = ({
             setLokaleGodziny={setLokaleGodziny}
             grafikWyjatki={grafikWyjatki}
             setGrafikWyjatki={setGrafikWyjatki}
+            budzetCele={budzetCele}
+            setBudzetCele={setBudzetCele}
+            budzetDni={budzetDni}
+            setBudzetDni={setBudzetDni}
+            dayLogs={dayLogs}
             onNewEmployee={goToNewEmployee}
             showMsg={showMsg}
           />

@@ -1,0 +1,269 @@
+<meta charset="utf-8">
+<title>Sprawdzian budżetu Grafiku</title>
+<style>
+  body { font: 14px/1.6 ui-monospace, Menlo, monospace; padding: 24px; background: #FBFAF9; color: #17120F; }
+  h1 { font: 700 18px/1.2 system-ui, sans-serif; }
+  .ok { color: #2C6A4F; } .zle { color: #DE3A22; font-weight: 700; }
+  pre { background: #F1EEEB; padding: 10px; overflow-x: auto; }
+</style>
+<h1>Sprawdzian utils/budzet.ts</h1>
+<div id="out">ładowanie…</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js"></script>
+<script>
+const out = document.getElementById("out");
+const log = (txt, cls = "") => {
+  const d = document.createElement("div");
+  d.className = cls; d.textContent = txt; out.appendChild(d);
+};
+
+// Mały loader ES-modułów: pobiera plik, transpiluje Babelem (te pliki mają
+// @ts-nocheck i są w praktyce zwykłym JS), przepisuje ścieżki importów na
+// blob-URL-e już załadowanych modułów i importuje.
+const cache = new Map();
+async function zaladuj(sciezka) {
+  if (cache.has(sciezka)) return cache.get(sciezka);
+  const p = new Promise(async (resolve, reject) => {
+    try {
+      let kod = null;
+      for (const ext of [".ts", ".tsx", ""]) {
+        const r = await fetch(sciezka + ext + "?cb=" + Date.now());
+        if (r.ok) { kod = await r.text(); break; }
+      }
+      if (kod === null) throw new Error("nie znaleziono " + sciezka);
+
+      const specyfikatory = [...kod.matchAll(/from\s+"(\.[^"]+)"/g)].map((m) => m[1]);
+      const baza = sciezka.slice(0, sciezka.lastIndexOf("/"));
+      const mapa = {};
+      for (const s of specyfikatory) {
+        const url = new URL(baza + "/" + s, location.origin).pathname;
+        mapa[s] = await zaladuj(url);
+      }
+      kod = kod.replace(/from\s+"(\.[^"]+)"/g, (m, s) => `from "${mapa[s]}"`);
+      const js = Babel.transform(kod, { presets: [["typescript", { allExtensions: true, isTSX: true }]] }).code;
+      resolve(URL.createObjectURL(new Blob([js], { type: "text/javascript" })));
+    } catch (e) { reject(e); }
+  });
+  cache.set(sciezka, p);
+  return p;
+}
+
+let zdanych = 0, oblanych = 0;
+const sprawdz = (nazwa, warunek, szczegol = "") => {
+  if (warunek) { zdanych++; log("  OK   " + nazwa, "ok"); }
+  else { oblanych++; log("  ŹLE  " + nazwa + (szczegol ? " — " + szczegol : ""), "zle"); }
+};
+
+(async () => {
+  try {
+    out.textContent = "";
+    const B = await import(await zaladuj("/src/utils/budzet"));
+    log("moduł załadowany razem z grafik.ts, umowy.ts, kalendarz.ts", "ok");
+    log("");
+
+    // Wrzesień 2026: 22 dni robocze, żadne święto nie wypada w dzień roboczy
+    // (patrz wymiarCzasuPracy w utils/kalendarz.ts) → norma pełnego etatu 176 h.
+    const ROK = 2026, MIES = 9;
+    const lokalRow = { name: "L", narzut_umowa: 20, narzut_zlecenie: 0 };
+    const bezNarzutu = { name: "L" };
+
+    const zlecenie = { id: "u1", name: "Ala", typ_umowy: "zlecenie", stawka: 30 };
+    const etat = { id: "u2", name: "Bo", typ_umowy: "umowa_o_prace", wymiar_etatu: 1,
+                   wynagrodzenie_mies: 8800 };
+    const polEtatu = { id: "u3", name: "Cela", typ_umowy: "umowa_o_prace", wymiar_etatu: 0.5,
+                       wynagrodzenie_mies: 4400 };
+    const pusty = { id: "u4", name: "Dorota" };
+
+    // --- KOSZT GODZINY ---------------------------------------------------
+    log("— koszt godziny —");
+    sprawdz("zlecenie bez narzutu = stawka", B.kosztGodziny(zlecenie, bezNarzutu, ROK, MIES) === 30);
+    sprawdz("zlecenie z narzutem 0% dla zlecenia = 30",
+      B.kosztGodziny(zlecenie, lokalRow, ROK, MIES) === 30);
+    sprawdz("etat: 8800 / 176 h = 50 zł/h", B.kosztGodziny(etat, bezNarzutu, ROK, MIES) === 50,
+      "jest " + B.kosztGodziny(etat, bezNarzutu, ROK, MIES));
+    sprawdz("etat z narzutem 20% = 60 zł/h",
+      Math.abs(B.kosztGodziny(etat, lokalRow, ROK, MIES) - 60) < 0.001,
+      "jest " + B.kosztGodziny(etat, lokalRow, ROK, MIES));
+    // Wymiar etatu skaluje NORMĘ, nie wynagrodzenie: 4400 / (176 × 0,5) = 50.
+    sprawdz("pół etatu: 4400 / 88 h = 50 zł/h",
+      B.kosztGodziny(polEtatu, bezNarzutu, ROK, MIES) === 50,
+      "jest " + B.kosztGodziny(polEtatu, bezNarzutu, ROK, MIES));
+    sprawdz("bez danych o wynagrodzeniu = null",
+      B.kosztGodziny(pusty, lokalRow, ROK, MIES) === null);
+    // Luty ma mniejszą normę, więc ta sama pensja kosztuje za godzinę WIĘCEJ.
+    sprawdz("ta sama pensja, inny miesiąc = inna stawka godzinowa",
+      B.kosztGodziny(etat, bezNarzutu, 2026, 2) > B.kosztGodziny(etat, bezNarzutu, ROK, MIES));
+
+    // --- CEL DNIA: ZESTAWY I WYJĄTKI ------------------------------------
+    log("");
+    log("— cel dnia —");
+    // 2026-09-14 to poniedziałek (dow 1), 2026-09-19 to sobota (dow 6).
+    const cele = [
+      { id: "c1", lokal: "L", obowiazuje_od: "2026-09-01", day_of_week: 1,
+        oczekiwany_utarg: 6500, cel_koszt_pct: 35 },
+      { id: "c2", lokal: "L", obowiazuje_od: "2026-09-01", day_of_week: 6,
+        oczekiwany_utarg: 13000, cel_koszt_pct: 28 },
+      { id: "c3", lokal: "L", obowiazuje_od: "2026-10-01", day_of_week: 1,
+        oczekiwany_utarg: 7000, cel_koszt_pct: 33 },
+      { id: "c4", lokal: "INNY", obowiazuje_od: "2026-09-01", day_of_week: 1,
+        oczekiwany_utarg: 99999, cel_koszt_pct: 99 },
+    ];
+    const cel = (d, dni) => B.celDnia({ cele, budzetDni: dni || [] }, "L", d);
+
+    sprawdz("poniedziałek bierze wiersz swojego dnia tygodnia",
+      cel("2026-09-14").utarg === 6500 && cel("2026-09-14").pct === 35);
+    sprawdz("sobota ma własne liczby", cel("2026-09-19").utarg === 13000);
+    sprawdz("obcy lokal nie przecieka", cel("2026-09-14").utarg !== 99999);
+    // Zestaw obowiązuje od SWOJEGO miesiąca w przód — ta sama zasada co przy
+    // wymaganiach obsady. Wrześniowy poniedziałek nie może wziąć liczby z
+    // zestawu październikowego, który jeszcze nie działa.
+    sprawdz("zestaw z przyszłości nie działa wstecz", cel("2026-09-14").utarg === 6500);
+    sprawdz("w październiku obowiązuje nowszy zestaw", cel("2026-10-05").utarg === 7000);
+    sprawdz("dzień bez wiersza w zestawie = null (nie zero)", cel("2026-09-15") === null);
+    sprawdz("brak jakiegokolwiek zestawu = null",
+      B.celDnia({ cele: [], budzetDni: [] }, "L", "2026-09-14") === null);
+
+    // Wyjątek nadpisuje POLE PO POLU.
+    const tylkoUtarg = [{ lokal: "L", date: "2026-09-14", oczekiwany_utarg: 4200, cel_koszt_pct: null }];
+    sprawdz("wyjątek zmienia utarg, procent zostaje z zestawu",
+      cel("2026-09-14", tylkoUtarg).utarg === 4200 && cel("2026-09-14", tylkoUtarg).pct === 35);
+    sprawdz("nadpisane oznaczone tylko na zmienionym polu",
+      cel("2026-09-14", tylkoUtarg).nadpisane.utarg === true &&
+      cel("2026-09-14", tylkoUtarg).nadpisane.pct === false);
+    sprawdz("baza pamięta wartość z zestawu",
+      cel("2026-09-14", tylkoUtarg).baza.utarg === 6500);
+    sprawdz("wyjątek dotyczy tylko swojej daty",
+      cel("2026-09-19", tylkoUtarg).utarg === 13000);
+    // Dzień, którego zestaw w ogóle nie opisuje, ale wyjątek tak.
+    const samWyjatek = [{ lokal: "L", date: "2026-09-15", oczekiwany_utarg: 5000, cel_koszt_pct: 30 }];
+    sprawdz("wyjątek działa też tam, gdzie zestaw milczy",
+      cel("2026-09-15", samWyjatek).utarg === 5000);
+
+    // --- KOSZT I ZAPAS DNIA ---------------------------------------------
+    log("");
+    log("— dzień —");
+    const users = [zlecenie, etat, pusty];
+    const plan = [
+      // Ala: zlecenie, 8 h × 30 = 240 zł
+      { id: "p1", lokal: "L", date: "2026-09-14", user_id: "u1", user_name: "Ala",
+        stanowisko: "Bar", start_time: "08:00", end_time: "16:00" },
+      // Bo: etat, 8 h × 60 (z narzutem 20%) = 480 zł
+      { id: "p2", lokal: "L", date: "2026-09-14", user_id: "u2", user_name: "Bo",
+        stanowisko: "Kuchnia", start_time: "10:00", end_time: "18:00" },
+      // Dorota: bez danych — NIE liczy się jako zero, tylko trafia na listę
+      { id: "p3", lokal: "L", date: "2026-09-14", user_id: "u4", user_name: "Dorota",
+        stanowisko: "Bar", start_time: "10:00", end_time: "18:00" },
+      // inny lokal i inny dzień — nie mogą wpaść do wyniku
+      { id: "p4", lokal: "INNY", date: "2026-09-14", user_id: "u1", user_name: "Ala",
+        stanowisko: "Bar", start_time: "08:00", end_time: "16:00" },
+      { id: "p5", lokal: "L", date: "2026-09-15", user_id: "u1", user_name: "Ala",
+        stanowisko: "Bar", start_time: "08:00", end_time: "16:00" },
+      // zmiana usunięta i zmiana osoby z wyłączonym kontem — obie poza kosztem
+      { id: "p6", lokal: "L", date: "2026-09-14", user_id: "u1", user_name: "Ala",
+        stanowisko: "Bar", start_time: "18:00", end_time: "20:00", deleted_at: "2026-09-13" },
+      { id: "p7", lokal: "L", date: "2026-09-14", user_id: "u1", user_name: "Ala",
+        stanowisko: "Bar", start_time: "20:00", end_time: "22:00", __nieaktywny: true },
+    ];
+    const dzien = (d, dni) =>
+      B.budzetDnia({ cele, budzetDni: dni || [], planShifts: plan, users, lokalRow,
+                     lokal: "L", dateStr: d });
+
+    const pon = dzien("2026-09-14");
+    sprawdz("koszt dnia = 240 + 480 = 720", pon.koszt === 720, "jest " + pon.koszt);
+    sprawdz("zlecenia i etaty rozdzielone", pon.zlecenia === 240 && pon.etaty === 480);
+    sprawdz("osoba bez danych trafia na listę, nie do kosztu",
+      pon.bezDanych.length === 1 && pon.bezDanych[0] === "Dorota");
+    sprawdz("usunięta zmiana nie liczy się do kosztu", pon.koszt === 720);
+    sprawdz("zmiana osoby z wyłączonym kontem nie liczy się do kosztu", pon.koszt === 720);
+    sprawdz("rozbicie po stanowiskach: Bar 240, Kuchnia 480",
+      pon.wgStanowisk["Bar"] === 240 && pon.wgStanowisk["Kuchnia"] === 480,
+      JSON.stringify(pon.wgStanowisk));
+    sprawdz("udział kosztu w utargu: 720/6500 = 11,08%",
+      Math.abs(pon.kosztPct - 11.0769) < 0.001, "jest " + pon.kosztPct);
+    sprawdz("limit = 6500 × 35% = 2275", pon.limit === 2275);
+    sprawdz("zapas = 2275 − 720 = 1555", pon.zapas === 1555);
+    sprawdz("dzień w celu nie jest oznaczony jako poniżej", pon.ponizejCelu === false);
+    sprawdz("min. utarg = 720 / 35% = 2057,14",
+      Math.abs(pon.minUtarg - 2057.142) < 0.01, "jest " + pon.minUtarg);
+
+    // Ten sam dzień z wyjątkiem obniżającym utarg do 1000 zł — 35% z tysiąca to
+    // 350 zł, a koszt jest wyższy, więc dzień wypada poniżej celu.
+    const chudy = dzien("2026-09-14", [{ lokal: "L", date: "2026-09-14", oczekiwany_utarg: 1000 }]);
+    sprawdz("wyjątek obniżający utarg wywraca zapas na minus", chudy.zapas === -370,
+      "jest " + chudy.zapas);
+    sprawdz("dzień poniżej celu oznaczony", chudy.ponizejCelu === true);
+
+    // Dzień bez celu: koszt jest, ale procentu i zapasu NIE wymyślamy.
+    const bezCelu = dzien("2026-09-15");
+    sprawdz("dzień bez celu ma koszt", bezCelu.koszt === 240);
+    sprawdz("dzień bez celu nie ma procentu", bezCelu.kosztPct === null);
+    sprawdz("dzień bez celu nie ma zapasu", bezCelu.zapas === null);
+    sprawdz("dzień bez celu nie jest 'poniżej celu'", bezCelu.ponizejCelu === false);
+
+    // --- TYDZIEŃ ---------------------------------------------------------
+    log("");
+    log("— tydzień —");
+    const tydzien = B.budzetTygodnia([pon, bezCelu]);
+    sprawdz("koszt tygodnia = 720 + 240", tydzien.koszt === 960);
+    sprawdz("prognoza sumuje tylko dni, które ją mają", tydzien.prognoza === 6500);
+    sprawdz("min. utarg tygodnia = suma dziennych",
+      Math.abs(tydzien.minUtarg - 2057.142) < 0.01, "jest " + tydzien.minUtarg);
+    // ⚠️ Dzień bez obsady NIE wchodzi do średniej — inaczej zaniżałby ją tak, że
+    // tydzień z jednym obsadzonym dniem wyglądałby na dwa razy łatwiejszy.
+    const zPustym = B.budzetTygodnia([pon, { ...pon, date: "2026-09-21", koszt: 0, minUtarg: 0,
+      zapas: 2275, ponizejCelu: false, etaty: 0, zlecenia: 0, godziny: 0, bezDanych: [] }]);
+    sprawdz("dzień bez obsady nie wchodzi do średniej",
+      Math.abs(zPustym.minUtargSredni - 2057.142) < 0.01, "jest " + zPustym.minUtargSredni);
+    sprawdz("ale nie zmienia sumy", Math.abs(zPustym.minUtarg - 2057.142) < 0.01);
+    sprawdz("dni poniżej celu wymienione z daty",
+      B.budzetTygodnia([chudy, pon]).dniPonizej.join() === "2026-09-14");
+    sprawdz("osoby bez danych zbierane z całego tygodnia",
+      tydzien.bezDanych.join() === "Dorota");
+    sprawdz("tydzień bez żadnego celu nie wymyśla min. utargu",
+      B.budzetTygodnia([bezCelu]).minUtarg === null);
+
+    // --- PODPOWIEDŹ Z HISTORII -------------------------------------------
+    log("");
+    log("— podpowiedź z historii —");
+    const karty = [
+      // poniedziałki: 6000, 7000, 8000, 9000 i piąty, który ma już nie wejść
+      { lokal: "L", date: "2026-09-14", obrot: 6000 },
+      { lokal: "L", date: "2026-09-07", obrot: 7000 },
+      { lokal: "L", date: "2026-08-31", obrot: 8000 },
+      { lokal: "L", date: "2026-08-24", obrot: 9000 },
+      { lokal: "L", date: "2026-08-17", obrot: 100000 },
+      // sobota, obcy lokal i dzień bez utargu — żadne nie może wpaść
+      { lokal: "L", date: "2026-09-19", obrot: 13000 },
+      { lokal: "INNY", date: "2026-09-14", obrot: 99999 },
+      { lokal: "L", date: "2026-09-21", obrot: 0 },
+    ];
+    const h = B.sredniUtargDnia(karty, "L", 1);
+    sprawdz("średnia z czterech ostatnich poniedziałków = 7500",
+      h.kwota === 7500 && h.zIlu === 4, JSON.stringify(h));
+    sprawdz("piąty poniedziałek poza oknem", h.kwota !== 26000);
+    sprawdz("brak historii = null", B.sredniUtargDnia(karty, "L", 4) === null);
+
+    // --- FORMATOWANIE ----------------------------------------------------
+    log("");
+    log("— formatowanie —");
+    // ⚠️ Liczba czterocyfrowa MUSI być grupowana tak samo jak pięciocyfrowa —
+    // Intl dla pl-PL tego nie robi i w jednej kolumnie stało "1260" obok
+    // "13 000", co wygląda na liczby różnych rzędów.
+    sprawdz("1260 grupowane", B.zl(1260).replace(/ /g, " ") === "1 260 zł", B.zl(1260));
+    sprawdz("13000 grupowane", B.zl(13000).replace(/ /g, " ") === "13 000 zł", B.zl(13000));
+    sprawdz("spacje są nierozdzielające", B.zl(13000).includes(" "));
+    sprawdz("brak wartości to kreska", B.zl(null) === "—");
+    sprawdz("ujemna kwota z minusem typograficznym", B.zl(-370).startsWith("−"));
+    sprawdz("procent bez ułamka", B.pct0(11.0769) === "11%");
+    sprawdz("procent z przecinkiem", B.pct1(11.0769) === "11,1%");
+
+    log("");
+    log(`ZDANYCH ${zdanych}, OBLANYCH ${oblanych}`, oblanych ? "zle" : "ok");
+  } catch (e) {
+    log("WYJĄTEK: " + (e && e.message ? e.message : e), "zle");
+    const pre = document.createElement("pre");
+    pre.textContent = (e && e.stack) || String(e);
+    out.appendChild(pre);
+  }
+})();
+</script>

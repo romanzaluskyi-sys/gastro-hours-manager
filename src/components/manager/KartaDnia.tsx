@@ -111,11 +111,11 @@ export default function KartaDnia({
   const auto = useMemo(
     () =>
       autoPodsumowanie({
-        shifts, planShifts, users, tasks, taskBlocks, taskCompletions,
+        shifts, planShifts, users, lokalRow, tasks, taskBlocks, taskCompletions,
         staffingRules, staffingRuleSets, grafikWyjatki,
         lokal, dateStr: data,
       }),
-    [shifts, planShifts, users, tasks, taskBlocks, taskCompletions, staffingRules, staffingRuleSets, grafikWyjatki, lokal, data]
+    [shifts, planShifts, users, lokalRow, tasks, taskBlocks, taskCompletions, staffingRules, staffingRuleSets, grafikWyjatki, lokal, data]
   );
 
   const fakt = prognozaNaDzien(weatherForecasts, miasto, data, 0);
@@ -267,8 +267,11 @@ export default function KartaDnia({
                 auto.kosztPlan && auto.koszt > auto.kosztPlan ? COLORS.accent : COLORS.muted,
             }}
           >
+            {/* Od 0.39.0 koszt liczy się też z kwoty z umowy, więc na tej
+                liście zostają wyłącznie osoby bez JAKICHKOLWIEK danych o
+                wynagrodzeniu — "bez stawki" mówiłoby o nich nieprawdę. */}
             {auto.bezStawki.length
-              ? `bez stawki: ${auto.bezStawki.join(", ")}`
+              ? `bez danych o wynagrodzeniu: ${auto.bezStawki.join(", ")}`
               : auto.kosztPlan
               ? `plan ${zl(auto.kosztPlan)} · ${znak(auto.koszt - auto.kosztPlan, " zł")}`
               : "brak grafiku"}

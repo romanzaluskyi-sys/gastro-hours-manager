@@ -16,6 +16,7 @@ import {
   Send,
   Users,
   Briefcase,
+  Wallet,
 } from "lucide-react";
 import GrafikWymagania from "./GrafikWymagania";
 import GrafikTydzien from "./GrafikTydzien";
@@ -58,6 +59,11 @@ export default function Grafik({
   setLokaleGodziny,
   grafikWyjatki,
   setGrafikWyjatki,
+  budzetCele,
+  setBudzetCele,
+  budzetDni,
+  setBudzetDni,
+  dayLogs,
   onNewEmployee,
   showMsg,
 }) {
@@ -67,6 +73,9 @@ export default function Grafik({
   // stanowisko, odpowiada na "kto stoi na barze w sobotę i czy ktoś tam w
   // ogóle stoi". Drugi jest bliższy temu, jak układa się grafik od zera,
   // pierwszy — temu, jak się go potem sprawdza.
+  // Trzeci układ, "budzet", czyta tę samą siatkę od strony pieniędzy: wiersze
+  // to wskaźniki (cel, prognoza, koszt, zapas), a nie ludzie. Nagłówek dni
+  // zostaje identyczny we wszystkich trzech — patrz GrafikBudzet.tsx.
   const [ukladSiatki, setUkladSiatki] = useState("osoby");
   const [weekStart, setWeekStart] = useState(() => mondayOf(toLocalYMD(new Date())));
   // Widok dnia ma własną kotwicę: przeskakiwanie tydzień <-> dzień nie może
@@ -229,6 +238,13 @@ export default function Grafik({
             >
               <Briefcase size={15} className="inline -mt-0.5 mr-1" /> Wg stanowisk
             </button>
+            <button
+              onClick={() => setUkladSiatki("budzet")}
+              className={ukladSiatki === "budzet" ? btnPrimaryCls : btnSecondaryCls}
+              title="Wiersz na wskaźnik — koszt pracy wobec prognozowanego utargu"
+            >
+              <Wallet size={15} className="inline -mt-0.5 mr-1" /> Wg budżetu
+            </button>
           </div>
         )}
 
@@ -326,6 +342,11 @@ export default function Grafik({
           setLokaleGodziny={setLokaleGodziny}
           grafikWyjatki={grafikWyjatki}
           setGrafikWyjatki={setGrafikWyjatki}
+          budzetCele={budzetCele}
+          setBudzetCele={setBudzetCele}
+          budzetDni={budzetDni}
+          setBudzetDni={setBudzetDni}
+          dayLogs={dayLogs}
           currentUser={currentUser}
           showMsg={showMsg}
         />
@@ -355,6 +376,9 @@ export default function Grafik({
           onResolveSwap={onResolveSwap}
           setAbsences={setAbsences}
           setShifts={setShifts}
+          budzetCele={budzetCele}
+          budzetDni={budzetDni}
+          setBudzetDni={setBudzetDni}
           currentUser={currentUser}
           showMsg={showMsg}
         />

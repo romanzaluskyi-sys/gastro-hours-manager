@@ -5,6 +5,39 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.39.0 — 2026-09-17
+
+- **Grafik wie, ile kosztuje.** Nad siatką tygodnia stoją teraz trzy karty:
+  koszt pracy za tydzień oraz — jako propozycja — minimalny utarg tygodnia i
+  średnio na dzień, przy którym ten grafik zmieści się w założonym procencie
+  kosztu pracy.
+- **W nagłówku każdego dnia widać koszt tego dnia i jaką część prognozowanego
+  utargu zjada.** Procent robi się czerwony, gdy przekracza cel — to sygnał, nie
+  blokada: zmianę nadal da się wpisać.
+- **Nowy widok „Wg budżetu"** obok „Wg osób" i „Wg stanowisk". Ta sama siatka i
+  ten sam nagłówek dni, tylko zamiast ludzi stoją w niej wskaźniki: cel % kosztu
+  pracy, prognozowany utarg, koszt pracy (z rozbiciem na stanowiska) i zapas do
+  celu.
+- **Cel finansowy ustawia się raz na dzień tygodnia** — Grafik → Konfiguracja →
+  Budżet. Oczekiwany utarg i docelowy % kosztu pracy, wersjonowane miesięcznie
+  jak wymagania obsady: nowy zestaw można utworzyć pusty albo skopiować z
+  bieżącego, a obowiązuje od swojego miesiąca aż do pojawienia się nowszego.
+- **Jeden dzień można zmienić bez ruszania reguły.** Sylwester, koncert w
+  mieście, remont ulicy — kliknięcie w liczbę w widoku „Wg budżetu" (w trybie
+  Edycja) zmienia ją tylko na ten dzień, a dzień dostaje podpis „zmienione na ten
+  dzień" i przycisk cofnięcia. Te same wyjątki widać i dodaje się w Konfiguracji.
+- **Przy umowie o pracę koszt godziny to kwota z umowy podzielona przez normę
+  miesiąca**, plus narzut pracodawcy z ustawień lokalu. Chodzi o to, ile lokal
+  wydaje, a nie ile pracownik zarobi. Ta sama zasada obowiązuje teraz również w
+  Pulsie: koszt pracy dnia przestał liczyć etatowców bez stawki godzinowej jako
+  zero, więc liczby w karcie dnia mogą być wyższe niż dotąd — i są prawdziwe.
+- Osoba bez stawki i bez kwoty z umowy nie jest liczona jako darmowa: koszt jest
+  wtedy opisany jako zaniżony, z nazwiskami.
+- W nagłówku lokalu doszła informacja „N osób ponad normą" obok dni pod minimum
+  i dni z nadmiarem.
+- Podpowiedź przy oczekiwanym utargu: średnia z czterech ostatnich takich dni
+  tygodnia z Pulsu. Wstawia liczbę do pola po kliknięciu — nigdy sama.
+
 ## 0.38.0 — 2026-09-16
 
 - **Giełda zmian ma teraz trzy drogi.** Ten sam przycisk „na giełdę", a za nim

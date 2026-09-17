@@ -67,6 +67,10 @@ export default function App() {
   const [lokaleGodziny, setLokaleGodziny] = useState([]);
   const [grafikWyjatki, setGrafikWyjatki] = useState([]);
   const [shiftSwaps, setShiftSwaps] = useState([]);
+  // Budżet Grafiku (0.39.0): cele na dzień tygodnia (wersjonowane miesięcznie)
+  // i wyjątki na konkretne daty. Patrz utils/budzet.ts.
+  const [budzetCele, setBudzetCele] = useState([]);
+  const [budzetDni, setBudzetDni] = useState([]);
 
   const [currentView, setCurrentView] = useState(() => loadSession().currentView);
   const [currentUser, setCurrentUser] = useState(() => loadSession().currentUser);
@@ -229,7 +233,7 @@ export default function App() {
         });
     });
 
-    // Grafik — sześć tabel, ten sam wzorzec co absences/tasks wyżej: każda
+    // Grafik — osiem tabel, ten sam wzorzec co absences/tasks wyżej: każda
     // osobno i nieblokująco, żeby brak którejkolwiek (albo błąd RLS) nie
     // zatrzymał logowania i reszty apki.
     const loadGrafik = () => {
@@ -240,6 +244,8 @@ export default function App() {
         ["lokale_godziny", setLokaleGodziny],
         ["grafik_wyjatki", setGrafikWyjatki],
         ["shift_swaps", setShiftSwaps],
+        ["grafik_budzet_cele", setBudzetCele],
+        ["grafik_budzet_dni", setBudzetDni],
       ];
       pairs.forEach(([table, setter]) => {
         api
@@ -431,6 +437,10 @@ export default function App() {
           setGrafikWyjatki={setGrafikWyjatki}
           shiftSwaps={shiftSwaps}
           setShiftSwaps={setShiftSwaps}
+          budzetCele={budzetCele}
+          setBudzetCele={setBudzetCele}
+          budzetDni={budzetDni}
+          setBudzetDni={setBudzetDni}
           showMsg={showMsg}
         />
       )}

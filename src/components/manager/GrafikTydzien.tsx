@@ -47,6 +47,8 @@ import {
   absenceOn,
   krotkaGodzina,
 } from "../../utils/grafik";
+import { budzetDnia, budzetTygodnia, zl, pct0 } from "../../utils/budzet";
+import { KartyBudzetu, WierszeBudzetu } from "./GrafikBudzet";
 import { activeSwapFor, pendingSwapDelta } from "../../utils/swaps";
 import { addUrlopDirectly, addNiedostepnoscDirectly } from "../../utils/absences";
 import { stanowiskoShort, stanowiskoBadgeStyle } from "../../utils/stanowiska";
@@ -218,6 +220,12 @@ function LokalSection({
   uklad = "osoby",
   shiftSwaps,
   onResolveSwap,
+  lokalRow,
+  budzetCele,
+  budzetDni,
+  setBudzetDni,
+  currentUser,
+  showMsg,
 }) {
   const [forecast, setForecast] = useState({});
 
@@ -373,6 +381,30 @@ function LokalSection({
   ).size;
   const dniPodMinimum = dayStats.filter((s) => s.hasGap).length;
   const dniZNadmiarem = dayStats.filter((s) => s.hasNadmiar).length;
+
+  // Warstwa budżetu. Liczymy ją ZAWSZE, nie tylko w układzie "Wg budżetu" —
+  // koszt dnia i jego udział w prognozie stoją w nagłówku każdego układu, bo
+  // to jest liczba, przy której podejmuje się decyzję o dopisaniu zmiany.
+  // Gdy budżetu nie skonfigurowano, `cel` jest null i warstwa milczy.
+  const dniBudzetu = weekDays.map((d) =>
+    budzetDnia({
+      cele: budzetCele,
+      budzetDni,
+      planShifts,
+      users,
+      lokalRow,
+      lokal,
+      dateStr: d,
+    })
+  );
+  const sumaBudzetu = budzetTygodnia(dniBudzetu);
+
+  // "1 osoba ponad normą — Paulina +4,5 h". Liczone z tego samego `rowMeta`,
+  // które rysuje wiersze — bez nowej arytmetyki i bez szansy na rozjazd z
+  // liczbą pokazaną przy nazwisku.
+  const ponadNorma = rowMeta
+    .filter((m) => m.norma != null && m.hours > m.norma + 0.05)
+    .map((m) => ({ name: m.user.name, nadwyzka: Math.round((m.hours - m.norma) * 10) / 10 }));
 
   const exportCsv = () => {
     const head = ["Pracownik", "Stanowisko", ...weekDays.map((d) => `${d}`)];
@@ -661,6 +693,17 @@ function LokalSection({
             {dniZNadmiarem} {dniZNadmiarem === 1 ? "dzień" : "dni"} z nadmiarem
           </span>
         )}
+        {ponadNorma.length > 0 && (
+          <span
+            className="text-[13px] font-bold text-[#7A5B12] flex items-center gap-1"
+            title={ponadNorma.map((o) => `${o.name} +${o.nadwyzka} h`).join("\n")}
+          >
+            <AlertTriangle size={14} />
+            {ponadNorma.length === 1
+              ? `1 osoba ponad normą — ${ponadNorma[0].name} +${ponadNorma[0].nadwyzka} h`
+              : `${ponadNorma.length} osób ponad normą`}
+          </span>
+        )}
         <div className="ml-auto flex gap-2">
           {mode === "edycja" && !trybDnia && (
             <button onClick={() => onCopyPrevWeek(lokal)} className={btnSecondaryCls}>
@@ -682,6 +725,8 @@ function LokalSection({
           </button>
         </div>
       </div>
+
+      <KartyBudzetu suma={sumaBudzetu} trybDnia={trybDnia} />
 
       <div className="overflow-x-auto">
         {/* table-fixed + colgroup: bez tego dni "oddychały" — tydzień z jedną
@@ -705,7 +750,11 @@ function LokalSection({
                   oczywista z zawartości, a te dwie linijki podnosiły cały
                   wiersz nagłówka, który i tak jest najwyższym elementem siatki. */}
               <th className="text-left px-3 py-2 border-r-[2px] border-[#171714] align-bottom">
-                {mode === "edycja" && (
+                {/* W układzie budżetu wiersze to wskaźniki, nie ludzie —
+                    zakładanie pracownika z tej kolumny nie miałoby sensu.
+                    W pozostałych układach przycisk zostaje tam, gdzie był. */}
+                {uklad === "budzet" && <span className={statLabelCls}>Wskaźnik</span>}
+                {uklad !== "budzet" && mode === "edycja" && (
                   <button
                     onClick={() => onAddEmployee(lokal)}
                     className="w-full px-2 py-1.5 rounded border-[2px] border-[#DE3A22] text-[#DE3A22] text-[12px] font-bold hover:bg-[#FAEAE6]"
@@ -765,6 +814,35 @@ function LokalSection({
                       <span className="whitespace-nowrap">{stat.people} os.</span>
                       <span className="whitespace-nowrap">{fmtH(stat.hours)}</span>
                     </div>
+                    {/* Trzecia linijka: ile ten dzień kosztuje i jaką część
+                        prognozowanego utargu zjada. Czerwień, gdy procent
+                        przekracza cel z konfiguracji — ta sama zasada co przy
+                        dziurach w obsadzie: kolor mówi "popatrz", nie blokuje.
+                        Dzień bez wpisanych zmian nie dostaje tu nic, bo "0 zł"
+                        wyglądałoby na policzoną liczbę. */}
+                    {dniBudzetu[i].koszt > 0 && (
+                      <div
+                        className={`flex items-baseline justify-between gap-1 text-[12px] font-bold mt-0.5 ${
+                          dniBudzetu[i].ponizejCelu ? "text-[#DE3A22]" : "text-[#6E6E66]"
+                        }`}
+                        title={
+                          dniBudzetu[i].pct != null
+                            ? `Cel: ${pct0(dniBudzetu[i].pct)} kosztu pracy${
+                                dniBudzetu[i].limit != null
+                                  ? ` — do celu ${zl(dniBudzetu[i].limit)}`
+                                  : ""
+                              }`
+                            : "Koszt pracy z wpisanych zmian"
+                        }
+                      >
+                        <span className="whitespace-nowrap">{zl(dniBudzetu[i].koszt)}</span>
+                        {dniBudzetu[i].kosztPct != null && (
+                          <span className="whitespace-nowrap">
+                            {pct0(dniBudzetu[i].kosztPct)}
+                          </span>
+                        )}
+                      </div>
+                    )}
                     <ProblemyObsady
                       stat={stat}
                       activeStanowiska={activeStanowiska}
@@ -775,6 +853,22 @@ function LokalSection({
               })}
             </tr>
           </thead>
+          {/* Układ "Wg budżetu" ma ten sam nagłówek dni co dwa pozostałe —
+              zmieniają się wyłącznie wiersze pod nim. Stopka z sumami godzin
+              w tym układzie się nie powtarza: wszystko, co ma tam stać, mówi
+              już podsumowanie budżetu. */}
+          {uklad === "budzet" ? (
+            <WierszeBudzetu
+              lokal={lokal}
+              dni={dniBudzetu}
+              suma={sumaBudzetu}
+              edycja={mode === "edycja"}
+              budzetDni={budzetDni}
+              setBudzetDni={setBudzetDni}
+              currentUser={currentUser}
+              showMsg={showMsg}
+            />
+          ) : (
           <tbody>
             {uklad === "stanowiska" &&
               (stanowiskaWiersze.length === 0 ? (
@@ -992,6 +1086,8 @@ function LokalSection({
               </tr>
             ))}
           </tbody>
+          )}
+          {uklad !== "budzet" && (
           <tfoot>
             <tr className="bg-[#F1F1EE] border-t-[2px] border-[#171714]">
               <td className="px-3 py-2 border-r-[2px] border-[#171714]">
@@ -1030,6 +1126,7 @@ function LokalSection({
               ))}
             </tr>
           </tfoot>
+          )}
         </table>
       </div>
     </div>
@@ -1065,6 +1162,9 @@ export default function GrafikTydzien({
   onResolveSwap,
   setAbsences,
   setShifts,
+  budzetCele,
+  budzetDni,
+  setBudzetDni,
   currentUser,
   showMsg,
 }) {
@@ -1542,11 +1642,26 @@ export default function GrafikTydzien({
           onAddEmployee={() => onNewEmployee && onNewEmployee(lokal)}
           shiftSwaps={shiftSwaps}
           onResolveSwap={onResolveSwap}
+          lokalRow={(lokale || []).find((l) => l.name === lokal) || null}
+          budzetCele={budzetCele}
+          budzetDni={budzetDni}
+          setBudzetDni={setBudzetDni}
+          currentUser={currentUser}
+          showMsg={showMsg}
         />
       ))}
 
       <p className="text-[12px] text-[#6E6E66]">
-        {uklad === "stanowiska" ? (
+        {uklad === "budzet" ? (
+          <>
+            Wiersze to wskaźniki tego samego tygodnia: cel i prognoza pochodzą z
+            Konfiguracji → Budżet, koszt pracy liczy się z wpisanych zmian. Przy
+            umowie o pracę godzina kosztuje kwotę z umowy podzieloną przez normę
+            miesiąca, plus narzut pracodawcy — czyli tyle, ile lokal wydaje, a nie
+            tyle, ile pracownik zarobi. Kliknięcie w cel albo prognozę zmienia je
+            tylko na ten jeden dzień.{" "}
+          </>
+        ) : uklad === "stanowiska" ? (
           <>
             Wiersz to stanowisko, kratka to jego obsada w danym dniu. Czerwone
             „−2 09:00–17:00” znaczy, że w tych godzinach brakuje dwóch osób wobec

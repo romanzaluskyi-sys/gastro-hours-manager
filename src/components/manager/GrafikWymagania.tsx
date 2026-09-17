@@ -7,7 +7,7 @@
 // Cała logika "co obowiązuje danego dnia" żyje w utils/grafik.ts — tutaj
 // jest wyłącznie UI i zapis. Pełna specyfikacja: docs/GRAFIK.md.
 import React, { useState, useMemo } from "react";
-import { Plus, Trash2, Copy, CalendarDays, Clock, AlertTriangle, Pencil } from "lucide-react";
+import { Plus, Trash2, Copy, CalendarDays, Clock, AlertTriangle, Pencil, Wallet } from "lucide-react";
 import { api } from "../../api/supabase";
 import {
   pageTitleCls,
@@ -18,6 +18,7 @@ import {
   statLabelCls,
 } from "./designTokens";
 import { trimTime, parseDays, findRuleSetForDate } from "../../utils/grafik";
+import GrafikBudzetKonfiguracja from "./GrafikBudzetKonfiguracja";
 
 // Kolejność wyświetlania — tydzień po polsku zaczyna się od poniedziałku,
 // ale same indeksy to zwykłe JS Date.getDay() (0=niedziela), tak samo jak
@@ -93,10 +94,15 @@ export default function GrafikWymagania({
   setLokaleGodziny,
   grafikWyjatki,
   setGrafikWyjatki,
+  budzetCele,
+  setBudzetCele,
+  budzetDni,
+  setBudzetDni,
+  dayLogs,
   currentUser,
   showMsg,
 }) {
-  const [view, setView] = useState("wymagania"); // wymagania | godziny | wyjatki
+  const [view, setView] = useState("wymagania"); // wymagania | godziny | wyjatki | budzet
   const [selectedSetId, setSelectedSetId] = useState(null);
   const nextMonth = new Date();
   nextMonth.setDate(1);
@@ -551,13 +557,14 @@ export default function GrafikWymagania({
   return (
     <div className="max-w-5xl mx-auto space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <h2 className={pageTitleCls}>Wymagania obsady</h2>
+        <h2 className={pageTitleCls}>{view === "budzet" ? "Budżet" : "Wymagania obsady"}</h2>
         <span className="text-[15px] text-[#6E6E66]">· {lokal}</span>
         <div className="ml-auto flex gap-2">
           {[
             { key: "wymagania", label: "Wymagania", Icon: CalendarDays },
             { key: "godziny", label: "Godziny otwarcia", Icon: Clock },
             { key: "wyjatki", label: "Wyjątki", Icon: AlertTriangle },
+            { key: "budzet", label: "Budżet", Icon: Wallet },
           ].map(({ key, label, Icon }) => (
             <button
               key={key}
@@ -569,6 +576,19 @@ export default function GrafikWymagania({
           ))}
         </div>
       </div>
+
+      {view === "budzet" && (
+        <GrafikBudzetKonfiguracja
+          lokal={lokal}
+          budzetCele={budzetCele}
+          setBudzetCele={setBudzetCele}
+          budzetDni={budzetDni}
+          setBudzetDni={setBudzetDni}
+          dayLogs={dayLogs}
+          currentUser={currentUser}
+          showMsg={showMsg}
+        />
+      )}
 
       {view === "wymagania" && (
         <>

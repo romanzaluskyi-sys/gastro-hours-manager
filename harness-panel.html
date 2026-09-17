@@ -33,7 +33,7 @@ const pokazBlad = (e) => {
 window.addEventListener("error", (ev) => pokazBlad(ev.error || ev.message));
 window.addEventListener("unhandledrejection", (ev) => pokazBlad(ev.reason));
 
-const IKONY = ["AlertCircle", "AlertTriangle", "Archive", "ArchiveRestore", "ArrowLeft", "ArrowLeftRight", "ArrowRight", "BarChart3", "Bell", "BookOpen", "Briefcase", "Calendar", "CalendarCheck", "CalendarDays", "CalendarRange", "Check", "CheckCircle", "CheckCircle2", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "ClipboardCheck", "ClipboardList", "ClipboardPlus", "Clock", "Cloud", "Construction", "Copy", "CopyPlus", "Delete", "Download", "Edit2", "Eye", "FileText", "Flag", "HelpCircle", "History", "Home", "Info", "Lock", "LogIn", "LogOut", "Mail", "MapPin", "MoreHorizontal", "Palmtree", "Pencil", "Plus", "Printer", "RefreshCw", "Save", "Send", "SlidersHorizontal", "Thermometer", "Trash2", "User", "UserPlus", "Users", "WifiOff", "X"];
+const IKONY = ["AlertCircle", "AlertTriangle", "Archive", "ArchiveRestore", "ArrowLeft", "ArrowLeftRight", "ArrowRight", "BarChart3", "Bell", "BookOpen", "Briefcase", "Calendar", "CalendarCheck", "CalendarDays", "CalendarRange", "Check", "CheckCircle", "CheckCircle2", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "ClipboardCheck", "ClipboardList", "ClipboardPlus", "Clock", "Cloud", "Construction", "Copy", "CopyPlus", "Delete", "Download", "Edit2", "Eye", "FileText", "Flag", "HelpCircle", "History", "Home", "Info", "Lock", "LogIn", "LogOut", "Mail", "MapPin", "MoreHorizontal", "Palmtree", "Pencil", "Plus", "Printer", "RefreshCw", "RotateCcw", "Save", "Send", "SlidersHorizontal", "Thermometer", "Trash2", "User", "UserPlus", "Users", "Wallet", "WifiOff", "X"];
 const stub = (kod) => URL.createObjectURL(new Blob([kod], { type: "text/javascript" }));
 
 // Atrapa Supabase — nic nie leci do sieci, każdy zapis wraca z wymyślonym id.
@@ -285,6 +285,25 @@ planTygodnia.push(
     stanowisko: "Kucharz", date: dniTygodnia[5], start_time: "12:00", end_time: "20:00", ...opub }
 );
 
+// Cel finansowy: sobota droższa w utargu i z niższym docelowym procentem,
+// niedziela bez celu w ogóle — dzień bez celu ma pokazać "—", a nie zero.
+const pierwszyBiezacego = (() => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+})();
+const celeStartowe = [1, 2, 3, 4, 5, 6, 0].map((dow, i) => ({
+  id: `bc${dow}`,
+  lokal: "Bułka i Jacek",
+  obowiazuje_od: pierwszyBiezacego,
+  day_of_week: dow,
+  oczekiwany_utarg: dow === 0 ? null : dow === 6 ? 13000 : 6500 + i * 300,
+  cel_koszt_pct: dow === 0 ? null : dow === 6 ? 28 : 35,
+}));
+const wyjatkiBudzetu = [
+  { id: "bd1", lokal: "Bułka i Jacek", date: dniTygodnia[2], oczekiwany_utarg: 4200,
+    cel_koszt_pct: null, autor: "Roman" },
+];
+
 const poprzedniMiesiac = (h) => {
   const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); d.setDate(10); d.setHours(h, 0, 0, 0);
   return d;
@@ -310,6 +329,11 @@ const poprzedniMiesiac = (h) => {
       const [planShifts, setPlanShifts] = useState(planTygodnia);
       const [staffingRules, setStaffingRules] = useState(regulyStartowe);
       const [staffingRuleSets, setStaffingRuleSets] = useState(zestawyStartowe);
+      // Budżet: zestaw celów od początku bieżącego miesiąca plus JEDEN wyjątek
+      // na konkretny dzień — bez wyjątku nie widać ani czerwonego podpisu
+      // "zmienione na ten dzień", ani tego, że nadpisanie działa polem po polu.
+      const [budzetCele, setBudzetCele] = useState(celeStartowe);
+      const [budzetDni, setBudzetDni] = useState(wyjatkiBudzetu);
 
       const props = {
         // ?rola=manager przełącza na kierownika JEDNEGO lokalu. Tylko w tym
@@ -421,6 +445,7 @@ const poprzedniMiesiac = (h) => {
         // ale z drugim, niezależnym stanem. Bez tego nie widać, czy edycja w
         // jednym miejscu nie miesza się z drugim.
         grafikWyjatki: wyjatkiStartowe,
+        budzetCele, setBudzetCele, budzetDni, setBudzetDni,
         weatherForecasts: [],
         dayLogs, setDayLogs, dayLogEntries, setDayLogEntries,
         dayLogTemplates, setDayLogTemplates,
