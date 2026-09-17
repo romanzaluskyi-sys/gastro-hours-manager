@@ -23,6 +23,12 @@ const skrotDnia = (d) => DZIEN_SKROT[new Date(d + "T00:00:00").getDay()];
 // w liczbie nad nim.
 const dniLabel = (n) => (n === 1 ? "1 dzień" : `${n} dni`);
 
+// Różnica dwóch procentów to PUNKTY PROCENTOWE, nie procenty — "o 30,2%
+// poniżej celu 33%" czyta się jako 33 minus 30% z 33, czyli zupełnie inną
+// liczbę niż ta, o którą chodzi.
+const punkty = (v) =>
+  `${(Math.round(v * 10) / 10).toString().replace(".", ",")} pkt proc.`;
+
 // Liczba do pola: bez spacji i ze zwykłą kropką, żeby dało się ją wpisać z
 // klawiatury numerycznej, a przecinek nie wywracał parsowania.
 const doPola = (v) => (v == null ? "" : String(v).replace(".", ","));
@@ -49,8 +55,8 @@ export function KartyBudzetu({ suma, trybDnia }) {
 
   return (
     <div
-      className={`px-4 py-3 border-b-[2px] border-[#171714] grid gap-3 ${
-        trybDnia ? "md:grid-cols-2" : "md:grid-cols-3"
+      className={`px-4 py-3 border-b-[2px] border-[#171714] grid gap-3 sm:grid-cols-2 ${
+        trybDnia ? "lg:grid-cols-3" : "lg:grid-cols-4"
       }`}
     >
       <div className="border-[2.5px] border-[#171714] rounded p-3 bg-white">
@@ -70,6 +76,34 @@ export function KartyBudzetu({ suma, trybDnia }) {
             koszt zaniżony — bez danych o wynagrodzeniu: {suma.bezDanych.join(", ")}
           </div>
         )}
+      </div>
+
+      {/* Druga karta stoi między kosztem a propozycjami świadomie: to jedyna
+          liczba w tym rzędzie, która łączy obie strony równania i jest DOKŁADNA
+          — koszt jest z grafiku, prognoza z konfiguracji, nic tu nie jest
+          proponowane. Dlatego pełna ramka, jak przy koszcie, a nie przerywana. */}
+      <div className="border-[2.5px] border-[#171714] rounded p-3 bg-white">
+        <div className={statLabelCls}>Koszt pracy / utarg · {okres}</div>
+        <div
+          className={`font-['Archivo'] font-extrabold text-[26px] leading-tight ${
+            suma.celPct != null && suma.kosztPct != null && suma.kosztPct > suma.celPct
+              ? "text-[#DE3A22]"
+              : "text-[#171714]"
+          }`}
+        >
+          {pct1(suma.kosztPct)}
+        </div>
+        <div className="text-[12px] text-[#6E6E66] leading-snug">
+          {suma.kosztPct == null
+            ? "wpisz prognozowany utarg w Konfiguracji"
+            : suma.celPct == null
+            ? "brak docelowego procentu do porównania"
+            : `cel ${pct1(suma.celPct)} — ${
+                suma.kosztPct > suma.celPct
+                  ? `o ${punkty(suma.kosztPct - suma.celPct)} powyżej`
+                  : `o ${punkty(suma.celPct - suma.kosztPct)} poniżej`
+              }`}
+        </div>
       </div>
 
       <KartaPropozycji
@@ -395,12 +429,6 @@ function PodsumowanieBudzetu({ suma, dni }) {
           </>
         ) : null}
       </span>
-      {suma.koszt > 0 && suma.prognoza > 0 && (
-        <span className="text-[#6E6E66]">
-          udział kosztu pracy:{" "}
-          <strong className="text-[#171714]">{pct1((suma.koszt / suma.prognoza) * 100)}</strong>
-        </span>
-      )}
       {ponizej.length > 0 && (
         <span className="text-[12px] font-bold text-[#DE3A22] bg-[#FAEAE6] rounded px-2 py-0.5">
           {dniLabel(ponizej.length)} poniżej celu — {ponizej.join(", ")}

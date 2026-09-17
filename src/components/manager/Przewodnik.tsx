@@ -32,6 +32,9 @@ const CHANGELOG = [
       "Cel finansowy (oczekiwany utarg i docelowy % kosztu pracy) ustawia się na dzień tygodnia w Grafik → Konfiguracja → Budżet, wersjonowany miesięcznie jak wymagania obsady.",
       "Pojedynczy dzień da się zmienić bez ruszania reguły — kliknięciem w liczbę w trybie Edycja; dzień dostaje podpis „zmienione na ten dzień\".",
       "Przy umowie o pracę koszt godziny to kwota z umowy przez normę miesiąca plus narzut — tak liczy teraz również Puls, więc koszt dnia nie pokazuje już etatowców jako darmowych.",
+      "Przy nazwisku w siatce widać różnicę wobec normy: „do normy: 16 h\" albo „+4,5 h ponad normą\" (tylko umowa o pracę).",
+      "Przycisk „Zobacz, co czeka na wysłanie\" pod siatką pokazuje pełną listę zmian w wersji roboczej, zanim polecą powiadomienia.",
+      "Zestaw konfiguracji — wymagań obsady albo celu finansowego — da się teraz usunąć.",
     ],
   },
   {

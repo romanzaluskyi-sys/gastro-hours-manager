@@ -202,6 +202,50 @@ export default function GrafikWymagania({
     setSaving(false);
   };
 
+  // Skasowanie zestawu razem z jego wymaganiami. Zestaw to nie jest wpis, który
+  // da się poprawić na miejscu — utworzony na zły miesiąc zostawał w rozwijanej
+  // liście na zawsze i przy każdym wejściu trzeba było pamiętać, żeby go nie
+  // wybrać.
+  //
+  // ⚠️ Kasowanie zestawu OBOWIĄZUJĄCEGO zmienia to, co widać w siatce już od
+  // następnego renderu: dni spadają na zestaw wcześniejszy albo — gdy nie ma
+  // żadnego — zostają bez wymagań, czyli kontrola dziur w obsadzie milknie. To
+  // za dużo, żeby zrobić to jednym kliknięciem bez powiedzenia, co się stanie.
+  const handleDeleteSet = async () => {
+    if (!activeSet) return;
+    const own = (staffingRules || []).filter((r) => r.set_id === activeSet.id);
+    const nastepny = setsForLokal
+      .filter((x) => x.id !== activeSet.id && x.obowiazuje_od <= todayStr)
+      .sort((a, b) => (a.obowiazuje_od < b.obowiazuje_od ? 1 : -1))[0];
+    const skutek =
+      activeSet.id !== effectiveSet?.id
+        ? "Ten zestaw jeszcze nie obowiązuje, więc siatka się nie zmieni."
+        : nastepny
+        ? `Od teraz obowiązywać będzie zestaw od ${monthLabel(nastepny.obowiazuje_od)}.`
+        : "To jedyny obowiązujący zestaw — po usunięciu lokal zostanie BEZ wymagań obsady i kontrola dziur przestanie cokolwiek pokazywać.";
+    if (
+      !window.confirm(
+        `Usunąć zestaw od ${monthLabel(activeSet.obowiazuje_od)} razem z ${own.length} wymaganiami?\n\n${skutek}\n\nTego nie da się cofnąć.`
+      )
+    )
+      return;
+    setSaving(true);
+    try {
+      for (const r of own) await api.delete("staffing_rules", r.id);
+      await api.delete("staffing_rule_sets", activeSet.id);
+      setStaffingRules((staffingRules || []).filter((r) => r.set_id !== activeSet.id));
+      setStaffingRuleSets((staffingRuleSets || []).filter((x) => x.id !== activeSet.id));
+      // Formularz z regułą ze skasowanego zestawu zapisałby ją z powrotem pod
+      // nieistniejącym set_id — czyścimy go razem z zestawem.
+      setRuleForm(emptyRuleForm());
+      setSelectedSetId(null);
+      showMsg("Usunięto zestaw wymagań.");
+    } catch (err) {
+      showMsg(`Błąd usuwania zestawu: ${err.message || "nieznany błąd"}`, "error");
+    }
+    setSaving(false);
+  };
+
   // --- WYMAGANIA -------------------------------------------------------
   const submitRule = async (e, { wyjatekId }) => {
     e.preventDefault();
@@ -663,6 +707,14 @@ export default function GrafikWymagania({
                 className={btnPrimaryCls}
               >
                 <Copy size={15} className="inline -mt-0.5 mr-1" /> Kopiuj bieżący
+              </button>
+              <button
+                onClick={handleDeleteSet}
+                disabled={saving || !activeSet}
+                className="bg-white text-[#DE3A22] font-['Archivo'] font-bold text-sm px-4 py-2.5 rounded border-[2px] border-[#DE3A22] hover:bg-[#FAEAE6] disabled:opacity-40"
+                title="Usuwa oglądany zestaw razem z jego wymaganiami"
+              >
+                <Trash2 size={15} className="inline -mt-0.5 mr-1" /> Usuń zestaw
               </button>
               <p className="text-[12px] text-[#6E6E66] w-full">
                 Zestaw obowiązuje od swojego miesiąca aż do pojawienia się

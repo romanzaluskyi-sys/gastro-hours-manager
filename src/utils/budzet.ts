@@ -209,6 +209,23 @@ export const budzetTygodnia = (dni) => {
     // o ponad połowę i sugerowało, że cel jest łatwiejszy, niż jest.
     minUtargSredni: zMinUtargiem.length > 0 ? minUtarg / zMinUtargiem.length : null,
     zapas: zCelem.length > 0 ? zCelem.reduce((s, d) => s + d.zapas, 0) : null,
+    // Udział kosztu pracy w prognozie — liczba DOKŁADNA, nie propozycja: koszt
+    // stoi w grafiku, prognoza w konfiguracji. Liczymy z sum, nie ze średniej
+    // dziennych procentów: dzień z małym utargiem i dzień z dużym ważą wtedy
+    // tyle, ile faktycznie ważą w tygodniu.
+    kosztPct:
+      lista.some((d) => d.utarg != null) && prognoza > 0
+        ? (lista.reduce((s, d) => s + d.koszt, 0) / prognoza) * 100
+        : null,
+    // Średni cel tygodnia, ważony prognozą — punkt odniesienia dla powyższego.
+    // Średnia arytmetyczna z siedmiu procentów kłamałaby tym mocniej, im
+    // bardziej sobota różni się utargiem od wtorku.
+    celPct: (() => {
+      const zCel = lista.filter((d) => d.utarg != null && d.pct != null);
+      const baza = zCel.reduce((s, d) => s + d.utarg, 0);
+      if (baza <= 0) return null;
+      return (zCel.reduce((s, d) => s + (d.utarg * d.pct) / 100, 0) / baza) * 100;
+    })(),
     dniPonizej: lista.filter((d) => d.ponizejCelu).map((d) => d.date),
     bezDanych: [...new Set(lista.flatMap((d) => d.bezDanych))],
   };
@@ -256,6 +273,16 @@ export const utworzZestaw = async ({ lokal, obowiazujeOd, zrodlo, autor }) => {
     );
   }
   return rows;
+};
+
+// Skasowanie całego zestawu celów — siedem wierszy naraz. Zestaw utworzony na
+// zły miesiąc inaczej zostawałby w rozwijanej liście na zawsze.
+export const usunZestaw = async ({ cele, setCele, lokal, obowiazujeOd }) => {
+  const doUsuniecia = wierszeZestawu(cele, lokal, obowiazujeOd);
+  for (const w of doUsuniecia) await api.delete("grafik_budzet_cele", w.id);
+  const ids = new Set(doUsuniecia.map((w) => w.id));
+  setCele((cele || []).filter((c) => !ids.has(c.id)));
+  return doUsuniecia.length;
 };
 
 export const zapiszCel = async ({ wiersz, patch }) =>

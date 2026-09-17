@@ -33,6 +33,21 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
   zero, więc liczby w karcie dnia mogą być wyższe niż dotąd — i są prawdziwe.
 - Osoba bez stawki i bez kwoty z umowy nie jest liczona jako darmowa: koszt jest
   wtedy opisany jako zaniżony, z nazwiskami.
+- **Przy nazwisku w siatce widać różnicę wobec normy** — „do normy: 16 h" albo
+  „+4,5 h ponad normą". Dotyczy umowy o pracę; przy zleceniu normy nie ma, więc
+  i plakietki nie ma. Niedobór jest szary, nie czerwony: to informacja dla
+  planującego, nie zarzut wobec pracownika.
+- **Osobna karta „Koszt pracy / utarg"** przy pozostałych — udział kosztu pracy
+  w prognozowanym utargu tygodnia, razem z celem do porównania. To liczba
+  dokładna, nie propozycja, dlatego stoi w pełnej ramce.
+- **Przycisk „Zobacz, co czeka na wysłanie"** pod siatką — pełna lista zmian w
+  wersji roboczej, dzień po dniu, z zaznaczeniem, które są nowe, które
+  zmienione, a które zdejmowane z grafiku. Wysyłka obejmuje wszystko od dziś w
+  przód, ze wszystkich lokali, więc teraz da się to najpierw obejrzeć.
+- **Zestaw konfiguracji da się usunąć** — i wymagań obsady, i celu finansowego.
+  Zestaw utworzony na zły miesiąc zostawał wcześniej na liście na zawsze.
+  Potwierdzenie mówi wprost, co się stanie: który zestaw zacznie obowiązywać
+  albo że lokal zostanie bez wymagań.
 - W nagłówku lokalu doszła informacja „N osób ponad normą" obok dni pod minimum
   i dni z nadmiarem.
 - Podpowiedź przy oczekiwanym utargu: średnia z czterech ostatnich takich dni

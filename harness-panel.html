@@ -33,7 +33,7 @@ const pokazBlad = (e) => {
 window.addEventListener("error", (ev) => pokazBlad(ev.error || ev.message));
 window.addEventListener("unhandledrejection", (ev) => pokazBlad(ev.reason));
 
-const IKONY = ["AlertCircle", "AlertTriangle", "Archive", "ArchiveRestore", "ArrowLeft", "ArrowLeftRight", "ArrowRight", "BarChart3", "Bell", "BookOpen", "Briefcase", "Calendar", "CalendarCheck", "CalendarDays", "CalendarRange", "Check", "CheckCircle", "CheckCircle2", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "ClipboardCheck", "ClipboardList", "ClipboardPlus", "Clock", "Cloud", "Construction", "Copy", "CopyPlus", "Delete", "Download", "Edit2", "Eye", "FileText", "Flag", "HelpCircle", "History", "Home", "Info", "Lock", "LogIn", "LogOut", "Mail", "MapPin", "MoreHorizontal", "Palmtree", "Pencil", "Plus", "Printer", "RefreshCw", "RotateCcw", "Save", "Send", "SlidersHorizontal", "Thermometer", "Trash2", "User", "UserPlus", "Users", "Wallet", "WifiOff", "X"];
+const IKONY = ["AlertCircle", "AlertTriangle", "Archive", "ArchiveRestore", "ArrowLeft", "ArrowLeftRight", "ArrowRight", "BarChart3", "Bell", "BookOpen", "Briefcase", "Calendar", "CalendarCheck", "CalendarDays", "CalendarRange", "Check", "CheckCircle", "CheckCircle2", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "ClipboardCheck", "ClipboardList", "ClipboardPlus", "Clock", "Cloud", "Construction", "Copy", "CopyPlus", "Delete", "Download", "Edit2", "Eye", "FileText", "Flag", "HelpCircle", "History", "Home", "Info", "ListChecks", "Lock", "LogIn", "LogOut", "Mail", "MapPin", "MoreHorizontal", "Palmtree", "Pencil", "Plus", "Printer", "RefreshCw", "RotateCcw", "Save", "Send", "SlidersHorizontal", "Thermometer", "Trash2", "User", "UserPlus", "Users", "Wallet", "WifiOff", "X"];
 const stub = (kod) => URL.createObjectURL(new Blob([kod], { type: "text/javascript" }));
 
 // Atrapa Supabase — nic nie leci do sieci, każdy zapis wraca z wymyślonym id.
@@ -190,6 +190,17 @@ const planTygodnia = [
   // ktoś zapomniał zamknąć.
   { id: "g8", user_id: "u0", user_name: "Roman", lokal: "Bułka i Jacek",
     stanowisko: "Kucharz", date: dniTygodnia[4], start_time: "06:00", end_time: "14:00", ...opub },
+  // Dwie zmiany NIEWYSŁANE: jedna nowa, jedna zdjęta z grafiku po wysłaniu
+  // (deleted_at — znika z siatki, ale kasuje się dopiero przy publikacji).
+  // Bez nich przycisk "Zobacz, co czeka na wysłanie" jest zawsze wyszarzony i
+  // nie widać ani listy, ani rozróżnienia "nowa / zmieniona / do usunięcia".
+  { id: "g9", user_id: "u1", user_name: "Ala", lokal: "Bułka i Jacek",
+    stanowisko: "Kucharz", date: dniTygodnia[5], start_time: "08:00", end_time: "16:00",
+    published_at: null, deleted_at: null },
+  { id: "g10", user_id: "u3", user_name: "Cezary", lokal: "Ceglana",
+    stanowisko: "Kucharz", date: dniTygodnia[6], start_time: "10:00", end_time: "18:00",
+    published_at: "2020-01-01T00:00:00Z", deleted_at: "2026-09-16T10:00:00Z",
+    updated_at: "2026-09-16T10:00:00Z" },
   // Druga zmiana tego samego dnia — w wydruku "osoby × dni" kratka rośnie o
   // kolejną trójkę zamiast chować drugą zmianę.
   { id: "g5", user_id: "u3", user_name: "Cezary", lokal: "Ceglana",

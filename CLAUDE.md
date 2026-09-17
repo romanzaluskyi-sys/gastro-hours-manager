@@ -286,6 +286,9 @@ src/
                                     dla wszystkich trzech układów
       GrafikBudzetKonfiguracja.tsx  cel finansowy na dzień tygodnia i wyjątki
                                     na konkretne daty
+      GrafikDoWyslaniaModal.tsx     podgląd wszystkiego, co czeka w wersji
+                                    roboczej — NIE publikuje, publikacja
+                                    zostaje przy "Wyślij grafik"
       PulpitHome.tsx, RejestrGodzin.tsx, ZatwierdzanieZmian.tsx,
       Aktywni.tsx, Zgloszenia.tsx, Pracownicy.tsx, RaportyIKoszty.tsx,
       Przewodnik.tsx, MojaPraca.tsx
@@ -2094,6 +2097,24 @@ Szczegóły, które łatwo zepsuć:
   `sredniUtargDnia` siedzi pod przyciskiem „z historii”. Liczba, która wpisała
   się sama, po tygodniu wygląda dokładnie jak liczba wpisana świadomie.
 - **Edycja komórek tylko w trybie Edycja**, jak reszta Grafiku.
+- **Udział kosztu w utargu tygodnia liczymy z SUM**, nie jako średnią dziennych
+  procentów, a cel do porównania ważymy prognozą. Średnia arytmetyczna kłamałaby
+  tym mocniej, im bardziej sobota różni się utargiem od wtorku. Różnica dwóch
+  procentów to PUNKTY PROCENTOWE — "o 30,2% poniżej celu 33%" znaczy co innego
+  niż to, o co chodzi.
+- **Plakietka normy przy nazwisku** (`plakietkaNormy` w `GrafikTydzien.tsx`)
+  dotyczy WYŁĄCZNIE umowy o pracę i niedobór jest w niej szary, nie czerwony —
+  ta sama zasada co przy bilansie okresu: to miara niewykorzystanego zasobu po
+  stronie kierownika, nie dług pracownika.
+- **Kasowanie zestawu konfiguracji** (wymagań w `GrafikWymagania.tsx`, celów w
+  `GrafikBudzetKonfiguracja.tsx`) ⚠️ zmienia to, co widać w siatce, od razu:
+  dni spadają na zestaw wcześniejszy albo zostają bez reguły. Potwierdzenie musi
+  powiedzieć KTÓRY, inaczej kontrola dziur w obsadzie milknie i nikt tego nie
+  zauważy, bo brak ostrzeżeń wygląda jak brak problemów.
+- **"Zobacz, co czeka na wysłanie"** (`GrafikDoWyslaniaModal.tsx`) niczego nie
+  zmienia — publikacja zostaje w jednym miejscu, przy przycisku "Wyślij grafik".
+  Lista grupuje po DNIU, nie po lokalu: pracownik dostanie powiadomienie o
+  swoich dniach, a kierownik przegląda to jak kalendarz.
 - **Budżetu nie widzi pracownik** — ani na tablecie, ani na prywatnym telefonie.
   Ta sama zasada co przy `PulsZmiany`: koszty i stawki nie są informacją dla tej
   roli.

@@ -21,6 +21,7 @@ import {
 } from "./designTokens";
 import {
   utworzZestaw,
+  usunZestaw,
   zapiszCel,
   zapiszNadpisanieDnia,
   usunNadpisanieDnia,
@@ -138,6 +139,39 @@ export default function GrafikBudzetKonfiguracja({
       showMsg(kopiuj ? "Utworzono zestaw z kopii bieżącego." : "Utworzono pusty zestaw.");
     } catch (err) {
       showMsg(`Błąd zapisu zestawu: ${err.message || "nieznany błąd"}`, "error");
+    }
+    setZapisuje(false);
+  };
+
+  // ⚠️ Kasowanie zestawu OBOWIĄZUJĄCEGO zmienia liczby w siatce od razu: dni
+  // spadają na zestaw wcześniejszy albo — gdy nie ma żadnego — tracą cel i cała
+  // warstwa budżetu milknie. Mówimy o tym wprost, zanim zapytamy.
+  const usun = async () => {
+    if (!aktywnyOd) return;
+    const wczesniejszy = zestawy
+      .filter((od) => od !== aktywnyOd && od <= dzis)
+      .sort()
+      .reverse()[0];
+    const skutek =
+      aktywnyOd !== obowiazujacy
+        ? "Ten zestaw jeszcze nie obowiązuje, więc w siatce nic się nie zmieni."
+        : wczesniejszy
+        ? `Od teraz obowiązywać będzie zestaw od ${monthLabel(wczesniejszy)}.`
+        : "To jedyny obowiązujący zestaw — po usunięciu lokal zostanie bez celu finansowego, a widok „Wg budżetu” przestanie pokazywać liczby.";
+    if (
+      !window.confirm(
+        `Usunąć zestaw celów od ${monthLabel(aktywnyOd)}?\n\n${skutek}\n\nWyjątki na konkretne dni zostają — kasuje się je osobno. Tego nie da się cofnąć.`
+      )
+    )
+      return;
+    setZapisuje(true);
+    try {
+      await usunZestaw({ cele: budzetCele, setCele: setBudzetCele, lokal, obowiazujeOd: aktywnyOd });
+      setDraft(null);
+      setWybranyOd(null);
+      showMsg("Usunięto zestaw celów.");
+    } catch (err) {
+      showMsg(`Błąd usuwania zestawu: ${err.message || "nieznany błąd"}`, "error");
     }
     setZapisuje(false);
   };
@@ -305,6 +339,14 @@ export default function GrafikBudzetKonfiguracja({
             }
           >
             <Copy size={15} className="inline -mt-0.5 mr-1" /> Kopiuj bieżący
+          </button>
+          <button
+            onClick={usun}
+            disabled={zapisuje || !aktywnyOd}
+            className="bg-white text-[#DE3A22] font-['Archivo'] font-bold text-sm px-4 py-2.5 rounded border-[2px] border-[#DE3A22] hover:bg-[#FAEAE6] disabled:opacity-40"
+            title="Usuwa oglądany zestaw celów (siedem dni tygodnia)"
+          >
+            <Trash2 size={15} className="inline -mt-0.5 mr-1" /> Usuń zestaw
           </button>
         </div>
 

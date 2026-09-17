@@ -222,6 +222,27 @@ const sprawdz = (nazwa, warunek, szczegol = "") => {
     sprawdz("tydzień bez żadnego celu nie wymyśla min. utargu",
       B.budzetTygodnia([bezCelu]).minUtarg === null);
 
+    // Udział kosztu pracy w prognozie — liczba dokładna, nie propozycja.
+    // Liczona z SUM, nie jako średnia dziennych procentów: dzień z małym
+    // utargiem ma wtedy taką wagę, jaką faktycznie ma w tygodniu.
+    const dwaDni = B.budzetTygodnia([
+      // 720 zł przy 6500 zł i celu 35%
+      pon,
+      // ten sam koszt przy dwa razy większym utargu i celu 28%
+      { ...pon, date: "2026-09-19", utarg: 13000, pct: 28, limit: 3640, zapas: 2920,
+        minUtarg: (720 / 28) * 100, ponizejCelu: false },
+    ]);
+    sprawdz("udział kosztu = 1440 / 19500 = 7,38%",
+      Math.abs(dwaDni.kosztPct - 7.3846) < 0.001, "jest " + dwaDni.kosztPct);
+    // Cel ważony prognozą: (6500×35% + 13000×28%) / 19500 = 30,33%, a NIE 31,5%,
+    // które wyszłoby ze średniej arytmetycznej dwóch procentów.
+    sprawdz("cel ważony prognozą, nie średnia procentów",
+      Math.abs(dwaDni.celPct - 30.3333) < 0.001, "jest " + dwaDni.celPct);
+    sprawdz("bez prognozy nie liczymy udziału",
+      B.budzetTygodnia([bezCelu]).kosztPct === null);
+    sprawdz("bez celu nie ma z czym porównać",
+      B.budzetTygodnia([bezCelu]).celPct === null);
+
     // --- PODPOWIEDŹ Z HISTORII -------------------------------------------
     log("");
     log("— podpowiedź z historii —");
