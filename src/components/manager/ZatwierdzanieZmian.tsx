@@ -7,7 +7,7 @@ import { Check, Edit2, HelpCircle, AlertCircle, X, Palmtree, ArrowLeftRight, Clo
 import { resolveCorrection, askAboutCorrection } from "../../utils/corrections";
 import { countWorkdays, URLOP_HOURS_PER_DAY } from "../../utils/absences";
 import { trimTime, shiftHours } from "../../utils/grafik";
-import { monthPlanHours } from "../../utils/swaps";
+import { monthPlanHours, typWymiany, wzajemnaZmiana } from "../../utils/swaps";
 import { pageTitleCls, statLabelCls, btnPrimaryCls, btnSecondaryCls } from "./designTokens";
 
 const fmtPLAbs = (dateStr) =>
@@ -339,6 +339,8 @@ export default function ZatwierdzanieZmian({
               const ps = planShifts.find(
                 (p) => String(p.id) === String(sw.grafik_shift_id)
               );
+              const typ = typWymiany(sw);
+              const wz = wzajemnaZmiana(sw, planShifts);
               return (
                 <div
                   key={sw.id}
@@ -346,7 +348,14 @@ export default function ZatwierdzanieZmian({
                 >
                   <div>
                     <div className="font-['Archivo'] font-extrabold text-[15px]">
-                      {sw.taker_user_name} przejmuje zmianę od: {sw.author_user_name}
+                      {typ === "zamiana"
+                        ? `${sw.taker_user_name} i ${sw.author_user_name} zamieniają się zmianami`
+                        : `${sw.taker_user_name} przejmuje zmianę od: ${sw.author_user_name}`}
+                      {typ === "oddanie" && (
+                        <span className="ml-2 text-[11px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#F1F1EE] text-[#6E6E66]">
+                          oddane wprost
+                        </span>
+                      )}
                     </div>
                     <div className="text-[14px] text-[#6E6E66] mt-0.5">
                       {ps
@@ -355,6 +364,26 @@ export default function ZatwierdzanieZmian({
                           )} · ${ps.stanowisko} · ${ps.lokal}`
                         : `${fmtPLAbs(sw.date)} · ${sw.lokal} · zmiana już nie istnieje`}
                     </div>
+                    {/* Przy zamianie kierownik musi zobaczyć OBIE zmiany —
+                        zatwierdza dwa przepisania naraz, a druga strona jest
+                        tak samo wiążąca jak pierwsza. */}
+                    {typ === "zamiana" && (
+                      <div className="text-[14px] text-[#6E6E66] mt-0.5">
+                        {wz ? (
+                          <>
+                            <span className="font-bold">w zamian: </span>
+                            {`${fmtPLAbs(wz.date)} · ${trimTime(wz.start_time)}–${trimTime(
+                              wz.end_time
+                            )} · ${wz.stanowisko} · ${wz.lokal}`}{" "}
+                            → {sw.author_user_name}
+                          </>
+                        ) : (
+                          <span className="text-[#DE3A22] font-bold">
+                            druga zmiana już nie istnieje — nie da się zatwierdzić
+                          </span>
+                        )}
+                      </div>
+                    )}
                     {sw.note && (
                       <div className="text-[13px] text-[#6E6E66] mt-1">{sw.note}</div>
                     )}
@@ -366,6 +395,14 @@ export default function ZatwierdzanieZmian({
                         // pokazujemy wyłącznie liczby.)
                         const mies = ps.date.slice(0, 7);
                         const h = shiftHours(ps);
+                        // Przy zamianie każda strona i bierze, i oddaje —
+                        // pokazanie samej przejmowanej zmiany sugerowałoby
+                        // wzrost godzin tam, gdzie realnie prawie nic się nie
+                        // zmienia. Zmiana spoza tego miesiąca liczy się zerem.
+                        const hw =
+                          typ === "zamiana" && wz && wz.date.slice(0, 7) === mies
+                            ? shiftHours(wz)
+                            : 0;
                         const strony = [
                           {
                             osoba: sw.taker_user_name,
@@ -374,7 +411,7 @@ export default function ZatwierdzanieZmian({
                               { id: sw.taker_user_id, name: sw.taker_user_name },
                               mies
                             ),
-                            delta: h,
+                            delta: h - hw,
                           },
                           {
                             osoba: sw.author_user_name,
@@ -383,7 +420,7 @@ export default function ZatwierdzanieZmian({
                               { id: sw.author_user_id, name: sw.author_user_name },
                               mies
                             ),
-                            delta: -h,
+                            delta: hw - h,
                           },
                         ];
                         return (
@@ -395,11 +432,19 @@ export default function ZatwierdzanieZmian({
                                 {Math.round((r.teraz + r.delta) * 10) / 10} h{" "}
                                 <span
                                   className={`font-extrabold ${
-                                    r.delta > 0 ? "text-[#2F7A2A]" : "text-[#DE3A22]"
+                                    r.delta === 0
+                                      ? "text-[#6E6E66]"
+                                      : r.delta > 0
+                                      ? "text-[#2F7A2A]"
+                                      : "text-[#DE3A22]"
                                   }`}
                                 >
-                                  ({r.delta > 0 ? "+" : "−"}
-                                  {Math.round(Math.abs(r.delta) * 10) / 10} h)
+                                  ({r.delta === 0 ? "bez zmian" : ""}
+                                  {r.delta !== 0 && (r.delta > 0 ? "+" : "−")}
+                                  {r.delta !== 0
+                                    ? `${Math.round(Math.abs(r.delta) * 10) / 10} h`
+                                    : ""}
+                                  )
                                 </span>
                               </span>
                             ))}
@@ -410,7 +455,7 @@ export default function ZatwierdzanieZmian({
                   <div className="flex gap-2">
                     <button
                       onClick={() => handleSwapDecision(sw, "approve")}
-                      disabled={swapBusyId === sw.id || !ps}
+                      disabled={swapBusyId === sw.id || !ps || (typ === "zamiana" && !wz)}
                       className={btnPrimaryCls}
                     >
                       Zatwierdź

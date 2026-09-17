@@ -180,8 +180,23 @@ const poprzedniMiesiac = (h) => {
     const KD = (await import(await zaladuj("/src/components/KioskDashboard"))).default;
     const { useState, createElement: h } = React;
 
+    const zaDni = (n) => {
+      const d = new Date(); d.setDate(d.getDate() + n);
+      return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, "0"), String(d.getDate()).padStart(2, "0")].join("-");
+    };
+    const opubGielda = { published_at: "2026-09-01T00:00:00Z" };
+    const planGieldy = [
+      { id: "g1", user_id: "u2", user_name: "Bo", lokal: "Ceglana", stanowisko: "Kucharz",
+        date: zaDni(5), start_time: "10:00", end_time: "18:00", ...opubGielda },
+      { id: "g2", user_id: "u3", user_name: "Cezary", lokal: "Ceglana", stanowisko: "Kucharz",
+        date: zaDni(6), start_time: "12:00", end_time: "20:00", ...opubGielda },
+      { id: "g3", user_id: "u4", user_name: "Dorota", lokal: "Ceglana", stanowisko: "Kucharz",
+        date: zaDni(5), start_time: "08:00", end_time: "16:00", ...opubGielda },
+    ];
+
     function Harness() {
       const [shifts, setShifts] = useState([]);
+      const [shiftSwaps, setShiftSwaps] = useState([]);
       const [issues, setIssues] = useState([]);
       const [notifications, setNotifications] = useState([]);
       // Zadania: trzy bloki — dla wszystkich, z pomiarem i tylko dla kucharza.
@@ -225,18 +240,25 @@ const poprzedniMiesiac = (h) => {
         users: [
           { id: "u2", name: "Bo", role: "open", active: true, archived: false,
             default_lokal: "Ceglana", default_stanowisko: "Kucharz" },
+          // Kucharz wolny w dniu zmiany Bo — jedyny kandydat przy "oddaj".
           { id: "u3", name: "Cezary", role: "open", active: true, archived: false,
-            default_lokal: "Ceglana", default_stanowisko: "Kelner" },
+            default_lokal: "Ceglana", default_stanowisko: "Kucharz" },
           // Z PIN-em blokady — po kliknięciu ma wyjść klawiatura, nie konto.
+          // Pracuje tego samego dnia co Bo: przy "oddaj" jej nie ma, przy
+          // "zamień się" jest — bo wtedy oddaje własną zmianę.
           { id: "u4", name: "Dorota", role: "open", active: true, archived: false,
-            default_lokal: "Ceglana", default_stanowisko: "Kelner", kiosk_pin: "1234" },
+            default_lokal: "Ceglana", default_stanowisko: "Kucharz", kiosk_pin: "1234" },
         ],
         issues, setIssues,
         notifications, setNotifications,
         tasks, taskBlocks, taskCompletions, setTaskCompletions,
         dayLogs: [], dayLogEntries, setDayLogEntries, dayLogTemplates: [],
         absences: [], setAbsences: () => {},
-        planShifts: [], shiftSwaps: [], setShiftSwaps: () => {},
+        // Grafik na przyszły tydzień — bez niego nie da się obejrzeć giełdy,
+        // bo zmianę można wystawić tylko z wyprzedzeniem 12 h. Dorota ma
+        // zmianę TEGO SAMEGO dnia co Bo: nie może wziąć jego zmiany na wprost,
+        // ale może się z nim zamienić.
+        planShifts: planGieldy, shiftSwaps, setShiftSwaps,
         showMsg: (m, t) => console.log("showMsg:", t, m),
       };
       return h(KD, props);

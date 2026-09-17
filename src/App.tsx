@@ -334,6 +334,7 @@ export default function App() {
           setCurrentView={setCurrentView}
           lokale={lokale}
           stanowiska={stanowiska}
+          users={users}
           shifts={shifts}
           setShifts={setShifts}
           issues={issues}

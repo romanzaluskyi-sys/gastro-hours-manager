@@ -468,6 +468,7 @@ const KioskDashboard = ({
         showEmployeeNameInMessages={false}
         issues={issues}
         setIssues={setIssues}
+        users={users}
         tasks={tasks}
         taskBlocks={taskBlocks}
         taskCompletions={taskCompletions}

@@ -138,6 +138,33 @@ Widoczność u kierownika — **dwa miejsca, świadomie zduplikowane**:
   **✓ / ✗** przy komórce. Ostrzeżenie widać zawsze (też w Podglądzie), ale
   **zatwierdzić można wyłącznie w trybie Edycja**.
 
+### Trzy tryby giełdy (2026-09-16, 0.38.0)
+
+Pierwsza wersja miała jeden tryb: wystaw dla wszystkich. W praktyce ludzie i
+tak najpierw dogadują się między sobą, a dopiero potem szukają, jak to wpisać
+— więc dwa nowe tryby opisują to, co i tak się dzieje:
+
+| Tryb | Kto widzi ofertę | Co się przepisuje |
+|---|---|---|
+| `gielda` | wszyscy uprawnieni i wolni | jedna zmiana → chętny |
+| `oddanie` | **jedna wskazana osoba** | jedna zmiana → adresat |
+| `zamiana` | jedna wskazana osoba | **dwie zmiany**, w obie strony |
+
+Wspólne dla wszystkich trzech: ten sam stan (`na_gieldzie` → `przyjeta` →
+`zatwierdzona`/`odrzucona`/`wycofana`) i to, że **ostatnie słowo ma kierownik**.
+Osobna maszyna stanów na tryb to trzy miejsca, w których można zapomnieć o
+kierowniku.
+
+- `target_*` (komu zaproponowano) to **nie** `taker_*` (kto wziął). Zlanie ich
+  dałoby ofertę wyglądającą na przyjętą, zanim ktokolwiek ją zobaczył.
+- Przy `zamiana` kandydatem jest też ktoś, kto **pracuje tego samego dnia** —
+  bo oddaje wtedy własną zmianę. Przy `oddanie` taka osoba kandydatem nie jest.
+- Godziny liczymy po OBU stronach: zamiana 8 h za 8 h to zero różnicy, a nie
+  +8 h dla przejmującego.
+- Zamiany, w której druga zmiana zniknęła z grafiku, **nie da się zatwierdzić**
+  — przycisk jest wyłączony, bo jedno przepisanie bez drugiego zostawia dzień
+  z dwiema osobami i dzień bez nikogo.
+
 ### Decyzje giełdy i wyjątków (2026-09-03)
 
 | # | Pytanie | Decyzja |
@@ -266,7 +293,7 @@ polityka RLS, `days_of_week` jako lista indeksów po przecinku (jak w `tasks`).
 | `staffing_rules` | wiersze wymagań (**addytywne**) | `set_id, wyjatek_id, stanowisko, days_of_week, start_time, end_time, required_count` |
 | `lokale_godziny` | godziny otwarcia per dzień tygodnia | `lokal, day_of_week, open_time, close_time, zamkniete` |
 | `grafik_wyjatki` | święta / niedziela handlowa | `lokal, date_from, date_to, zamkniete, open_time, close_time, note` |
-| `shift_swaps` | giełda zmian | `grafik_shift_id, author_*, taker_*, status, decided_by, decided_at` |
+| `shift_swaps` | giełda zmian | `grafik_shift_id, author_*, taker_*, status, decided_by, decided_at` + (0.38.0) `typ, target_*, wzajemna_shift_id` |
 | `users` (rozszerzenie) | wiele stanowisk | `allowed_stanowiska[]` (wzorem `allowed_lokale`) |
 
 **Draft vs opublikowany**: zmiana jest "niewysłana", gdy

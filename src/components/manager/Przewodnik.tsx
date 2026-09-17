@@ -23,6 +23,17 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.38.0",
+    date: "2026-09-16",
+    items: [
+      "Giełda zmian ma trzy drogi: wystaw dla wszystkich, oddaj konkretnej osobie, zamień się zmianami.",
+      "Oferta skierowana jest widoczna tylko dla wskazanej osoby — reszta zespołu jej nie widzi.",
+      "Przy zamianie kierownik widzi obie zmiany naraz i godziny po obu stronach (8 h za 8 h to zero różnicy).",
+      "Każdy z trzech trybów kończy się tak samo: decyzją kierownika.",
+      "Zadania widzi pracownik, który ma dziś zmianę w grafiku — albo każdy zaraz po rozpoczęciu zmiany. W dniu wolnym checklisty nie ma.",
+    ],
+  },
+  {
     version: "0.37.0",
     date: "2026-09-14",
     items: [

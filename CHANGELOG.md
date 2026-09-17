@@ -5,6 +5,30 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.38.0 — 2026-09-16
+
+- **Giełda zmian ma teraz trzy drogi.** Ten sam przycisk „na giełdę", a za nim
+  wybór: **wystaw** (jak dotąd — zobaczą wszyscy, którzy mogą wziąć tę zmianę),
+  **oddaj konkretnej osobie** (ofertę widzi tylko ona, nikt inny) albo
+  **zamień się zmianami** (bierzesz jej zmianę, ona Twoją).
+- **Oddanie i zamiana są dla tych, którzy już się dogadali.** Zwykle ustalacie
+  to między sobą, a potem szukacie, jak wpisać to do systemu — teraz da się
+  wpisać wprost, bez wystawiania zmiany „dla wszystkich" i czekania, kto
+  pierwszy kliknie.
+- **Kierownik zatwierdza tak samo jak dotąd**, przy każdym z trzech trybów. W
+  kolejce decyzji widzi, o który tryb chodzi, a przy zamianie — obie zmiany
+  naraz i to, jak wyjdą godziny każdej ze stron (zamiana 8 h za 8 h to zero
+  różnicy, a nie nagły wzrost).
+- **Zadania widzi ten, kto dziś pracuje.** Do tej pory checklistę dostawał
+  każdy, kto ma dany lokal w karcie — również w dniu wolnym, gdzie wyglądało to
+  jak zaległość („masz 8 niewykonanych zadań"). Teraz zadania pokazują się
+  osobom, które mają dziś zmianę w grafiku, a także każdemu zaraz po
+  rozpoczęciu zmiany — żeby zastępstwo wchodzące bez wpisu w grafiku nie
+  zostało z pustym ekranem.
+- Przy zamianie kandydatem jest też osoba, która pracuje tego samego dnia —
+  bo przecież oddaje wtedy swoją zmianę. Przy zwykłym oddaniu takiej osoby na
+  liście nie ma.
+
 ## 0.37.0 — 2026-09-14
 
 - **Zadania układają się w bloki.** Zamiast listy luźnych pozycji lokal ma

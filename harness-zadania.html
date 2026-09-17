@@ -1,5 +1,5 @@
 <meta charset="utf-8">
-<title>Sprawdzian zadań</title>
+<title>Sprawdzian zadań i giełdy</title>
 <style>
   body { font: 14px/1.6 ui-monospace, Menlo, monospace; padding: 24px; background: #FBFAF9; color: #17120F; }
   h1 { font: 700 18px/1.2 system-ui, sans-serif; }
@@ -7,7 +7,7 @@
   .ok { color: #2C6A4F; } .zle { color: #DE3A22; font-weight: 700; }
   pre { background: #F1EEEB; padding: 10px; overflow-x: auto; }
 </style>
-<h1>Sprawdzian utils/tasks.ts — bloki zadań</h1>
+<h1>Sprawdzian utils/tasks.ts (bloki zadań) i utils/swaps.ts (giełda)</h1>
 <div id="out">ładowanie…</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js"></script>
@@ -251,6 +251,141 @@ const sprawdz = (nazwa, warunek, szczegol = "") => {
     sprawdz("HACCP ma pomiary z normami",
       T.BLOKI_STARTOWE.find((b) => b.nazwa.includes("HACCP")).zadania
         .some((z) => (z.pola || []).some((p) => p.min != null || p.max != null)));
+
+
+
+    log("");
+    log("— zadania tylko dla pracujących dziś —");
+    // Reguła dotyczy WYŁĄCZNIE ekranu pracownika. Panel kierownika liczy
+    // zadania lokalu niezależnie od obsady.
+    const daneZad = { tasks: zadania, blocks: bloki, completions: [], entries: [], templates: [] };
+    const przypisanie = { lokal: "L", stanowisko: "Kucharz" };
+    const zBlokami = (opcje) =>
+      T.buildEmployeeBlocks(daneZad, przypisanie, PN, "all", opcje).length;
+    sprawdz("pracuje dziś — widzi bloki", zBlokami({ pracuje: true }) > 0);
+    sprawdz("nie pracuje — nie widzi nic", zBlokami({ pracuje: false }) === 0);
+    sprawdz("brak opcji = po staremu (panel kierownika)", zBlokami(undefined) > 0,
+      "domyślne `pracuje` musi zostać prawdą, inaczej znika też widok kierownika");
+
+    const grafikDzis = [{ date: PN }];
+    sprawdz("wpis w grafiku wystarczy",
+      T.pracujeTegoDnia({ grafikOsoby: grafikDzis, shiftsOsoby: [], dateStr: PN }));
+    sprawdz("grafik na inny dzień nie liczy się dziś",
+      !T.pracujeTegoDnia({ grafikOsoby: [{ date: ND }], shiftsOsoby: [], dateStr: PN }));
+    sprawdz("odbicie bez grafiku też wystarczy",
+      T.pracujeTegoDnia({ grafikOsoby: [], shiftsOsoby: [{ id: "s1" }], dateStr: PN }),
+      "zastępstwo wchodzi bez wpisu — pusta checklista wyglądałaby na awarię");
+    sprawdz("ani grafiku, ani odbicia = dzień wolny",
+      !T.pracujeTegoDnia({ grafikOsoby: [], shiftsOsoby: [], dateStr: PN }));
+
+    log("");
+    log("— giełda: trzy tryby —");
+    const S = await import(await zaladuj("/src/utils/swaps"));
+    // Zmiany daleko w przód, żeby limit 12 h nigdy nie był powodem odrzucenia.
+    const zaTydzien = (d) => {
+      const x = new Date(); x.setDate(x.getDate() + d);
+      return [x.getFullYear(), String(x.getMonth()+1).padStart(2,"0"), String(x.getDate()).padStart(2,"0")].join("-");
+    };
+    const D1 = zaTydzien(7), D2 = zaTydzien(8);
+    const ludzie = [
+      { id: "u1", name: "Ala", active: true, archived: false, role: "open",
+        default_stanowisko: "Kucharz", allowed_stanowiska: "Kucharz" },
+      { id: "u2", name: "Bo", active: true, archived: false, role: "open",
+        default_stanowisko: "Kucharz", allowed_stanowiska: "Kucharz" },
+      { id: "u3", name: "Cezary", active: true, archived: false, role: "open",
+        default_stanowisko: "Kelner", allowed_stanowiska: "Kelner" },
+      { id: "u4", name: "Dorota", active: true, archived: false, role: "open",
+        default_stanowisko: "Kucharz", allowed_stanowiska: "Kucharz" },
+    ];
+    const [ala, bo, cezary, dorota] = ludzie;
+    const opub = { published_at: "2026-09-01T00:00:00Z" };
+    const zmianaAli = { id: "p1", user_id: "u1", user_name: "Ala", lokal: "L",
+      stanowisko: "Kucharz", date: D1, start_time: "10:00", end_time: "18:00", ...opub };
+    const zmianaBo = { id: "p2", user_id: "u2", user_name: "Bo", lokal: "L",
+      stanowisko: "Kucharz", date: D2, start_time: "12:00", end_time: "20:00", ...opub };
+    // Dorota pracuje TEGO SAMEGO dnia co Ala — nie może wziąć jej zmiany na
+    // wprost, ale może się z nią zamienić, bo wtedy oddaje swoją.
+    const zmianaDoroty = { id: "p3", user_id: "u4", user_name: "Dorota", lokal: "L",
+      stanowisko: "Kucharz", date: D1, start_time: "08:00", end_time: "16:00", ...opub };
+    const plan = [zmianaAli, zmianaBo, zmianaDoroty];
+    const wolne = [];
+
+    const kandydaci = (typ) =>
+      S.kandydaciNaZmiane({ users: ludzie, planShifts: plan, absences: wolne,
+        planShift: zmianaAli, author: ala, typ }).map((u) => u.name);
+    sprawdz("oddanie: kandydatem jest wolny kucharz",
+      kandydaci("oddanie").includes("Bo"));
+    sprawdz("oddanie: kelner nie jest kandydatem (inne stanowisko)",
+      !kandydaci("oddanie").includes("Cezary"));
+    sprawdz("oddanie: zajęty tego dnia NIE jest kandydatem",
+      !kandydaci("oddanie").includes("Dorota"));
+    sprawdz("zamiana: zajęty tego dnia JEST kandydatem",
+      kandydaci("zamiana").includes("Dorota"),
+      "przy zamianie oddaje swoją zmianę, więc dzień się zwalnia");
+    sprawdz("autor nie jest kandydatem na własną zmianę",
+      !kandydaci("oddanie").includes("Ala"));
+
+    const doZamiany = (kand) =>
+      S.zmianyDoZamiany({ planShifts: plan, absences: wolne, kandydat: kand,
+        author: ala, mojaZmiana: zmianaAli }).map((p) => p.id);
+    sprawdz("zamiana: widać zmianę kandydata w inny dzień",
+      JSON.stringify(doZamiany(bo)) === JSON.stringify(["p2"]), JSON.stringify(doZamiany(bo)));
+    sprawdz("zamiana: zmiana kandydata w TEN SAM dzień też jest do wzięcia",
+      JSON.stringify(doZamiany(dorota)) === JSON.stringify(["p3"]),
+      "autor oddaje wtedy własną zmianę z tego dnia, więc kolizji nie ma");
+    sprawdz("zamiana: własna zmiana nie trafia na listę",
+      !doZamiany(bo).includes("p1"));
+
+    // Kto widzi ofertę — cała różnica między trybami po stronie odbiorcy.
+    const ofertaGieldy = { id: "s1", grafik_shift_id: "p1", status: "na_gieldzie",
+      author_user_id: "u1", author_user_name: "Ala", typ: "gielda" };
+    const ofertaDlaBo = { id: "s2", grafik_shift_id: "p1", status: "na_gieldzie",
+      author_user_id: "u1", author_user_name: "Ala", typ: "oddanie",
+      target_user_id: "u2", target_user_name: "Bo" };
+    const widzi = (swapy, kto) =>
+      S.offersForUser({ swaps: swapy, planShifts: plan, absences: wolne, user: kto })
+        .map((o) => o.sw.id);
+    sprawdz("giełda: widzi każdy uprawniony i wolny", widzi([ofertaGieldy], bo).includes("s1"));
+    sprawdz("oddanie: widzi TYLKO adresat", widzi([ofertaDlaBo], bo).includes("s2"));
+    sprawdz("oddanie: nikt inny jej nie widzi", widzi([ofertaDlaBo], dorota).length === 0,
+      "to jest cała różnica trybu skierowanego");
+    sprawdz("autor nie widzi własnej oferty", widzi([ofertaGieldy], ala).length === 0);
+
+    const ofertaZamiany = { id: "s3", grafik_shift_id: "p1", status: "na_gieldzie",
+      author_user_id: "u1", author_user_name: "Ala", typ: "zamiana",
+      target_user_id: "u4", target_user_name: "Dorota", wzajemna_shift_id: "p3" };
+    sprawdz("zamiana: adresat widzi ofertę mimo własnej zmiany tego dnia",
+      widzi([ofertaZamiany], dorota).includes("s3"),
+      "bo dzień zwalnia właśnie ta zmiana, którą oddaje");
+    sprawdz("wzajemna zmiana odnaleziona po id",
+      S.wzajemnaZmiana(ofertaZamiany, plan).id === "p3");
+
+    // Godziny: przy zamianie obie strony i biorą, i oddają.
+    const mies = D1.slice(0, 7);
+    const przyjeta = { ...ofertaZamiany, status: "przyjeta", taker_user_id: "u4",
+      taker_user_name: "Dorota" };
+    const deltaDoroty = S.pendingSwapDelta([przyjeta], plan, dorota, mies);
+    sprawdz("zamiana 8 h za 8 h to zero różnicy", Math.abs(deltaDoroty) < 0.001,
+      "policzenie samej przejmowanej zmiany dałoby +8 h z niczego");
+    const przyjeteOddanie = { ...ofertaDlaBo, status: "przyjeta", taker_user_id: "u2",
+      taker_user_name: "Bo" };
+    sprawdz("oddanie: przejmujący zyskuje 8 h",
+      Math.abs(S.pendingSwapDelta([przyjeteOddanie], plan, bo, mies) - 8) < 0.001);
+    sprawdz("oddanie: autor traci 8 h",
+      Math.abs(S.pendingSwapDelta([przyjeteOddanie], plan, ala, mies) + 8) < 0.001);
+
+    sprawdz("etykieta stanu mówi, na kogo się czeka",
+      S.statusLabelFor(ofertaDlaBo) === "Czeka na: Bo");
+    sprawdz("etykieta giełdy bez zmian", S.statusLabelFor(ofertaGieldy) === "Na giełdzie");
+    sprawdz("stary wiersz bez kolumny typ to giełda", S.typWymiany({}) === "gielda");
+
+    let odmowa = "";
+    try {
+      await S.acceptSwap({ swap: ofertaDlaBo, planShift: zmianaAli, taker: dorota,
+        planShifts: plan, absences: wolne });
+    } catch (e) { odmowa = e.message; }
+    sprawdz("cudzej oferty skierowanej nie da się przejąć", /innej osobie/.test(odmowa),
+      "filtr w UI to za mało — zapis musi bronić się sam");
 
     log("");
     log(`${zdanych} zdanych, ${oblanych} oblanych`, oblanych ? "zle" : "ok");
