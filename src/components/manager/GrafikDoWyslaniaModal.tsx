@@ -59,7 +59,7 @@ export default function GrafikDoWyslaniaModal({ zmiany, onClose, onPublish, publ
       onClick={onClose}
     >
       <div
-        className="bg-[#FAFAF7] border-[2.5px] border-[#171714] rounded w-full max-w-3xl my-4"
+        className="bg-[#FAFAF7] border-[2.5px] border-[#171714] rounded-xl w-full max-w-3xl my-4 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-4 py-3 border-b-[2px] border-[#171714] flex items-center gap-3">

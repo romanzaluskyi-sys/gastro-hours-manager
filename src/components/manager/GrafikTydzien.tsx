@@ -27,6 +27,8 @@ import {
   sectionCardCls,
   btnPrimaryCls,
   btnSecondaryCls,
+  btnSecondarySmallCls,
+  btnDangerSmallCls,
   statLabelCls,
 } from "./designTokens";
 import {
@@ -693,7 +695,11 @@ function LokalSection({
 
   return (
     <div className={sectionCardCls}>
-      <div className="px-4 py-3 border-b-[2px] border-[#171714] flex flex-wrap items-center gap-3">
+      {/* Pasek nagłówka i karty budżetu stoją NAD siatką i konkurują z nią o
+          wysokość ekranu — każde zaoszczędzone 8 px to jeden więcej widoczny
+          wiersz pracownika. Stąd ciaśniejsze odstępy i mniejsze przyciski niż
+          w innych zakładkach; treść jest ta sama. */}
+      <div className="px-4 py-2 border-b-[2px] border-[#171714] flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <h3 className="font-['Archivo'] font-extrabold text-[16px]">{lokal}</h3>
         <span className="text-[13px] text-[#6E6E66]">
           {osobyWTygodniu} osób · {fmtH(weekHours)} {trybDnia ? "tego dnia" : "w tygodniu"}
@@ -734,22 +740,22 @@ function LokalSection({
         )}
         <div className="ml-auto flex gap-2">
           {mode === "edycja" && !trybDnia && (
-            <button onClick={() => onCopyPrevWeek(lokal)} className={btnSecondaryCls}>
-              <CopyPlus size={15} className="inline -mt-0.5 mr-1" /> Kopiuj z poprzedniego tygodnia
+            <button onClick={() => onCopyPrevWeek(lokal)} className={btnSecondarySmallCls}>
+              <CopyPlus size={14} className="inline -mt-0.5 mr-1" /> Kopiuj z poprzedniego tygodnia
             </button>
           )}
           {mode === "edycja" && (
             <button
               onClick={() => onClearRange(lokal)}
-              className="bg-white text-[#DE3A22] font-['Archivo'] font-bold text-sm px-4 py-2.5 rounded border-[2px] border-[#DE3A22] hover:bg-[#FAEAE6]"
+              className={btnDangerSmallCls}
               title={`Usuwa grafik tylko tego lokalu (${lokal}) za oglądany zakres`}
             >
-              <Trash2 size={15} className="inline -mt-0.5 mr-1" />{" "}
+              <Trash2 size={14} className="inline -mt-0.5 mr-1" />{" "}
               {trybDnia ? "Wyczyść dzień" : "Wyczyść tydzień"}
             </button>
           )}
-          <button onClick={exportCsv} className={btnSecondaryCls}>
-            <Download size={15} className="inline -mt-0.5 mr-1" /> Eksport lokalu
+          <button onClick={exportCsv} className={btnSecondarySmallCls}>
+            <Download size={14} className="inline -mt-0.5 mr-1" /> Eksport lokalu
           </button>
         </div>
       </div>

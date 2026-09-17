@@ -19,6 +19,11 @@ const DZIEN_SKROT = ["ND", "PON", "WT", "ŚR", "CZW", "PT", "SOB"];
 
 const skrotDnia = (d) => DZIEN_SKROT[new Date(d + "T00:00:00").getDay()];
 
+// Zaokrąglenie takie samo jak `cardCls`/`statTileCls` w designTokens — karty
+// budżetu miały `rounded` i odcinały się kanciastością od reszty panelu.
+// ⚠️ Kwadratowy bez zaokrągleń zostaje tylko znak Shiftro (ShiftroMark.tsx).
+const kartaCls = "border-[2.5px] border-[#171714] rounded-xl px-3 py-2 bg-white";
+
 // Polska odmiana: 1 dzień, 2+ dni — "1 dni" w podpisie karty wygląda na błąd
 // w liczbie nad nim.
 const dniLabel = (n) => (n === 1 ? "1 dzień" : `${n} dni`);
@@ -51,29 +56,35 @@ export function KartyBudzetu({ suma, trybDnia }) {
   if (suma.zlecenia > 0) czesci.push(`${zl(suma.zlecenia)} zlecenia`);
   // "~" przy etatach nie jest ozdobą: przy umowie o pracę to ALOKACJA stałej
   // pensji na godziny tego tygodnia, a nie kwota, którą lokal wyda dodatkowo.
-  if (suma.etaty > 0) czesci.push(`~${zl(suma.etaty)} etaty (proporcja okresu)`);
+  if (suma.etaty > 0) czesci.push(`~${zl(suma.etaty)} etaty`);
+  // Wyjaśnienie znaku "~" zeszło do podpowiedzi: w podpisie łamało kartę na
+  // dodatkową linijkę, a tłumaczy rzecz, którą czyta się raz.
+  const opisSkladu =
+    suma.etaty > 0
+      ? "Przy umowie o pracę to część miesięcznej pensji przypadająca na godziny tego okresu (alokacja), a nie wydatek dodatkowy — stąd znak ~."
+      : "Koszt godzin z wpisanego grafiku, z narzutem pracodawcy.";
 
   return (
     <div
-      className={`px-4 py-3 border-b-[2px] border-[#171714] grid gap-3 sm:grid-cols-2 ${
+      className={`px-4 py-2.5 border-b-[2px] border-[#171714] grid gap-2 sm:grid-cols-2 ${
         trybDnia ? "lg:grid-cols-3" : "lg:grid-cols-4"
       }`}
     >
-      <div className="border-[2.5px] border-[#171714] rounded p-3 bg-white">
+      <div className={kartaCls}>
         <div className={statLabelCls}>Koszt pracy · {okres}</div>
-        <div className="font-['Archivo'] font-extrabold text-[26px] leading-tight">
+        <div className="font-['Archivo'] font-extrabold text-[22px] leading-none mt-0.5">
           {zl(suma.koszt)}
         </div>
-        <div className="text-[12px] text-[#6E6E66] leading-snug">
+        <div className="text-[11px] text-[#6E6E66] leading-tight mt-1 truncate" title={opisSkladu}>
           {czesci.length > 0 ? czesci.join(" + ") : "brak zmian w grafiku"}
         </div>
         {suma.bezDanych.length > 0 && (
           <div
-            className="text-[12px] font-bold text-[#8A3A2B] mt-1 leading-snug"
-            title="Te osoby nie mają ani stawki godzinowej, ani kwoty z umowy — ich godziny nie weszły do kosztu"
+            className="text-[11px] font-bold text-[#8A3A2B] leading-tight truncate"
+            title={`Koszt zaniżony — te osoby nie mają ani stawki godzinowej, ani kwoty z umowy: ${suma.bezDanych.join(", ")}`}
           >
-            <AlertTriangle size={12} className="inline -mt-0.5 mr-1" />
-            koszt zaniżony — bez danych o wynagrodzeniu: {suma.bezDanych.join(", ")}
+            <AlertTriangle size={11} className="inline -mt-0.5 mr-1" />
+            bez wynagrodzenia: {suma.bezDanych.join(", ")}
           </div>
         )}
       </div>
@@ -82,10 +93,10 @@ export function KartyBudzetu({ suma, trybDnia }) {
           liczba w tym rzędzie, która łączy obie strony równania i jest DOKŁADNA
           — koszt jest z grafiku, prognoza z konfiguracji, nic tu nie jest
           proponowane. Dlatego pełna ramka, jak przy koszcie, a nie przerywana. */}
-      <div className="border-[2.5px] border-[#171714] rounded p-3 bg-white">
+      <div className={kartaCls}>
         <div className={statLabelCls}>Koszt pracy / utarg · {okres}</div>
         <div
-          className={`font-['Archivo'] font-extrabold text-[26px] leading-tight ${
+          className={`font-['Archivo'] font-extrabold text-[22px] leading-none mt-0.5 ${
             suma.celPct != null && suma.kosztPct != null && suma.kosztPct > suma.celPct
               ? "text-[#DE3A22]"
               : "text-[#171714]"
@@ -93,7 +104,7 @@ export function KartyBudzetu({ suma, trybDnia }) {
         >
           {pct1(suma.kosztPct)}
         </div>
-        <div className="text-[12px] text-[#6E6E66] leading-snug">
+        <div className="text-[11px] text-[#6E6E66] leading-tight mt-1">
           {suma.kosztPct == null
             ? "wpisz prognozowany utarg w Konfiguracji"
             : suma.celPct == null
@@ -134,15 +145,15 @@ export function KartyBudzetu({ suma, trybDnia }) {
 
 function KartaPropozycji({ label, wartosc, opis }) {
   return (
-    <div className="relative border-[2.5px] border-dashed border-[#DE3A22] rounded p-3 bg-white">
+    <div className="relative border-[2.5px] border-dashed border-[#DE3A22] rounded-xl px-3 py-2 bg-white">
       <span className="absolute -top-2 right-3 bg-[#DE3A22] text-white text-[9px] font-extrabold tracking-wider px-1.5 py-0.5 rounded">
         PROPOZYCJA
       </span>
       <div className={statLabelCls}>{label}</div>
-      <div className="font-['Archivo'] font-extrabold text-[26px] leading-tight text-[#DE3A22]">
+      <div className="font-['Archivo'] font-extrabold text-[22px] leading-none mt-0.5 text-[#DE3A22]">
         {zl(wartosc)}
       </div>
-      <div className="text-[12px] text-[#6E6E66] leading-snug">{opis}</div>
+      <div className="text-[11px] text-[#6E6E66] leading-tight mt-1">{opis}</div>
     </div>
   );
 }

@@ -2115,6 +2115,12 @@ Szczegóły, które łatwo zepsuć:
   zmienia — publikacja zostaje w jednym miejscu, przy przycisku "Wyślij grafik".
   Lista grupuje po DNIU, nie po lokalu: pracownik dostanie powiadomienie o
   swoich dniach, a kierownik przegląda to jak kalendarz.
+- **Pasek nagłówka lokalu i karty budżetu są CIAŚNIEJSZE niż karty w innych
+  zakładkach** (`btnSecondarySmallCls`/`btnDangerSmallCls` w designTokens,
+  `kartaCls` w GrafikBudzet): stoją nad siatką i konkurują z nią o wysokość
+  ekranu, gdzie każde zaoszczędzone 8 px to jeden więcej widoczny wiersz
+  pracownika. Zaokrąglenie zostaje takie samo jak w reszcie panelu
+  (`rounded-xl`) — kanciaste zostaje tylko znak Shiftro.
 - **Budżetu nie widzi pracownik** — ani na tablecie, ani na prywatnym telefonie.
   Ta sama zasada co przy `PulsZmiany`: koszty i stawki nie są informacją dla tej
   roli.
