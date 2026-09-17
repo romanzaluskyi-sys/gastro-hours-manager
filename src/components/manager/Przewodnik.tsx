@@ -23,6 +23,22 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.39.0",
+    date: "2026-09-17",
+    items: [
+      "Grafik pokazuje koszt pracy tygodnia i — jako propozycję — minimalny utarg, przy którym ten grafik mieści się w celu.",
+      "W nagłówku każdego dnia stoi koszt dnia i jego udział w prognozowanym utargu; czerwony, gdy przekracza cel.",
+      "Nowy widok „Wg budżetu\" obok „Wg osób\" i „Wg stanowisk\": ten sam nagłówek dni, a w wierszach cel, prognoza, koszt i zapas.",
+      "Cel finansowy (oczekiwany utarg i docelowy % kosztu pracy) ustawia się na dzień tygodnia w Grafik → Konfiguracja → Budżet, wersjonowany miesięcznie jak wymagania obsady.",
+      "Pojedynczy dzień da się zmienić bez ruszania reguły — kliknięciem w liczbę w trybie Edycja; dzień dostaje podpis „zmienione na ten dzień\".",
+      "Przy umowie o pracę koszt godziny to kwota z umowy przez normę miesiąca plus narzut — tak liczy teraz również Puls, więc koszt dnia nie pokazuje już etatowców jako darmowych.",
+      "Przy nazwisku w siatce widać różnicę wobec normy: „do normy: 16 h\" albo „+4,5 h ponad normą\" (tylko umowa o pracę).",
+      "Przycisk „Zobacz, co czeka na wysłanie\" pod siatką pokazuje pełną listę zmian w wersji roboczej, zanim polecą powiadomienia.",
+      "Zestaw konfiguracji — wymagań obsady albo celu finansowego — da się teraz usunąć.",
+      "Prognozowany utarg i docelowy % kosztu pracy widać i wpisuje się w dwóch miejscach: w konfiguracji Grafiku i w karcie dnia w Pulsie. To jedna liczba, nie dwie kopie.",
+    ],
+  },
+  {
     version: "0.38.0",
     date: "2026-09-16",
     items: [

@@ -49,6 +49,12 @@ export default function Puls({
   dayLogTemplates,
   setDayLogTemplates,
   weatherForecasts,
+  // Cel finansowy dnia (utils/budzet.ts) — ta sama tabela, którą wypełnia
+  // Grafik → Konfiguracja → Budżet. Karta dnia go POKAZUJE i pozwala poprawić
+  // na ten jeden dzień; drugiego miejsca na tę liczbę nie ma.
+  budzetCele,
+  budzetDni,
+  setBudzetDni,
   showMsg,
   initialLokal,
   initialDate,
@@ -104,6 +110,7 @@ export default function Puls({
     shifts, planShifts, users, tasks, taskBlocks, taskCompletions,
     staffingRules, staffingRuleSets, grafikWyjatki,
     karty, wpisy, szablony, weatherForecasts,
+    budzetCele, budzetDni, setBudzetDni,
     setKarty: setKartyLokalne,
     setWpisy: setWpisyLokalne,
     odswiez,

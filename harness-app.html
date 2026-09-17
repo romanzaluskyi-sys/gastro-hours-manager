@@ -25,7 +25,7 @@ const pokazBlad = (e) => {
 window.addEventListener("error", (ev) => pokazBlad(ev.error || ev.message));
 window.addEventListener("unhandledrejection", (ev) => pokazBlad(ev.reason));
 
-const IKONY = ["AlertCircle", "AlertTriangle", "Archive", "ArchiveRestore", "ArrowLeft", "ArrowLeftRight", "ArrowRight", "BarChart3", "Bell", "BookOpen", "Briefcase", "Calendar", "CalendarCheck", "CalendarDays", "CalendarRange", "Check", "CheckCircle", "CheckCircle2", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "ClipboardCheck", "ClipboardList", "ClipboardPlus", "Clock", "Cloud", "Construction", "Copy", "CopyPlus", "Delete", "Download", "Edit2", "Eye", "FileText", "Flag", "HelpCircle", "History", "Home", "Info", "Lock", "LogIn", "LogOut", "Mail", "MapPin", "MoreHorizontal", "Palmtree", "Pencil", "Plus", "Printer", "RefreshCw", "Save", "Send", "SlidersHorizontal", "Thermometer", "Trash2", "User", "UserPlus", "Users", "WifiOff", "X"];
+const IKONY = ["AlertCircle", "AlertTriangle", "Archive", "ArchiveRestore", "ArrowLeft", "ArrowLeftRight", "ArrowRight", "BarChart3", "Bell", "BookOpen", "Briefcase", "Calendar", "CalendarCheck", "CalendarDays", "CalendarRange", "Check", "CheckCircle", "CheckCircle2", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "ClipboardCheck", "ClipboardList", "ClipboardPlus", "Clock", "Cloud", "Construction", "Copy", "CopyPlus", "Delete", "Download", "Edit2", "Eye", "FileText", "Flag", "HelpCircle", "History", "Home", "Info", "ListChecks", "Lock", "LogIn", "LogOut", "Mail", "MapPin", "MoreHorizontal", "Palmtree", "Pencil", "Plus", "Printer", "RefreshCw", "RotateCcw", "Save", "Send", "SlidersHorizontal", "Thermometer", "Trash2", "User", "UserPlus", "Users", "Wallet", "WifiOff", "X"];
 const stub = (kod) => URL.createObjectURL(new Blob([kod], { type: "text/javascript" }));
 
 const dzis = new Date();
@@ -58,6 +58,13 @@ window.__tabele = {
     priority: "sredni", kolejnosc: 0, pola: [], active: true, archived: false }],
   task_completions: [],
   weather_forecasts: [],
+  // Cel finansowy na poniedziałki — ten sam powód co blok zadań wyżej:
+  // sprawdza, czy budzetCele wychodzi z App i dociera aż do siatki Grafiku,
+  // a nie tylko czy GrafikBudzet renderuje się w izolacji (błąd #16).
+  grafik_budzet_cele: [{ id: "bc1", lokal: "Bułka i Jacek",
+    obowiazuje_od: `${dzis.getFullYear()}-${String(dzis.getMonth() + 1).padStart(2, "0")}-01`,
+    day_of_week: 1, oczekiwany_utarg: 6500, cel_koszt_pct: 35 }],
+  grafik_budzet_dni: [],
   // Zmiana z grafiku sprzed dwóch dni, której nikt nie odbił — pozycja dla
   // kolejki "był w grafiku, nie odbił".
   grafik_shifts: [{

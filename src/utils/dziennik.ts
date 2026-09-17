@@ -19,6 +19,7 @@ import {
   minToTime,
 } from "./grafik";
 import { zadaniaNaDzien, findSharedCompletion, parseDaysOfWeek } from "./tasks";
+import { kosztGodziny } from "./budzet";
 import {
   TYPY_POLA,
   slugKlucza,
@@ -273,6 +274,7 @@ export const autoPodsumowanie = ({
   shifts,
   planShifts,
   users,
+  lokalRow,
   tasks,
   taskBlocks,
   taskCompletions,
@@ -290,10 +292,19 @@ export const autoPodsumowanie = ({
       toLocalYMD(s.start_time) === dateStr
   );
 
-  const stawki = {};
-  (users || []).forEach((u) => {
-    if (u.stawka != null && u.stawka !== "") stawki[u.name] = Number(u.stawka);
-  });
+  // Koszt godziny liczy utils/budzet.ts — ta sama funkcja, którą liczy Grafik.
+  // Do 0.39.0 stała tu goła `users.stawka`, więc etatowiec bez stawki godzinowej
+  // wchodził do kosztu dnia jako ZERO i labour cost lokalu z samymi etatami
+  // wyglądał na idealny. Teraz przy umowie o pracę bierzemy kwotę z umowy
+  // podzieloną przez normę miesiąca, plus narzut pracodawcy z konfiguracji
+  // lokalu — czyli to, ile lokal naprawdę wydaje.
+  const [rokDnia, miesDnia] = dateStr.split("-").map(Number);
+  const stawkaOsoby = (nazwa, userId) => {
+    const u = (users || []).find(
+      (x) => (userId != null && String(x.id) === String(userId)) || x.name === nazwa
+    );
+    return u ? kosztGodziny(u, lokalRow, rokDnia, miesDnia) : null;
+  };
 
   let godzinyFakt = 0;
   let koszt = 0;
@@ -306,7 +317,8 @@ export const autoPodsumowanie = ({
     }
     const h = (s.end_time - s.start_time) / 3600000;
     godzinyFakt += h;
-    if (stawki[s.user_name] != null) koszt += h * stawki[s.user_name];
+    const st = stawkaOsoby(s.user_name, s.user_id);
+    if (st != null) koszt += h * st;
     else bezStawki.add(s.user_name);
   });
 
@@ -317,7 +329,7 @@ export const autoPodsumowanie = ({
   // Koszt planowany liczymy z tych samych stawek co faktyczny — inaczej
   // różnica plan/fakt mieszałaby dwie rzeczy naraz: inne godziny i inne stawki.
   const kosztPlan = plan.reduce(
-    (sum, s) => sum + shiftHours(s) * (stawki[s.user_name] ?? 0),
+    (sum, s) => sum + shiftHours(s) * (stawkaOsoby(s.user_name, s.user_id) ?? 0),
     0
   );
 
@@ -557,10 +569,10 @@ export const prognozaUtargu = (dayLogs, lokal, dateStr) => {
 export const wierszDnia = ({
   shifts, planShifts, users, tasks, taskBlocks, taskCompletions,
   dayLogs, dayLogEntries, dayLogTemplates, weatherForecasts,
-  lokal, miasto, dateStr,
+  lokal, lokalRow, miasto, dateStr,
 }) => {
   const auto = autoPodsumowanie({
-    shifts, planShifts, users, tasks, taskBlocks, taskCompletions,
+    shifts, planShifts, users, lokalRow, tasks, taskBlocks, taskCompletions,
     staffingRules: [], staffingRuleSets: [], grafikWyjatki: [],
     lokal, dateStr,
   });

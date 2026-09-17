@@ -29,7 +29,7 @@ const znak = (n, j = "") =>
 const dzienMiesiaca = (d) => d.split("-").reverse().slice(0, 2).join(".");
 
 export default function PulsTydzien({
-  lokal, miasto, dzis,
+  lokal, lokalRow, miasto, dzis,
   shifts, planShifts, users, tasks, taskBlocks, taskCompletions,
   karty, wpisy, szablony, weatherForecasts,
   data, setData, onOtworzDzien,
@@ -49,7 +49,7 @@ export default function PulsTydzien({
         wierszDnia({
           shifts, planShifts, users, tasks, taskBlocks, taskCompletions,
           dayLogs: karty, dayLogEntries: wpisy, dayLogTemplates: szablony,
-          weatherForecasts, lokal, miasto, dateStr,
+          weatherForecasts, lokal, lokalRow, miasto, dateStr,
         })
       );
 

@@ -51,6 +51,15 @@ export const btnPrimaryCls =
 export const btnSecondaryCls =
   "bg-white text-[#171714] font-['Archivo'] font-bold text-sm px-4 py-2.5 rounded border-[2px] border-[#171714] hover:bg-[#F1F1EE] disabled:opacity-50";
 
+// Kompaktowy wariant przycisków paska — ten sam kształt i kolory, mniejszy
+// padding i tekst. Dla pasków, które stoją NAD treścią i konkurują z nią o
+// wysokość ekranu (nagłówek lokalu w Grafiku, gdzie pod spodem jest siatka
+// tygodnia i każde 8 px to jeden mniej widoczny wiersz pracownika).
+export const btnSecondarySmallCls =
+  "bg-white text-[#171714] font-['Archivo'] font-bold text-[13px] px-3 py-1.5 rounded border-[2px] border-[#171714] hover:bg-[#F1F1EE] disabled:opacity-50";
+export const btnDangerSmallCls =
+  "bg-white text-[#DE3A22] font-['Archivo'] font-bold text-[13px] px-3 py-1.5 rounded border-[2px] border-[#DE3A22] hover:bg-[#FAEAE6] disabled:opacity-50";
+
 // Przycisk z samą ikoną — kwadratowy, tej samej wysokości co zwykłe przyciski
 // paska. Dla rzeczy, które kierownik klika stale i zna z kształtu (tryb
 // podglądu/edycji, konfiguracja); podpis zostaje w `title`.

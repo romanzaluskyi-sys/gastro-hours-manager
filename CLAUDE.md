@@ -172,6 +172,11 @@ src/
                                   pracownika (publishedShiftsFor — filtruje
                                   niewysłane i oznaczone do usunięcia).
                                   NIE duplikuj tego w komponentach.
+    budzet.ts                   CAŁA arytmetyka pieniędzy w Grafiku: koszt
+                                  godziny (z narzutem), cel dnia, koszt i
+                                  zapas dnia, podsumowanie tygodnia. NIE licz
+                                  kosztu grafiku nigdzie indziej — patrz
+                                  "Budżet Grafiku" niżej.
     umowy.ts                    typ umowy, norma miesięczna, koszt lokalu i
                                   bilans okresu rozliczeniowego — patrz
                                   "Umowa, norma i koszt" niżej. NIE licz
@@ -273,7 +278,17 @@ src/
       PrzepiszZmianyModal.tsx       co ze zmianami odchodzącego pracownika:
                                     przepisać na następcę albo zdjąć
       GrafikZmianaModal.tsx         modal przypisania zmiany + modal blokady
-      GrafikWymagania.tsx           wymagania obsady, godziny otwarcia, wyjątki
+      GrafikWymagania.tsx           wymagania obsady, godziny otwarcia, wyjątki,
+                                    budżet (czwarty podwidok)
+      GrafikBudzet.tsx              trzy karty nad siatką + wiersze układu
+                                    "Wg budżetu". ⚠️ NIE rysuje nagłówka dni —
+                                    ten zostaje w GrafikTydzien i jest wspólny
+                                    dla wszystkich trzech układów
+      GrafikBudzetKonfiguracja.tsx  cel finansowy na dzień tygodnia i wyjątki
+                                    na konkretne daty
+      GrafikDoWyslaniaModal.tsx     podgląd wszystkiego, co czeka w wersji
+                                    roboczej — NIE publikuje, publikacja
+                                    zostaje przy "Wyślij grafik"
       PulpitHome.tsx, RejestrGodzin.tsx, ZatwierdzanieZmian.tsx,
       Aktywni.tsx, Zgloszenia.tsx, Pracownicy.tsx, RaportyIKoszty.tsx,
       Przewodnik.tsx, MojaPraca.tsx
@@ -754,6 +769,10 @@ odpadają. Zamiast tego dwa pliki w katalogu głównym, uruchamiane przez
   widzi ofertę skierowaną, kto jest kandydatem przy oddaniu, a kto przy
   zamianie, i jak liczą się godziny po obu stronach). To on pilnuje, że `null`
   w dniach tygodnia dalej znaczy „codziennie";
+- `harness-budzet.html` — sprawdza arytmetykę budżetu Grafiku: koszt godziny dla
+  czterech typów umowy (w tym pół etatu i konto bez żadnych danych), pierwszeństwo
+  „wyjątek dnia → zestaw → nic", zapas i minimalny utarg, oraz grupowanie tysięcy.
+  To on pilnuje, że `null` w celu dalej znaczy „nie wpisano", a nie „zero";
 - `harness-panel.html` — montuje CAŁY `ManagerDashboard` z propsami takimi,
   jakie podaje `App.tsx`, z PODMIENIONYM `api/supabase` (nic nie leci do sieci,
   można klikać wszystko). To jedyny sprawdzian, który łapie propsy gubione
@@ -1253,6 +1272,20 @@ zakresem — wymaga Grafiku, którego nie ma.
   kod (int), zrodlo ('forecast'|'previous_runs'), created_at`. Unikalność
   `(miasto, target_date, horizon_days)` — duplikat zafałszowałby średni błąd,
   a w nim leży cała wartość tej tabeli. Migracja `0013`.
+- **grafik_budzet_cele** — cel finansowy na dzień tygodnia, patrz "Budżet
+  Grafiku" wyżej. `id (uuid), lokal, obowiazuje_od (date, zawsze 1. dzień
+  miesiąca), day_of_week (int, 0=niedziela), oczekiwany_utarg (numeric, null =
+  nie wpisano — NIE zero), cel_koszt_pct (numeric, null jw.), created_by,
+  created_at`. Unikalność `(lokal, obowiazuje_od, day_of_week)` — dwa wiersze na
+  ten sam wtorek to dwie różne odpowiedzi na "ile wolno wydać" i cicho wygrywałby
+  ten, który pierwszy wróci z REST-a. Zestaw = para `(lokal, obowiazuje_od)`; nie
+  ma osobnej tabeli nagłówków, bo zestaw zawsze powstaje kompletny, z siedmioma
+  dniami. Migracja `0022`. RLS: otwarta polityka, jak reszta.
+- **grafik_budzet_dni** — wyjątek budżetu na konkretną datę. `id (uuid), lokal,
+  date (date), oczekiwany_utarg (numeric, null = zostaje wartość z zestawu),
+  cel_koszt_pct (numeric, null jw.), autor, created_at`. Unikalność
+  `(lokal, date)`. Piszą tu OBA wejścia — ołówek w siatce "Wg budżetu" i
+  formularz w Konfiguracji — bo to jedna rzecz, nie dwie. Migracja `0022`.
 
 ## Urlopy i niedostępność — zaimplementowane 2026-09-03
 
@@ -1342,6 +1375,9 @@ wzorzec co `shift_edits`/`tasks`) — błąd tu nie blokuje reszty apki.
 
 [`utils/umowy.ts`](src/utils/umowy.ts) + `wymiarCzasuPracy()` w
 [`utils/kalendarz.ts`](src/utils/kalendarz.ts). Migracja `0018`.
+⚠️ Od 0.39.0 `stawkaEfektywna()` z tego pliku jest podstawą kosztu w Grafiku i
+w Pulsie — patrz "Budżet Grafiku" (5f) niżej, zwłaszcza akapit o świadomym
+odstępstwie od zasady z 5c.
 
 Jedno rozróżnienie, z którego wynika cała reszta:
 
@@ -1982,6 +2018,133 @@ uzasadnieniami. Poniżej tylko to, o co najłatwiej się potknąć:
   (`planWeek.find`). Osoba wypożyczona po południu gdzie indziej wyglądała
   więc na wolną cały dzień. Dziś `gdzieIndziej` to `filter` po wszystkich
   zmianach dnia poza tym lokalem, renderowany w każdej gałęzi komórki.
+
+### 5f. Budżet Grafiku — dodane 2026-09-17 (0.39.0)
+
+Grafik wiedział, ILU ludzi ma stać na zmianie, ale nie wiedział, ILE to ma
+kosztować. Kierownik układał tydzień, a o koszcie dowiadywał się dopiero w
+Pulsie — czyli po fakcie, kiedy jedyne, co da się zrobić, to opisać w
+komentarzu, dlaczego wyszło drożej. Cała arytmetyka w
+[`utils/budzet.ts`](src/utils/budzet.ts), migracja `0022`.
+
+**Ile lokal WYDAJE, nie ile pracownik zarobi** (ustalenie właściciela z tej
+sesji). Koszt godziny to `stawkaEfektywna` z `utils/umowy.ts` PLUS narzut
+pracodawcy z konfiguracji lokalu (`narzut_umowa`/`narzut_zlecenie`):
+
+| Typ umowy | Koszt godziny |
+|---|---|
+| Zlecenie / B2B | `stawka` × (1 + narzut) |
+| Umowa o pracę | `wynagrodzenie_mies / norma miesiąca` × (1 + narzut) |
+| Brak obu | `null` — osoba trafia na listę `bezDanych`, NIE liczy się jako 0 |
+
+⚠️ **To świadome odstępstwo od zasady z 5c** („godziny × stawka przy umowie o
+pracę byłoby mylące”) i dotyczy WYŁĄCZNIE warstwy budżetu. Tam pytanie brzmi
+inaczej: nie „ile kosztuje kolejna godzina” (przy etacie: nic), tylko „jaką
+część stałego kosztu zjadł ten dzień”. Dlatego przy etatach w karcie tygodnia
+stoi znak `~` — to ALOKACJA, nie wydatek dodatkowy. W wierszu pracownika dalej
+stoi norma, bo tam decyzją jest „czy wystarczy godzin”.
+
+⚠️ **Puls liczy tym samym kodem od 0.39.0.** `autoPodsumowanie` w
+`utils/dziennik.ts` używało gołej `users.stawka`, więc etatowiec bez stawki
+godzinowej wchodził do kosztu dnia jako ZERO i lokal z samymi etatami miał
+idealny labour cost. Liczby w kartach dni sprzed tej wersji były przez to
+zaniżone. `autoPodsumowanie`/`wierszDnia` przyjmują teraz `lokalRow` (narzut).
+
+**Dwa poziomy celu, i tylko dwa:**
+- `grafik_budzet_cele` — reguła na dzień tygodnia, wersjonowana miesięcznie
+  dokładnie jak `staffing_rule_sets` (zestaw = para `lokal` + `obowiazuje_od`,
+  zawsze siedem wierszy; obowiązuje od swojego miesiąca aż do nowszego).
+- `grafik_budzet_dni` — wyjątek na JEDNĄ datę, nadpisujący POLE PO POLU (można
+  zmienić sam utarg i zostawić procent z zestawu).
+
+⚠️ **Cele NIE wiszą na `staffing_rule_sets`**, mimo że wersjonują się tak samo:
+utworzenie zestawu celów na październik utworzyłoby wtedy także PUSTY zestaw
+wymagań obsady, a `findRuleSetForDate` bierze najnowszy zestaw ≤ data — kontrola
+dziur zamilkłaby na cały miesiąc i nikt by tego nie zauważył, bo brak ostrzeżeń
+wygląda dokładnie jak brak problemów.
+
+⚠️ **Wyjątki budżetu NIE są w `grafik_wyjatki`** — tamto ma zakres dat, własne
+wymagania obsady i godziny otwarcia. Olówek w siatce ma zmienić jedną liczbę na
+jeden dzień, a nie po cichu ruszyć godziny otwarcia. Dlatego zakres dodany w
+Konfiguracji rozpisuje się na pojedyncze dni: „który dzień jest zmieniony” ma
+wtedy jedną, trywialną odpowiedź.
+
+**Trzeci układ siatki: `uklad === "budzet"`** (obok `osoby` i `stanowiska`).
+⚠️ **Nagłówek dni jest WSPÓLNY** — zostaje w `LokalSection` w
+`GrafikTydzien.tsx`, a `GrafikBudzet.tsx` dostarcza tylko `<tbody>`. Ustalenie
+właściciela: szapka ma wyglądać identycznie we wszystkich trzech układach, a
+druga kopia tego nagłówka rozjechałaby się przy pierwszej poprawce pogody albo
+godzin. Stopka z sumami godzin w tym układzie się nie powtarza.
+
+Szczegóły, które łatwo zepsuć:
+- **`cel === null` znaczy „nie skonfigurowano”, nie „zero”** — cała warstwa
+  wtedy milczy. Zapas „0 zł” wygląda jak liczba, którą ktoś policzył.
+- **Minimalny utarg tygodnia to SUMA dziennych**, nie „koszt tygodnia przez
+  średni procent”. Cel bywa inny w sobotę niż we wtorek, więc te dwa rachunki
+  dają różne liczby, a tylko pierwszy zgadza się z kolumnami pod spodem.
+- **Do średniej „min. utarg na dzień” wchodzą tylko dni z obsadą.** Dzień bez
+  zmian ma minimalny utarg zero i wliczony zaniżałby średnią tak, że tydzień z
+  trzema obsadzonymi dniami wyglądałby na dwa razy łatwiejszy.
+- **Wartość równa tej z zestawu NIE jest nadpisaniem** — inaczej dzień dostawał
+  czerwony podpis „zmienione na ten dzień” mimo że nic się nie zmieniło.
+- **„Cofnij” kasuje tylko swoje pole**, nie cały wyjątek dnia.
+- **Koszt bierzemy po `date`**, nie po odcinkach przez północ — tak samo jak
+  godziny w nagłówku dnia. Dwie liczby o tym samym dniu, które się nie zgadzają,
+  kosztują więcej zaufania, niż warta jest ta precyzja.
+- **`zl()` grupuje tysiące SAMO**, bo `toLocaleString("pl-PL")` nie grupuje
+  liczb czterocyfrowych i w jednej kolumnie stało „1260 zł” obok „13 000 zł”.
+- **Prognozowany utarg nigdy nie podstawia się sam** (ustalenie właściciela).
+  `sredniUtargDnia` siedzi pod przyciskiem „z historii”. Liczba, która wpisała
+  się sama, po tygodniu wygląda dokładnie jak liczba wpisana świadomie.
+- **Edycja komórek tylko w trybie Edycja**, jak reszta Grafiku.
+- **Udział kosztu w utargu tygodnia liczymy z SUM**, nie jako średnią dziennych
+  procentów, a cel do porównania ważymy prognozą. Średnia arytmetyczna kłamałaby
+  tym mocniej, im bardziej sobota różni się utargiem od wtorku. Różnica dwóch
+  procentów to PUNKTY PROCENTOWE — "o 30,2% poniżej celu 33%" znaczy co innego
+  niż to, o co chodzi.
+- **Plakietka normy przy nazwisku** (`plakietkaNormy` w `GrafikTydzien.tsx`)
+  dotyczy WYŁĄCZNIE umowy o pracę i niedobór jest w niej szary, nie czerwony —
+  ta sama zasada co przy bilansie okresu: to miara niewykorzystanego zasobu po
+  stronie kierownika, nie dług pracownika.
+- **Kasowanie zestawu konfiguracji** (wymagań w `GrafikWymagania.tsx`, celów w
+  `GrafikBudzetKonfiguracja.tsx`) ⚠️ zmienia to, co widać w siatce, od razu:
+  dni spadają na zestaw wcześniejszy albo zostają bez reguły. Potwierdzenie musi
+  powiedzieć KTÓRY, inaczej kontrola dziur w obsadzie milknie i nikt tego nie
+  zauważy, bo brak ostrzeżeń wygląda jak brak problemów.
+- **"Zobacz, co czeka na wysłanie"** (`GrafikDoWyslaniaModal.tsx`) niczego nie
+  zmienia — publikacja zostaje w jednym miejscu, przy przycisku "Wyślij grafik".
+  Lista grupuje po DNIU, nie po lokalu: pracownik dostanie powiadomienie o
+  swoich dniach, a kierownik przegląda to jak kalendarz.
+- **Pasek nagłówka lokalu i karty budżetu są CIAŚNIEJSZE niż karty w innych
+  zakładkach** (`btnSecondarySmallCls`/`btnDangerSmallCls` w designTokens,
+  `kartaCls` w GrafikBudzet): stoją nad siatką i konkurują z nią o wysokość
+  ekranu, gdzie każde zaoszczędzone 8 px to jeden więcej widoczny wiersz
+  pracownika. Zaokrąglenie zostaje takie samo jak w reszcie panelu
+  (`rounded-xl`) — kanciaste zostaje tylko znak Shiftro.
+- **Cel dnia jest jeden i wpisuje się go z DWÓCH miejsc**: Grafik →
+  Konfiguracja → Budżet (reguła na dzień tygodnia) i karta dnia w Pulsie, sekcja
+  "Utarg i notatki" (nadpisanie na ten jeden dzień). Oba piszą przez
+  `zapiszNadpisanieDnia` do `grafik_budzet_dni`, więc wpisane w jednym miejscu
+  widać w drugim od razu. Drugie wejście istnieje, bo o utargu myśli się przy
+  zamykaniu dnia, a nie przy planowaniu obsady.
+  - ⚠️ W Pulsie te dwa pola zapisują się OD RAZU, a nie przyciskiem "Zapisz"
+    karty — idą do innej tabeli niż `day_logs`. Dlatego stoją we własnej ramce z
+    podpisem "zapisuje się od razu": różne zachowanie ma być widoczne, zanim
+    ktoś kliknie.
+  - ⚠️ W karcie dnia są teraz DWIE liczby o utargu i nie wolno ich zlepić.
+    `prognozaUtargu` ("zwykle X zł") to średnia z czterech ostatnich takich dni
+    tygodnia — obserwacja. `celDnia().utarg` ("plan X zł") to liczba wpisana
+    przez kierownika — decyzja. Dzień, w którym się rozjeżdżają, jest właśnie
+    tym, o którym warto porozmawiać.
+  - ⚠️ **Zamknięty dzień ma plan tylko do odczytu.** Zmiana celu po zamknięciu
+    przepisywałaby, czego oczekiwano — ta sama zasada co przy `poprawZamknietyDzien`.
+  - Kafelek "Koszt pracy / utarg" bierze próg z celu tego lokalu i dnia tygodnia;
+    sztywne "zdrowy zakres 25–35%" zostaje tylko wtedy, gdy celu nie wpisano.
+- **Budżetu nie widzi pracownik** — ani na tablecie, ani na prywatnym telefonie.
+  Ta sama zasada co przy `PulsZmiany`: koszty i stawki nie są informacją dla tej
+  roli.
+- `harness-budzet.html` sprawdza całą arytmetykę na ręcznie policzonych
+  przykładach (54 przypadki). Dokładając logikę, dopisz przypadek.
 
 ### 5e. Giełda zmian — trzy tryby (0.38.0)
 

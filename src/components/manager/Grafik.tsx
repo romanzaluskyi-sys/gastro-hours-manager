@@ -16,10 +16,13 @@ import {
   Send,
   Users,
   Briefcase,
+  Wallet,
+  ListChecks,
 } from "lucide-react";
 import GrafikWymagania from "./GrafikWymagania";
 import GrafikTydzien from "./GrafikTydzien";
 import GrafikMiesiac from "./GrafikMiesiac";
+import GrafikDoWyslaniaModal from "./GrafikDoWyslaniaModal";
 import {
   pageTitleCls,
   cardCls,
@@ -58,6 +61,11 @@ export default function Grafik({
   setLokaleGodziny,
   grafikWyjatki,
   setGrafikWyjatki,
+  budzetCele,
+  setBudzetCele,
+  budzetDni,
+  setBudzetDni,
+  dayLogs,
   onNewEmployee,
   showMsg,
 }) {
@@ -67,6 +75,9 @@ export default function Grafik({
   // stanowisko, odpowiada na "kto stoi na barze w sobotę i czy ktoś tam w
   // ogóle stoi". Drugi jest bliższy temu, jak układa się grafik od zera,
   // pierwszy — temu, jak się go potem sprawdza.
+  // Trzeci układ, "budzet", czyta tę samą siatkę od strony pieniędzy: wiersze
+  // to wskaźniki (cel, prognoza, koszt, zapas), a nie ludzie. Nagłówek dni
+  // zostaje identyczny we wszystkich trzech — patrz GrafikBudzet.tsx.
   const [ukladSiatki, setUkladSiatki] = useState("osoby");
   const [weekStart, setWeekStart] = useState(() => mondayOf(toLocalYMD(new Date())));
   // Widok dnia ma własną kotwicę: przeskakiwanie tydzień <-> dzień nie może
@@ -79,6 +90,7 @@ export default function Grafik({
   // zasadą, którą liczy sumy miesięczne widok tygodnia.
   const [month, setMonth] = useState(() => addDaysYMD(mondayOf(toLocalYMD(new Date())), 3).slice(0, 7));
   const [publishing, setPublishing] = useState(false);
+  const [pokazDoWyslania, setPokazDoWyslania] = useState(false);
 
   // Lokale WYŚWIETLANE w siatce (zależne od górnego paska)...
   const lokaleNames =
@@ -155,6 +167,7 @@ export default function Grafik({
       });
       const mapa = new Map(updated.map((s) => [s.id, s]));
       setPlanShifts((planShifts || []).map((s) => mapa.get(s.id) || s));
+      setPokazDoWyslania(false);
       showMsg(`Grafik wysłany. Powiadomionych osób: ${powiadomieni}.`);
     } catch (err) {
       showMsg(`Błąd wysyłki grafiku: ${err.message || "nieznany błąd"}`, "error");
@@ -228,6 +241,13 @@ export default function Grafik({
               title="Wiersz na stanowisko — kto je obsadza i czy ktokolwiek je obsadza"
             >
               <Briefcase size={15} className="inline -mt-0.5 mr-1" /> Wg stanowisk
+            </button>
+            <button
+              onClick={() => setUkladSiatki("budzet")}
+              className={ukladSiatki === "budzet" ? btnPrimaryCls : btnSecondaryCls}
+              title="Wiersz na wskaźnik — koszt pracy wobec prognozowanego utargu"
+            >
+              <Wallet size={15} className="inline -mt-0.5 mr-1" /> Wg budżetu
             </button>
           </div>
         )}
@@ -326,6 +346,11 @@ export default function Grafik({
           setLokaleGodziny={setLokaleGodziny}
           grafikWyjatki={grafikWyjatki}
           setGrafikWyjatki={setGrafikWyjatki}
+          budzetCele={budzetCele}
+          setBudzetCele={setBudzetCele}
+          budzetDni={budzetDni}
+          setBudzetDni={setBudzetDni}
+          dayLogs={dayLogs}
           currentUser={currentUser}
           showMsg={showMsg}
         />
@@ -355,10 +380,51 @@ export default function Grafik({
           onResolveSwap={onResolveSwap}
           setAbsences={setAbsences}
           setShifts={setShifts}
+          budzetCele={budzetCele}
+          budzetDni={budzetDni}
+          setBudzetDni={setBudzetDni}
           currentUser={currentUser}
           showMsg={showMsg}
         />
       ) : null}
+
+      {/* Pasek na dole siatki: zobaczyć CO poleci do ludzi, zanim to poleci.
+          Licznik przy "Wyślij grafik" mówi tylko ile — a publikacja obejmuje
+          wszystko od dziś w przód, ze wszystkich lokali, więc "37" nad
+          przyciskiem wysyłającym powiadomienia jest dokładnie tą chwilą, w
+          której chce się najpierw zobaczyć listę. */}
+      {(view === "tydzien" || view === "dzien") && (
+        <div className="flex flex-wrap items-center gap-3 pb-2">
+          <button
+            onClick={() => setPokazDoWyslania(true)}
+            disabled={niewyslane === 0}
+            className={niewyslane > 0 ? btnSecondaryCls : `${btnSecondaryCls} opacity-50`}
+          >
+            <ListChecks size={15} className="inline -mt-0.5 mr-1" />
+            {niewyslane === 0
+              ? "Wszystko wysłane"
+              : `Zobacz, co czeka na wysłanie (${niewyslane})`}
+          </button>
+          {niewyslanePozaTygodniem > 0 && (
+            <span className="text-[12px] text-[#6E6E66]">
+              {/* Liczone zawsze wobec TYGODNIA (weekStart…weekEnd), także w
+                  widoku dnia — tam kotwica dnia jest osobna, a ta liczba i tak
+                  ma odpowiadać na "czego nie widzę na ekranie". */}
+              w tym {niewyslanePozaTygodniem} poza oglądanym tygodniem — wysyłka
+              i tak je obejmie
+            </span>
+          )}
+        </div>
+      )}
+
+      {pokazDoWyslania && (
+        <GrafikDoWyslaniaModal
+          zmiany={niewyslaneWiersze}
+          publishing={publishing}
+          onPublish={handlePublish}
+          onClose={() => setPokazDoWyslania(false)}
+        />
+      )}
     </div>
   );
 }

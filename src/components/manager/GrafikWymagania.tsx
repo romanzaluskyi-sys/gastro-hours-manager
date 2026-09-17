@@ -7,7 +7,7 @@
 // Cała logika "co obowiązuje danego dnia" żyje w utils/grafik.ts — tutaj
 // jest wyłącznie UI i zapis. Pełna specyfikacja: docs/GRAFIK.md.
 import React, { useState, useMemo } from "react";
-import { Plus, Trash2, Copy, CalendarDays, Clock, AlertTriangle, Pencil } from "lucide-react";
+import { Plus, Trash2, Copy, CalendarDays, Clock, AlertTriangle, Pencil, Wallet } from "lucide-react";
 import { api } from "../../api/supabase";
 import {
   pageTitleCls,
@@ -18,6 +18,7 @@ import {
   statLabelCls,
 } from "./designTokens";
 import { trimTime, parseDays, findRuleSetForDate } from "../../utils/grafik";
+import GrafikBudzetKonfiguracja from "./GrafikBudzetKonfiguracja";
 
 // Kolejność wyświetlania — tydzień po polsku zaczyna się od poniedziałku,
 // ale same indeksy to zwykłe JS Date.getDay() (0=niedziela), tak samo jak
@@ -93,10 +94,15 @@ export default function GrafikWymagania({
   setLokaleGodziny,
   grafikWyjatki,
   setGrafikWyjatki,
+  budzetCele,
+  setBudzetCele,
+  budzetDni,
+  setBudzetDni,
+  dayLogs,
   currentUser,
   showMsg,
 }) {
-  const [view, setView] = useState("wymagania"); // wymagania | godziny | wyjatki
+  const [view, setView] = useState("wymagania"); // wymagania | godziny | wyjatki | budzet
   const [selectedSetId, setSelectedSetId] = useState(null);
   const nextMonth = new Date();
   nextMonth.setDate(1);
@@ -192,6 +198,50 @@ export default function GrafikWymagania({
       );
     } catch (err) {
       showMsg(`Błąd zapisu zestawu: ${err.message || "nieznany błąd"}`, "error");
+    }
+    setSaving(false);
+  };
+
+  // Skasowanie zestawu razem z jego wymaganiami. Zestaw to nie jest wpis, który
+  // da się poprawić na miejscu — utworzony na zły miesiąc zostawał w rozwijanej
+  // liście na zawsze i przy każdym wejściu trzeba było pamiętać, żeby go nie
+  // wybrać.
+  //
+  // ⚠️ Kasowanie zestawu OBOWIĄZUJĄCEGO zmienia to, co widać w siatce już od
+  // następnego renderu: dni spadają na zestaw wcześniejszy albo — gdy nie ma
+  // żadnego — zostają bez wymagań, czyli kontrola dziur w obsadzie milknie. To
+  // za dużo, żeby zrobić to jednym kliknięciem bez powiedzenia, co się stanie.
+  const handleDeleteSet = async () => {
+    if (!activeSet) return;
+    const own = (staffingRules || []).filter((r) => r.set_id === activeSet.id);
+    const nastepny = setsForLokal
+      .filter((x) => x.id !== activeSet.id && x.obowiazuje_od <= todayStr)
+      .sort((a, b) => (a.obowiazuje_od < b.obowiazuje_od ? 1 : -1))[0];
+    const skutek =
+      activeSet.id !== effectiveSet?.id
+        ? "Ten zestaw jeszcze nie obowiązuje, więc siatka się nie zmieni."
+        : nastepny
+        ? `Od teraz obowiązywać będzie zestaw od ${monthLabel(nastepny.obowiazuje_od)}.`
+        : "To jedyny obowiązujący zestaw — po usunięciu lokal zostanie BEZ wymagań obsady i kontrola dziur przestanie cokolwiek pokazywać.";
+    if (
+      !window.confirm(
+        `Usunąć zestaw od ${monthLabel(activeSet.obowiazuje_od)} razem z ${own.length} wymaganiami?\n\n${skutek}\n\nTego nie da się cofnąć.`
+      )
+    )
+      return;
+    setSaving(true);
+    try {
+      for (const r of own) await api.delete("staffing_rules", r.id);
+      await api.delete("staffing_rule_sets", activeSet.id);
+      setStaffingRules((staffingRules || []).filter((r) => r.set_id !== activeSet.id));
+      setStaffingRuleSets((staffingRuleSets || []).filter((x) => x.id !== activeSet.id));
+      // Formularz z regułą ze skasowanego zestawu zapisałby ją z powrotem pod
+      // nieistniejącym set_id — czyścimy go razem z zestawem.
+      setRuleForm(emptyRuleForm());
+      setSelectedSetId(null);
+      showMsg("Usunięto zestaw wymagań.");
+    } catch (err) {
+      showMsg(`Błąd usuwania zestawu: ${err.message || "nieznany błąd"}`, "error");
     }
     setSaving(false);
   };
@@ -551,13 +601,14 @@ export default function GrafikWymagania({
   return (
     <div className="max-w-5xl mx-auto space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <h2 className={pageTitleCls}>Wymagania obsady</h2>
+        <h2 className={pageTitleCls}>{view === "budzet" ? "Budżet" : "Wymagania obsady"}</h2>
         <span className="text-[15px] text-[#6E6E66]">· {lokal}</span>
         <div className="ml-auto flex gap-2">
           {[
             { key: "wymagania", label: "Wymagania", Icon: CalendarDays },
             { key: "godziny", label: "Godziny otwarcia", Icon: Clock },
             { key: "wyjatki", label: "Wyjątki", Icon: AlertTriangle },
+            { key: "budzet", label: "Budżet", Icon: Wallet },
           ].map(({ key, label, Icon }) => (
             <button
               key={key}
@@ -569,6 +620,19 @@ export default function GrafikWymagania({
           ))}
         </div>
       </div>
+
+      {view === "budzet" && (
+        <GrafikBudzetKonfiguracja
+          lokal={lokal}
+          budzetCele={budzetCele}
+          setBudzetCele={setBudzetCele}
+          budzetDni={budzetDni}
+          setBudzetDni={setBudzetDni}
+          dayLogs={dayLogs}
+          currentUser={currentUser}
+          showMsg={showMsg}
+        />
+      )}
 
       {view === "wymagania" && (
         <>
@@ -643,6 +707,14 @@ export default function GrafikWymagania({
                 className={btnPrimaryCls}
               >
                 <Copy size={15} className="inline -mt-0.5 mr-1" /> Kopiuj bieżący
+              </button>
+              <button
+                onClick={handleDeleteSet}
+                disabled={saving || !activeSet}
+                className="bg-white text-[#DE3A22] font-['Archivo'] font-bold text-sm px-4 py-2.5 rounded border-[2px] border-[#DE3A22] hover:bg-[#FAEAE6] disabled:opacity-40"
+                title="Usuwa oglądany zestaw razem z jego wymaganiami"
+              >
+                <Trash2 size={15} className="inline -mt-0.5 mr-1" /> Usuń zestaw
               </button>
               <p className="text-[12px] text-[#6E6E66] w-full">
                 Zestaw obowiązuje od swojego miesiąca aż do pojawienia się

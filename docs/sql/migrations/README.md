@@ -40,6 +40,7 @@ wykonalne.
 | `0019` | bloki zadań (`task_blocks`), pola pomiaru na zadaniu, `task_completions.entry_id` | nowe |
 | `0020` | dni tygodnia na poziomie zadania wewnątrz bloku (`tasks.days_of_week` wraca do życia) | nowe |
 | `0021` | giełda zmian: oddanie konkretnej osobie i zamiana zmianami (`shift_swaps.typ`, `target_*`, `wzajemna_shift_id`) | nowe |
+| `0022` | budżet Grafiku: cel na dzień tygodnia (`grafik_budzet_cele`) i wyjątek na datę (`grafik_budzet_dni`) | nowe |
 
 `0001`–`0004` odtworzono ze zrzutu prawdziwej bazy
 (`docs/sql/tools/zrzut-schematu.sql`, 2026-09-07), a nie z opisu w
