@@ -33,7 +33,7 @@ const pokazBlad = (e) => {
 window.addEventListener("error", (ev) => pokazBlad(ev.error || ev.message));
 window.addEventListener("unhandledrejection", (ev) => pokazBlad(ev.reason));
 
-const IKONY = ["AlertCircle", "AlertTriangle", "Archive", "ArchiveRestore", "ArrowLeft", "ArrowLeftRight", "ArrowRight", "BarChart3", "Bell", "BookOpen", "Briefcase", "Calendar", "CalendarCheck", "CalendarDays", "CalendarRange", "Check", "CheckCircle", "CheckCircle2", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "ClipboardCheck", "ClipboardList", "ClipboardPlus", "Clock", "Cloud", "Construction", "Copy", "CopyPlus", "Delete", "Download", "Edit2", "Eye", "FileText", "Flag", "HelpCircle", "History", "Home", "Info", "ListChecks", "Lock", "LogIn", "LogOut", "Mail", "MapPin", "MoreHorizontal", "Palmtree", "Pencil", "Plus", "Printer", "RefreshCw", "RotateCcw", "Save", "Send", "SlidersHorizontal", "Thermometer", "Trash2", "User", "UserPlus", "Users", "Wallet", "WifiOff", "X"];
+const IKONY = ["AlertCircle", "AlertTriangle", "Archive", "ArchiveRestore", "ArrowLeft", "ArrowLeftRight", "ArrowRight", "BarChart3", "Bell", "BookOpen", "Briefcase", "Calendar", "CalendarCheck", "CalendarDays", "CalendarRange", "Check", "CheckCircle", "CheckCircle2", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "ClipboardCheck", "ClipboardList", "ClipboardPlus", "Clock", "Cloud", "Construction", "Copy", "CopyPlus", "Delete", "Download", "Edit2", "Eye", "FileText", "Flag", "HelpCircle", "History", "Home", "Hourglass", "Info", "ListChecks", "Lock", "LogIn", "LogOut", "Mail", "MapPin", "MoreHorizontal", "Palmtree", "Pencil", "Plus", "Printer", "RefreshCw", "RotateCcw", "Save", "Send", "SlidersHorizontal", "Thermometer", "Trash2", "User", "UserPlus", "Users", "Wallet", "WifiOff", "X"];
 const stub = (kod) => URL.createObjectURL(new Blob([kod], { type: "text/javascript" }));
 
 // Atrapa Supabase — nic nie leci do sieci, każdy zapis wraca z wymyślonym id.
@@ -381,6 +381,12 @@ const poprzedniMiesiac = (h) => {
           // Stare konto: typ umowy siedzi jeszcze w kolumnie `etat`.
           { id: "u5", name: "Ewa", etat: "zlecenie", stawka: 31.4, active: true,
             archived: false, role: "open", default_lokal: "Ceglana" },
+          // Dodana z Tabletu na dzień próbny: bez umowy, bez stawki, bez
+          // e-maila. Musi stać w kolejce decyzji i NIE może pojawić się w
+          // Grafiku ani w kandydatach do przepisania zmian.
+          { id: "u6", name: "Nowa Osoba", active: true, archived: false, role: "open",
+            default_lokal: "Bułka i Jacek", default_stanowisko: "Kucharz", email: "",
+            probny_status: "oczekuje", probny_od: dzisYMD, probny_przez: "Tablet Bułka" },
         ],
         lokale: [
           { id: "l1", name: "Bułka i Jacek", miasto: "Koszalin", archived: false },
@@ -406,6 +412,13 @@ const poprzedniMiesiac = (h) => {
             start_time: poprzedniMiesiac(8), end_time: poprzedniMiesiac(16) },
           { id: "sh3", user_id: "u2", user_name: "Bo", lokal: "Ceglana", stanowisko: "Kucharz",
             start_time: godz(8), end_time: godz(16) },
+          // Zmiany bez odbitego końca: jedna zwykłego pracownika, jedna osoby
+          // na próbę. Obie muszą wypaść z "Kto jest teraz w pracy" i stanąć w
+          // kolejce decyzji — i żadna nie może dołożyć nikomu ani jednej godziny.
+          { id: "sh4", user_id: "u5", user_name: "Ewa", lokal: "Ceglana", stanowisko: "Kelner",
+            start_time: godz(9), end_time: null },
+          { id: "sh5", user_id: "u6", user_name: "Nowa Osoba", lokal: "Bułka i Jacek",
+            stanowisko: "Kucharz", start_time: godz(7), end_time: null },
         ],
         issues: [
           // anonimowe: user_id === null, lokalu nie da się odczytać

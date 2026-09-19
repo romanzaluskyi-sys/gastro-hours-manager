@@ -164,6 +164,19 @@ export default function App() {
           console.error("Błąd pobierania zgłoszeń:", err.message || err);
         });
     };
+    // `users` też musi się odświeżać, z tego samego powodu co `shifts` (patrz
+    // komentarz przy loadShifts niżej): Tablet Służbowy stoi zalogowany
+    // tygodniami. Bez tego osoba dodana na próbę z drugiego urządzenia nie
+    // pojawiłaby się na liście, a odrzucona nadal by na niej stała i dalej
+    // odbijała godziny. Tabela ma kilkadziesiąt wierszy, więc to tani zapyt.
+    const loadUsers = () => {
+      api
+        .get("users")
+        .then((u) => setUsers(Array.isArray(u) ? u : []))
+        .catch((err) => {
+          console.error("Błąd pobierania pracowników:", err.message || err);
+        });
+    };
     loadNotifications();
 
     // shift_edits (audit trail korekt) — ładujemy raz, bez pollingu: rośnie
@@ -302,6 +315,7 @@ export default function App() {
       loadNotifications();
       loadIssues();
       loadShifts();
+      loadUsers();
     }, 45000);
     return () => clearInterval(pollInterval);
   }, []);
@@ -372,6 +386,7 @@ export default function App() {
           shifts={shifts}
           setShifts={setShifts}
           users={users}
+          setUsers={setUsers}
           issues={issues}
           setIssues={setIssues}
           notifications={notifications}

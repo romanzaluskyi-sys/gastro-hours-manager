@@ -23,6 +23,7 @@ import {
   Palmtree,
 } from "lucide-react";
 import { pageTitleCls, cardCls, btnPrimaryCls, btnSecondaryCls, statLabelCls } from "./designTokens";
+import { czekaNaDecyzje } from "../../utils/probni";
 import { BLOKI_PRACOWNIKA, blokiLokalu } from "../../utils/grafik";
 import { getMonthName } from "../../utils/format";
 import {
@@ -469,6 +470,62 @@ export default function Pracownicy({
                           kosztu pracy w utargu pokaże wydatek lokalu, a nie samą wypłatę.
                         </p>
                       </div>
+
+                      {/* Od kiedy zmiana bez odbitego końca przestaje uchodzić
+                          za trwającą. Dwa progi, bo to dwie różne sytuacje:
+                          ktoś miał zmianę w grafiku i ją przeciągnął, albo
+                          pracował poza grafikiem i nie ma się do czego odnieść. */}
+                      <div className="mt-4 pt-3 border-t-[2px] border-[#E7E7E2]">
+                        <p className={`${statLabelCls} mb-2`}>
+                          Zmiany bez odbitego końca
+                        </p>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-xs font-bold text-[#6E6E66]">
+                              Tolerancja po grafiku (godz.)
+                            </label>
+                            <input
+                              type="number"
+                              step="0.5"
+                              min="0"
+                              value={editingDict.tolerancja_po_grafiku_h ?? ""}
+                              onChange={(e) =>
+                                setEditingDict({
+                                  ...editingDict,
+                                  tolerancja_po_grafiku_h: e.target.value,
+                                })
+                              }
+                              placeholder="4"
+                              className="w-full p-2 border-[2px] border-[#171714] rounded"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-bold text-[#6E6E66]">
+                              Maksymalna zmiana poza grafikiem (godz.)
+                            </label>
+                            <input
+                              type="number"
+                              step="0.5"
+                              min="0"
+                              value={editingDict.max_dlugosc_zmiany_h ?? ""}
+                              onChange={(e) =>
+                                setEditingDict({
+                                  ...editingDict,
+                                  max_dlugosc_zmiany_h: e.target.value,
+                                })
+                              }
+                              placeholder="17"
+                              className="w-full p-2 border-[2px] border-[#171714] rounded"
+                            />
+                          </div>
+                        </div>
+                        <p className="text-[11px] text-[#6E6E66] mt-1">
+                          Po tym czasie zmiana przestaje być pokazywana jako trwająca i
+                          trafia do Zatwierdzania zmian. Godziny nie są nikomu
+                          dopisywane — do Twojej decyzji liczą się jako zero. Puste =
+                          4 godz. po grafiku i 17 godz. bez grafiku.
+                        </p>
+                      </div>
                     </div>
                   )}
                   {view === "stanowiska" && (
@@ -608,7 +665,15 @@ export default function Pracownicy({
                     {u.default_stanowisko || roleLabel(u.role)}
                     {u.default_lokal ? ` · ${u.default_lokal}` : ""}
                   </p>
-                  {view === "aktywni" && missing.length > 0 && (
+                  {/* Osoba dodana z tabletu wygląda na liście dokładnie jak
+                      reszta załogi, a nią jeszcze nie jest: nie ma umowy,
+                      stawki ani miejsca w grafiku. */}
+                  {czekaNaDecyzje(u) && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#8A6B1E] bg-[#FFF4D6] px-1.5 py-0.5 rounded mt-1.5 mr-1.5">
+                      <AlertTriangle size={11} /> Na próbę — czeka na decyzję
+                    </span>
+                  )}
+                  {view === "aktywni" && missing.length > 0 && !czekaNaDecyzje(u) && (
                     <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#8A6B1E] bg-[#FFF4D6] px-1.5 py-0.5 rounded mt-1.5">
                       <AlertTriangle size={11} /> Brak terminu {missing.join(", ")}
                     </span>
@@ -638,6 +703,21 @@ export default function Pracownicy({
               <h3 className="font-['Archivo'] font-extrabold text-lg mb-4">
                 {isNew ? "Nowy pracownik" : editingUser.name}
               </h3>
+
+              {/* Karta wygląda tak samo dla każdego, więc bez tego paska nie
+                  widać, że ta osoba nie jest jeszcze przyjęta — a od tego
+                  zależy, czy w ogóle warto uzupełniać resztę pól. */}
+              {czekaNaDecyzje(editingUser) && (
+                <div className="mb-4 p-3 rounded-xl border-[2px] border-[#8A6B1E] bg-[#FFF4D6] text-[13px] text-[#6B5415]">
+                  <strong>Dodany(-a) na próbę z Tabletu Służbowego</strong>
+                  {editingUser.probny_od
+                    ? ` ${editingUser.probny_od.split("-").reverse().join(".")}`
+                    : ""}
+                  {editingUser.probny_przez ? ` przez: ${editingUser.probny_przez}` : ""}.
+                  Odbija godziny, ale nie ma jej w Grafiku i nie może się nigdzie
+                  zalogować. Decyzja czeka w zakładce Zatwierdzanie zmian.
+                </div>
+              )}
 
               {/* 1–2. Kim jest i jakim kontem się posługuje. */}
               <p className={`${statLabelCls} mb-2`}>Dane podstawowe</p>

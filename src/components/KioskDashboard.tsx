@@ -1,6 +1,15 @@
 // @ts-nocheck
 import React, { useState, useEffect } from "react";
-import { Lock, AlertCircle, Delete, ChevronLeft, Mail, BookOpen } from "lucide-react";
+import {
+  Lock,
+  AlertCircle,
+  Delete,
+  ChevronLeft,
+  Mail,
+  BookOpen,
+  UserPlus,
+  Hourglass,
+} from "lucide-react";
 import { getTodaysShiftsForUser } from "../utils/shifts";
 import { offersForUser, STATUS_LABEL } from "../utils/swaps";
 import { mozeZamykacPuls } from "./manager/PulsZmiany";
@@ -11,6 +20,8 @@ import {
   opisDnia,
   EmployeeSessionScreens,
 } from "./employeeSessionShared";
+import { zmianaTrwa } from "../utils/porzucone";
+import { dodajProbnego, czekaNaDecyzje } from "../utils/probni";
 import WeatherBadge from "./WeatherBadge";
 import ShiftroMark from "./ShiftroMark";
 import { PRODUKT } from "../config";
@@ -37,6 +48,7 @@ const KioskDashboard = ({
   shifts,
   setShifts,
   users,
+  setUsers,
   issues,
   setIssues,
   notifications,
@@ -62,6 +74,10 @@ const KioskDashboard = ({
   const [pinEntered, setPinEntered] = useState("");
   const [pinError, setPinError] = useState(false);
   const [now, setNow] = useState(new Date());
+  // Szybkie dodanie osoby na dzień próbny. Trzy pola i nic więcej: resztę
+  // karty wypełnia kierownik, jeśli w ogóle zdecyduje się ją przyjąć.
+  const [nowyForm, setNowyForm] = useState(null);
+  const [nowySaving, setNowySaving] = useState(false);
 
   const allowed = currentUser.allowed_lokale
     ? currentUser.allowed_lokale.split(",").map((l) => l.trim())
@@ -125,7 +141,32 @@ const KioskDashboard = ({
   // pokazywał nieprawdę).
   const stanDnia = new Map(
     activeUsers.map((u) => {
-      const otwarta = shifts.find((s) => s.user_id === u.id && !s.end_time);
+      // ⚠️ Tylko zmiana, która WCIĄŻ trwa. Ta, której ktoś nie zakończył i
+      // która przekroczyła próg lokalu, nie może dalej świecić "od 08:00" —
+      // liczniki nad listą kłamałyby, a osoba nie mogłaby odbić nowej zmiany.
+      const otwarta = shifts.find(
+        (s) =>
+          s.user_id === u.id &&
+          zmianaTrwa({ shift: s, planShifts, lokale, users, now })
+      );
+      // Zmiana, której ta osoba nie zakończyła i która czeka na decyzję
+      // kierownika. Nie liczy się już jako trwająca, ale musi być widoczna:
+      // człowiek stojący przy tablecie jest jedynym, który pamięta, o której
+      // wtedy wyszedł.
+      //
+      // ⚠️ Tylko z ostatniego tygodnia, choć w kolejce kierownika takie pozycje
+      // wiszą bez ograniczenia. Po tygodniu ta osoba i tak nie pamięta tamtej
+      // godziny, więc podpis przestaje być prośbą o informację i zostaje z
+      // niego sam wyrzut sumienia, którego nie da się odkliknąć.
+      const porzucona = shifts.find(
+        (s) =>
+          s.user_id === u.id &&
+          !s.end_time &&
+          !s.is_urlop &&
+          !s.rozliczenie &&
+          now - s.start_time < 7 * 86400000 &&
+          !zmianaTrwa({ shift: s, planShifts, lokale, users, now })
+      );
       const zamkniete = getTodaysShiftsForUser(shifts, u.id).filter((s) => s.end_time);
       const zaplanowane = (planShifts || [])
         .filter(
@@ -143,7 +184,7 @@ const KioskDashboard = ({
         : zaplanowane.length > 0
         ? "oczekiwany"
         : "wolne";
-      return [u.id, { otwarta, zamkniete, zaplanowane, stan }];
+      return [u.id, { otwarta, porzucona, zamkniete, zaplanowane, stan }];
     })
   );
   const ile = (stan) => activeUsers.filter((u) => stanDnia.get(u.id).stan === stan).length;
@@ -177,7 +218,53 @@ const KioskDashboard = ({
     setPinTarget(null);
     setPinEntered("");
     setPinError(false);
+    setNowyForm(null);
     setScreen("LIST");
+  };
+
+  const otworzNowego = () => {
+    setNowyForm({
+      name: "",
+      lokal: lokaleAllowed[0]?.name || allowed[0] || "",
+      stanowisko: "",
+    });
+    setScreen("NOWY");
+  };
+
+  // Dzień próbny bywa płatny, a kierownika rano w lokalu nie ma. Konto
+  // powstaje bez e-maila i bez PIN-u — nie da się nim nigdzie zalogować,
+  // istnieje tylko na tym tablecie i czeka na decyzję (utils/probni.ts).
+  const zapiszNowego = async () => {
+    const imie = (nowyForm?.name || "").trim();
+    const duplikat = activeUsers.find(
+      (u) => u.name.trim().toLowerCase() === imie.toLowerCase()
+    );
+    if (
+      duplikat &&
+      !window.confirm(
+        `${duplikat.name} jest już na liście tego tabletu. Dodać mimo to drugą osobę o tym samym imieniu?`
+      )
+    )
+      return;
+    setNowySaving(true);
+    try {
+      const utworzony = await dodajProbnego({
+        name: imie,
+        lokal: nowyForm.lokal,
+        stanowisko: nowyForm.stanowisko,
+        przez: currentUser.name,
+      });
+      setUsers?.((prev) => [...(prev || []), utworzony]);
+      setNowyForm(null);
+      // Od razu do jego sesji: po to ta osoba stoi przy tablecie — żeby
+      // odbić zmianę, a nie żeby zobaczyć, że konto powstało.
+      setSelectedEmployee(utworzony);
+      setScreen("SESSION");
+      showMsg(`${utworzony.name} dodany(-a) na próbę. Kierownik to potwierdzi.`);
+    } catch (e) {
+      showMsg(e.message || "Błąd zapisu", "error");
+    }
+    setNowySaving(false);
   };
 
   const selectEmployee = (u) => {
@@ -262,8 +349,12 @@ const KioskDashboard = ({
                 : "Brak przypisanych pracowników"}
             </div>
             {widoczniUsers.map((u) => {
-              const { otwarta: empOpen, zamkniete: empClosedToday, zaplanowane } =
-                stanDnia.get(u.id);
+              const {
+                otwarta: empOpen,
+                porzucona: empPorzucona,
+                zamkniete: empClosedToday,
+                zaplanowane,
+              } = stanDnia.get(u.id);
               // Na wspólnym tablecie nikt nie wchodzi na cudzą stronę, więc
               // giełda musi być widoczna już na liście. Podświetlamy TYLKO
               // tych, którzy mogą coś wziąć — dla nich to zaproszenie do
@@ -304,9 +395,24 @@ const KioskDashboard = ({
                       {u.name}{" "}
                       {u.kiosk_pin && <Lock size={14} strokeWidth={2.3} />}
                     </div>
-                    <div className="text-[13px] text-[#6E6E66] mt-0.5">
+                    <div className="text-[13px] text-[#6E6E66] mt-0.5 flex items-center gap-1.5 flex-wrap">
                       {u.default_stanowisko || ""}
+                      {czekaNaDecyzje(u) && (
+                        <span className="text-[11px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#FFF4D6] text-[#8A6B1E]">
+                          na próbę
+                        </span>
+                      )}
                     </div>
+                    {/* Zmiana bez odbitego końca czeka u kierownika, ale
+                        jedyną osobą, która pamięta, o której naprawdę wyszła,
+                        jest ta stojąca teraz przy tablecie. */}
+                    {empPorzucona && (
+                      <div className="text-[13px] font-bold text-[#8A3A2B] mt-1 flex items-center gap-1">
+                        <Hourglass size={14} strokeWidth={2.3} />
+                        Niezakończona zmiana z{" "}
+                        {opisDnia(toLocalYMD(empPorzucona.start_time))}
+                      </div>
+                    )}
                     {/* Prawo do zamknięcia Pulsu jest jednodniowe, więc łatwo
                         o nim zapomnieć — a zapomniany dzień zostaje niewpisany.
                         Znak stoi na liście, żeby był widoczny zanim ktokolwiek
@@ -362,6 +468,116 @@ const KioskDashboard = ({
                 Brak przypisanych pracowników.
               </div>
             )}
+            {/* Ktoś na dzień próbny przychodzi rano, kiedy kierownika w lokalu
+                nie ma. Bez tej drogi jego godziny lądują na kartce albo nigdzie. */}
+            <button
+              onClick={otworzNowego}
+              className="mt-auto border-2 border-dashed border-[#B7B6AE] rounded p-3.5 flex items-center justify-center gap-2 w-full text-[15px] font-['Archivo'] font-bold text-[#6E6E66]"
+            >
+              <UserPlus size={18} strokeWidth={2.3} /> Nowa osoba na próbę
+            </button>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  // ==========================================
+  // EKRAN: NOWY — osoba na dzień próbny
+  // Trzy pola i koniec. Wszystko inne (stawka, umowa, terminy, dostęp z
+  // telefonu) to decyzje kierownika, a tutaj stoi ktoś, kto ma za pięć minut
+  // wejść na salę.
+  // ==========================================
+  if (screen === "NOWY" && nowyForm) {
+    const stanowiskaNowego = stanowiska.filter(
+      (s) => s.lokal_name === nowyForm.lokal && !s.archived
+    );
+    const komplet =
+      nowyForm.name.trim() && nowyForm.lokal && nowyForm.stanowisko;
+    return (
+      <div className="h-screen bg-white flex flex-col items-center overflow-hidden">
+        <div className="w-full max-w-md bg-white h-full flex flex-col shadow-lg overflow-hidden">
+          <header className="px-[18px] pt-[22px] pb-[14px] bg-[#F1F1EE] border-b-[1.5px] border-[#B7B6AE] flex items-center gap-3 flex-shrink-0">
+            <button
+              onClick={goList}
+              className="flex items-center gap-1 border-2 border-[#B7B6AE] rounded font-['Archivo'] font-bold text-sm px-3 py-2 text-[#171714]"
+            >
+              <ChevronLeft size={16} strokeWidth={2.5} /> Wróć
+            </button>
+            <span className="font-['Archivo'] font-extrabold text-[19px] text-[#171714]">
+              Nowa osoba na próbę
+            </span>
+          </header>
+          <main className="flex-1 overflow-y-auto px-5 pt-6 pb-5">
+            <p className="text-sm text-[#6E6E66] mb-5">
+              Wystarczy, żeby zacząć odbijać godziny. Kierownik dostanie
+              powiadomienie i zdecyduje, czy ta osoba zostaje.
+            </p>
+
+            <label className="text-xs font-bold text-[#6E6E66] uppercase tracking-wider">
+              Imię i nazwisko
+            </label>
+            <input
+              type="text"
+              autoFocus
+              value={nowyForm.name}
+              onChange={(e) => setNowyForm({ ...nowyForm, name: e.target.value })}
+              placeholder="np. Anna Kowalska"
+              className="w-full p-3 border-[2.5px] border-[#171714] rounded text-[17px] mt-1.5 mb-4"
+            />
+
+            {/* Wybór lokalu tylko wtedy, gdy tablet obsługuje więcej niż
+                jeden — jedno pole mniej to jedno pole mniej do pomylenia. */}
+            {lokaleAllowed.length > 1 && (
+              <>
+                <label className="text-xs font-bold text-[#6E6E66] uppercase tracking-wider">
+                  Lokal
+                </label>
+                <select
+                  value={nowyForm.lokal}
+                  onChange={(e) =>
+                    setNowyForm({ ...nowyForm, lokal: e.target.value, stanowisko: "" })
+                  }
+                  className="w-full p-3 border-[2.5px] border-[#171714] rounded text-[17px] mt-1.5 mb-4 bg-white"
+                >
+                  {lokaleAllowed.map((l) => (
+                    <option key={l.id} value={l.name}>
+                      {l.name}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
+
+            <label className="text-xs font-bold text-[#6E6E66] uppercase tracking-wider">
+              Stanowisko
+            </label>
+            <select
+              value={nowyForm.stanowisko}
+              onChange={(e) =>
+                setNowyForm({ ...nowyForm, stanowisko: e.target.value })
+              }
+              className="w-full p-3 border-[2.5px] border-[#171714] rounded text-[17px] mt-1.5 mb-6 bg-white"
+            >
+              <option value="">— wybierz —</option>
+              {stanowiskaNowego.map((s) => (
+                <option key={s.id} value={s.name}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+
+            <button
+              disabled={!komplet || nowySaving}
+              onClick={zapiszNowego}
+              className="w-full bg-[#DE3A22] text-white font-['Archivo'] font-extrabold text-[17px] rounded p-4 disabled:opacity-40"
+            >
+              {nowySaving ? "Zapisywanie..." : "Dodaj i zacznij zmianę"}
+            </button>
+            <p className="text-[13px] text-[#6E6E66] mt-3">
+              Ta osoba nie pojawi się w grafiku i nie zaloguje się z własnego
+              telefonu, dopóki kierownik jej nie zatwierdzi.
+            </p>
           </main>
         </div>
       </div>
@@ -455,6 +671,15 @@ const KioskDashboard = ({
       <EmployeeSessionScreens
         key={selectedEmployee.id}
         employee={selectedEmployee}
+        /* Tablet Służbowy dostaje pełny zestaw bloków — poza osobą na próbę.
+           Jej Grafik jest pusty z definicji, Wiadomości też (nikt jeszcze do
+           niej nie pisze), a Giełda wymaga zmian w grafiku. Pusta zakładka
+           wygląda jak zepsuta, więc zostają te trzy, które mają treść. */
+        bloki={
+          czekaNaDecyzje(selectedEmployee)
+            ? ["WPISY", "RAPORT", "ZADANIA"]
+            : undefined
+        }
         lokaleOptions={lokaleAllowed}
         stanowiskaOptions={stanowiskaAllowed}
         lokaleWszystkie={lokale}

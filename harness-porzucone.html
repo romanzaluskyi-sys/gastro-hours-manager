@@ -1,0 +1,270 @@
+<meta charset="utf-8">
+<title>Sprawdzian zmian bez zakończenia</title>
+<style>
+  body { font: 14px/1.6 ui-monospace, Menlo, monospace; padding: 24px; background: #FBFAF9; color: #17120F; }
+  h1 { font: 700 18px/1.2 system-ui, sans-serif; }
+  .ok { color: #2C6A4F; } .zle { color: #DE3A22; font-weight: 700; }
+  pre { background: #F1EEEB; padding: 10px; overflow-x: auto; }
+</style>
+<h1>Sprawdzian utils/porzucone.ts i utils/probni.ts</h1>
+<div id="out">ładowanie…</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js"></script>
+<script>
+const out = document.getElementById("out");
+const log = (txt, cls = "") => {
+  const d = document.createElement("div");
+  d.className = cls; d.textContent = txt; out.appendChild(d);
+};
+
+// Ten sam loader co w pozostałych harnessach: pobiera plik, transpiluje
+// Babelem i przepisuje importy na blob-URL-e już załadowanych modułów.
+const cache = new Map();
+async function zaladuj(sciezka) {
+  if (cache.has(sciezka)) return cache.get(sciezka);
+  const p = new Promise(async (resolve, reject) => {
+    try {
+      let kod = null;
+      for (const ext of [".ts", ".tsx", ""]) {
+        const r = await fetch(sciezka + ext + "?cb=" + Date.now());
+        if (r.ok) { kod = await r.text(); break; }
+      }
+      if (kod === null) throw new Error("nie znaleziono " + sciezka);
+
+      const specyfikatory = [...kod.matchAll(/from\s+"(\.[^"]+)"/g)].map((m) => m[1]);
+      const baza = sciezka.slice(0, sciezka.lastIndexOf("/"));
+      const mapa = {};
+      for (const s of specyfikatory) {
+        const url = new URL(baza + "/" + s, location.origin).pathname;
+        mapa[s] = await zaladuj(url);
+      }
+      kod = kod.replace(/from\s+"(\.[^"]+)"/g, (m, s) => `from "${mapa[s]}"`);
+      const js = Babel.transform(kod, { presets: [["typescript", { allExtensions: true, isTSX: true }]] }).code;
+      resolve(URL.createObjectURL(new Blob([js], { type: "text/javascript" })));
+    } catch (e) { reject(e); }
+  });
+  cache.set(sciezka, p);
+  return p;
+}
+
+let zdanych = 0, oblanych = 0;
+const sprawdz = (nazwa, warunek, szczegol = "") => {
+  if (warunek) { zdanych++; log("  OK   " + nazwa, "ok"); }
+  else { oblanych++; log("  ŹLE  " + nazwa + (szczegol ? " — " + szczegol : ""), "zle"); }
+};
+
+(async () => {
+  try {
+    out.textContent = "";
+    const P = await import(await zaladuj("/src/utils/porzucone"));
+    const R = await import(await zaladuj("/src/utils/probni"));
+    log("moduły załadowane razem z grafik.ts i api/*", "ok");
+    log("");
+
+    const d = (rok, mies, dzien, g = 0, m = 0) => new Date(rok, mies - 1, dzien, g, m, 0, 0);
+    const ala = { id: "u1", name: "Ala" };
+    const bo = { id: "u2", name: "Bo" };
+    const users = [ala, bo];
+    const plan = (nadpis) => ({
+      user_id: "u1",
+      lokal: "L",
+      date: "2026-09-15",
+      start_time: "08:00:00",
+      end_time: "16:00:00",
+      published_at: "2026-09-10T10:00:00Z",
+      deleted_at: null,
+      ...nadpis,
+    });
+    const zmiana = (nadpis) => ({
+      id: "s1",
+      user_id: "u1",
+      user_name: "Ala",
+      lokal: "L",
+      stanowisko: "Bar",
+      start_time: d(2026, 9, 15, 8, 2),
+      end_time: null,
+      ...nadpis,
+    });
+
+    // --- PROGI LOKALU ----------------------------------------------------
+    log("— progi lokalu —");
+    sprawdz("brak lokalu = wartości domyślne",
+      P.progiLokalu([], "L").tolerancja === 4 && P.progiLokalu([], "L").maks === 17);
+    sprawdz("puste pola = wartości domyślne",
+      P.progiLokalu([{ name: "L", tolerancja_po_grafiku_h: "", max_dlugosc_zmiany_h: null }], "L")
+        .tolerancja === 4);
+    // Zero znaczyłoby "zrywaj zmianę natychmiast" — to prawie zawsze pusty
+    // formularz, nie decyzja, więc traktujemy je jak brak wartości.
+    sprawdz("zero nie jest progiem",
+      P.progiLokalu([{ name: "L", tolerancja_po_grafiku_h: 0 }], "L").tolerancja === 4);
+    sprawdz("ustawione progi są czytane",
+      P.progiLokalu([{ name: "L", tolerancja_po_grafiku_h: 2, max_dlugosc_zmiany_h: 12 }], "L")
+        .maks === 12);
+    sprawdz("progi biorą się z WŁAŚCIWEGO lokalu",
+      P.progiLokalu(
+        [{ name: "A", tolerancja_po_grafiku_h: 1 }, { name: "L", tolerancja_po_grafiku_h: 6 }],
+        "L"
+      ).tolerancja === 6);
+
+    // --- PLANOWANY KONIEC ------------------------------------------------
+    log("");
+    log("— planowany koniec —");
+    sprawdz("jedna zmiana w grafiku",
+      +P.planowanyKoniec([plan()], ala, d(2026, 9, 15, 8, 2)) === +d(2026, 9, 15, 16));
+    // Zmiana dzielona: pierwszy koniec zrzynałby zmianę w środku drugiej części.
+    sprawdz("zmiana dzielona — bierzemy NAJPÓŹNIEJSZY koniec",
+      +P.planowanyKoniec(
+        [plan({ start_time: "12:00", end_time: "16:00" }),
+         plan({ start_time: "18:00", end_time: "22:00" })],
+        ala, d(2026, 9, 15, 12)
+      ) === +d(2026, 9, 15, 22));
+    sprawdz("zmiana przez północ kończy się nazajutrz",
+      +P.planowanyKoniec([plan({ start_time: "22:00", end_time: "06:00" })], ala, d(2026, 9, 15, 22))
+        === +d(2026, 9, 16, 6));
+    sprawdz("wersja robocza się nie liczy",
+      P.planowanyKoniec([plan({ published_at: null })], ala, d(2026, 9, 15, 8)) === null);
+    sprawdz("zmiana oznaczona do usunięcia się nie liczy",
+      P.planowanyKoniec([plan({ deleted_at: "2026-09-12T08:00:00Z" })], ala, d(2026, 9, 15, 8))
+        === null);
+    sprawdz("cudza zmiana się nie liczy",
+      P.planowanyKoniec([plan({ user_id: "u2" })], ala, d(2026, 9, 15, 8)) === null);
+    sprawdz("inny dzień się nie liczy",
+      P.planowanyKoniec([plan({ date: "2026-09-16" })], ala, d(2026, 9, 15, 8)) === null);
+
+    // --- PRÓG ZAKOŃCZENIA ------------------------------------------------
+    log("");
+    log("— próg —");
+    const progGrafik = P.progZakonczenia({
+      shift: zmiana(), planShifts: [plan()], user: ala, progi: { tolerancja: 4, maks: 17 },
+    });
+    sprawdz("z grafiku: koniec 16:00 + 4 h = 20:00",
+      progGrafik.powod === "grafik" && +progGrafik.prog === +d(2026, 9, 15, 20),
+      String(progGrafik.prog));
+    const progLimit = P.progZakonczenia({
+      shift: zmiana(), planShifts: [], user: ala, progi: { tolerancja: 4, maks: 17 },
+    });
+    sprawdz("bez grafiku: start 08:02 + 17 h = 01:02 nazajutrz",
+      progLimit.powod === "limit" && +progLimit.prog === +d(2026, 9, 16, 1, 2),
+      String(progLimit.prog));
+    // Kto odbił się długo po swoim planie, pracuje faktycznie poza nim — plan
+    // użyty dosłownie zrzynałby zmianę dwie godziny po jej rozpoczęciu.
+    const progPoPlanie = P.progZakonczenia({
+      shift: zmiana({ start_time: d(2026, 9, 15, 18) }),
+      planShifts: [plan()], user: ala, progi: { tolerancja: 4, maks: 17 },
+    });
+    sprawdz("start PO planowanym końcu → liczy się limit, nie grafik",
+      progPoPlanie.powod === "limit" && +progPoPlanie.prog === +d(2026, 9, 16, 11),
+      progPoPlanie.powod + " " + progPoPlanie.prog);
+    const progWlasny = P.progZakonczenia({
+      shift: zmiana(), planShifts: [plan()], user: ala, progi: { tolerancja: 1.5, maks: 17 },
+    });
+    sprawdz("tolerancja lokalu 1,5 h → 17:30", +progWlasny.prog === +d(2026, 9, 15, 17, 30));
+
+    // --- CZY PORZUCONA ---------------------------------------------------
+    log("");
+    log("— rozpoznanie —");
+    const lokale = [{ name: "L" }];
+    const wolanie = (nadpis, teraz) =>
+      P.czyPorzucona({ shift: zmiana(nadpis), planShifts: [plan()], lokale, users, now: teraz });
+    sprawdz("minutę przed progiem — jeszcze trwa", wolanie({}, d(2026, 9, 15, 19, 59)) === null);
+    sprawdz("dokładnie w progu — już porzucona", !!wolanie({}, d(2026, 9, 15, 20)));
+    sprawdz("godzinę po progu — porzucona", !!wolanie({}, d(2026, 9, 15, 21)));
+    sprawdz("zamknięta zmiana nigdy nie jest porzucona",
+      wolanie({ end_time: d(2026, 9, 15, 16, 10) }, d(2026, 9, 16, 12)) === null);
+    sprawdz("urlop nie jest porzuconą zmianą",
+      wolanie({ is_urlop: true }, d(2026, 9, 16, 12)) === null);
+    // Kolejka, która pokazuje w kółko to samo, przestaje być czytana.
+    sprawdz("rozstrzygnięta nie wraca do kolejki",
+      wolanie({ rozliczenie: "odrzucono" }, d(2026, 9, 16, 12)) === null);
+    sprawdz("powód jest zapamiętany", wolanie({}, d(2026, 9, 15, 21)).powod === "grafik");
+
+    log("");
+    log("— trwa czy nie —");
+    const trwa = (teraz) =>
+      P.zmianaTrwa({ shift: zmiana(), planShifts: [plan()], lokale, users, now: teraz });
+    sprawdz("w trakcie zmiany trwa", trwa(d(2026, 9, 15, 12)) === true);
+    sprawdz("po progu już nie trwa", trwa(d(2026, 9, 15, 20, 1)) === false);
+    sprawdz("zamknięta nie trwa",
+      P.zmianaTrwa({ shift: zmiana({ end_time: d(2026, 9, 15, 16) }), planShifts: [plan()],
+        lokale, users, now: d(2026, 9, 15, 17) }) === false);
+
+    // --- KOLEJKA ---------------------------------------------------------
+    log("");
+    log("— kolejka —");
+    const kolejka = P.zmianyPorzucone({
+      shifts: [
+        zmiana({ id: "nowa", start_time: d(2026, 9, 14, 8) }),
+        zmiana({ id: "stara", start_time: d(2026, 9, 10, 8) }),
+        zmiana({ id: "obca", lokal: "X", start_time: d(2026, 9, 12, 8) }),
+        zmiana({ id: "ok", end_time: d(2026, 9, 13, 16), start_time: d(2026, 9, 13, 8) }),
+      ],
+      planShifts: [],
+      lokale,
+      users,
+      lokalOk: (l) => l === "L",
+      now: d(2026, 9, 16, 12),
+    });
+    sprawdz("obcy lokal odfiltrowany", !kolejka.some((p) => p.shift.id === "obca"));
+    sprawdz("zamknięta nie wchodzi", !kolejka.some((p) => p.shift.id === "ok"));
+    sprawdz("zostają dwie pozycje", kolejka.length === 2, "jest " + kolejka.length);
+    sprawdz("najstarsza pierwsza", kolejka[0].shift.id === "stara");
+    // Okna czasowego tu NIE MA (inaczej niż przy zmianach bez odbicia): ślad
+    // odbicia dowodzi, że człowiek przyszedł, a niezapłacona praca się nie
+    // przedawnia.
+    const dawna = P.zmianyPorzucone({
+      shifts: [zmiana({ start_time: d(2026, 5, 1, 8) })],
+      planShifts: [], lokale, users, now: d(2026, 9, 16, 12),
+    });
+    sprawdz("pozycja sprzed czterech miesięcy nadal w kolejce", dawna.length === 1);
+
+    // --- PRACOWNIK NA PRÓBĘ ----------------------------------------------
+    log("");
+    log("— pracownik na próbę —");
+    const probny = { id: "p1", name: "Nowa", default_lokal: "L", probny_status: "oczekuje",
+                     probny_od: "2026-09-15" };
+    const probnyStarszy = { id: "p2", name: "Druga", default_lokal: "L",
+                            probny_status: "oczekuje", probny_od: "2026-09-10" };
+    const przyjety = { id: "p3", name: "Trzecia", default_lokal: "L",
+                       probny_status: "zatwierdzony" };
+    const odrzucony = { id: "p4", name: "Czwarta", default_lokal: "L",
+                        probny_status: "odrzucony", archived: true };
+    const obcy = { id: "p5", name: "Piąta", default_lokal: "X", probny_status: "oczekuje" };
+
+    sprawdz("oczekujący czeka na decyzję", R.czekaNaDecyzje(probny) === true);
+    sprawdz("zatwierdzony już nie czeka", R.czekaNaDecyzje(przyjety) === false);
+    sprawdz("zwykły pracownik nie czeka", R.czekaNaDecyzje({ id: "z" }) === false);
+    // Ślad zostaje po decyzji — inaczej po pół roku nie da się odpowiedzieć,
+    // skąd się ta osoba w ogóle wzięła.
+    sprawdz("ślad po próbie zostaje po zatwierdzeniu", R.bylNaProbie(przyjety) === true);
+
+    const doDecyzji = R.probniDoDecyzji({
+      users: [probny, probnyStarszy, przyjety, odrzucony, obcy],
+      lokalOk: (l) => l === "L",
+    });
+    sprawdz("do decyzji trafiają tylko oczekujący z moich lokali", doDecyzji.length === 2,
+      JSON.stringify(doDecyzji.map((u) => u.name)));
+    sprawdz("najdłużej czekający pierwszy", doDecyzji[0].name === "Druga");
+    sprawdz("zarchiwizowany odrzucony nie wraca", !doDecyzji.some((u) => u.id === "p4"));
+
+    const godziny = R.godzinyProbnego(
+      [
+        { user_id: "p1", start_time: d(2026, 9, 15, 8), end_time: d(2026, 9, 15, 16) },
+        { user_id: "p1", start_time: d(2026, 9, 16, 8), end_time: null },
+        { user_id: "zz", start_time: d(2026, 9, 15, 8), end_time: d(2026, 9, 15, 20) },
+      ],
+      probny
+    );
+    // Zmiana bez końca daje zero godzin — to jest ta sama zasada, na której
+    // stoi cała pierwsza połowa tego pliku.
+    sprawdz("liczymy tylko zamknięte zmiany tej osoby", godziny === 8, "jest " + godziny);
+
+    log("");
+    log(`ZDANYCH ${zdanych}, OBLANYCH ${oblanych}`, oblanych ? "zle" : "ok");
+  } catch (e) {
+    log("WYJĄTEK: " + (e && e.message ? e.message : e), "zle");
+    const pre = document.createElement("pre");
+    pre.textContent = (e && e.stack) || String(e);
+    out.appendChild(pre);
+  }
+})();
+</script>

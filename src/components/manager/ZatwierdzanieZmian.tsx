@@ -3,10 +3,21 @@
 // godzin / "zapomniałem odbić" zgłoszone przez pracownika w Zgłoś). Biржа
 // zmian z Grafiku — świadomie poza zakresem, patrz plan realizacji.
 import React, { useState } from "react";
-import { Check, Edit2, HelpCircle, AlertCircle, X, Palmtree, ArrowLeftRight, Clock } from "lucide-react";
+import {
+  Check,
+  Edit2,
+  HelpCircle,
+  AlertCircle,
+  X,
+  Palmtree,
+  ArrowLeftRight,
+  Clock,
+  Hourglass,
+  UserPlus,
+} from "lucide-react";
 import { resolveCorrection, askAboutCorrection } from "../../utils/corrections";
 import { countWorkdays, URLOP_HOURS_PER_DAY } from "../../utils/absences";
-import { trimTime, shiftHours } from "../../utils/grafik";
+import { trimTime, shiftHours, toLocalYMD } from "../../utils/grafik";
 import { monthPlanHours, typWymiany, wzajemnaZmiana } from "../../utils/swaps";
 import { pageTitleCls, statLabelCls, btnPrimaryCls, btnSecondaryCls } from "./designTokens";
 
@@ -36,14 +47,39 @@ const fmtPL = (dateStr) =>
 
 const diffCls = (a, b) => (a !== b ? "text-[#DE3A22] font-bold" : "text-[#171714]");
 
+// Podpowiedź godziny zakończenia dla zmiany bez odbitego końca: to, co stało
+// w grafiku. Gdy grafiku nie było, pole zostaje PUSTE — podstawiona "teraz"
+// albo "start + 8 h" wyglądałaby jak liczba, którą ktoś sprawdził.
+const domyslnyKoniec = (poz) => (poz.koniecPlanu ? fmtHHMM(poz.koniecPlanu) : "");
+
+// Jak dawno minął próg — po to, żeby pozycja sprzed trzech dni wyglądała
+// inaczej niż ta sprzed godziny.
+const odKiedyCzeka = (prog, teraz = new Date()) => {
+  const godz = Math.floor((teraz - prog) / 3600000);
+  if (godz < 1) return "przed chwilą";
+  if (godz < 24) return `${godz} godz. temu`;
+  const dni = Math.floor(godz / 24);
+  return dni === 1 ? "wczoraj" : `${dni} dni temu`;
+};
+
 import { zmianyBezOdbicia, rozliczBrakOdbicia } from "../../utils/odbicia";
+import { zmianyPorzucone, rozliczPorzucona } from "../../utils/porzucone";
+import {
+  probniDoDecyzji,
+  zatwierdzProbnego,
+  odrzucProbnego,
+  godzinyProbnego,
+} from "../../utils/probni";
 
 export default function ZatwierdzanieZmian({
   currentUser,
   shifts,
   setShifts,
   users = [],
+  setUsers,
+  lokale = [],
   absences = [],
+  onOpenEmployee,
   setPlanShifts,
   issues,
   setIssues,
@@ -70,6 +106,12 @@ export default function ZatwierdzanieZmian({
   // per pozycja, bo kierownik potrafi poprawiać kilka naraz.
   const [odbicieGodziny, setOdbicieGodziny] = useState({});
 
+  const [porzuconeBusyId, setPorzuconeBusyId] = useState(null);
+  // Godzina zakończenia wpisywana per pozycja — kierownik potrafi rozliczać
+  // kilka naraz, tak samo jak przy brakach odbicia.
+  const [porzuconeGodziny, setPorzuconeGodziny] = useState({});
+  const [probnyBusyId, setProbnyBusyId] = useState(null);
+
   const brakiOdbicia = zmianyBezOdbicia({
     planShifts,
     shifts,
@@ -77,6 +119,55 @@ export default function ZatwierdzanieZmian({
     absences,
     lokalOk: hasAccessToLokal,
   });
+
+  const porzucone = zmianyPorzucone({
+    shifts,
+    planShifts,
+    lokale,
+    users,
+    lokalOk: hasAccessToLokal,
+  });
+
+  const probni = probniDoDecyzji({ users, lokalOk: hasAccessToLokal });
+
+  const rozliczZmiane = async (poz, decyzja) => {
+    setPorzuconeBusyId(poz.shift.id);
+    try {
+      await rozliczPorzucona({
+        shift: poz.shift,
+        decyzja,
+        end: porzuconeGodziny[poz.shift.id] ?? domyslnyKoniec(poz),
+        kto: currentUser.name,
+        shifts,
+        setShifts,
+      });
+      showMsg(
+        decyzja === "zapisano" ? "Godziny zapisane" : "Zmiana odrzucona — bez godzin"
+      );
+    } catch (e) {
+      showMsg(e.message || "Błąd zapisu", "error");
+    }
+    setPorzuconeBusyId(null);
+  };
+
+  const decyzjaOProbnym = async (user, decyzja) => {
+    setProbnyBusyId(user.id);
+    try {
+      const zapisany =
+        decyzja === "zatwierdzony"
+          ? await zatwierdzProbnego(user)
+          : await odrzucProbnego(user);
+      setUsers((prev) => prev.map((u) => (u.id === zapisany.id ? zapisany : u)));
+      showMsg(
+        decyzja === "zatwierdzony"
+          ? `${user.name} jest już zwykłym pracownikiem — uzupełnij kartę.`
+          : `${user.name} odrzucony(-a). Konto poszło do archiwum, godziny zostają.`
+      );
+    } catch (e) {
+      showMsg(`Błąd zapisu: ${e.message || "nieznany błąd"}`, "error");
+    }
+    setProbnyBusyId(null);
+  };
 
   const rozliczOdbicie = async (poz, decyzja) => {
     setOdbicieBusyId(poz.plan.id);
@@ -254,6 +345,86 @@ export default function ZatwierdzanieZmian({
 
   return (
     <div className="max-w-5xl mx-auto">
+      {/* Najpierw osoby na próbę: dzień próbny trwa jeden dzień, a decyzja
+          spóźniona o tydzień jest tyle samo warta co jej brak. */}
+      {probni.length > 0 && (
+        <div className="mb-8">
+          <h3 className="font-['Archivo'] font-extrabold text-lg mb-3 flex items-center gap-2">
+            <UserPlus size={18} /> Pracownicy na próbę · {probni.length}
+          </h3>
+          <p className="text-[13px] text-[#6E6E66] mb-3 max-w-[70ch]">
+            Dodani z Tabletu Służbowego. Odbijają godziny, ale nie ma ich w
+            Grafiku i nie mogą się nigdzie zalogować, dopóki nie zdecydujesz.
+          </p>
+          <div className="space-y-3">
+            {probni.map((u) => {
+              const godziny = godzinyProbnego(shifts, u);
+              const zajety = probnyBusyId === u.id;
+              return (
+                <div
+                  key={u.id}
+                  className="bg-white rounded-xl border-[2px] border-[#171714] p-4 flex flex-wrap items-center gap-4"
+                >
+                  <div className="min-w-[200px]">
+                    <div className="font-['Archivo'] font-extrabold text-[16px]">
+                      {u.name}
+                    </div>
+                    <div className="text-[13px] text-[#6E6E66]">
+                      {u.default_lokal}
+                      {u.default_stanowisko ? ` · ${u.default_stanowisko}` : ""}
+                      {u.probny_od ? ` · od ${fmtPLAbs(u.probny_od)}` : ""}
+                    </div>
+                    {u.probny_przez && (
+                      <div className="text-[12px] text-[#8F8E86] mt-0.5">
+                        dodany(-a) na tablecie: {u.probny_przez}
+                      </div>
+                    )}
+                  </div>
+                  {/* Liczba godzin jest tu najważniejsza: od niej zależy, czy
+                      odrzucenie kogokolwiek kosztuje pieniądze. */}
+                  <span
+                    className={`text-[13px] font-bold px-3 py-1.5 rounded ${
+                      godziny > 0
+                        ? "bg-[#FAEAE6] text-[#8A3A2B]"
+                        : "bg-[#EAEAE5] text-[#4A4A43]"
+                    }`}
+                  >
+                    {godziny > 0
+                      ? `${godziny.toFixed(1).replace(".", ",")} godz. odbite`
+                      : "bez godzin"}
+                  </span>
+                  <div className="flex flex-wrap gap-2 ml-auto">
+                    {onOpenEmployee && (
+                      <button
+                        type="button"
+                        onClick={() => onOpenEmployee(u.id)}
+                        className="px-4 py-2.5 rounded border-[2px] border-[#B7B6AE] font-['Archivo'] font-bold text-sm bg-white"
+                      >
+                        Otwórz kartę
+                      </button>
+                    )}
+                    <button
+                      disabled={zajety}
+                      onClick={() => decyzjaOProbnym(u, "odrzucony")}
+                      className="px-4 py-2.5 rounded border-[2px] border-[#171714] font-['Archivo'] font-bold text-sm bg-white disabled:opacity-50"
+                    >
+                      Odrzuć
+                    </button>
+                    <button
+                      disabled={zajety}
+                      onClick={() => decyzjaOProbnym(u, "zatwierdzony")}
+                      className="px-4 py-2.5 rounded font-['Archivo'] font-bold text-sm bg-[#DE3A22] text-white disabled:opacity-50"
+                    >
+                      Zatwierdź
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {brakiOdbicia.length > 0 && (
         <div className="mb-8">
           <h3 className="font-['Archivo'] font-extrabold text-lg mb-3 flex items-center gap-2">
@@ -320,6 +491,80 @@ export default function ZatwierdzanieZmian({
                       className="px-4 py-2.5 rounded font-['Archivo'] font-bold text-sm bg-[#DE3A22] text-white disabled:opacity-50"
                     >
                       Dopisz godziny
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Rodzeństwo sekcji wyżej: tam ktoś nie odbił NICZEGO, tutaj odbił
+          start i nie odbił końca. Obie kończą się tą samą decyzją. */}
+      {porzucone.length > 0 && (
+        <div className="mb-8">
+          <h3 className="font-['Archivo'] font-extrabold text-lg mb-3 flex items-center gap-2">
+            <Hourglass size={18} /> Zmiany bez zakończenia · {porzucone.length}
+          </h3>
+          <p className="text-[13px] text-[#6E6E66] mb-3 max-w-[70ch]">
+            Ktoś odbił start i wyszedł bez odbicia końca. Godzin nie zgadujemy —
+            do czasu Twojej decyzji te zmiany liczą się jako zero godzin.
+          </p>
+          <div className="space-y-3">
+            {porzucone.map((poz) => {
+              const zajety = porzuconeBusyId === poz.shift.id;
+              const koniec = porzuconeGodziny[poz.shift.id] ?? domyslnyKoniec(poz);
+              return (
+                <div
+                  key={poz.shift.id}
+                  className="bg-white rounded-xl border-[2px] border-[#171714] p-4 flex flex-wrap items-center gap-4"
+                >
+                  <div className="min-w-[190px]">
+                    <div className="font-['Archivo'] font-extrabold text-[16px]">
+                      {poz.shift.user_name}
+                    </div>
+                    <div className="text-[13px] text-[#6E6E66]">
+                      {fmtPLAbs(toLocalYMD(poz.shift.start_time))} · {poz.shift.lokal}
+                      {poz.shift.stanowisko ? ` · ${poz.shift.stanowisko}` : ""}
+                    </div>
+                    <div className="text-[12px] text-[#8F8E86] mt-0.5">
+                      {poz.powod === "grafik"
+                        ? `wg grafiku do ${fmtHHMM(poz.koniecPlanu)}, minęło ${poz.tolerancja} godz. tolerancji`
+                        : `poza grafikiem, zmiana przekroczyła ${poz.maks} godz.`}{" "}
+                      · {odKiedyCzeka(poz.prog)}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[13px] text-[#6E6E66]">
+                      od <strong>{fmtHHMM(poz.shift.start_time)}</strong> do
+                    </span>
+                    <input
+                      type="time"
+                      value={koniec}
+                      onChange={(e) =>
+                        setPorzuconeGodziny({
+                          ...porzuconeGodziny,
+                          [poz.shift.id]: e.target.value,
+                        })
+                      }
+                      className="p-2 border-[2px] border-[#171714] rounded"
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-2 ml-auto">
+                    <button
+                      disabled={zajety}
+                      onClick={() => rozliczZmiane(poz, "odrzucono")}
+                      className="px-4 py-2.5 rounded border-[2px] border-[#171714] font-['Archivo'] font-bold text-sm bg-white disabled:opacity-50"
+                    >
+                      Nie było zmiany
+                    </button>
+                    <button
+                      disabled={zajety || !koniec}
+                      onClick={() => rozliczZmiane(poz, "zapisano")}
+                      className="px-4 py-2.5 rounded font-['Archivo'] font-bold text-sm bg-[#DE3A22] text-white disabled:opacity-50"
+                    >
+                      Zapisz godziny
                     </button>
                   </div>
                 </div>

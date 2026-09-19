@@ -15,6 +15,10 @@
     {
       "path": "/api/cron/check-odbicia",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/check-porzucone",
+      "schedule": "30 7 * * *"
     }
   ]
 }

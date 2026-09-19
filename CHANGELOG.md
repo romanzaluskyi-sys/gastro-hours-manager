@@ -5,6 +5,38 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.40.0 — 2026-09-19
+
+- **Zmiana, której nikt nie zakończył, przestaje udawać, że trwa.** Jeśli ktoś
+  odbił start i wyszedł bez odbicia końca, po upływie tolerancji zmiana znika z
+  ekranu „Kto jest teraz w pracy" i trafia do Zatwierdzania zmian jako pozycja do
+  decyzji. **Godzin nikomu nie dopisujemy** — do czasu decyzji taka zmiana liczy
+  się jako zero godzin, bo zgadnięta godzina wyjścia to czyjaś wypłata.
+- Kierownik ma dwa przyciski: **Zapisz godziny** (z podpowiedzianą godziną z
+  grafiku, jeśli zmiana tam stała) albo **Nie było zmiany**. W obu wypadkach
+  pracownik dostaje wiadomość, co się z jego godzinami stało.
+- **Dwa progi, ustawiane per lokal** (Pracownicy → Lokale): ile godzin po
+  planowanym końcu zmiany jeszcze czekamy (domyślnie 4) i jak długo może trwać
+  zmiana kogoś, kogo tego dnia nie było w grafiku (domyślnie 17).
+- **Tablet mówi o tym od razu.** Kto ma niezakończoną zmianę z poprzedniego dnia,
+  widzi to na czerwono na swoim ekranie i może ją zamknąć, podając właściwą
+  godzinę — zanim zrobi to za niego kolejka kierownika. Przy nazwisku na liście
+  osób stoi podpis „Niezakończona zmiana z…".
+- **Raz dziennie rano przypomnienie** idzie do pracownika i do kierownika lokalu.
+- **Nowa osoba na próbę — wprost z Tabletu Służbowego.** Ktoś przychodzi na dzień
+  próbny, a kierownika w lokalu nie ma: przycisk pod listą osób, trzy pola (imię i
+  nazwisko, lokal, stanowisko) i można odbijać godziny oraz oglądać je w Raporcie.
+- Taka osoba **nie pojawia się w Grafiku** i **nie zaloguje się z własnego
+  telefonu** — konto powstaje bez e-maila i bez PIN-u, więc istnieje wyłącznie na
+  tym tablecie.
+- **Kierownik dostaje ją do decyzji** w Zatwierdzaniu zmian, razem z liczbą już
+  odbitych godzin. **Zatwierdź** robi z niej zwykłego pracownika (dane umowy
+  uzupełnia się w karcie), **Odrzuć** przenosi konto do archiwum — a odbite
+  godziny zostają, bo należą się za przepracowany dzień.
+- Lista pracowników odświeża się teraz sama co 45 sekund, jak godziny i
+  wiadomości: tablet stoi zalogowany tygodniami i musi widzieć zmiany zrobione
+  gdzie indziej.
+
 ## 0.39.0 — 2026-09-17
 
 - **Grafik wie, ile kosztuje.** Nad siatką tygodnia stoją teraz trzy karty:
