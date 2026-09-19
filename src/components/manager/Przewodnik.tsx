@@ -23,6 +23,19 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.40.0",
+    date: "2026-09-19",
+    items: [
+      "Zmiana zaczęta i nieodbita do końca znika z „Kto jest teraz w pracy\" i trafia do Zatwierdzania zmian — godzin nikomu nie dopisujemy, do decyzji liczy się jako zero.",
+      "Dwa przyciski decyzji: „Zapisz godziny\" (z podpowiedzią z grafiku) albo „Nie było zmiany\"; pracownik dostaje wiadomość w obu wypadkach.",
+      "Progi ustawia się per lokal (Pracownicy → Lokale): tolerancja po grafiku (domyślnie 4 godz.) i maksymalna zmiana poza grafikiem (domyślnie 17 godz.).",
+      "Na tablecie niezakończona zmiana z poprzedniego dnia świeci na czerwono i da się ją zamknąć właściwą godziną; przy nazwisku stoi podpis „Niezakończona zmiana z…\".",
+      "Nowa osoba na próbę wprost z Tabletu Służbowego: imię i nazwisko, lokal, stanowisko — i już odbija godziny.",
+      "Osoba na próbę nie pokazuje się w Grafiku i nie zaloguje się z własnego telefonu, dopóki kierownik jej nie zatwierdzi.",
+      "Decyzja o niej czeka w Zatwierdzaniu zmian razem z liczbą odbitych godzin; odrzucenie przenosi konto do archiwum, a godziny zostają.",
+    ],
+  },
+  {
     version: "0.39.0",
     date: "2026-09-17",
     items: [

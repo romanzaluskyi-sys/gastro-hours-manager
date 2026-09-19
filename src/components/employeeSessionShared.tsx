@@ -22,6 +22,7 @@ import { sendToGoogleSheets, toLocalYMD } from "../api/googleSheets";
 import { createManagerNotification } from "../api/notifications";
 import { APP_VERSION } from "../config";
 import { findOverlappingShift, opisKolidujacej, znajdzKolizjeWBazie, getTodaysShiftsForUser } from "../utils/shifts";
+import { zmianaTrwa } from "../utils/porzucone";
 import WeatherBadge from "./WeatherBadge";
 import PulsZmiany, { mozeZamykacPuls } from "./manager/PulsZmiany";
 import PulsPrzypomnienie from "./manager/PulsPrzypomnienie";
@@ -458,8 +459,21 @@ export const EmployeeSessionScreens = ({
     (s) => s.lokal_name === formLokal
   );
 
+  // ⚠️ Zmiana bez odbitego końca NIE trwa w nieskończoność. Po przekroczeniu
+  // progu lokalu (utils/porzucone.ts) przestaje być uznawana za trwającą i
+  // czeka na decyzję kierownika. Bez tego osoba, która raz zapomniała odbić
+  // koniec, nie mogła w ogóle rozpocząć kolejnej zmiany: ekran stał wtedy w
+  // trybie "zakończ trwającą zmianę" i innej drogi nie było.
   const openShift = shifts.find(
-    (s) => s.user_id === employee.id && !s.end_time
+    (s) =>
+      s.user_id === employee.id &&
+      zmianaTrwa({
+        shift: s,
+        planShifts,
+        lokale: lokaleWszystkie,
+        users: [employee],
+        now,
+      })
   );
   const todaysClosedShifts = getTodaysShiftsForUser(shifts, employee.id).filter(
     (s) => s.end_time
@@ -1387,6 +1401,23 @@ export const EmployeeSessionScreens = ({
         <div className="text-sm text-[#6E6E66] mt-1">
           {openShift.lokal} · {openShift.stanowisko}
         </div>
+        {/* Zmiana z poprzedniego dnia wygląda na ekranie dokładnie tak samo
+            jak dzisiejsza — widać tylko godzinę startu. Człowiek, który
+            zapomniał odbić koniec, dowiadywał się o tym dopiero od kierownika,
+            kilka dni później. Tutaj dowiaduje się od razu i może to poprawić
+            sam, podając właściwą godzinę. */}
+        {toLocalYMD(startDate) !== toLocalYMD(now) && (
+          <div className="mt-2.5 rounded p-3 border-2 border-[#DE3A22] bg-[#FBEAE6]">
+            <div className="font-['Archivo'] font-extrabold text-[15px] text-[#8A3A2B]">
+              Ta zmiana trwa od {opisDnia(toLocalYMD(startDate))}
+            </div>
+            <div className="text-[13px] text-[#6E6E66] mt-0.5">
+              Jeśli już ją skończyłeś(-aś), zakończ ją poniżej i podaj godzinę, o
+              której naprawdę wyszedłeś(-aś). Bez tego te godziny nie policzą
+              się nikomu.
+            </div>
+          </div>
+        )}
         {planowanyKoniec &&
           bloki.includes("GRAFIK") &&
           (() => {

@@ -22,6 +22,8 @@ import { getShort, getDayOfWeek, getMonthName, getAvailableYears } from "../util
 import { findOverlappingShift, opisKolidujacej, znajdzKolizjeWBazie } from "../utils/shifts";
 import { zadaniaNaDzien, toLocalYMD } from "../utils/tasks";
 import { resolveAbsenceRequest, addUrlopDirectly, deleteAbsence } from "../utils/absences";
+import { zmianyPorzucone } from "../utils/porzucone";
+import { probniDoDecyzji, czekaNaDecyzje } from "../utils/probni";
 import NotificationsPanel from "./NotificationsPanel";
 import ZatwierdzanieZmian from "./manager/ZatwierdzanieZmian";
 import ZadaniaISprzatanie from "./manager/ZadaniaISprzatanie";
@@ -142,6 +144,16 @@ const ManagerDashboard = ({
     setTab("raporty");
   };
 
+  // Karta pracownika wprost z kolejki decyzji. Zatwierdzony pracownik na próbę
+  // nie ma jeszcze ani stawki, ani umowy — bez tego skrótu trzeba by go szukać
+  // na liście kilkudziesięciu osób zaraz po tym, jak się go zatwierdziło.
+  const goToEmployeeCard = (userId) => {
+    const u = users.find((x) => String(x.id) === String(userId));
+    if (!u) return;
+    setEditingUser({ ...u });
+    setTab("pracownicy");
+  };
+
   // "Dodaj pracownika" z nagłówka siatki Grafiku. Do 0.32 otwierało modal
   // przypisania zmiany komuś spoza siatki, co myliło: przycisk mówi
   // "pracownika", a dawał zmianę. Teraz prowadzi tam, gdzie pracownik
@@ -242,6 +254,18 @@ const ManagerDashboard = ({
   const pendingAbsences = absences.filter(
     (a) => a.status === "pending" && hasAccessToLokal(a.lokal)
   );
+
+  // Zmiany, które ktoś zaczął i nie zakończył, oraz osoby dodane na próbę z
+  // Tabletu. Liczone tu tylko po to, żeby dało się je policzyć w znaczku przy
+  // zakładce — całą logikę trzyma utils/porzucone.ts i utils/probni.ts.
+  const porzuconeZmiany = zmianyPorzucone({
+    shifts,
+    planShifts,
+    lokale,
+    users,
+    lokalOk: hasAccessToLokal,
+  });
+  const probniOczekujacy = probniDoDecyzji({ users, lokalOk: hasAccessToLokal });
 
   // Decyzja o zamianie z giełdy. Cała logika (przepisanie zmiany na nowego
   // pracownika, powiadomienia obu stron) siedzi w resolveSwap w
@@ -387,6 +411,12 @@ const ManagerDashboard = ({
   const visibleUsers = users.filter(
     (u) => !u.archived && hasAccessToLokal(u.default_lokal)
   );
+  // Pracownik na próbę nie istnieje dla Grafiku, dopóki kierownik go nie
+  // zatwierdzi: wpisana mu zmiana wyglądałaby na pokrytą obsadę, a on może
+  // jutro nie przyjść. Filtr stoi TYLKO w tym jednym miejscu — zamiast w
+  // siatce tygodnia, siatce miesiąca, modalu przypisania i doborze kandydatów
+  // osobno, gdzie prędzej czy później któreś zostałoby pominięte.
+  const usersDoGrafiku = users.filter((u) => !czekaNaDecyzje(u));
   const archivedUsers = users.filter(
     (u) => u.archived && hasAccessToLokal(u.default_lokal)
   );
@@ -457,7 +487,11 @@ const ManagerDashboard = ({
 
   const shellBadges = {
     zatwierdzanie:
-      pendingCorrections.length + pendingAbsences.length + pendingSwaps.length,
+      pendingCorrections.length +
+      pendingAbsences.length +
+      pendingSwaps.length +
+      porzuconeZmiany.length +
+      probniOczekujacy.length,
     zgloszenia: widoczneZgloszenia.filter((i) => i.status === "nowe").length,
     powiadomienia: unreadManagerCount,
     pracownicy: pracownicyTerminyCount,
@@ -812,6 +846,11 @@ const ManagerDashboard = ({
           okres_rozliczeniowy: num(editingDict.okres_rozliczeniowy),
           narzut_umowa: num(editingDict.narzut_umowa),
           narzut_zlecenie: num(editingDict.narzut_zlecenie),
+          // ⚠️ Ten payload budowany jest z JAWNEJ listy pól, nie ze {...stanu}
+          // — każde nowe pole formularza trzeba dopisać także tutaj, inaczej
+          // wpisana wartość przepada bez błędu (patrz dzien_wyplaty wyżej).
+          tolerancja_po_grafiku_h: num(editingDict.tolerancja_po_grafiku_h),
+          max_dlugosc_zmiany_h: num(editingDict.max_dlugosc_zmiany_h),
         };
         if (editingDict.id) {
           const l = await api.patch("lokale", editingDict.id, payload);
@@ -1365,7 +1404,7 @@ const ManagerDashboard = ({
             selectedLokal={selectedLokal}
             availableLokaleForManager={availableLokaleForManager}
             lokale={lokale}
-            users={users}
+            users={usersDoGrafiku}
             setUsers={setUsers}
             activeStanowiska={activeStanowiska}
             planShifts={planShifts}
@@ -1858,6 +1897,9 @@ const ManagerDashboard = ({
         {tab === "aktywni" && (
           <Aktywni
             shifts={shifts}
+            planShifts={planShifts}
+            lokale={lokale}
+            users={users}
             matchesFilter={matchesLokalFilter}
             onEndShift={openEditShift}
             onNameClick={goToEmployeeReport}
@@ -1935,6 +1977,9 @@ const ManagerDashboard = ({
             onResolveSwap={handleResolveSwap}
             showMsg={showMsg}
             users={users}
+            setUsers={setUsers}
+            lokale={lokale}
+            onOpenEmployee={goToEmployeeCard}
             absences={absences}
             setPlanShifts={setPlanShifts}
           />
