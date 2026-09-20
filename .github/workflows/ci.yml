@@ -1,0 +1,52 @@
+# Sprawdziany na każdym PR-ze.
+#
+# ⚠️ Świadomie NIE MA tu zadania `npm run build`. Vercel buduje każdy PR jako
+# Preview Deployment i nieudany build widać w PR-ze jako czerwony check —
+# drugi build robiłby to samo wolniej i zaczynałby się rozjeżdżać z tamtym przy
+# pierwszej zmianie ustawień projektu. To, czego Vercel NIE robi, jest niżej.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  wersje:
+    name: Numer wersji w czterech miejscach
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/sprawdz-wersje.py
+
+  harnessy:
+    name: Harnessy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # Playwright instalujemy OBOK projektu, nie w nim: repo nie ma
+      # package-lock.json, a `npm install playwright` w korzeniu przeliczyłby
+      # też zależności CRA i zapisał je inaczej niż robi to Vercel.
+      - name: Playwright
+        run: |
+          mkdir -p /tmp/pw && cd /tmp/pw
+          npm init -y > /dev/null
+          npm install --silent playwright@1.49.1
+          npx playwright install --with-deps chromium
+
+      - name: Serwer plików
+        run: |
+          python3 -m http.server 8765 --bind 127.0.0.1 &
+          for i in $(seq 1 20); do
+            curl -sf http://127.0.0.1:8765/ > /dev/null && break
+            sleep 0.5
+          done
+
+      - name: Uruchom harnessy
+        env:
+          NODE_PATH: /tmp/pw/node_modules
+        run: node scripts/harness-ci.cjs

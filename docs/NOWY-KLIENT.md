@@ -40,6 +40,11 @@ Environment Variables:
 | `SUPABASE_KEY` | crony | jak wyżej |
 | `CRON_SECRET` | autoryzacja crona | losowy ciąg |
 
+⚠️ **Ustaw każdą z nich dla WSZYSTKICH trzech środowisk** (Production,
+Preview, Development). Ustawione tylko dla produkcji dają podgląd każdego PR-a
+z ekranem „brak konfiguracji" — wygląda to na zepsuty kod, a zepsute są
+ustawienia projektu.
+
 ⚠️ **`REACT_APP_*` trafiają do bundla na etapie BUILDA.** Samo zapisanie
 zmiennej nic nie zmienia w już zbudowanej paczce — po każdej zmianie zrób
 redeploy.
@@ -48,18 +53,34 @@ redeploy.
 są dla funkcji w `api/`** i czytają się w runtime. To dwa różne mechanizmy i
 dlatego te same wartości trzeba wpisać dwa razy.
 
-### Jak sprawdzić, że nie podłączyło się do cudzej bazy
+### Co się stanie, jeśli zmiennych nie ustawisz
 
-`src/config.ts` ma **fallback na wartości pierwszego klienta** — bez niego
-merge tej zmiany zgasiłby działającą produkcję. Fallback jest jednocześnie
-pułapką: projekt bez ustawionych zmiennych po cichu czyta dane pierwszego
-klienta.
+Nic złego i nic cichego — i to jest cały sens tego, jak to jest zrobione.
 
-Dlatego nazwa najemcy (`REACT_APP_TENANT`) stoi **na ekranie logowania pod
-nazwą produktu i w panelu kierownika pod nazwiskiem**. Po pierwszym deployu
-otwórz ekran logowania: jeśli widzisz tam nazwę starego klienta, zmiennych
-nie ustawiono i aplikacja czyta cudzą bazę. To jedyny sygnał widoczny gołym
-okiem — nie pomijaj tego sprawdzenia.
+- **Aplikacja** pokaże ekran „wdrożenie nieskonfigurowane" z listą brakujących
+  zmiennych zamiast ekranu logowania.
+- **Crony** zwrócą 500 z nazwą brakującej zmiennej (widać to w Vercel →
+  Deployments → Functions jako czerwony przebieg).
+
+⚠️ Do 0.40.0 było inaczej: kod miał wpisany adres i klucz **pierwszego
+klienta** jako wartość zapasową, więc nowe wdrożenie bez zmiennych po cichu
+czytało i **zapisywało cudzą bazę**, wyglądając przy tym na sprawne. Tej
+wartości zapasowej już nie ma — w `src/config.ts` ani w żadnym z kronów. Jeśli
+kiedykolwiek pojawi się pomysł, żeby ją przywrócić „na wszelki wypadek", to
+jest dokładnie ten wypadek, przed którym ma chronić jej brak.
+
+### Sprawdzenie po pierwszym deployu
+
+Nazwa najemcy (`REACT_APP_TENANT`) stoi **na ekranie logowania pod nazwą
+produktu** i **w panelu kierownika pod nazwiskiem**. Otwórz ekran logowania i
+sprawdź, czy stoi tam nazwa TEGO klienta. Nieustawiona zmienna wyświetli się
+jako czerwone „⚠ brak REACT_APP_TENANT" — nie da się jej przeoczyć, ale nie
+blokuje logowania (brak nazwy nie jest powodem, żeby zgasić aplikację).
+
+Drugie sprawdzenie, jednorazowe: wywołaj ręcznie jednego crona z nagłówkiem
+`Authorization: Bearer $CRON_SECRET` i zobacz, czy odpowiada 200, a nie 500.
+Crony chodzą raz na dobę, więc bez tego o błędnej konfiguracji dowiesz się
+dopiero następnego ranka.
 
 ## 3. Google Apps Script (opcjonalnie)
 

@@ -1,8 +1,14 @@
 <meta charset="utf-8">
-<!-- ⚠️ Ten harness używa PRAWDZIWEGO klucza Supabase z src/config.ts. Renderowanie
-     niczego nie zapisuje, ale przyciski, które wołają api.post (np. "Szybki start"
-     w konfiguracji wpisów albo "Zamknij dzień"), zapiszą wiersz do produkcyjnej bazy.
-     Klikaj tu tylko to, co czyta. -->
+<!-- ⚠️ Ten harness rozmawia z PRAWDZIWĄ bazą. Renderowanie niczego nie zapisuje,
+     ale przyciski wołające api.post (np. "Szybki start" w konfiguracji wpisów albo
+     "Zamknij dzień") zapiszą wiersz do bazy, którą podasz niżej. Klikaj tu tylko to,
+     co czyta.
+
+     Adres i klucz stoją TUTAJ, a nie w src/config.ts: od 0.41.0 kod nie ma wpisanego
+     w sobie żadnej bazy (model silo — każdy klient ma własną), więc harness musi
+     powiedzieć wprost, do czyjej bazy się podłącza. Chcesz sprawdzić innego klienta:
+     podmień te dwie wartości. Klucz jest publishable — ten sam, który i tak jedzie
+     do przeglądarki w zbudowanej paczce. -->
 <title>Render karty dnia</title>
 <style>
   body { font: 14px system-ui, sans-serif; background: #F1F1EE; margin: 0; }
@@ -14,6 +20,15 @@
 <div id="status">ładowanie…</div>
 <div id="app"></div>
 
+<script>
+  // ⚠️ MUSI stać przed załadowaniem /src/config — ten plik czyta window.__SHIFTRO_ENV
+  // raz, przy imporcie modułu.
+  window.__SHIFTRO_ENV = {
+    REACT_APP_SUPABASE_URL: "https://gdzossvaauznqsrfqovw.supabase.co",
+    REACT_APP_SUPABASE_KEY: "sb_publishable_4SuEM6I6VujiuBtqGze1Nw_vFoeoM3S",
+    REACT_APP_TENANT: "Gastro Emka (harness)",
+  };
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js" crossorigin="anonymous"></script>

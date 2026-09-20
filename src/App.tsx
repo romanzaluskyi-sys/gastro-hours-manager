@@ -3,12 +3,14 @@ import React, { useState, useEffect } from "react";
 import { CheckCircle, AlertCircle } from "lucide-react";
 import { isConfigured, APP_VERSION } from "./config";
 import { api } from "./api/supabase";
+import { ustawKontekstBledow } from "./api/errors";
 import { toLocalYMD } from "./api/googleSheets";
 import LoginScreen from "./components/LoginScreen";
 import PersonalDashboard from "./components/PersonalDashboard";
 import KioskDashboard from "./components/KioskDashboard";
 import ManagerDashboard from "./components/ManagerDashboard";
 import UpdateBanner from "./components/UpdateBanner";
+import KonfiguracjaBrak from "./components/KonfiguracjaBrak";
 
 // Trzyma zalogowanego użytkownika w localStorage, żeby odświeżenie strony
 // nie wylogowywało — bez tego sesja żyła tylko w pamięci Reacta. `pin`
@@ -319,6 +321,23 @@ export default function App() {
     }, 45000);
     return () => clearInterval(pollInterval);
   }, []);
+
+  // Kto i na którym ekranie — dopisywane do każdego zapisu w app_errors.
+  // Bez tego dziennik błędów mówi "coś się wywaliło" i nic poza tym, a przy
+  // kilku lokalach to za mało, żeby cokolwiek odtworzyć.
+  useEffect(() => {
+    ustawKontekstBledow({
+      user_name: currentUser ? currentUser.name : null,
+      rola: currentUser ? currentUser.role : null,
+      lokal: currentUser ? currentUser.default_lokal : null,
+      ekran: currentView,
+    });
+  }, [currentUser, currentView]);
+
+  // ⚠️ PRZED całą resztą renderu. Bez konfiguracji nie ma czego pobrać, więc
+  // ekran logowania stałby pusty i mówił "Nieprawidłowe dane" na poprawny PIN
+  // — diagnoza, która kosztuje godzinę zamiast sekundy. Patrz config.ts.
+  if (!isConfigured) return <KonfiguracjaBrak />;
 
   return (
     <div className="font-sans text-gray-900">

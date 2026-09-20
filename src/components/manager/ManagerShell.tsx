@@ -119,7 +119,13 @@ export default function ManagerShell({
             {currentUser.name} ·{" "}
             {isLocalManager ? "kierownik lokalu" : "kierownik sieci"}
           </p>
-          <p className="text-[11px] text-[#B7B6AE]/70 mt-0.5">{TENANT}</p>
+          {/* Jak na ekranie logowania: pusto znaczy "nie wiadomo, czyją
+              bazę czyta to wdrożenie", a to musi być widać. */}
+          <p className="text-[11px] text-[#B7B6AE]/70 mt-0.5">
+            {TENANT || (
+              <span className="text-[#DE3A22]">&#9888; brak REACT_APP_TENANT</span>
+            )}
+          </p>
         </div>
         <nav className="flex-grow flex flex-col overflow-y-auto">
           {NAV_ITEMS.map(({ key, label, Icon, badgeKey }) => (

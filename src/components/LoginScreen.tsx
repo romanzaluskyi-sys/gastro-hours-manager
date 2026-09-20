@@ -90,7 +90,16 @@ const LoginScreen = ({
             u nowego klienta stoi tu nazwa starego, nie ustawiono zmiennych
             środowiskowych i aplikacja czyta cudze dane. */}
         <p className="text-center text-[13px] text-[#8F8E86] mb-6">
-          {TENANT} · wersja {APP_VERSION}
+          {TENANT || (
+            /* Pusta nazwa najemcy znaczy, że nie ustawiono REACT_APP_TENANT.
+               Aplikacja działa (baza jest skonfigurowana), ale znika jedyny
+               widoczny sygnał, CZYJĄ bazę czyta to wdrożenie — więc mówimy
+               o tym wprost, zamiast pokazywać samą wersję. */
+            <span className="text-[#DE3A22] font-bold">
+              &#9888; brak REACT_APP_TENANT
+            </span>
+          )}{" "}
+          · wersja {APP_VERSION}
         </p>
         {dbError && (
           <div className="bg-[#FAEAE6] border-l-4 border-[#DE3A22] p-4 mb-6 rounded">
