@@ -5,6 +5,15 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.41.2 — 2026-09-20
+
+- **Pole „PIN blokady" w karcie pracownika przyjmuje sześć cyfr.** Wcześniej
+  nie dało się wpisać szóstej — pole blokowało dokładnie tę zmianę, pod którą
+  przygotowana była poprzednia wersja. Krótsze PIN-y sprzed tej wersji działają
+  dalej; klawiatura tabletu obsługuje obie długości.
+- Pod polem stoi zdanie o tym, że ten sam PIN otwiera profil na tablecie i
+  loguje na prywatnym telefonie — dotąd trzeba było to wiedzieć skądinąd.
+
 ## 0.41.1 — 2026-09-20
 
 - **Klawiatura PIN-u na Tablecie Służbowym przyjmuje dłuższy PIN.** Sześć cyfr

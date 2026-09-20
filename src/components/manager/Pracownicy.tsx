@@ -789,18 +789,30 @@ export default function Pracownicy({
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="text-xs font-bold text-[#171714]">
-                          PIN blokady (4 cyfry)
+                          PIN blokady (6 cyfr)
                         </label>
+                        {/* ⚠️ Do 0.41.1 stało tu `maxLength="4"` i nie dało się
+                            wpisać szóstej cyfry — czyli to pole blokowało
+                            dokładnie tę zmianę, na którą przygotowana była
+                            poprzednia wersja (Supabase Auth nie przyjmie hasła
+                            krótszego niż 6 znaków, patrz CLAUDE.md, "Logowanie
+                            i dostęp do danych"). Krótsze PIN-y sprzed tej
+                            wersji działają dalej: klawiatura tabletu obsługuje
+                            obie długości. */}
                         <input
                           type="text"
                           value={editingUser.kiosk_pin || ""}
                           onChange={(e) =>
                             setEditingUser({ ...editingUser, kiosk_pin: e.target.value })
                           }
-                          maxLength="4"
+                          maxLength="6"
                           placeholder="brak — kiosk nie pyta o PIN"
                           className={inputCls}
                         />
+                        <div className="text-[11px] text-[#6E6E66] mt-1">
+                          Ten sam PIN otwiera profil na tablecie i loguje na
+                          prywatnym telefonie.
+                        </div>
                       </div>
                       <div>
                         <label className="text-xs font-bold text-[#171714]">
