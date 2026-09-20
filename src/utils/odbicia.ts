@@ -12,6 +12,7 @@
 import { api } from "../api/supabase";
 import { toLocalYMD } from "../api/googleSheets";
 import { trimTime, shiftHours, findBlockingAbsence } from "./grafik";
+import { znajdzKolizjeWBazie, opisKolidujacej } from "./shifts";
 import { createEmployeeNotification } from "../api/notifications";
 
 // Ile dni wstecz szukamy. Dalej nie ma sensu: po dwóch tygodniach nikt nie
@@ -98,6 +99,40 @@ export const rozliczBrakOdbicia = async ({
     let endD = buildLocalDate(plan.date, doG);
     // Zmiana przez północ kończy się nazajutrz — ta sama zasada co w grafiku.
     if (endD <= startD) endD.setDate(endD.getDate() + 1);
+
+    // ⚠️ Pytamy BAZY, zanim dopiszemy godziny. 08.09.2026 jedno kliknięcie
+    // "Dopisz godziny" dało dwa wiersze w `shifts` oddalone o 3,7 ms — a
+    // `grafik_shifts.rozliczenie` ustawiło się raz, więc kolejka wyglądała na
+    // rozliczoną i nikt tego nie zauważył, dopóki Dawidowi nie wyszło 20 h
+    // zamiast 10. Jedyny wtedy zamek (`odbicieBusyId`) to stan Reacta, a stan
+    // aktualizuje się asynchronicznie: dwa wywołania w tym samym takcie widzą
+    // to samo `null` i oba przechodzą dalej.
+    //
+    // Ta sama ochrona, którą Tablet Służbowy dostał w 0.36.2 — tylko panel
+    // kierownika jej wtedy nie dostał.
+    const juzJest = await znajdzKolizjeWBazie({
+      userId: user.id,
+      start: startD,
+      end: endD,
+      excludeId: null,
+    });
+    if (juzJest) {
+      // Wiersz już istnieje — zostaje ten pierwszy. Oznaczamy tylko grafik,
+      // żeby pozycja zniknęła z kolejki; drugiego powiadomienia też nie
+      // wysyłamy, bo pierwsze wywołanie już je wysłało.
+      const zapisanyPlan = await api.patch("grafik_shifts", plan.id, {
+        rozliczenie: decyzja,
+        rozliczenie_przez: kto,
+        rozliczenie_at: new Date().toISOString(),
+      });
+      setPlanShifts(
+        (planShifts || []).map((z) =>
+          String(z.id) === String(plan.id) ? zapisanyPlan : z
+        )
+      );
+      return juzJest;
+    }
+
     nowaZmiana = await api.post("shifts", {
       user_id: user.id,
       user_name: user.name,

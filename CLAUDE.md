@@ -135,6 +135,9 @@ api/                         — root-level, POZA src/ — funkcje Vercel Cron
   cron/
     check-document-terms.js    — codzienna weryfikacja terminów sanepid/umowy,
                                  patrz Roadmap punkt 1 i sekcja "Cron" wyżej
+    check-porzucone.js         — codzienne przypomnienie o zmianach bez
+                                 odbitego końca (pracownik + kierownik),
+                                 patrz "Zmiany bez zakończenia" niżej
 vercel.json                  — harmonogram crona
 CHANGELOG.md                 — historia wersji, patrz "Wersjonowanie i CHANGELOG" niżej
 docs/GRAFIK.md               — pełna specyfikacja Grafiku z uzasadnieniami decyzji właściciela
@@ -184,6 +187,14 @@ src/
     swaps.ts                    giełda zmian — jedyne miejsce piszące do
                                   shift_swaps i przepisujące zmianę na
                                   innego pracownika (resolveSwap)
+    porzucone.ts                zmiany zaczęte i niezakończone: progi lokalu,
+                                  rozpoznanie (czyPorzucona/zmianaTrwa) i
+                                  decyzja kierownika. NIE licz nigdzie indziej,
+                                  czy zmiana wciąż trwa — patrz "Zmiany bez
+                                  zakończenia" niżej
+    probni.ts                   pracownik na próbę dodany z Tabletu: kto czeka
+                                  na decyzję, jak powstaje konto i co robi
+                                  zatwierdzenie/odrzucenie
     tasks.ts                    bloki zadań i pomiary: blokiNaDzien/
                                   zadaniaNaDzien/buildEmployeeBlocks/
                                   toggleTaskCompletion/
@@ -404,6 +415,10 @@ na urządzeniu, `showEmployeeNameInMessages=true`; konto osobiste: tylko
 `currentUser.name`, `showEmployeeNameInMessages=false`) — **nie przenoś
 tego filtrowania do środka komponentu współdzielonego**, to jedyna
 świadoma różnica logiki między dwoma konsumentami.
+
+**Nowa osoba na próbę** — przycisk pod listą osób (ekran "NOWY" w
+`KioskDashboard.tsx`) zakłada konto komuś, kto przyszedł na dzień próbny, i od
+razu wpuszcza go do jego sesji. Pełny opis: "Pracownik na próbę" niżej.
 
 **Blokada PIN-em na kiosku** — zaimplementowana (patrz niżej, Schemat
 Supabase i sekcja "Panel kierownika"), TYLKO w `KioskDashboard.tsx`.
@@ -773,6 +788,10 @@ odpadają. Zamiast tego dwa pliki w katalogu głównym, uruchamiane przez
   czterech typów umowy (w tym pół etatu i konto bez żadnych danych), pierwszeństwo
   „wyjątek dnia → zestaw → nic", zapas i minimalny utarg, oraz grupowanie tysięcy.
   To on pilnuje, że `null` w celu dalej znaczy „nie wpisano", a nie „zero";
+- `harness-porzucone.html` — sprawdza progi zmian bez odbitego końca (grafik
+  kontra limit, zmiana dzielona, przez północ, start po planowanym końcu) oraz
+  pracownika na próbę. To on pilnuje, że `end_time = NULL` dalej znaczy zero
+  godzin, a nie "policz jakoś";
 - `harness-panel.html` — montuje CAŁY `ManagerDashboard` z propsami takimi,
   jakie podaje `App.tsx`, z PODMIENIONYM `api/supabase` (nic nie leci do sieci,
   można klikać wszystko). To jedyny sprawdzian, który łapie propsy gubione
@@ -998,6 +1017,8 @@ Supabase" niżej.
 | 5 | **Zgłoś → "Zgłoś problem"**: dowolna uwaga, opcjonalnie anonimowo | pracownik → kierownik | `issues`, `type='problem'` (to jest dotychczasowe "Zgłoś", tylko nazwane) | ZROBIONE |
 | 6 | Odpowiedź kierownika na zgłoszenie typu "Popraw zmianę" (Zatwierdź/Popraw/Zapytaj) | kierownik → pracownik | `createEmployeeNotification` z `utils/corrections.ts` (`resolveCorrection`/`askAboutCorrection`), imię konkretnego kierownika w treści | **ZROBIONE** (2026-09-02) |
 | 7 | Kolejka korekt w panelu kierownika, zakładka **Zatwierdzanie zmian** (`manager/ZatwierdzanieZmian.tsx`) | — | `issues` (`type='correction'`) | **ZROBIONE** — osobna zakładka, nie miesza się z p. 5 (Zgłoszenia pokazuje tylko `type !== "correction"`) |
+| 8 | Zmiana zaczęta i niezakończona (bez odbitego końca) | cron `check-porzucone.js` → pracownik i kierownik LOKALU; decyzja kierownika → pracownik | `notifications`, `type='porzucona'` | **ZROBIONE** (0.40.0) — patrz "Zmiany bez zakończenia" |
+| 9 | Ktoś dodał na Tablecie osobę na próbę | `dodajProbnego` → kierownik LOKALU | `notifications`, `audience='manager'`, `type='probny'` | **ZROBIONE** (0.40.0) — patrz "Pracownik na próbę" |
 
 **Rozdzielenie "Zgłoś" na dwa typy** (ustalone 2026-08-31, patrz makiet
 "Zgłoś — Dwa Typy" z sesji projektowej) — dwa różne procesy po stronie
@@ -1057,13 +1078,19 @@ zakresem — wymaga Grafiku, którego nie ma.
   `typ_umowy` (text: `umowa_o_prace`|`zlecenie`|`b2b`|`inna`), `wymiar_etatu`
   (numeric — 1 / 0,75 / 0,5…, skaluje normę), `wynagrodzenie_mies` (numeric —
   kwota z umowy ZA TEN wymiar, NIE do mnożenia przez `wymiar_etatu`).
+  Od 2026-09-19 (migracja `0023`): `probny_status` (text: `oczekuje` |
+  `zatwierdzony` | `odrzucony`, nullable — puste znaczy zwykły pracownik),
+  `probny_od` (date), `probny_przez` (text, które konto tabletu go dodało) —
+  patrz "Pracownik na próbę" wyżej.
   ⚠️ `etat` (text) jest od tej migracji NIEUŻYWANY — trzymał naraz wymiar i
   rodzaj umowy. Kolumna zostaje z danymi, a `typUmowy()` w `utils/umowy.ts`
   czyta ją jako fallback dla kont, których jeszcze nie zapisano po migracji.
 - **lokale** — `id, name, archived, miasto, dzien_wyplaty (int, nullable,
   puste = 10 — dzień wypłaty pokazywany w kontekście dnia w Pulsie),
   okres_rozliczeniowy (int, nullable, puste = 1), narzut_umowa/narzut_zlecenie
-  (numeric, nullable, procent ponad wynagrodzenie, puste = 0)`. Trzy ostatnie
+  (numeric, nullable, procent ponad wynagrodzenie, puste = 0),
+  tolerancja_po_grafiku_h/max_dlugosc_zmiany_h (numeric, nullable, puste = 4 i
+  17 — progi zmian bez odbitego końca, migracja 0023)`. Trzy z nich
   z migracji `0018` — ustawienia płacowe siedzą na LOKALU, nie na pracowniku:
   to decyzje organizacyjne, jednakowe dla całej załogi, a skopiowane do
   kilkudziesięciu kart rozjadą się przy pierwszej pomyłce. `miasto` (text, nullable,
@@ -1102,7 +1129,14 @@ zakresem — wymaga Grafiku, którego nie ma.
   `id` to **uuid** (zweryfikowane bezpośrednio w Supabase 2026-09-02 —
   wcześniejsze wzmianki o `bigint` w tym pliku były błędne; nie ufaj typom
   kolumn opisanym tu bez świeżej weryfikacji przez
-  `information_schema.columns`, jeśli coś na tym zależy). `is_urlop`
+  `information_schema.columns`, jeśli coś na tym zależy).
+  Od 2026-09-19 (migracja `0023`): `rozliczenie` (text: `zapisano` |
+  `odrzucono`), `rozliczenie_przez`, `rozliczenie_at` — decyzja kierownika o
+  zmianie bez odbitego końca (te same nazwy co w `grafik_shifts`), oraz
+  `porzucona_powiadomiono_at` (timestamptz), która służy WYŁĄCZNIE temu, żeby
+  codzienny cron nie wysłał tej samej wiadomości drugi raz. ⚠️ `end_time`
+  zostaje wtedy `NULL` i to jest cały mechanizm "godziny się nie liczą" —
+  patrz "Zmiany bez zakończenia" wyżej. `is_urlop`
   (boolean, default `false`) i `absence_id` (text, nullable, luźne
   odwołanie do `absences.id`, bez FK — ten sam wzorzec co
   `shift_edits.shift_id`) dodane 2026-09-03, patrz "Urlopy i
@@ -1401,11 +1435,20 @@ KP na to pozwala): normę i tak trzeba odebrać w innym dniu, a bez odejmowania
 wrzesień i grudzień miałyby tę samą normę — czyli zniknąłby cały powód, dla
 którego to liczymy.
 
+⚠️ **Kwota z umowy jest PODŁOGĄ kosztu, nie całością** (0.40.0). Poniżej normy
+koszt się nie zmniejsza (przestój, art. 81 KP), ale godziny PONAD normę lokal
+dopłaca — po stawce wynikającej z tej samej umowy, czyli `kwota / norma`
+(`stawkaEfektywna`). Liczy to `kosztMiesiaca`, a `nadwyzkaPonadNorme()` zwraca
+samą nadwyżkę do podpisów w UI. Bez tego koszt kłamał tym bardziej, im więcej
+ktoś nadrabiał. Godziny urlopu wchodzą do porównania z normą i tak ma być:
+`(fakt + urlop) − norma` daje dokładnie to samo co `fakt − (norma − urlop)`.
+
 ⚠️ **Dopłat za nadgodziny i pracę w święta (50/100%) świadomie NIE MA.**
 Ustalenie właściciela: w gastronomii praca w święta jest normą, a dopłaty
-ponad ustawowe minimum to decyzja restauracji, nie reguła prawa. Miejsce na
-przyszły słownik wyjątków ("ten dzień ×1,5") jest, ale puste — nie dopisuj go
-z własnej inicjatywy.
+ponad ustawowe minimum to decyzja restauracji, nie reguła prawa. Godzina ponad
+normę liczy się więc po ZWYKŁEJ stawce z umowy — to nie to samo co dodatek.
+Miejsce na przyszły słownik wyjątków ("ten dzień ×1,5") jest, ale puste — nie
+dopisuj go z własnej inicjatywy.
 
 ⚠️ **Ujemny bilans NIE jest długiem pracownika.** Jeśli lokal nie dał pracy w
 okresie rozliczeniowym, wynagrodzenie i tak się należy (przestój, art. 81 KP)
@@ -1533,6 +1576,173 @@ Szczegóły, które łatwo zepsuć:
 - Okno kolejki to 14 dni (`OKNO_DNI`). Dalej nikt nie pamięta, czy tamtego
   wtorku przyszedł, a zgadywanie jest gorsze niż brak.
 
+## Zmiany bez zakończenia — dodane 2026-09-19 (0.40.0)
+
+[`utils/porzucone.ts`](src/utils/porzucone.ts) + sekcja w `ZatwierdzanieZmian.tsx`
++ druga lista w `Aktywni.tsx` + `api/cron/check-porzucone.js`. Migracja `0023`.
+
+Rodzeństwo poprzedniej sekcji: tam ktoś nie odbił NICZEGO, tutaj odbił start i
+nie odbił końca. Zostawiona tak, zmiana wisiała otwarta w nieskończoność —
+ekran "Kto jest teraz w pracy" pokazywał ludzi, których dawno nie było, a
+pracownikowi BLOKOWAŁA kolejne odbicie (formularz przechodzi wtedy w tryb
+"zakończ trwającą zmianę" i innej drogi nie ma).
+
+⚠️ **"Zamknięcie" NIE oznacza wpisania końca.** `end_time` zostaje `NULL`, bo
+nikt nie wie, o której ta osoba wyszła. To jest jednocześnie cały mechanizm
+"godziny się nie liczą": **w tej apce nic nie czyta kolumny `godzin`** — każde
+podsumowanie liczy `end_time - start_time` i pomija wiersze bez końca. Wiersz
+bez końca daje więc zero godzin wszędzie sam z siebie, bez dokładania wyjątku w
+dziesięciu miejscach. Zmienia się tylko jedno: zmiana przestaje być uznawana za
+TRWAJĄCĄ (`zmianaTrwa`).
+
+⚠️ **Wiersza nie kasujemy.** "O 8:02 ta osoba odbiła start" to jedyny twardy
+ślad, z którego wynika, że w ogóle przyszła.
+
+Dwa progi, celowo bez mieszania ich ze sobą:
+- stała tego dnia w OPUBLIKOWANYM grafiku → planowany koniec + tolerancja
+  (`lokale.tolerancja_po_grafiku_h`, puste = 4 h);
+- nie stała → start + maksymalna długość zmiany (`lokale.max_dlugosc_zmiany_h`,
+  puste = 17 h).
+
+Szczegóły, które łatwo zepsuć:
+- **Bierzemy NAJPÓŹNIEJSZY planowany koniec dnia**, nie pierwszy: przy zmianie
+  dzielonej (12:00–16:00 i 18:00–22:00) pierwszy zrzynałby zmianę o 20:00, w
+  środku drugiej części.
+- **Grafik liczy się tylko wtedy, gdy planowany koniec wypada PO starcie.** Kto
+  odbił się o 18:00, mając w grafiku 08:00–16:00, pracuje faktycznie poza planem
+  — plan użyty dosłownie zrzynałby zmianę dwie godziny po jej rozpoczęciu.
+- **Kolejka jest LICZONA, nie przechowywana** (tak samo jak `zmianyBezOdbicia`).
+  Cron nie jest jej źródłem i niczego nie zamyka — wysyła tylko powiadomienia,
+  raz dziennie rano, a `shifts.porzucona_powiadomiono_at` pilnuje, żeby ta sama
+  zmiana nie wracała codziennie.
+- **Bez okna czasowego**, inaczej niż przy zmianach bez odbicia (`OKNO_DNI`).
+  Tam pytanie brzmi "czy on tamtego wtorku przyszedł" i po dwóch tygodniach nikt
+  tego nie wie. Tutaj wiadomo NA PEWNO, że przyszedł, więc pozycja jest
+  niezapłaconą pracą — a ta się nie przedawnia.
+- **Profilaktyka stoi przed kolejką.** Zmiana z poprzedniego dnia wyglądała na
+  tablecie dokładnie jak dzisiejsza (widać samą godzinę startu), więc człowiek
+  dowiadywał się o wszystkim od kierownika, kilka dni później. Dziś dostaje
+  czerwony pasek "Ta zmiana trwa od …" na swoim ekranie i podpis przy nazwisku
+  na liście osób — większość przypadków zamyka człowiek, nie system.
+- **`Aktywni` ma DWIE listy.** "Kto jest teraz w pracy" i osobno "Bez
+  zakończenia". Jedna lista z czerwonym licznikiem po ośmiu godzinach sprawiała,
+  że ekran kłamał o tym, ile osób jest w lokalu.
+- ⚠️ Próg zależy od lokalu, więc `czyPorzucona`/`zmianaTrwa` potrzebują wierszy
+  `lokale`. Dokładając kolejne miejsce, które pyta "czy ta zmiana trwa",
+  przekaż je — inaczej wszędzie wyjdą wartości domyślne i dwa ekrany powiedzą
+  co innego.
+- `harness-porzucone.html` sprawdza całą arytmetykę progów na ręcznie
+  policzonych przykładach (39 przypadków, razem z pracownikiem na próbę).
+
+## Pracownik na próbę — dodane 2026-09-19 (0.40.0)
+
+[`utils/probni.ts`](src/utils/probni.ts) + ekran "NOWY" w `KioskDashboard.tsx`
++ sekcja w `ZatwierdzanieZmian.tsx`. Migracja `0023`.
+
+Dzień próbny bywa płatny, a przychodzi się na niego rano, kiedy kierownika w
+lokalu nie ma. Bez tej ścieżki godziny takiej osoby lądowały na kartce albo
+nigdzie — czyli dokładnie tak, jak wyglądało wszystko przed tą aplikacją.
+
+⚠️ **To ZWYKŁY wiersz w `users`, nie osobna tabela.** Godziny odwołują się do
+`user_id`, a Raport, Aktywni i Rejestr Godzin czytają `users` — osobna tabela
+kazałaby zdublować każde z tych miejsc. Różnicę robi jedna kolumna:
+`users.probny_status` (`'oczekuje'` → `'zatwierdzony'`/`'odrzucony'`).
+
+⚠️ **Konto powstaje BEZ e-maila i BEZ PIN-u.** Nie da się nim zalogować nigdzie
+— istnieje tylko na tym jednym tablecie, w lokalu, pod fizyczną kontrolą. To
+jest całe zabezpieczenie przed tym, żeby ktoś z sali nie naprodukował kont;
+świadomie nie ma tu żadnej dodatkowej blokady, bo ta osoba przychodzi właśnie
+wtedy, gdy nie ma kogo zapytać o zgodę.
+
+- **Na tablecie: trzy pola** (imię i nazwisko, lokal, stanowisko) i od razu jego
+  sesja — po to ta osoba stoi przy tablecie, żeby odbić zmianę, a nie żeby
+  zobaczyć, że konto powstało. Wybór lokalu pokazuje się tylko wtedy, gdy tablet
+  obsługuje więcej niż jeden.
+- **Widzi Zmianę, Raport i Zadania** (`bloki` w `EmployeeSessionScreens`).
+  Grafik jest dla niej pusty z definicji, Wiadomości też, a Giełda wymaga zmian
+  w grafiku — pusta zakładka wygląda jak zepsuta.
+- ⚠️ **Nie pokazuje się w Grafiku.** Filtr stoi w JEDNYM miejscu —
+  `usersDoGrafiku` w `ManagerDashboard.tsx`, tam gdzie `<Grafik>` dostaje
+  `users` — zamiast w siatce tygodnia, siatce miesiąca, modalu przypisania i
+  doborze kandydatów osobno, gdzie prędzej czy później któreś zostałoby
+  pominięte.
+- **Decyzja żyje w Zatwierdzaniu zmian**, razem z liczbą już odbitych godzin —
+  od niej zależy, czy odrzucenie kogokolwiek cokolwiek kosztuje.
+  **Zatwierdź** zdejmuje tylko to jedno ograniczenie (dane umowy uzupełnia się
+  w karcie, stąd przycisk "Otwórz kartę"). **Odrzuć** archiwizuje konto, a
+  `shifts` zostają nietknięte: kto przepracował dzień próbny, ma za niego
+  zapłatę niezależnie od tego, czy został przyjęty. Trwałe usunięcie zostaje
+  tam, gdzie było zawsze — w widoku Archiwum.
+- ⚠️ **`users` są teraz w pollu co 45 s** (`App.tsx`, razem z `shifts`,
+  `issues` i `notifications`). Bez tego osoba dodana z drugiego urządzenia nie
+  pojawiłaby się na liście, a odrzucona nadal by na niej stała i dalej odbijała
+  godziny — tablet stoi zalogowany tygodniami.
+
+## Raporty i koszty — przebudowa 2026-09-20 (0.40.0)
+
+⚠️ **Koszt liczy `kosztMiesiaca()` z `utils/umowy.ts`, NIE `godziny × users.stawka`.**
+Do 0.40.0 stała tam goła `users.stawka`, więc KAŻDY pracownik na umowie o pracę
+miał koszt `null`, wypadał z kafelka „Koszt" i cały miesiąc świecił „dane
+niepełne". To ta sama pomyłka, którą w 0.39.0 naprawiono w Pulsie
+(`autoPodsumowanie`) — jeśli znajdziesz trzecie miejsce liczące koszt ze
+stawki godzinowej, to jest ten sam błąd.
+
+- **Cała arytmetyka miesiąca siedzi w jednej funkcji `agreguj(rok, miesIdx)`**,
+  bo liczy się ją dwa razy: dla oglądanego miesiąca i dla poprzedniego (pasek
+  porównania). Skopiowana reguła rozjechałaby się przy pierwszej poprawce —
+  zwłaszcza reguła o dwóch zakresach, opisana niżej.
+- **Zakładka startuje na miesiącu POPRZEDNIM.** Wchodzi się tu raz na miesiąc i
+  po to, żeby przejrzeć miesiąc zamknięty; otwarta na bieżącym pokazywała połowę
+  danych i wyglądała na niekompletną. ⚠️ Dlatego `goToEmployeeReport` przekazuje
+  DATĘ klikniętej zmiany (`skok`) — bez tego klik w imię osoby stojącej właśnie
+  na zmianie otwierał jej pustą kartę w poprzednim miesiącu.
+- **Koszt per lokal to ALOKACJA proporcją godzin**, oznaczona `~`. Wynagrodzenie
+  etatowca jest miesięczne i nie da się go rozciąć po miejscach inaczej; dzielimy
+  właśnie tak, żeby rozbicie sumowało się DOKŁADNIE do kafelka wyżej. Znak `~`
+  stoi tylko tam, gdzie naprawdę było co dzielić (etat w kilku lokalach).
+- ⚠️ **W raporcie są WYŁĄCZNIE osoby z zarejestrowanymi godzinami w tym
+  miesiącu.** Nikogo nie dopisujemy z listy pracowników. Pierwsza wersja
+  0.40.0 dopisywała etatowców bez ani jednej odbitej godziny (pensja należy
+  się niezależnie od godzin) i to WYMYŚLAŁO ludzi: osoba zatrudniona we
+  wrześniu pokazywała się z pełną kwotą w każdym wcześniejszym miesiącu.
+  `data_zatrudnienia`/`ostatni_dzien` są w kartach zwykle puste, więc nie ma na
+  czym oprzeć takiego dopisywania — jedynym twardym śladem obecności w
+  miesiącu jest odbita zmiana. Świadoma konsekwencja: nieobecność etatowca
+  (choroba, urlop bezpłatny) nie pokaże się tu jako wydatek; to pytanie zadaje
+  bilans okresu w karcie pracownika.
+- **Zero godzin przy istniejącej zmianie znaczy jedno**: nikt nie odbił jej
+  końca (`bezKonca > 0` → „zmiana bez zakończenia", patrz sekcja wyżej).
+  Człowiek był, godziny czekają na decyzję.
+- **Porównanie z poprzednim miesiącem jest BEZ zieleni i czerwieni.** Wyższy
+  koszt przy wyższym utargu nie jest porażką, a więcej godzin nie jest ani dobre,
+  ani złe samo z siebie. Koszt porównujemy tylko wtedy, gdy OBA miesiące są
+  policzone do końca — inaczej spadek znaczyłby tylko tyle, że komuś nie wpisano
+  wynagrodzenia.
+- **Kwoty formatuje `zl()` z `utils/budzet.ts`**, to samo co w Grafiku i Pulsie:
+  własny `toFixed(0) + " zł"` nie grupował tysięcy.
+- **CSV eksportuje podsumowanie OSÓB, nie listę zmian** — tamtą eksportuje
+  Rejestr Godzin. Brak wynagrodzenia wychodzi jako pusta komórka, nie zero.
+- **Trzy przekroje pod jednym przełącznikiem** (`widok`: lokale / stanowiska /
+  pracownicy). Kafelki i pasek porównania zostają NAD przełącznikiem — to rama,
+  w której czyta się każdy z przekrojów; zmienia się tylko oś (gdzie wydaliśmy,
+  na co, komu). Trzy sekcje jedna pod drugą robiły z tej strony stos.
+  ⚠️ Etykiety pigułek są KRÓTKIE („Lokale"), bo pełną nazwę niesie nagłówek
+  karty pod spodem — to samo zdanie w obu miejscach czytało się jak błąd.
+- **Dwa rozbicia tych samych pieniędzy, jednym komponentem `Rozbicie`**:
+  „Według lokalu" (gdzie wydaliśmy) i „Według stanowiska" (na co). Ten sam
+  podział proporcją godzin liczy JEDNA pętla w `agreguj` — dwie rozjechałyby
+  się przy pierwszej poprawce reguły.
+- **Każda pozycja rozwija się strzałką, domyślnie ZWINIĘTA.** Skład zbiera
+  `dodaj()` przy okazji liczenia (`osoby`), więc rozwinięcie niczego nie
+  przelicza. Rozwinięte z góry, rozbicie zjadałoby ekran i zasłaniało sumę
+  miesiąca, po którą się tu wchodzi. Kliknięcie nazwiska w środku woła
+  `pokazOsobe` — przełącza na przekrój „pracownicy" i otwiera kartę; bez tego
+  rozbicie kończy się na liczbie i tę samą osobę trzeba szukać ręcznie.
+- ⚠️ **Wiersz z zerem godzin i zerem kosztu nie powstaje.** Osoba, której cała
+  zmiana wisi bez zakończenia, dorzucała pustą pozycję „—" i znak „+?" przy
+  stanowisku, w którym nic się nie wydarzyło. Wiersz bez godzin zostaje TYLKO
+  dla kosztu, który trzeba gdzieś położyć (etatowiec bez odbitych godzin).
+
 ⚠️ **Raporty i koszty mają DWA zakresy i nie wolno ich zlepić w jeden.**
 `periodShifts` (górny pasek, `matchesLokalFilter`) decyduje tylko o tym, KOGO
 widać na liście — to nawigacja. Wszystkie liczby idą z `zakresOsob`: pełne
@@ -1593,6 +1803,26 @@ chwili.
 Pełny opis, dane i propozycje (unikalny indeks `(user_id, start_time)`,
 `created_by` + osobna tożsamość urządzeń):
 [`docs/DUPLIKATY-I-SWIEZOSC-DANYCH.md`](docs/DUPLIKATY-I-SWIEZOSC-DANYCH.md).
+
+⚠️ **Ta sama klasa błędu wróciła 08.09.2026 z PANELU, nie z tabletu** (naprawione
+w 0.40.0). Jedno kliknięcie „Dopisz godziny" w kolejce „Był w grafiku, nie odbił"
+dało dwa wiersze w `shifts` oddalone o **3,7 ms**, a `grafik_shifts.rozliczenie`
+ustawiło się raz — więc kolejka wyglądała na rozliczoną i nikt tego nie zauważył,
+dopóki Dawidowi nie wyszło 20 h zamiast 10.
+
+Powód: jedynym zamkiem był `useState` („busy id"), a **stan Reacta aktualizuje
+się asynchronicznie** — dwa wywołania w tym samym takcie widzą to samo `null` i
+oba przechodzą dalej. Odtąd:
+- zamek stoi na `useRef` (`zajmij`/`zwolnij` w `ZatwierdzanieZmian.tsx`) i
+  obejmuje WSZYSTKIE decyzje tego ekranu, bo każda miała tę samą wadę;
+- `rozliczBrakOdbicia` i `resolveCorrection` pytają BAZY (`znajdzKolizjeWBazie`)
+  tuż przed dopisaniem godzin — gdy wiersz już jest, biorą istniejący zamiast
+  tworzyć drugi, ale i tak kończą resztę (oznaczenie grafiku, rozwiązanie
+  zgłoszenia), inaczej pozycja wróciłaby do kolejki jutro.
+
+⚠️ **Każde nowe miejsce, które TWORZY wiersz w `shifts`, musi zadać to pytanie
+bazie.** Zamek w komponencie chroni przed podwójnym wywołaniem, ale nie przed
+nieaktualnym stanem ani przed drugą sesją.
 
 ## Znane błędy — JUŻ NAPRAWIONE, nie wprowadzaj ponownie
 

@@ -102,15 +102,34 @@ export const narzutDla = (user, lokalRow) => {
 
 // Ile lokal WYDAJE na tę osobę w danym miesiącu.
 //
-// Dla umowy o pracę to suma z umowy — niezależnie od godzin. To jest właśnie
-// odpowiedź na pytanie właściciela "ile lokal wydaje", a nie "ile pracownik
-// zarobił za przepracowane godziny": etatowiec, który przepracował o 8 h za
-// mało, kosztuje dokładnie tyle samo.
+// Dla umowy o pracę kwota z umowy jest PODŁOGĄ, nie całością:
+//
+//   poniżej normy → sama kwota z umowy. Wynagrodzenie należy się niezależnie
+//     od tego, czy lokal dał pracę (przestój, art. 81 KP), więc niedobór godzin
+//     niczego nie obniża. Etatowiec, który przepracował o 8 h za mało, kosztuje
+//     dokładnie tyle samo.
+//   ponad normę  → kwota z umowy PLUS nadwyżka godzin po stawce wynikającej z
+//     tej samej umowy (kwota / norma miesiąca, czyli `stawkaEfektywna`).
+//     Te godziny lokal naprawdę dopłaca i bez nich koszt kłamał tym bardziej,
+//     im więcej ktoś nadrabiał.
+//
+// ⚠️ To NIE jest dopłata za nadgodziny (50/100%) — tej świadomie nie ma, patrz
+// CLAUDE.md. Godzina ponad normę liczy się tu po zwykłej stawce z umowy;
+// ewentualny dodatek ponad ustawowe minimum to decyzja restauracji i miejsce
+// na przyszły słownik wyjątków, nadal puste.
 export const kosztMiesiaca = ({ user, godziny, lokalRow, rok, mies }) => {
   const narzut = 1 + narzutDla(user, lokalRow) / 100;
   if (naEtacie(user)) {
     const kwota = liczba(user.wynagrodzenie_mies);
-    if (kwota != null) return kwota * narzut;
+    if (kwota != null) {
+      const norma = normaMiesiaca(user, rok, mies);
+      const zaGodzine = stawkaEfektywna(user, rok, mies);
+      // Bez normy (brak wymiaru etatu) nie ma od czego liczyć nadwyżki —
+      // zgadywanie pełnego etatu byłoby gorsze niż jej nieliczenie.
+      const nadwyzka =
+        norma && zaGodzine ? Math.max(0, (godziny || 0) - norma) : 0;
+      return (kwota + nadwyzka * zaGodzine) * narzut;
+    }
     // Bez kwoty z umowy da się jeszcze policzyć po stawce godzinowej, jeśli
     // ktoś ją wpisał — gorzej, ale lepiej niż "—".
     const st = liczba(user.stawka);
@@ -118,6 +137,18 @@ export const kosztMiesiaca = ({ user, godziny, lokalRow, rok, mies }) => {
   }
   const st = liczba(user.stawka);
   return st == null ? null : (godziny || 0) * st * narzut;
+};
+
+// Ile godzin ponad normę ma ta osoba w danym miesiącu — i ile lokal za nie
+// dopłaca. Zwraca null dla każdego, kto normy nie ma (zlecenie, brak wymiaru
+// etatu): tam pojęcie nadwyżki nie istnieje, a zero wyglądałoby jak odpowiedź.
+export const nadwyzkaPonadNorme = (user, godziny, rok, mies) => {
+  if (!naEtacie(user)) return null;
+  const norma = normaMiesiaca(user, rok, mies);
+  const zaGodzine = stawkaEfektywna(user, rok, mies);
+  if (!norma || !zaGodzine) return null;
+  const godzin = Math.max(0, (godziny || 0) - norma);
+  return { norma, godzin, zaGodzine, kwota: godzin * zaGodzine };
 };
 
 // Granice okresu rozliczeniowego, w którym leży dany miesiąc. Kotwiczymy je w

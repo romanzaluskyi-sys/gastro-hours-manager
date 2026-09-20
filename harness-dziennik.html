@@ -321,9 +321,41 @@ const sprawdz = (nazwa, warunek, szczegol = "") => {
       U.kosztMiesiaca({ user: zleceniobiorca, godziny: 10, rok: 2026, mies: 9 }) === 320);
     sprawdz("etat: koszt to kwota z umowy, nie godziny × stawka",
       U.kosztMiesiaca({ user: etatowiec, godziny: 10, rok: 2026, mies: 9 }) === 5200);
+    // Niedobór godzin niczego nie obniża (przestój, art. 81 KP), ale nadwyżka
+    // JEST realnym wydatkiem lokalu i musi się doliczyć.
     sprawdz("etat: mniej przepracowanych godzin NIE obniża kosztu lokalu",
       U.kosztMiesiaca({ user: etatowiec, godziny: 1, rok: 2026, mies: 9 }) ===
-        U.kosztMiesiaca({ user: etatowiec, godziny: 200, rok: 2026, mies: 9 }));
+        U.kosztMiesiaca({ user: etatowiec, godziny: 176, rok: 2026, mies: 9 }));
+    // 186 h przy normie 176 h → 10 h × 29,55 zł = 295,50 zł ponad kwotę z umowy.
+    sprawdz("etat: godziny PONAD normę dopłacamy po stawce z umowy",
+      U.kosztMiesiaca({ user: etatowiec, godziny: 186, rok: 2026, mies: 9 }) === 5495.5,
+      "jest " + U.kosztMiesiaca({ user: etatowiec, godziny: 186, rok: 2026, mies: 9 }));
+    sprawdz("etat: dokładnie norma to jeszcze nie nadwyżka",
+      U.kosztMiesiaca({ user: etatowiec, godziny: 176, rok: 2026, mies: 9 }) === 5200);
+    // Bez wymiaru etatu nie ma normy, więc nie ma od czego liczyć nadwyżki —
+    // zgadywanie pełnego etatu byłoby gorsze niż jej nieliczenie.
+    sprawdz("etat bez wymiaru: brak normy = brak nadwyżki, sama kwota",
+      U.kosztMiesiaca({
+        user: { typ_umowy: "umowa_o_prace", wynagrodzenie_mies: 5200 },
+        godziny: 300, rok: 2026, mies: 9,
+      }) === 5200);
+    sprawdz("narzut liczy się także od nadwyżki",
+      Math.abs(
+        U.kosztMiesiaca({ user: etatowiec, godziny: 186, lokalRow: { narzut_umowa: 20 }, rok: 2026, mies: 9 }) - 6594.6
+      ) < 0.001,
+      "jest " + U.kosztMiesiaca({ user: etatowiec, godziny: 186, lokalRow: { narzut_umowa: 20 }, rok: 2026, mies: 9 }));
+
+    const nad = U.nadwyzkaPonadNorme(etatowiec, 186, 2026, 9);
+    sprawdz("nadwyżka: 186 h przy normie 176 to 10 h", nad && nad.godzin === 10);
+    sprawdz("nadwyżka niesie kwotę do dopłaty", nad && Math.abs(nad.kwota - 295.5) < 0.001,
+      nad && String(nad.kwota));
+    sprawdz("poniżej normy nadwyżka wynosi zero, a nie liczbę ujemną",
+      U.nadwyzkaPonadNorme(etatowiec, 100, 2026, 9).godzin === 0);
+    // Zlecenie normy nie ma i nie wolno mu jej dorabiać — null, a nie 0, bo
+    // zero wyglądałoby jak odpowiedź "nic ponad normę".
+    sprawdz("zlecenie nie ma nadwyżki (null, nie zero)",
+      U.nadwyzkaPonadNorme(zleceniobiorca, 300, 2026, 9) === null);
+
     sprawdz("narzut 20% dolicza się do kwoty z umowy",
       U.kosztMiesiaca({ user: etatowiec, godziny: 10, lokalRow: { narzut_umowa: 20 }, rok: 2026, mies: 9 }) === 6240);
     sprawdz("pusty narzut = 0, nic nie jest zmyślane",

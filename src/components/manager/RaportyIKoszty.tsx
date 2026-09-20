@@ -7,7 +7,7 @@
 // pracownika w Rejestr Godzin/Aktywni nawiguje tu przez selectedUserId
 // sterowany z ManagerDashboard.tsx — patrz onNameClick tam.
 import React, { useState, useEffect } from "react";
-import { Edit2, Download } from "lucide-react";
+import { Edit2, Download, ChevronDown, ChevronRight } from "lucide-react";
 import { getDayOfWeek, getMonthName } from "../../utils/format";
 import {
   buildPlanFactMap,
@@ -15,6 +15,15 @@ import {
   toLocalYMD,
   PLAN_FAKT_PROG_H,
 } from "../../utils/grafik";
+import {
+  kosztMiesiaca,
+  nadwyzkaPonadNorme,
+  naEtacie,
+  typUmowy,
+  TYPY_UMOWY,
+} from "../../utils/umowy";
+import { zl } from "../../utils/budzet";
+import { stanowiskoBadgeStyle } from "../../utils/stanowiska";
 import {
   pageTitleCls,
   sectionCardCls,
@@ -32,18 +41,158 @@ const fmtHM = (d) =>
     ? `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`
     : "";
 
+const fmtH = (n) => (n || 0).toFixed(1).replace(".", ",");
+// Kwoty formatuje `zl` z utils/budzet — to samo, co w Grafiku i w Pulsie.
+// Własny `toFixed(0) + " zł"` nie grupował tysięcy i w jednej kolumnie stało
+// "6266 zł" obok "11086 zł", czyli liczby wyglądające na ten sam rząd.
+const fmtZl = (n) => zl(n);
+
+// Rozbicie godzin i kosztu na wymiary: lokal ("gdzie wydaliśmy") i stanowisko
+// ("na co"). Jeden komponent dla obu, bo obie sekcje odpowiadają tą samą miarą
+// i tym samym podziałem — dwie kopie rozjechałyby się przy pierwszej poprawce.
+const Rozbicie = ({ tytul, dane, badge = null, pusto, onOsoba }) => {
+  // ⚠️ Domyślnie WSZYSTKO zwinięte. Rozwinięte z góry, rozbicie zjadałoby
+  // cały ekran i zasłaniało to, po co się tu wchodzi — sumę miesiąca.
+  const [otwarte, setOtwarte] = useState({});
+  const wpisy = Object.entries(dane || {}).sort((a, b) => b[1].hours - a[1].hours);
+  const maAlokacje = wpisy.some(([, v]) => v.alokacja);
+  const maBraki = wpisy.some(([, v]) => v.brakKosztu);
+  return (
+    <div className={`${sectionCardCls} mb-6`}>
+      <div className={sectionHeaderCls}>{tytul}</div>
+      <div className="divide-y divide-[#B7B6AE]">
+        {wpisy.length === 0 && <p className="p-4 text-sm text-[#8F8E86]">{pusto}</p>}
+        {wpisy.map(([klucz, v]) => {
+          const rozwiniete = !!otwarte[klucz];
+          const osoby = [...(v.osoby || [])].sort((a, b) => b.hours - a.hours);
+          return (
+            <div key={klucz}>
+              <button
+                type="button"
+                onClick={() => setOtwarte((o) => ({ ...o, [klucz]: !o[klucz] }))}
+                className="w-full px-4 py-2.5 flex items-center justify-between gap-3 text-sm text-left hover:bg-[#F1F1EE]"
+              >
+                <span className="font-bold flex items-center gap-2 min-w-0">
+                  {rozwiniete ? (
+                    <ChevronDown size={15} className="flex-shrink-0 text-[#6E6E66]" />
+                  ) : (
+                    <ChevronRight size={15} className="flex-shrink-0 text-[#6E6E66]" />
+                  )}
+                  {badge && badge(klucz)}
+                  <span className="truncate">{klucz}</span>
+                  <span className="text-[11px] font-semibold text-[#8F8E86] flex-shrink-0">
+                    {osoby.length} os.
+                  </span>
+                </span>
+                <span className="flex items-baseline gap-3 flex-shrink-0">
+                  {/* "~" znaczy ALOKACJA: wynagrodzenie etatowca jest miesięczne
+                      i rozkłada się proporcją godzin, a nie dlatego, że tyle
+                      tam wydano. */}
+                  <span className="text-[#6E6E66] tabular-nums whitespace-nowrap">
+                    {v.brakKosztu && v.cost === 0
+                      ? "brak wynagrodzenia"
+                      : `${v.alokacja ? "~" : ""}${fmtZl(v.cost)}${v.brakKosztu ? " +?" : ""}`}
+                  </span>
+                  <span className="font-['Archivo'] font-bold tabular-nums whitespace-nowrap">
+                    {fmtH(v.hours)} h
+                  </span>
+                </span>
+              </button>
+              {rozwiniete && (
+                <div className="bg-[#F7F7F4] border-t border-[#DEDDD7]">
+                  {osoby.length === 0 && (
+                    <p className="px-4 py-2 text-[13px] text-[#8F8E86]">
+                      Brak osób do pokazania.
+                    </p>
+                  )}
+                  {osoby.map((o) => (
+                    <button
+                      key={o.uid + klucz}
+                      type="button"
+                      onClick={() => onOsoba && onOsoba(o.uid)}
+                      className="w-full pl-10 pr-4 py-1.5 flex items-center justify-between gap-3 text-[13px] text-left hover:bg-[#EDECE6]"
+                    >
+                      <span className="truncate text-[#171714] hover:underline">
+                        {o.name}
+                      </span>
+                      <span className="flex items-baseline gap-3 flex-shrink-0 tabular-nums">
+                        <span className="text-[#8F8E86] whitespace-nowrap">
+                          {o.cost == null ? "brak wynagrodzenia" : fmtZl(o.cost)}
+                        </span>
+                        <span className="font-semibold whitespace-nowrap">
+                          {fmtH(o.hours)} h
+                        </span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {(maAlokacje || maBraki) && (
+        <p className="px-4 py-2 text-[11px] text-[#6E6E66] border-t border-[#B7B6AE]">
+          {maAlokacje && (
+            <>
+              „~" — wynagrodzenie z umowy o pracę rozłożone proporcją godzin;
+              suma zgadza się z kafelkiem „Koszt" wyżej.{" "}
+            </>
+          )}
+          {maBraki && '„+?" — jest tu ktoś bez wpisanego wynagrodzenia w karcie.'}
+        </p>
+      )}
+    </div>
+  );
+};
+
+// Porównanie z poprzednim miesiącem — świadomie BEZ zieleni i czerwieni.
+// Wyższy koszt przy wyższym utargu nie jest porażką, a więcej godzin nie jest
+// ani dobre, ani złe samo z siebie. To ma być punkt odniesienia, nie ocena —
+// ta sama zasada co przy plan vs fakt.
+const Roznica = ({ teraz, przed, format }) => {
+  if (przed == null || przed === 0) return <b className="tabular-nums">{format(teraz)}</b>;
+  const pct = ((teraz - przed) / przed) * 100;
+  const bliskoZera = Math.abs(pct) < 0.5;
+  return (
+    <>
+      <b className="tabular-nums">{format(teraz)}</b>{" "}
+      <span className="text-[#8F8E86]">
+        z {format(przed)} ·{" "}
+        {bliskoZera
+          ? "bez zmian"
+          : `${pct > 0 ? "+" : "−"}${Math.abs(pct).toFixed(1).replace(".", ",")}%`}
+      </span>
+    </>
+  );
+};
+
 export default function RaportyIKoszty({
   users,
   shifts,
+  lokale = [],
+  stanowiska = [],
   matchesFilter,
   hasAccessToLokal,
   onEditShift,
   selectedUserId,
   setSelectedUserId,
+  skok = null,
   planShifts = [],
 }) {
-  const [month, setMonth] = useState(new Date().getMonth());
-  const [year, setYear] = useState(new Date().getFullYear());
+  // ⚠️ Startujemy na miesiącu POPRZEDNIM, nie bieżącym. Na tę stronę wchodzi
+  // się raz na miesiąc i po to, żeby przejrzeć miesiąc ZAMKNIĘTY przed
+  // wypłatą — otwarta na bieżącym pokazywała połowę danych i wyglądała, jakby
+  // brakowało w niej informacji. Powrót jest jednym kliknięciem ("Bieżący
+  // miesiąc"), a wybrany miesiąc stoi w czarnej plakietce w nagłówku.
+  // Który przekrój oglądamy. Domyślnie lokale — to jest pytanie, od którego
+  // zaczyna się przegląd miesiąca; do konkretnej osoby schodzi się później.
+  const [widok, setWidok] = useState("lokale");
+  const [month, setMonth] = useState(() => (new Date().getMonth() + 11) % 12);
+  const [year, setYear] = useState(() => {
+    const d = new Date();
+    return d.getMonth() === 0 ? d.getFullYear() - 1 : d.getFullYear();
+  });
 
   const shiftMonth = (delta) => {
     let m = month + delta;
@@ -72,72 +221,221 @@ export default function RaportyIKoszty({
   // każdej z częścią swoich godzin, i żadna nie mówiła, ile mu się w sumie
   // należy.
   const widoczny = hasAccessToLokal || matchesFilter;
-  const wMiesiacu = (s) =>
-    s.start_time.getMonth() === month && s.start_time.getFullYear() === year;
-  const periodShifts = shifts.filter((s) => matchesFilter(s.lokal) && wMiesiacu(s));
-  const periodShiftsAll = shifts.filter((s) => widoczny(s.lokal) && wMiesiacu(s));
-
-  const rateByUser = {};
-  users.forEach((u) => {
-    if (u.stawka != null && u.stawka !== "") rateByUser[u.id] = Number(u.stawka);
-  });
-
   const hoursOf = (s) => (s.end_time ? (s.end_time - s.start_time) / 3600000 : 0);
 
-  // --- agregacja per pracownik ---
-  // Kogo pokazujemy: tych, którzy pracowali w oglądanym lokalu. Ale WSZYSTKIE
-  // liczby (kafelki, wiersze, "Według lokalu") liczymy z pełnych godzin tych
-  // osób — inaczej suma u góry nie zgadzałaby się z rozbiciem pod spodem, a
-  // kierownik nie miałby jak zobaczyć, gdzie podziała się reszta.
-  const widoczneOsoby = new Set(
-    periodShifts.map((s) => s.user_id).filter(Boolean)
-  );
-  const zakresOsob = periodShiftsAll.filter(
-    (s) => s.user_id && widoczneOsoby.has(s.user_id)
-  );
+  // Narzut pracodawcy jest ustawieniem LOKALU, nie osoby — bierzemy go z
+  // lokalu macierzystego, tak samo jak karta pracownika.
+  const lokalRowFor = (u) =>
+    (lokale || []).find((l) => l.name === u?.default_lokal) || null;
 
-  const byUser = {};
-  zakresOsob.forEach((s) => {
-    if (!s.user_id) return;
-    byUser[s.user_id] = byUser[s.user_id] || { hours: 0, count: 0 };
-    byUser[s.user_id].hours += hoursOf(s);
-    byUser[s.user_id].count += 1;
-  });
-  // Ile z tych godzin przypada na oglądany lokal — pokazujemy pod spodem, gdy
-  // różni się od całości, żeby liczba w wierszu nie wyglądała na pomyłkę.
-  const wTymLokalu = {};
-  periodShifts.forEach((s) => {
-    if (!s.user_id) return;
-    wTymLokalu[s.user_id] = (wTymLokalu[s.user_id] || 0) + hoursOf(s);
-  });
-  // Lista słucha zakładki (nawigacja), ale liczby w wierszu są pełne.
-  const employeeRows = Object.keys(wTymLokalu)
-    .map((uid) => {
-      const u = users.find((x) => x.id === uid);
-      const rate = rateByUser[uid];
-      const hours = byUser[uid] ? byUser[uid].hours : 0;
-      return {
-        uid,
-        user: u,
-        hours,
-        hoursTuLokal: wTymLokalu[uid],
-        count: byUser[uid] ? byUser[uid].count : 0,
-        cost: rate != null ? hours * rate : null,
+  // ⚠️ Koszt liczy `kosztMiesiaca`, a NIE `godziny × users.stawka`. Przy umowie
+  // o pracę lokal płaci kwotę z umowy niezależnie od godzin, a ta strona
+  // odpowiada na pytanie "ile lokal wydał". Do 0.40.0 stała tu goła
+  // `users.stawka`, więc KAŻDY etatowiec miał koszt `null`, wypadał z kafelka
+  // i cały miesiąc świecił "dane niepełne" — ta sama pomyłka, którą w 0.39.0
+  // naprawiono w Pulsie (`autoPodsumowanie`).
+  const kosztOsoby = (u, godziny, rok, miesIdx) =>
+    u
+      ? kosztMiesiaca({
+          user: u,
+          godziny,
+          lokalRow: lokalRowFor(u),
+          rok,
+          mies: miesIdx + 1,
+        })
+      : null;
+
+  // Cała arytmetyka miesiąca w JEDNYM miejscu, żeby dało się ją policzyć drugi
+  // raz dla miesiąca poprzedniego (pasek porównania) bez powtarzania reguł —
+  // zwłaszcza reguły o dwóch zakresach, którą najłatwiej zgubić przy kopiowaniu.
+  //
+  // Dwa zakresy, celowo:
+  // - `pShifts` słucha górnego paska (nawigacja: kogo widzę w tym lokalu);
+  // - `pAll` bierze wszystkie lokale kierownika i służy do liczb per osoba.
+  // Godziny i koszt jednej osoby to fakt płacowy, nie fakt lokalu. Liczone per
+  // zakładka, pracownik wypożyczony między lokalami pokazywał się dwa razy, w
+  // każdej z częścią godzin, i żadna nie mówiła, ile mu się w sumie należy.
+  const agreguj = (rok, miesIdx) => {
+    const wM = (s) =>
+      s.start_time.getMonth() === miesIdx && s.start_time.getFullYear() === rok;
+    const pShifts = shifts.filter((s) => matchesFilter(s.lokal) && wM(s));
+    const pAll = shifts.filter((s) => widoczny(s.lokal) && wM(s));
+
+    // Ile godzin przypada na oglądany lokal — pokazujemy pod spodem, gdy różni
+    // się od całości, żeby liczba w wierszu nie wyglądała na pomyłkę.
+    const wTymLokalu = {};
+    pShifts.forEach((s) => {
+      if (!s.user_id) return;
+      wTymLokalu[s.user_id] = (wTymLokalu[s.user_id] || 0) + hoursOf(s);
+    });
+
+    // ⚠️ W raporcie są WYŁĄCZNIE osoby z zarejestrowanymi godzinami w tym
+    // miesiącu — nikogo nie dopisujemy z listy pracowników.
+    //
+    // Przez chwilę (0.40.0, jeszcze przed wdrożeniem) dopisywaliśmy tu
+    // etatowców bez ani jednej odbitej godziny, bo pensja należy im się
+    // niezależnie od godzin. W praktyce to WYMYŚLAŁO ludzi: osoba zatrudniona
+    // we wrześniu pokazywała się z pełną kwotą w każdym wcześniejszym
+    // miesiącu, w którym jeszcze nie pracowała. Daty zatrudnienia i odejścia
+    // są w kartach zwykle puste, więc nie ma na czym oprzeć takiego
+    // dopisywania — jedynym twardym śladem obecności w miesiącu jest odbita
+    // zmiana.
+    //
+    // Konsekwencja, świadoma: nieobecność etatowca (choroba, urlop bezpłatny,
+    // nieodbite zmiany) nie pokaże się tu jako wydatek. To pytanie zadaje
+    // bilans okresu w karcie pracownika, gdzie jest komu je zadać.
+    const widoczneOsoby = new Set(pShifts.map((s) => s.user_id).filter(Boolean));
+    const zakres = pAll.filter((s) => s.user_id && widoczneOsoby.has(s.user_id));
+
+    const byUser = {};
+    zakres.forEach((s) => {
+      const w = (byUser[s.user_id] = byUser[s.user_id] || {
+        hours: 0,
+        urlop: 0,
+        count: 0,
+        bezKonca: 0,
+      });
+      w.hours += hoursOf(s);
+      w.count += 1;
+      if (s.is_urlop) w.urlop += hoursOf(s);
+      // Zmiana bez odbitego końca to godziny, których nikomu nie policzono —
+      // czyli dokładnie to, co trzeba zobaczyć PRZED wypłatą, a nie po niej.
+      if (!s.end_time && !s.rozliczenie) w.bezKonca += 1;
+    });
+
+    const rows = [...widoczneOsoby]
+      .map((uid) => users.find((x) => x.id === uid))
+      .filter(Boolean)
+      .map((u) => {
+        const w = byUser[u.id] || { hours: 0, urlop: 0, count: 0, bezKonca: 0 };
+        return {
+          uid: u.id,
+          user: u,
+          hours: w.hours,
+          urlop: w.urlop,
+          hoursTuLokal: wTymLokalu[u.id] || 0,
+          count: w.count,
+          bezKonca: w.bezKonca,
+          cost: kosztOsoby(u, w.hours, rok, miesIdx),
+        };
+      })
+      .sort((a, b) => (b.cost ?? b.hours) - (a.cost ?? a.hours));
+
+    const totalHours = rows.reduce((a, r) => a + r.hours, 0);
+    const totalCost = rows.reduce((a, r) => a + (r.cost || 0), 0);
+    const costIncomplete = rows.some((r) => r.cost == null);
+    // Urlop jest zwykłym wierszem w shifts (8 h za dzień roboczy), więc wchodzi
+    // do sum automatycznie — i tak ma być. Ale kierownik musi widzieć, ILE z
+    // tych godzin to urlop, bo to nie jest czas na sali.
+    const urlopHours = rows.reduce((a, r) => a + r.urlop, 0);
+
+    // Koszt per lokal to ALOKACJA, nie wydatek tego jednego miejsca:
+    // wynagrodzenie etatowca jest miesięczne i nie da się go rozciąć po
+    // lokalach inaczej niż proporcją godzin. Dzielimy właśnie tak, żeby
+    // rozbicie sumowało się DOKŁADNIE do kafelka wyżej — dwie liczby o tym
+    // samym miesiącu, które się nie zgadzają, kosztują więcej zaufania, niż
+    // warta jest ta precyzja. Urlopu nie przypisujemy do lokalu: pracownik go
+    // tam nie przepracował.
+    const byLokal = {};
+    const byStanowisko = {};
+    const dodaj = (mapa, klucz, godziny, koszt, alokacja, osoba) => {
+      const w = (mapa[klucz] = mapa[klucz] || {
+        hours: 0,
+        cost: 0,
+        brakKosztu: false,
+        alokacja: false,
+        osoby: [],
+      });
+      w.hours += godziny;
+      if (koszt == null) w.brakKosztu = true;
+      else w.cost += koszt;
+      if (alokacja) w.alokacja = true;
+      // Skład pozycji — bez niego liczba w wierszu jest nie do sprawdzenia
+      // inaczej niż przez przeliczanie wszystkich ludzi po kolei.
+      if (osoba) w.osoby.push({ ...osoba, hours: godziny, cost: koszt });
+    };
+    // Ta sama proporcja godzin, dwa różne klucze: lokal ("gdzie wydaliśmy") i
+    // stanowisko ("na co wydaliśmy"). Jedna pętla, bo dwie rozjechałyby się
+    // przy pierwszej poprawce reguły podziału.
+    rows.forEach((r) => {
+      const moje = zakres.filter((s) => s.user_id === r.uid);
+      const rozbij = (mapa, kluczOf, domyslny) => {
+        const wg = {};
+        moje.forEach((s) => {
+          const klucz = kluczOf(s);
+          wg[klucz] = (wg[klucz] || 0) + hoursOf(s);
+        });
+        const suma = Object.values(wg).reduce((a, h) => a + h, 0);
+        const kto = { uid: r.uid, name: r.user.name };
+        if (suma <= 0) {
+          // Zero godzin i zero kosztu nie jest niczyim wierszem — ktoś z samą
+          // zmianą bez zakończenia dorzucałby pustą pozycję "—" i znak "+?"
+          // przy stanowisku, w którym nic się nie wydarzyło. Wiersz zostaje
+          // TYLKO dla kosztu, który naprawdę trzeba gdzieś położyć: etatowca
+          // bez ani jednej odbitej godziny.
+          if (r.cost > 0) dodaj(mapa, domyslny || "—", 0, r.cost, false, kto);
+          return;
+        }
+        // Znak "~" tylko tam, gdzie naprawdę było co dzielić: etatowiec w
+        // jednym miejscu kosztował je całą kwotą i żadnego szacunku tam nie ma.
+        const dzielone = naEtacie(r.user) && Object.keys(wg).length > 1;
+        Object.entries(wg).forEach(([klucz, h]) => {
+          dodaj(
+            mapa,
+            klucz,
+            h,
+            r.cost == null ? null : (r.cost * h) / suma,
+            dzielone,
+            kto
+          );
+        });
       };
-    })
-    .filter((r) => r.user)
-    .sort((a, b) => (b.cost ?? b.hours) - (a.cost ?? a.hours));
+      rozbij(byLokal, (s) => (s.is_urlop ? "Urlop" : s.lokal), r.user.default_lokal);
+      // Urlop świadomie NIE trafia na stanowisko: pracownik go tam nie
+      // przepracował, a doliczony zawyżałby obsadę konkretnej roli — ta sama
+      // zasada co przy lokalach.
+      rozbij(
+        byStanowisko,
+        (s) => (s.is_urlop ? "Urlop" : s.stanowisko || "—"),
+        r.user.default_stanowisko
+      );
+    });
 
-  const totalHours = employeeRows.reduce((a, r) => a + r.hours, 0);
-  // Urlop jest zwykłym wierszem w shifts (8 h za dzień roboczy), więc wchodzi
-  // do sum godzin i kosztów automatycznie — i tak ma być. Ale kierownik musi
-  // widzieć, ILE z tych godzin to urlop, bo to nie jest czas na sali.
-  // Plan vs fakt za oglądany miesiąc — dla analityki, nie dla oceny. Urlop
-  // jest z tego wyłączony po stronie faktu (nie ma go w grafiku), więc
-  // porównujemy tylko realnie przepracowany czas.
-  // Porównujemy tylko dni ZAMKNIĘTE: plan na cały miesiąc zestawiony z
-  // faktem za pięć dni dawałby "-82%" i nie znaczyłby nic. Dzisiejszy dzień
-  // też pomijamy — połowa ludzi jeszcze nie skończyła zmiany.
+    return {
+      pShifts,
+      pAll,
+      rows,
+      totalHours,
+      totalCost,
+      costIncomplete,
+      urlopHours,
+      byLokal,
+      byStanowisko,
+    };
+  };
+
+  const M = agreguj(year, month);
+  const poprzedniData = new Date(year, month - 1, 1);
+  const poprz = agreguj(poprzedniData.getFullYear(), poprzedniData.getMonth());
+
+  const periodShifts = M.pShifts;
+  const periodShiftsAll = M.pAll;
+  const employeeRows = M.rows;
+  const totalHours = M.totalHours;
+  const totalCost = M.totalCost;
+  const costIncomplete = M.costIncomplete;
+  const urlopHours = M.urlopHours;
+  const pracaHours = totalHours - urlopHours;
+  const byLokal = M.byLokal;
+  const byStanowisko = M.byStanowisko;
+
+  // Plan vs fakt za oglądany miesiąc — dla analityki, nie dla oceny. Urlop jest
+  // z tego wyłączony po stronie faktu (nie ma go w grafiku), więc porównujemy
+  // tylko realnie przepracowany czas.
+  //
+  // Porównujemy WYŁĄCZNIE dni zamknięte: plan na cały miesiąc zestawiony z
+  // faktem za pięć dni dawałby "−82%" i nie znaczyłby nic. Dzisiejszy dzień też
+  // pomijamy — połowa ludzi jeszcze nie skończyła zmiany.
   const wczorajYMD = (() => {
     const d = new Date();
     d.setDate(d.getDate() - 1);
@@ -162,29 +460,30 @@ export default function RaportyIKoszty({
     r.faktH += v.faktH;
   });
 
-  const urlopHours = zakresOsob
-    .filter((s) => s.is_urlop)
-    .reduce((a, s) => a + hoursOf(s), 0);
-  const pracaHours = totalHours - urlopHours;
-  const totalCostRows = employeeRows.filter((r) => r.cost != null);
-  const totalCost = totalCostRows.reduce((a, r) => a + r.cost, 0);
-  const costIncomplete = employeeRows.some((r) => r.cost == null);
-
-  // --- agregacja per lokal ---
-  // Urlopu nie przypisujemy do lokalu — pracownik go tam nie przepracował,
-  // a wliczony w "Według lokalu" zawyżałby obsadę konkretnego miejsca.
-  const byLokal = {};
-  zakresOsob.forEach((s) => {
-    const klucz = s.is_urlop ? "Urlop" : s.lokal;
-    byLokal[klucz] = byLokal[klucz] || { hours: 0 };
-    byLokal[klucz].hours += hoursOf(s);
-  });
+  // Kliknięcie nazwiska w rozwiniętej pozycji prowadzi do jego karty — bez
+  // tego rozbicie kończy się na liczbie i trzeba szukać tej samej osoby
+  // jeszcze raz, ręcznie, w trzeciej zakładce.
+  const pokazOsobe = (uid) => {
+    setSelectedUserId(uid);
+    setWidok("pracownicy");
+  };
 
   useEffect(() => {
     if (selectedUserId && !users.find((u) => u.id === selectedUserId)) {
       setSelectedUserId(null);
     }
   }, [selectedUserId]);
+
+  // Wejście z imienia w Rejestrze Godzin albo w Aktywnych przenosi też na
+  // miesiąc tamtej zmiany — inaczej ta strona, otwarta domyślnie na miesiącu
+  // zamkniętym, pokazywałaby pustą kartę osoby stojącej właśnie na zmianie.
+  // `seq` jest po to, żeby dwa kliknięcia w ten sam miesiąc też zadziałały.
+  useEffect(() => {
+    if (!skok) return;
+    setMonth(skok.mies);
+    setYear(skok.rok);
+    setWidok("pracownicy");
+  }, [skok?.seq]);
 
   const selectedUser = selectedUserId ? users.find((u) => u.id === selectedUserId) : null;
   const selectedShifts = selectedUserId
@@ -205,8 +504,63 @@ export default function RaportyIKoszty({
   const selectedUrlop = selectedShifts
     .filter((s) => s.is_urlop)
     .reduce((a, s) => a + hoursOf(s), 0);
-  const selectedRate = selectedUserId ? rateByUser[selectedUserId] : null;
-  const selectedCost = selectedRate != null ? selectedHours * selectedRate : null;
+  const selectedCost = kosztOsoby(selectedUser, selectedHours, year, month);
+  // Przy umowie o pracę ta kwota nie jest iloczynem godzin i stawki: do normy
+  // to wynagrodzenie z umowy, a ponad normę dochodzą dopłacone godziny. Bez
+  // tego podpisu pierwsze pytanie brzmi "dlaczego się nie zgadza".
+  const selectedNadwyzka = selectedUser
+    ? nadwyzkaPonadNorme(selectedUser, selectedHours, year, month + 1)
+    : null;
+
+  // Podsumowanie osób, nie lista zmian — tamtą eksportuje Rejestr Godzin i
+  // powielanie jej tutaj dałoby dwa pliki o tej samej nazwie w głowie
+  // odbiorcy. Stąd wychodzi to, po co się na tę stronę wchodzi: godziny,
+  // urlop i koszt na osobę za zamknięty miesiąc.
+  const handleExportCsv = () => {
+    const naglowek = [
+      "Pracownik",
+      "Stanowisko",
+      "Lokal macierzysty",
+      "Typ umowy",
+      "Godziny",
+      "w tym w wybranym lokalu",
+      "w tym urlop",
+      "Liczba zmian",
+      "Koszt (zl)",
+    ];
+    const etykietaUmowy = (u) =>
+      (TYPY_UMOWY.find((x) => x.key === typUmowy(u)) || {}).label || "";
+    const lines = [naglowek.join(";")];
+    employeeRows.forEach((r) => {
+      lines.push(
+        [
+          r.user.name,
+          r.user.default_stanowisko || "",
+          r.user.default_lokal || "",
+          etykietaUmowy(r.user),
+          r.hours.toFixed(2),
+          r.hoursTuLokal.toFixed(2),
+          r.urlop.toFixed(2),
+          r.count,
+          // Pusto, a nie zero: brak wynagrodzenia w karcie to nie jest koszt
+          // zerowy i nie wolno go zsumować jak zera.
+          r.cost == null ? "" : r.cost.toFixed(2),
+        ]
+          .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+          .join(";")
+      );
+    });
+    // BOM, żeby Excel nie rozsypał polskich znaków.
+    const blob = new Blob(["\ufeff" + lines.join("\n")], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `koszty-${year}-${String(month + 1).padStart(2, "0")}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -241,7 +595,13 @@ export default function RaportyIKoszty({
           <button onClick={() => shiftMonth(1)} className={btnSecondaryCls}>
             Następny →
           </button>
-          <button disabled title="Wkrótce" className={`${btnSecondaryCls} opacity-50 cursor-not-allowed`}>
+          <button
+            onClick={handleExportCsv}
+            disabled={employeeRows.length === 0}
+            className={`${btnSecondaryCls} ${
+              employeeRows.length === 0 ? "opacity-50 cursor-not-allowed" : ""
+            }`}
+          >
             <Download size={15} className="inline -mt-0.5 mr-1" /> Eksport CSV
           </button>
           <button disabled title="Wkrótce" className={`${btnSecondaryCls} opacity-50 cursor-not-allowed`}>
@@ -263,8 +623,12 @@ export default function RaportyIKoszty({
         </div>
         <div className={statTileCls}>
           <p className={statLabelCls}>Koszt</p>
-          <p className={statValueCls}>{totalCost.toFixed(0)} zł</p>
-          {costIncomplete && <p className="text-[11px] text-[#DE3A22] mt-0.5">dane niepełne</p>}
+          <p className={statValueCls}>{fmtZl(totalCost)}</p>
+          {costIncomplete && (
+            <p className="text-[11px] text-[#DE3A22] mt-0.5">
+              bez części osób — brak wynagrodzenia w karcie
+            </p>
+          )}
         </div>
         <div className={statTileCls}>
           <p className={statLabelCls}>Pracownicy</p>
@@ -305,30 +669,105 @@ export default function RaportyIKoszty({
         <div className={statTileCls}>
           <p className={statLabelCls}>Śr. koszt/h</p>
           <p className={statValueCls}>
-            {totalHours > 0 && !costIncomplete ? (totalCost / totalHours).toFixed(1) : "—"}
+            {totalHours > 0 && !costIncomplete
+              ? `${(totalCost / totalHours).toFixed(1).replace(".", ",")} zł`
+              : "—"}
           </p>
         </div>
       </div>
 
-      <div className={`${sectionCardCls} mb-6`}>
-        <div className={sectionHeaderCls}>Według lokalu</div>
-        <div className="divide-y divide-[#B7B6AE]">
-          {Object.keys(byLokal).length === 0 && (
-            <p className="p-4 text-sm text-[#8F8E86]">Brak danych w tym okresie.</p>
-          )}
-          {Object.entries(byLokal)
-            .sort((a, b) => b[1].hours - a[1].hours)
-            .map(([lokal, v]) => (
-              <div key={lokal} className="px-4 py-2.5 flex items-center justify-between text-sm">
-                <span className="font-bold">{lokal}</span>
-                <span className="font-['Archivo'] font-bold tabular-nums">
-                  {v.hours.toFixed(1).replace(".", ",")} h
+      {/* Punkt odniesienia dla wszystkiego wyżej. Bez niego kafelki mówią, ile
+          było, ale nie mówią, czy to dużo. */}
+      {(poprz.totalHours > 0 || poprz.totalCost > 0) && (
+        <div className="bg-white rounded-xl border-[2px] border-[#171714] px-4 py-2.5 mb-6 flex flex-wrap items-center gap-x-6 gap-y-1.5 text-[13px]">
+          <span className={statLabelCls}>
+            vs {getMonthName(poprzedniData.getMonth())} {poprzedniData.getFullYear()}
+          </span>
+          <span>
+            godziny <Roznica teraz={totalHours} przed={poprz.totalHours} format={(n) => `${fmtH(n)} h`} />
+          </span>
+          {/* Koszt porównujemy tylko wtedy, gdy OBA miesiące są policzone do
+              końca — inaczej spadek znaczyłby tylko tyle, że komuś nie wpisano
+              wynagrodzenia. */}
+          {!costIncomplete && !poprz.costIncomplete && (
+            <>
+              <span>
+                koszt <Roznica teraz={totalCost} przed={poprz.totalCost} format={fmtZl} />
+              </span>
+              {totalHours > 0 && poprz.totalHours > 0 && (
+                <span>
+                  koszt/h{" "}
+                  <Roznica
+                    teraz={totalCost / totalHours}
+                    przed={poprz.totalCost / poprz.totalHours}
+                    format={(n) => `${n.toFixed(1).replace(".", ",")} zł`}
+                  />
                 </span>
-              </div>
-            ))}
+              )}
+            </>
+          )}
         </div>
+      )}
+
+      {/* Kafelki i pasek porównania zostają nad wszystkim — to rama, w której
+          czyta się każdy z przekrojów. Niżej zmienia się tylko OŚ: gdzie
+          wydaliśmy, na co, czy komu. Trzy sekcje jedna pod drugą robiły z tej
+          strony stos, przez który trzeba było przewijać do właściwej. */}
+      <div className="flex gap-2 mb-5 flex-wrap">
+        {[
+          // Krótkie etykiety: pełną nazwę przekroju niesie nagłówek karty pod
+          // spodem, a "Według lokalu" w obu miejscach czytało się jak błąd.
+          { key: "lokale", label: "Lokale" },
+          { key: "stanowiska", label: "Stanowiska" },
+          { key: "pracownicy", label: "Pracownicy" },
+        ].map((w) => (
+          <button
+            key={w.key}
+            onClick={() => setWidok(w.key)}
+            className={`px-3.5 py-2 rounded border-[2px] font-['Archivo'] font-bold text-sm ${
+              widok === w.key
+                ? "bg-[#171714] text-white border-[#171714]"
+                : "bg-white text-[#171714] border-[#B7B6AE]"
+            }`}
+          >
+            {w.label}
+          </button>
+        ))}
       </div>
 
+      {widok === "lokale" && (
+        <Rozbicie
+          tytul="Według lokalu"
+          dane={byLokal}
+          pusto="Brak danych w tym okresie."
+          onOsoba={pokazOsobe}
+        />
+      )}
+
+      {/* Drugi wymiar tych samych pieniędzy: nie "gdzie", tylko "na co".
+          Przy planowaniu obsady to jest pytanie, które zadaje się najpierw —
+          ile kosztuje kuchnia, a ile sala. */}
+      {widok === "stanowiska" && (
+        <Rozbicie
+          tytul="Według stanowiska"
+          dane={byStanowisko}
+          pusto="Brak danych w tym okresie."
+          onOsoba={pokazOsobe}
+          badge={(nazwa) => {
+            const styl = stanowiskoBadgeStyle(stanowiska, null, nazwa);
+            return (
+              <span
+                className="w-2.5 h-2.5 rounded-full flex-shrink-0 border border-[#B7B6AE]"
+                style={
+                  styl ? { backgroundColor: styl.color, borderColor: styl.color } : undefined
+                }
+              />
+            );
+          }}
+        />
+      )}
+
+      {widok === "pracownicy" && (
       <div className="grid md:grid-cols-[360px_1fr] gap-5">
         {/* --- Lista pracowników --- */}
         <div className={`${!selectedUser ? "block" : "hidden md:block"} ${sectionCardCls}`}>
@@ -350,6 +789,16 @@ export default function RaportyIKoszty({
                   <p className="text-xs text-[#6E6E66] truncate">
                     {r.user.default_stanowisko || "—"} · {r.count} zmiany
                   </p>
+                  {/* Zero godzin przy istniejącej zmianie znaczy jedno:
+                      nikt nie odbił jej końca. Człowiek był, tylko jego
+                      godziny czekają na decyzję kierownika. */}
+                  {r.bezKonca > 0 && (
+                    <p className="text-xs text-[#8A3A2B] font-bold truncate">
+                      {r.bezKonca === 1
+                        ? "zmiana bez zakończenia — godziny nierozliczone"
+                        : `${r.bezKonca} zmiany bez zakończenia — godziny nierozliczone`}
+                    </p>
+                  )}
                   {/* Gdy część godzin przypada na inny lokal, mówimy to wprost —
                       inaczej liczba w wierszu wygląda na niezgodną z sumą lokalu. */}
                   {Math.abs(r.hours - r.hoursTuLokal) > 0.01 && (
@@ -363,7 +812,7 @@ export default function RaportyIKoszty({
                     {r.hours.toFixed(1).replace(".", ",")} h
                   </p>
                   <p className="text-xs text-[#6E6E66]">
-                    {r.cost != null ? `${r.cost.toFixed(0)} zł` : "brak stawki"}
+                    {r.cost != null ? fmtZl(r.cost) : "brak wynagrodzenia"}
                   </p>
                 </div>
               </button>
@@ -424,7 +873,16 @@ export default function RaportyIKoszty({
                       {selectedHours.toFixed(1).replace(".", ",")} h
                     </p>
                     <p className="text-xs text-[#6E6E66]">
-                      {selectedCost != null ? `${selectedCost.toFixed(0)} zł` : "brak stawki"}
+                      {selectedCost != null ? fmtZl(selectedCost) : "brak wynagrodzenia"}
+                      {selectedCost != null && selectedNadwyzka && (
+                        <span className="block text-[11px] text-[#8F8E86]">
+                          {selectedNadwyzka.godzin > 0
+                            ? `umowa + ${fmtH(selectedNadwyzka.godzin)} h ponad normą ${fmtH(
+                                selectedNadwyzka.norma
+                              )} h`
+                            : `wg umowy · norma ${fmtH(selectedNadwyzka.norma)} h`}
+                        </span>
+                      )}
                     </p>
                   </div>
                 </div>
@@ -515,6 +973,7 @@ export default function RaportyIKoszty({
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }

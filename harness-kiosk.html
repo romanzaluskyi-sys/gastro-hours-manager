@@ -33,7 +33,7 @@ const pokazBlad = (e) => {
 window.addEventListener("error", (ev) => pokazBlad(ev.error || ev.message));
 window.addEventListener("unhandledrejection", (ev) => pokazBlad(ev.reason));
 
-const IKONY = ["AlertCircle", "AlertTriangle", "Archive", "ArchiveRestore", "ArrowLeft", "ArrowLeftRight", "ArrowRight", "BarChart3", "Bell", "BookOpen", "Briefcase", "Calendar", "CalendarCheck", "CalendarDays", "CalendarRange", "Check", "CheckCircle", "CheckCircle2", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "ClipboardCheck", "ClipboardList", "ClipboardPlus", "Clock", "Cloud", "Construction", "Copy", "CopyPlus", "Delete", "Download", "Edit2", "Eye", "FileText", "Flag", "HelpCircle", "History", "Home", "Info", "ListChecks", "Lock", "LogIn", "LogOut", "Mail", "MapPin", "MoreHorizontal", "Palmtree", "Pencil", "Plus", "Printer", "RefreshCw", "RotateCcw", "Save", "Send", "SlidersHorizontal", "Thermometer", "Trash2", "User", "UserPlus", "Users", "Wallet", "WifiOff", "X"];
+const IKONY = ["AlertCircle", "AlertTriangle", "Archive", "ArchiveRestore", "ArrowLeft", "ArrowLeftRight", "ArrowRight", "BarChart3", "Bell", "BookOpen", "Briefcase", "Calendar", "CalendarCheck", "CalendarDays", "CalendarRange", "Check", "CheckCircle", "CheckCircle2", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "ClipboardCheck", "ClipboardList", "ClipboardPlus", "Clock", "Cloud", "Construction", "Copy", "CopyPlus", "Delete", "Download", "Edit2", "Eye", "FileText", "Flag", "HelpCircle", "History", "Home", "Hourglass", "Info", "ListChecks", "Lock", "LogIn", "LogOut", "Mail", "MapPin", "MoreHorizontal", "Palmtree", "Pencil", "Plus", "Printer", "RefreshCw", "RotateCcw", "Save", "Send", "SlidersHorizontal", "Thermometer", "Trash2", "User", "UserPlus", "Users", "Wallet", "WifiOff", "X"];
 const stub = (kod) => URL.createObjectURL(new Blob([kod], { type: "text/javascript" }));
 
 // Atrapa Supabase — nic nie leci do sieci, każdy zapis wraca z wymyślonym id.
@@ -195,7 +195,31 @@ const poprzedniMiesiac = (h) => {
     ];
 
     function Harness() {
-      const [shifts, setShifts] = useState([]);
+      // ?nocna=1 — Bo odbił start wczoraj wieczorem i nie odbił końca. Zmiana
+      // jeszcze trwa (17 h limitu nie minęło), więc ma się pokazać ostrzeżenie
+      // "trwa od wczoraj". Po przekroczeniu progu zniknęłaby z listy trwających
+      // i stanęła w kolejce kierownika — tego samego ekranu nie da się pokazać
+      // naraz, stąd przełącznik.
+      const [shifts, setShifts] = useState(() =>
+        new URLSearchParams(location.search).get("nocna") === "1"
+          ? [
+              {
+                id: "shN",
+                user_id: "u2",
+                user_name: "Bo",
+                lokal: "Ceglana",
+                stanowisko: "Kucharz",
+                start_time: (() => {
+                  const d = new Date();
+                  d.setDate(d.getDate() - 1);
+                  d.setHours(20, 0, 0, 0);
+                  return d;
+                })(),
+                end_time: null,
+              },
+            ]
+          : []
+      );
       const [shiftSwaps, setShiftSwaps] = useState([]);
       const [issues, setIssues] = useState([]);
       const [notifications, setNotifications] = useState([]);
@@ -204,6 +228,25 @@ const poprzedniMiesiac = (h) => {
       // tablecie jest jedyną drogą do cudzej checklisty.
       const [taskCompletions, setTaskCompletions] = useState([]);
       const [dayLogEntries, setDayLogEntries] = useState([]);
+      // Lista osób musi być stanem, bo tablet sam ją uzupełnia: osoba dodana
+      // na próbę ma się pojawić od razu, bez przeładowania strony.
+      const [users, setUsers] = useState(() => [
+        { id: "u2", name: "Bo", role: "open", active: true, archived: false,
+          default_lokal: "Ceglana", default_stanowisko: "Kucharz" },
+        // Kucharz wolny w dniu zmiany Bo — jedyny kandydat przy "oddaj".
+        { id: "u3", name: "Cezary", role: "open", active: true, archived: false,
+          default_lokal: "Ceglana", default_stanowisko: "Kucharz" },
+        // Z PIN-em blokady — po kliknięciu ma wyjść klawiatura, nie konto.
+        // Pracuje tego samego dnia co Bo: przy "oddaj" jej nie ma, przy
+        // "zamień się" jest — bo wtedy oddaje własną zmianę.
+        { id: "u4", name: "Dorota", role: "open", active: true, archived: false,
+          default_lokal: "Ceglana", default_stanowisko: "Kucharz", kiosk_pin: "1234" },
+        // Czeka na decyzję kierownika: ma mieć plakietkę "na próbę" na liście
+        // i skrócony zestaw zakładek po wejściu (bez Grafiku).
+        { id: "u5", name: "Na Próbę", role: "open", active: true, archived: false,
+          default_lokal: "Ceglana", default_stanowisko: "Kelner", email: "",
+          probny_status: "oczekuje", probny_od: "2026-09-19", probny_przez: "Tablet Ceglana" },
+      ]);
       const taskBlocks = [
         { id: "bk1", lokal: "Ceglana", nazwa: "Otwarcie lokalu", schedule_type: "poranne",
           deadline_time: "10:00", kolejnosc: 0, active: true, archived: false },
@@ -237,18 +280,7 @@ const poprzedniMiesiac = (h) => {
           { id: "s3", name: "Kelner", lokal_name: "Ceglana", archived: false },
         ],
         shifts, setShifts,
-        users: [
-          { id: "u2", name: "Bo", role: "open", active: true, archived: false,
-            default_lokal: "Ceglana", default_stanowisko: "Kucharz" },
-          // Kucharz wolny w dniu zmiany Bo — jedyny kandydat przy "oddaj".
-          { id: "u3", name: "Cezary", role: "open", active: true, archived: false,
-            default_lokal: "Ceglana", default_stanowisko: "Kucharz" },
-          // Z PIN-em blokady — po kliknięciu ma wyjść klawiatura, nie konto.
-          // Pracuje tego samego dnia co Bo: przy "oddaj" jej nie ma, przy
-          // "zamień się" jest — bo wtedy oddaje własną zmianę.
-          { id: "u4", name: "Dorota", role: "open", active: true, archived: false,
-            default_lokal: "Ceglana", default_stanowisko: "Kucharz", kiosk_pin: "1234" },
-        ],
+        users, setUsers,
         issues, setIssues,
         notifications, setNotifications,
         tasks, taskBlocks, taskCompletions, setTaskCompletions,

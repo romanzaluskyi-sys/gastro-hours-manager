@@ -7,6 +7,7 @@ import { api } from "../api/supabase";
 import { createEmployeeNotification } from "../api/notifications";
 import { sendToGoogleSheets } from "../api/googleSheets";
 import { toLocalYMD } from "../api/googleSheets";
+import { znajdzKolizjeWBazie } from "./shifts";
 
 const fmtHHMM = (d) =>
   d
@@ -69,19 +70,38 @@ export const resolveCorrection = async ({
       "EDIT_SHIFT"
     );
   } else {
-    savedShift = await api.post("shifts", {
-      user_id: issue.user_id,
-      user_name: issue.user_name,
-      lokal: finalValues.lokal,
-      stanowisko: finalValues.stanowisko,
-      start_time: startD.toISOString(),
-      end_time: endD ? endD.toISOString() : null,
-      godzin,
+    // ⚠️ Zgłoszenie "Zapomniałem odbić" tworzy NOWY wiersz godzin, więc dwa
+    // wywołania tego samego zatwierdzenia dają dwa wpisy — dokładnie to, co
+    // 08.09.2026 zdarzyło się w kolejce braków odbicia. Pytamy bazy, zanim
+    // dopiszemy: jeśli ta zmiana już tam jest, przyjmujemy ją zamiast tworzyć
+    // drugą, a zgłoszenie i tak zostanie rozwiązane niżej.
+    const juzJest = await znajdzKolizjeWBazie({
+      userId: issue.user_id,
+      start: startD,
+      end: endD,
+      excludeId: null,
     });
-    sendToGoogleSheets(
-      { ...savedShift, start_time: startD, end_time: endD },
-      "ADD_SHIFT"
-    );
+    if (juzJest) {
+      // Wiersz już jest — bierzemy istniejący zamiast tworzyć drugi. Reszta
+      // (ślad w shift_edits, rozwiązanie zgłoszenia, powiadomienie) musi się
+      // wykonać normalnie: wcześniejsze wyjście zostawiłoby zgłoszenie w
+      // stanie "nowe" i wróciłoby ono do kolejki następnego dnia.
+      savedShift = juzJest;
+    } else {
+      savedShift = await api.post("shifts", {
+        user_id: issue.user_id,
+        user_name: issue.user_name,
+        lokal: finalValues.lokal,
+        stanowisko: finalValues.stanowisko,
+        start_time: startD.toISOString(),
+        end_time: endD ? endD.toISOString() : null,
+        godzin,
+      });
+      sendToGoogleSheets(
+        { ...savedShift, start_time: startD, end_time: endD },
+        "ADD_SHIFT"
+      );
+    }
   }
 
   await api.patch("issues", issue.id, { status: "rozwiazane" });

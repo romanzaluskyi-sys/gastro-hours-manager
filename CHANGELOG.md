@@ -5,6 +5,90 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.40.0 — 2026-09-19
+
+- **Zmiana, której nikt nie zakończył, przestaje udawać, że trwa.** Jeśli ktoś
+  odbił start i wyszedł bez odbicia końca, po upływie tolerancji zmiana znika z
+  ekranu „Kto jest teraz w pracy" i trafia do Zatwierdzania zmian jako pozycja do
+  decyzji. **Godzin nikomu nie dopisujemy** — do czasu decyzji taka zmiana liczy
+  się jako zero godzin, bo zgadnięta godzina wyjścia to czyjaś wypłata.
+- Kierownik ma dwa przyciski: **Zapisz godziny** (z podpowiedzianą godziną z
+  grafiku, jeśli zmiana tam stała) albo **Nie było zmiany**. W obu wypadkach
+  pracownik dostaje wiadomość, co się z jego godzinami stało.
+- **Dwa progi, ustawiane per lokal** (Pracownicy → Lokale): ile godzin po
+  planowanym końcu zmiany jeszcze czekamy (domyślnie 4) i jak długo może trwać
+  zmiana kogoś, kogo tego dnia nie było w grafiku (domyślnie 17).
+- **Tablet mówi o tym od razu.** Kto ma niezakończoną zmianę z poprzedniego dnia,
+  widzi to na czerwono na swoim ekranie i może ją zamknąć, podając właściwą
+  godzinę — zanim zrobi to za niego kolejka kierownika. Przy nazwisku na liście
+  osób stoi podpis „Niezakończona zmiana z…".
+- **Raz dziennie rano przypomnienie** idzie do pracownika i do kierownika lokalu.
+- **Nowa osoba na próbę — wprost z Tabletu Służbowego.** Ktoś przychodzi na dzień
+  próbny, a kierownika w lokalu nie ma: przycisk pod listą osób, trzy pola (imię i
+  nazwisko, lokal, stanowisko) i można odbijać godziny oraz oglądać je w Raporcie.
+- Taka osoba **nie pojawia się w Grafiku** i **nie zaloguje się z własnego
+  telefonu** — konto powstaje bez e-maila i bez PIN-u, więc istnieje wyłącznie na
+  tym tablecie.
+- **Kierownik dostaje ją do decyzji** w Zatwierdzaniu zmian, razem z liczbą już
+  odbitych godzin. **Zatwierdź** robi z niej zwykłego pracownika (dane umowy
+  uzupełnia się w karcie), **Odrzuć** przenosi konto do archiwum — a odbite
+  godziny zostają, bo należą się za przepracowany dzień.
+- Lista pracowników odświeża się teraz sama co 45 sekund, jak godziny i
+  wiadomości: tablet stoi zalogowany tygodniami i musi widzieć zmiany zrobione
+  gdzie indziej.
+
+### Podwójne wpisy godzin z panelu
+
+- **Jedno kliknięcie w kolejce decyzji nie może już zapisać godzin dwa razy.**
+  08.09 jedno naciśnięcie „Dopisz godziny" utworzyło dwa identyczne wpisy
+  oddalone o cztery milisekundy — Dawidowi wyszło 20 godzin zamiast 10.
+  Blokada przycisku była zwykłym stanem ekranu, a ten aktualizuje się z
+  opóźnieniem, więc oba wywołania zdążyły przejść.
+- Teraz blokada działa natychmiast, a przed dopisaniem godzin aplikacja pyta
+  bazy, czy taka zmiana już tam nie jest — to samo zabezpieczenie, które
+  Tablet Służbowy ma od 0.36.2. Dotyczy zarówno kolejki „Był w grafiku, nie
+  odbił", jak i zatwierdzania zgłoszeń „Zapomniałem odbić".
+
+### Raporty i koszty
+
+- **Koszt liczy się wreszcie dla wszystkich.** Do tej pory brana była wyłącznie
+  stawka godzinowa, więc każdy pracownik na umowie o pracę miał koszt pusty, a
+  cały miesiąc świecił „dane niepełne". Teraz przy umowie o pracę liczy się
+  kwota z umowy plus narzut z ustawień lokalu — tak samo jak w karcie pracownika
+  i w Grafiku.
+- **Zakładka otwiera się na miesiącu poprzednim**, a nie bieżącym: wchodzi się
+  tu po to, żeby przejrzeć miesiąc zamknięty. Powrót to jedno kliknięcie
+  („Bieżący miesiąc"), a wejście z imienia w Rejestrze Godzin albo w Aktywnych
+  przenosi od razu na miesiąc tamtej zmiany.
+- **„Według lokalu" pokazuje teraz także koszt.** Wynagrodzenie z umowy o pracę
+  rozkłada się między lokale proporcją godzin i jest wtedy oznaczone „~" —
+  to alokacja, nie wydatek jednego miejsca. Suma zgadza się z kafelkiem u góry.
+- **Pasek porównania z poprzednim miesiącem**: godziny, koszt i koszt za
+  godzinę. Bez zieleni i czerwieni — wyższy koszt przy wyższym utargu nie jest
+  porażką.
+- **W raporcie są wyłącznie osoby z zarejestrowanymi godzinami w danym
+  miesiącu** — nikt nie jest dopisywany z listy pracowników. Osoba zatrudniona
+  we wrześniu nie pojawi się w sierpniowym zestawieniu.
+- **Sygnał przed wypłatą w wierszu pracownika**: „zmiana bez zakończenia —
+  godziny nierozliczone".
+- **Eksport CSV działa** — podsumowanie na osobę za wybrany miesiąc (godziny, w
+  tym urlop, liczba zmian, koszt). Pusta komórka zamiast zera tam, gdzie
+  wynagrodzenia nie wpisano.
+- **Godziny ponad normę są doliczane do kosztu.** Przy umowie o pracę kwota z
+  umowy to podłoga: poniżej normy koszt się nie zmniejsza, ale każda godzina
+  ponad normę dolicza się po stawce wynikającej z tej samej umowy (kwota
+  podzielona przez normę miesiąca). Widać to też w karcie pracownika —
+  „umowa + 4 h ponad normą 44 h" zamiast dawnego „wg umowy, niezależnie od
+  godzin", które było po prostu nieprawdą.
+- **Trzy przekroje zamiast stosu sekcji**: przełącznik Lokale / Stanowiska /
+  Pracownicy pod kafelkami. Kafelki i porównanie z poprzednim miesiącem
+  zostają nad wszystkim — zmienia się tylko oś: gdzie wydaliśmy, na co, czy
+  komu. „Według stanowiska" jest przy okazji nowe: ile kosztuje kuchnia, a ile
+  sala.
+- **Każdą pozycję da się rozwinąć strzałką** i zobaczyć, z kogo się składa —
+  domyślnie wszystko zwinięte. Kliknięcie nazwiska w środku prowadzi wprost do
+  karty tej osoby.
+
 ## 0.39.0 — 2026-09-17
 
 - **Grafik wie, ile kosztuje.** Nad siatką tygodnia stoją teraz trzy karty:

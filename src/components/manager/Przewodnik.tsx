@@ -23,6 +23,27 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.40.0",
+    date: "2026-09-19",
+    items: [
+      "Zmiana zaczęta i nieodbita do końca znika z „Kto jest teraz w pracy\" i trafia do Zatwierdzania zmian — godzin nikomu nie dopisujemy, do decyzji liczy się jako zero.",
+      "Dwa przyciski decyzji: „Zapisz godziny\" (z podpowiedzią z grafiku) albo „Nie było zmiany\"; pracownik dostaje wiadomość w obu wypadkach.",
+      "Progi ustawia się per lokal (Pracownicy → Lokale): tolerancja po grafiku (domyślnie 4 godz.) i maksymalna zmiana poza grafikiem (domyślnie 17 godz.).",
+      "Na tablecie niezakończona zmiana z poprzedniego dnia świeci na czerwono i da się ją zamknąć właściwą godziną; przy nazwisku stoi podpis „Niezakończona zmiana z…\".",
+      "Nowa osoba na próbę wprost z Tabletu Służbowego: imię i nazwisko, lokal, stanowisko — i już odbija godziny.",
+      "Osoba na próbę nie pokazuje się w Grafiku i nie zaloguje się z własnego telefonu, dopóki kierownik jej nie zatwierdzi.",
+      "Decyzja o niej czeka w Zatwierdzaniu zmian razem z liczbą odbitych godzin; odrzucenie przenosi konto do archiwum, a godziny zostają.",
+      "Jedno kliknięcie w kolejce decyzji nie zapisze już godzin dwa razy — blokada działa natychmiast, a przed zapisem sprawdzamy bazę.",
+      "Raporty i koszty: koszt liczy się też dla umowy o pracę (kwota z umowy plus narzut), a nie tylko dla stawki godzinowej.",
+      "Zakładka otwiera się na miesiącu poprzednim; wejście z imienia w Rejestrze albo Aktywnych przenosi na miesiąc tamtej zmiany.",
+      "„Według lokalu\" pokazuje koszt, a pasek pod kafelkami porównuje godziny i koszt z poprzednim miesiącem.",
+      "W raporcie są tylko osoby z zarejestrowanymi godzinami w danym miesiącu; w wierszu widać, czyje zmiany zostały bez zakończenia. Eksport CSV działa.",
+      "Godziny ponad normę doliczają się do kosztu po stawce z umowy — kwota z umowy jest podłogą, nie całością.",
+      "Trzy przekroje pod kafelkami: Lokale, Stanowiska, Pracownicy — zamiast wszystkiego jedno pod drugim.",
+      "Każdą pozycję rozwija strzałka: widać, z kogo składa się ta kwota, a kliknięcie nazwiska otwiera kartę tej osoby.",
+    ],
+  },
+  {
     version: "0.39.0",
     date: "2026-09-17",
     items: [
