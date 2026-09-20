@@ -54,9 +54,11 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 - **Pasek porównania z poprzednim miesiącem**: godziny, koszt i koszt za
   godzinę. Bez zieleni i czerwieni — wyższy koszt przy wyższym utargu nie jest
   porażką.
-- **Dwa sygnały przed wypłatą w wierszu pracownika**: „brak odbitych godzin w
-  tym miesiącu" (etatowiec, który kosztował pełną kwotę, a nie ma ani jednej
-  zmiany) i „zmiana bez zakończenia — godziny nierozliczone".
+- **W raporcie są wyłącznie osoby z zarejestrowanymi godzinami w danym
+  miesiącu** — nikt nie jest dopisywany z listy pracowników. Osoba zatrudniona
+  we wrześniu nie pojawi się w sierpniowym zestawieniu.
+- **Sygnał przed wypłatą w wierszu pracownika**: „zmiana bez zakończenia —
+  godziny nierozliczone".
 - **Eksport CSV działa** — podsumowanie na osobę za wybrany miesiąc (godziny, w
   tym urlop, liczba zmian, koszt). Pusta komórka zamiast zera tam, gdzie
   wynagrodzenia nie wpisano.

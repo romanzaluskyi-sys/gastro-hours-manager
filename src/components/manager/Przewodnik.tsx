@@ -36,7 +36,7 @@ const CHANGELOG = [
       "Raporty i koszty: koszt liczy się też dla umowy o pracę (kwota z umowy plus narzut), a nie tylko dla stawki godzinowej.",
       "Zakładka otwiera się na miesiącu poprzednim; wejście z imienia w Rejestrze albo Aktywnych przenosi na miesiąc tamtej zmiany.",
       "„Według lokalu\" pokazuje koszt, a pasek pod kafelkami porównuje godziny i koszt z poprzednim miesiącem.",
-      "W wierszu pracownika widać, kto nie ma odbitych godzin i czyje zmiany zostały bez zakończenia. Eksport CSV działa.",
+      "W raporcie są tylko osoby z zarejestrowanymi godzinami w danym miesiącu; w wierszu widać, czyje zmiany zostały bez zakończenia. Eksport CSV działa.",
       "Godziny ponad normę doliczają się do kosztu po stawce z umowy — kwota z umowy jest podłogą, nie całością.",
       "Trzy przekroje pod kafelkami: Lokale, Stanowiska, Pracownicy — zamiast wszystkiego jedno pod drugim.",
       "Każdą pozycję rozwija strzałka: widać, z kogo składa się ta kwota, a kliknięcie nazwiska otwiera kartę tej osoby.",

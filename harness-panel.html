@@ -378,9 +378,9 @@ const poprzedniMiesiac = (h) => {
           // Nic nie wypełnione — nie może wywrócić karty ani pokazać zmyślonej liczby.
           { id: "u4", name: "Dorota", active: true, archived: false, role: "open",
             default_lokal: "Ceglana" },
-          // Etat z kwotą z umowy i BEZ ani jednej odbitej godziny — kosztował
-          // pełne wynagrodzenie, więc musi być widoczny w Raportach i kosztach,
-          // mimo że nie ma go w żadnej zmianie.
+          // Etat z kwotą z umowy i BEZ ani jednej odbitej godziny. NIE MA go
+          // pokazać żaden miesiąc w Raportach i kosztach: dopisywanie takich
+          // osób wymyślało ludzi, których wtedy jeszcze nie zatrudniono.
           { id: "u7", name: "Filip", typ_umowy: "umowa_o_prace", wymiar_etatu: 1,
             wynagrodzenie_mies: 4000, active: true, archived: false, role: "closed",
             email: "f@x.pl", pin: "123456", default_lokal: "Ceglana",

@@ -269,34 +269,22 @@ export default function RaportyIKoszty({
       wTymLokalu[s.user_id] = (wTymLokalu[s.user_id] || 0) + hoursOf(s);
     });
 
-    // Etatowiec, który w tym lokalu nie odbił ani jednej godziny, i tak
-    // kosztował pełną kwotę z umowy. Bez tego wiersza strona "ile lokal wydał"
-    // po cichu gubi ten wydatek — a to prawie zawsze znak, że coś wymaga
-    // wyjaśnienia (choroba, urlop bezpłatny, nieodbite zmiany). Kogo jeszcze
-    // nie zatrudniono albo kto już odszedł, pomijamy: jego zero nic nie znaczy.
-    const poczatekM = toLocalYMD(new Date(rok, miesIdx, 1));
-    const koniecM = toLocalYMD(new Date(rok, miesIdx + 1, 0));
-    // ⚠️ ...ale TYLKO w miesiącu, w którym cokolwiek się działo. Miesiąc bez
-    // ani jednej zmiany to prawie zawsze miesiąc sprzed wdrożenia systemu, a
-    // nie miesiąc, w którym cała załoga siedziała w domu na pełnej pensji.
-    // Widmowa lista płac za taki miesiąc psuje też pasek porównania: pokazywał
-    // "bez zmian" wobec lipca, w którym nie było żadnych danych. Ta sama
-    // zasada co pomijanie pustych miesięcy w `bilansOkresu`.
-    const bezGodzin = (pShifts.length === 0 ? [] : users || []).filter(
-      (u) =>
-        !wTymLokalu[u.id] &&
-        !u.archived &&
-        naEtacie(u) &&
-        matchesFilter(u.default_lokal) &&
-        kosztOsoby(u, 0, rok, miesIdx) != null &&
-        !(u.data_zatrudnienia && u.data_zatrudnienia > koniecM) &&
-        !(u.ostatni_dzien && u.ostatni_dzien < poczatekM)
-    );
-
-    const widoczneOsoby = new Set([
-      ...pShifts.map((s) => s.user_id).filter(Boolean),
-      ...bezGodzin.map((u) => u.id),
-    ]);
+    // ⚠️ W raporcie są WYŁĄCZNIE osoby z zarejestrowanymi godzinami w tym
+    // miesiącu — nikogo nie dopisujemy z listy pracowników.
+    //
+    // Przez chwilę (0.40.0, jeszcze przed wdrożeniem) dopisywaliśmy tu
+    // etatowców bez ani jednej odbitej godziny, bo pensja należy im się
+    // niezależnie od godzin. W praktyce to WYMYŚLAŁO ludzi: osoba zatrudniona
+    // we wrześniu pokazywała się z pełną kwotą w każdym wcześniejszym
+    // miesiącu, w którym jeszcze nie pracowała. Daty zatrudnienia i odejścia
+    // są w kartach zwykle puste, więc nie ma na czym oprzeć takiego
+    // dopisywania — jedynym twardym śladem obecności w miesiącu jest odbita
+    // zmiana.
+    //
+    // Konsekwencja, świadoma: nieobecność etatowca (choroba, urlop bezpłatny,
+    // nieodbite zmiany) nie pokaże się tu jako wydatek. To pytanie zadaje
+    // bilans okresu w karcie pracownika, gdzie jest komu je zadać.
+    const widoczneOsoby = new Set(pShifts.map((s) => s.user_id).filter(Boolean));
     const zakres = pAll.filter((s) => s.user_id && widoczneOsoby.has(s.user_id));
 
     const byUser = {};
@@ -801,16 +789,9 @@ export default function RaportyIKoszty({
                   <p className="text-xs text-[#6E6E66] truncate">
                     {r.user.default_stanowisko || "—"} · {r.count} zmiany
                   </p>
-                  {/* Dwa RÓŻNE powody zera i nie wolno ich zlepić w jeden
-                      komunikat. Etatowiec bez ani jednej zmiany kosztował pełną
-                      kwotę z umowy i to pytanie o nieobecność, której nikt nie
-                      wpisał. Zmiana bez odbitego końca to co innego: człowiek
-                      był, tylko jego godziny czekają na decyzję kierownika. */}
-                  {r.count === 0 && (
-                    <p className="text-xs text-[#8A3A2B] font-bold truncate">
-                      brak odbitych godzin w tym miesiącu
-                    </p>
-                  )}
+                  {/* Zero godzin przy istniejącej zmianie znaczy jedno:
+                      nikt nie odbił jej końca. Człowiek był, tylko jego
+                      godziny czekają na decyzję kierownika. */}
                   {r.bezKonca > 0 && (
                     <p className="text-xs text-[#8A3A2B] font-bold truncate">
                       {r.bezKonca === 1

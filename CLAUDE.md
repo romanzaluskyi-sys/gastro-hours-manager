@@ -1700,16 +1700,19 @@ stawki godzinowej, to jest ten sam błąd.
   etatowca jest miesięczne i nie da się go rozciąć po miejscach inaczej; dzielimy
   właśnie tak, żeby rozbicie sumowało się DOKŁADNIE do kafelka wyżej. Znak `~`
   stoi tylko tam, gdzie naprawdę było co dzielić (etat w kilku lokalach).
-- ⚠️ **Etatowiec bez ani jednej zmiany dostaje wiersz z pełnym kosztem — ale
-  tylko w miesiącu, w którym cokolwiek się działo.** Miesiąc bez żadnej zmiany
-  to prawie zawsze miesiąc sprzed wdrożenia, nie miesiąc na pełnej pensji bez
-  pracy; widmowa lista płac psuła też pasek porównania („bez zmian" wobec
-  miesiąca bez danych). Ta sama zasada co pomijanie pustych miesięcy w
-  `bilansOkresu`.
-- **Dwa sygnały zera i nie wolno ich zlepić**: `count === 0` to „brak odbitych
-  godzin" (pytanie o nieobecność, której nikt nie wpisał), a `bezKonca > 0` to
-  „zmiana bez zakończenia" (człowiek był, godziny czekają na decyzję — patrz
-  „Zmiany bez zakończenia" wyżej).
+- ⚠️ **W raporcie są WYŁĄCZNIE osoby z zarejestrowanymi godzinami w tym
+  miesiącu.** Nikogo nie dopisujemy z listy pracowników. Pierwsza wersja
+  0.40.0 dopisywała etatowców bez ani jednej odbitej godziny (pensja należy
+  się niezależnie od godzin) i to WYMYŚLAŁO ludzi: osoba zatrudniona we
+  wrześniu pokazywała się z pełną kwotą w każdym wcześniejszym miesiącu.
+  `data_zatrudnienia`/`ostatni_dzien` są w kartach zwykle puste, więc nie ma na
+  czym oprzeć takiego dopisywania — jedynym twardym śladem obecności w
+  miesiącu jest odbita zmiana. Świadoma konsekwencja: nieobecność etatowca
+  (choroba, urlop bezpłatny) nie pokaże się tu jako wydatek; to pytanie zadaje
+  bilans okresu w karcie pracownika.
+- **Zero godzin przy istniejącej zmianie znaczy jedno**: nikt nie odbił jej
+  końca (`bezKonca > 0` → „zmiana bez zakończenia", patrz sekcja wyżej).
+  Człowiek był, godziny czekają na decyzję.
 - **Porównanie z poprzednim miesiącem jest BEZ zieleni i czerwieni.** Wyższy
   koszt przy wyższym utargu nie jest porażką, a więcej godzin nie jest ani dobre,
   ani złe samo z siebie. Koszt porównujemy tylko wtedy, gdy OBA miesiące są
