@@ -151,6 +151,99 @@ załadowaniem modułu (`harness-karta.html` — prawdziwa baza, `harness-app.htm
 To jedyna droga podania konfiguracji z pominięciem builda i ma być jawna:
 harness sięgający do prawdziwej bazy musi mieć to napisane u siebie.
 
+## Logowanie i dostęp do danych — W TRAKCIE (Etap 3, od 0.41.0)
+
+⚠️ **Stan na dziś: wszystkie polityki RLS to `using (true)`, a PIN-y porównuje
+PRZEGLĄDARKA** po pobraniu całej tabeli `users`. Klucz publishable jedzie w
+paczce do każdego, kto otworzy stronę, więc każdy, kto zna adres, może odczytać
+i zapisać wszystko — stawki, daty urodzenia, PIN-y. Migracja `0025` NIE
+zmieniła tego; dołożyła tylko fundament. Nie opisuj tego systemu jako
+zabezpieczonego, dopóki Etap 3c nie jest zrobiony.
+
+**Kto się faktycznie loguje** (29 aktywnych kont, pomiar z 2026-09-20):
+4 kierowników + 4 tablety (e-mail + 6-cyfrowy `pin`) i 4 pracowników z
+prywatnym telefonem (e-mail + `kiosk_pin`). **Pozostałych 17 nie loguje się
+w ogóle** — wybiera się ich z listy na tablecie, który jest już zalogowany.
+Dlatego kont w Auth jest 12, nie 29.
+
+⚠️ **Tożsamością na wspólnym tablecie jest TABLET, nie pracownik** (decyzja
+właściciela, 2026-09-20). Urządzenie stoi w lokalu pod fizyczną kontrolą i to
+jest jego zabezpieczenie; logowanie przed każdym odbiciem zabiłoby sens kiosku.
+Konsekwencja, którą trzeba znać: RLS zawęzi tablet do JEGO lokalu, ale
+wewnątrz lokalu nie odróżni, która osoba odbija — tak samo jak dziś.
+
+⚠️ **PIN docelowo ma wszędzie co najmniej 6 znaków** (Supabase Auth nie
+przyjmie krótszego hasła). Podnosi je `scripts/utworz-konta-auth.py`,
+dopisując `01` — także kontom BEZ e-maila, żeby na tablecie nie powstała
+mieszanka długości (klawiatura ma zatwierdzać sama, a nie prosić o "OK").
+
+⚠️ **To siedzi za osobną flagą `--podnies-piny`** i do 0.41.1 nie wolno jej
+było użyć: `KioskDashboard.tsx` miał zaszyte `length === 4` w dwóch miejscach
+i zatwierdzał sam na czwartej cyfrze, więc podniesiony PIN zablokowałby tym
+osobom wejście na tablecie — nazajutrz rano, przed zmianą.
+
+**Od 0.41.1 klawiatura przyjmuje obie długości naraz** (`PIN_AUTO = 6`,
+`PIN_MIN = 4`): sześć cyfr zatwierdza się samo, krótszy PIN zatwierdza
+przycisk "Otwórz". Dopiero to czyni flagę bezpieczną — i dlatego ta zmiana
+poszła OSOBNYM deployem, przed podniesieniem PIN-ów. Kolejność jest tu całą
+treścią: odwrotna wyłącza lokal na jedno rano.
+
+⚠️ **Ekran świadomie nie zna długości cudzego PIN-u**, choć dziś mógłby ją
+odczytać z `pinTarget.kiosk_pin`. Po przejściu na RPC `sprawdz_kiosk_pin` PIN
+przestanie opuszczać bazę i ta wiedza zniknie — logika oparta na niej
+musiałaby wtedy powstać drugi raz, inaczej. Stąd też kropek jest tyle, ile
+wpisano, a nie tyle, ile "trzeba".
+
+**Etapy** (3a zrobione, reszta nie):
+- **3a — fundament.** Migracja `0025`: `users.auth_id`, helpery
+  `moje_konto`/`moja_rola`/`widzi_wszystko`/`moje_lokale` i RPC
+  `sprawdz_kiosk_pin`. Konta zakłada `scripts/utworz-konta-auth.py`
+  (SUCHY przebieg domyślnie, wymaga klucza SERVICE ROLE z pominięciem repo).
+  Nic jeszcze tego nie używa.
+- **3b — logowanie przez Auth.** Klient GoTrue jest gotowy
+  ([`api/auth.ts`](src/api/auth.ts), sprawdzian `harness-auth.html`); reszta
+  nie. Zostaje: `api/supabase.ts` ma wysyłać token użytkownika zamiast klucza
+  publishable (i odświeżać po 401), LoginScreen ma przestać pobierać
+  wszystkich `users` i porównywać PIN w przeglądarce, blokada PIN-em na
+  tablecie ma iść przez `sprawdz_kiosk_pin`, a zmiana cudzego PIN-u przez
+  kierownika potrzebuje funkcji w root-level `api/` (patrz niżej o SERVICE
+  ROLE). Klawiatura kiosku jest już gotowa — 0.41.1, osobny deploy.
+
+  ⚠️ **Trzy rzeczy w `api/auth.ts`, których nie widać przy ręcznym
+  logowaniu, a każda wyłącza lokal:**
+  1. **Refresh tokeny ROTUJĄ.** Drugie odświeżenie zużytym tokenem unieważnia
+     całą sesję, a `App.tsx` startuje od `Promise.all` z pięcioma
+     zapytaniami — stąd jedno wspólne `trwajaceOdswiezenie` zamiast pięciu
+     równoległych. Bez tego użytkownik wylatuje dokładnie przy wejściu.
+  2. **Brak sieci to NIE powód do wylogowania.** Tablet w kuchni traci wi-fi
+     kilka razy dziennie; wyjątek z `fetch` zostawia sesję nietkniętą, a
+     dopiero ODPOWIEDŹ serwera, że token jest nieważny, ją czyści.
+  3. **`odswiezPoBledzie` istnieje osobno**, bo zegar tabletu bywa
+     przestawiony: token "ważny jeszcze 40 minut" według urządzenia może być
+     martwy według serwera, więc samo wyprzedzające odświeżanie nie
+     wystarcza — potrzebna jest reakcja na 401.
+- **3c — zawężenie polityk** tabela po tabeli, z `scripts/sprawdz-dostep.py`
+  jako regresją: skrypt próbuje zestawu zapytań kluczem anonimowym i sprawdza,
+  co ma przejść, a co nie.
+
+⚠️ **Helpery MUSZĄ być `security definer` i `stable`, z `set search_path`.**
+Polityka na `users`, która czyta `users` po rolę, zapętliłaby się bez definera;
+`volatile` kazałoby Postgresowi wołać funkcję raz na wiersz (przy `shifts` to
+dziesiątki tysięcy wywołań na jedno wejście w Rejestr Godzin); bez
+`search_path` ktoś podstawia własną tabelę `users` pod funkcję działającą z
+prawami właściciela.
+
+⚠️ **`moje_lokale()` i `hasAccessToLokal` w `ManagerDashboard.tsx` muszą mówić
+to samo** — puste `allowed_lokale` u kierownika sieci znaczy "wszystkie". Gdy
+się rozjadą, ekran pokaże coś, czego baza nie wyda (albo odwrotnie), a to
+wygląda jak losowa awaria, nie jak błąd uprawnień.
+
+⚠️ **Zmiana cudzego hasła wymaga klucza SERVICE ROLE**, którego front mieć nie
+może. Kierownik ustawiający PIN w karcie pracownika będzie więc potrzebował
+funkcji w root-level `api/` (sprawdzającej token i rolę wołającego), a nie
+kolejnego zapisu z przeglądarki. Tej funkcji jeszcze NIE MA — powstaje w 3b,
+razem z logowaniem.
+
 ## Struktura plików
 
 Frontend jest rozbity na moduły wg odpowiedzialności (refaktoryzacja z
@@ -181,6 +274,9 @@ docs/sql/migrations/          — migracje, stosowane przez scripts/migrate.py (
 docs/sql/tools/               — zapytania pomocnicze (zrzut schematu, weryfikacja Grafiku,
                                  ostatnie-bledy.sql — dziennik błędów aplikacji)
 scripts/migrate.py            — runner migracji, domyślnie SUCHY przebieg
+scripts/utworz-konta-auth.py  — zakłada konta w Supabase Auth dla tych 12 kont,
+                                 które faktycznie się logują, i podnosi PIN-y
+                                 do 6 znaków; SUCHY przebieg domyślnie
 scripts/sprawdz-wersje.py     — czy numer wersji stoi ten sam w czterech
                                  miejscach (config.ts, version.json,
                                  CHANGELOG.md, Przewodnik.tsx); woła go CI
@@ -205,6 +301,10 @@ src/
   api/
     supabase.ts               — obiekt `api` (get z paginacją/post/patch/delete/patchByFilter)
     googleSheets.ts            — sendToGoogleSheets, toLocalYMD
+    auth.ts                    — logowanie przez Supabase Auth (GoTrue) pisane
+                                  ręcznie na fetchu: zaloguj/odswiez/token/
+                                  wyloguj, sesja w localStorage. Patrz
+                                  "Logowanie i dostęp do danych" wyżej
     errors.ts                  — zapiszBlad/ustawKontekstBledow/
                                   wlaczGlobalneNasluchy: dziennik błędów do
                                   tabeli app_errors, patrz "Błędy" niżej
@@ -891,6 +991,9 @@ odpadają. Zamiast tego dwa pliki w katalogu głównym, uruchamiane przez
   między poziomami — dwa pozostałe renderują komponenty w izolacji i taki błąd
   przepuszczą. Lista ikon lucide jest w nim wygenerowana ze wszystkich importów
   w `src/`, więc obejmuje każdy komponent panelu;
+- `harness-auth.html` — logowanie: rotacja refresh tokenów przy równoległych
+  żądaniach, zachowanie przy braku sieci i przy odmowie serwera. `fetch` jest
+  podmieniony, więc nie trzeba znać niczyjego hasła;
 - `harness-bledy.html` — dziennik błędów: limit zapisów na sesję, odsiewanie
   powtórzeń, komplet pól wiersza i to, czy `ErrorBoundary` pokazuje ekran
   zamiast białej strony. `fetch` jest podmieniony, nic nie leci do sieci.
@@ -1161,7 +1264,8 @@ zakresem — wymaga Grafiku, którego nie ma.
   active, archived, stanowisko, sanepid_expiry, sanepid_last_notified,
   umowa_expiry, umowa_last_notified, kiosk_pin`. `sanepid_expiry`/
   `umowa_expiry`: `date`, nullable — terminy dokumentów pracownika, patrz
-  "Panel kierownika" wyżej. `kiosk_pin` (text, nullable, 4 cyfry, dodana
+  "Panel kierownika" wyżej. `kiosk_pin` (text, nullable, 4 LUB 6 cyfr — docelowo 6, patrz "Logowanie i
+  dostęp do danych"; klawiatura tabletu obsługuje obie długości, dodana
   2026-08-31) — blokada PIN-em na kiosku, patrz "Panel kierownika" i
   "Tablet Służbowy" wyżej; NIE mylić z kolumną `pin` (6-cyfrowy PIN
   logowania Email+PIN). Formularz kierownika do jej ustawiania istnieje
