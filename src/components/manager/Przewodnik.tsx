@@ -27,7 +27,8 @@ const CHANGELOG = [
     date: "2026-09-20",
     items: [
       "Pole „PIN blokady\" w karcie pracownika przyjmuje sześć cyfr — wcześniej nie dało się wpisać szóstej.",
-      "Ten sam PIN otwiera profil na tablecie i loguje na prywatnym telefonie; krótsze PIN-y działają dalej.",
+      "Ten sam PIN otwiera profil na tablecie i loguje na prywatnym telefonie.",
+      "Na Tablecie Służbowym PIN to dokładnie sześć cyfr i otwiera profil sam, bez przycisku — profil z krótszym PIN-em nie otworzy się w ogóle, popraw go w karcie.",
     ],
   },
   {

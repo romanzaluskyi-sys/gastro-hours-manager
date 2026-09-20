@@ -279,21 +279,21 @@ const KioskDashboard = ({
     }
   };
 
-  // ⚠️ Do 0.41.0 klawiatura miała zaszyte cztery cyfry w dwóch miejscach i
-  // zatwierdzała sama na czwartej. PIN musi urosnąć do sześciu znaków, bo
-  // krótszego hasła nie przyjmie Supabase Auth (patrz "Logowanie i dostęp do
-  // danych" w CLAUDE.md) — a między jedną długością a drugą jest kilka dni, w
-  // których część załogi ma jeszcze cztery cyfry, a część już sześć.
+  // PIN blokady ma DOKŁADNIE sześć cyfr i zatwierdza się sam — dokładnie tak,
+  // jak wcześniej cztery. Bez przycisku, bez potwierdzania: przy urządzeniu,
+  // które obsługuje się jedną ręką w biegu, każde dodatkowe dotknięcie jest
+  // kosztem płaconym kilkanaście razy dziennie (ustalenie właściciela).
   //
-  // Stąd dwa progi zamiast jednego: sześć cyfr zatwierdza się samo (docelowy,
-  // szybki przypadek), a od czterech można zatwierdzić przyciskiem.
+  // ⚠️ Sześć, a nie cztery, bo PIN jest jednocześnie hasłem do logowania z
+  // prywatnego telefonu, a Supabase Auth nie przyjmie krótszego niż 6 znaków
+  // (patrz "Logowanie i dostęp do danych" w CLAUDE.md).
   //
-  // ⚠️ Ekran świadomie NIE zna długości cudzego PIN-u, choć dziś mógłby ją
-  // odczytać z `pinTarget.kiosk_pin`. W następnym kroku PIN przestanie
-  // opuszczać bazę (RPC `sprawdz_kiosk_pin`) i ta wiedza zniknie — logika
-  // oparta na niej musiałaby wtedy powstać drugi raz, inaczej.
-  const PIN_AUTO = 6;
-  const PIN_MIN = 4;
+  // ⚠️ Stąd wynika twardy warunek na dane: KAŻDY ustawiony `kiosk_pin` musi
+  // mieć sześć cyfr. Krótszego nie da się tu wpisać, więc profil z PIN-em
+  // czterocyfrowym byłby nie do otwarcia. Pole w karcie pracownika ma
+  // `maxLength="6"`, a zapytanie sprawdzające, czy w bazie nie został jakiś
+  // krótszy, jest w docs/sql/tools/ostatnie-bledy.sql.
+  const DLUGOSC_PIN = 6;
 
   const zatwierdzPin = (wpisany) => {
     const target = pinTarget;
@@ -318,9 +318,9 @@ const KioskDashboard = ({
       return;
     }
     setPinEntered((prev) => {
-      if (prev.length >= PIN_AUTO) return prev;
+      if (prev.length >= DLUGOSC_PIN) return prev;
       const next = prev + k;
-      if (next.length === PIN_AUTO) setTimeout(() => zatwierdzPin(next), 150);
+      if (next.length === DLUGOSC_PIN) setTimeout(() => zatwierdzPin(next), 150);
       return next;
     });
   };
@@ -626,17 +626,13 @@ const KioskDashboard = ({
               Ten profil jest zablokowany
             </div>
             <div className="text-sm text-[#6E6E66] mt-2 max-w-[260px]">
-              {pinTarget?.name} zabezpieczył(a) profil PIN-em. Wpisz PIN, żeby
-              otworzyć.
+              {pinTarget?.name} zabezpieczył(a) profil PIN-em. Wpisz 6 cyfr,
+              żeby otworzyć.
             </div>
-            {/* Kropek tyle, ile wpisano — nie tyle, ile "trzeba". Stała liczba
-                pól mówiłaby osobie z czterocyfrowym PIN-em, że wpisała za
-                mało, a długości cudzego PIN-u ten ekran nie zna. */}
+            {/* Sześć pól na stałe: długość jest jedna dla wszystkich, więc
+                kropki mogą pokazywać, ile jeszcze zostało. */}
             <div className="flex gap-4 mt-8">
-              {Array.from(
-                { length: Math.min(PIN_AUTO, Math.max(PIN_MIN, pinEntered.length)) },
-                (_, i) => i
-              ).map((i) => (
+              {[0, 1, 2, 3, 4, 5].map((i) => (
                 <div
                   key={i}
                   className={`w-[18px] h-[18px] rounded-full border-[2.5px] ${
@@ -682,20 +678,6 @@ const KioskDashboard = ({
                 <Delete size={20} />
               </button>
             </div>
-            {/* Dla PIN-ów krótszych niż sześć cyfr. Przycisk stoi tu zawsze, a
-                nie pojawia się po czwartej cyfrze: element, który wyskakuje w
-                trakcie wpisywania, przesuwa klawiaturę pod palcem. */}
-            <button
-              onClick={() => zatwierdzPin(pinEntered)}
-              disabled={pinEntered.length < PIN_MIN}
-              className={`mt-6 w-full max-w-[280px] border-[2.5px] rounded-lg font-['Archivo'] font-bold py-3 ${
-                pinEntered.length < PIN_MIN
-                  ? "border-[#B7B6AE] text-[#B7B6AE] bg-white"
-                  : "border-[#171714] text-white bg-[#DE3A22]"
-              }`}
-            >
-              Otwórz
-            </button>
           </main>
         </div>
       </div>

@@ -240,12 +240,7 @@ const poprzedniMiesiac = (h) => {
         // Pracuje tego samego dnia co Bo: przy "oddaj" jej nie ma, przy
         // "zamień się" jest — bo wtedy oddaje własną zmianę.
         { id: "u4", name: "Dorota", role: "open", active: true, archived: false,
-          default_lokal: "Ceglana", default_stanowisko: "Kucharz", kiosk_pin: "1234" },
-        // PIN sześciocyfrowy — taki, jaki będzie po `--podnies-piny`. Obie
-        // długości muszą działać JEDNOCZEŚNIE: między jednym a drugim
-        // deployem część załogi ma jeszcze cztery cyfry, a część już sześć.
-        { id: "u6", name: "Ewa", role: "open", active: true, archived: false,
-          default_lokal: "Ceglana", default_stanowisko: "Kucharz", kiosk_pin: "123401" },
+          default_lokal: "Ceglana", default_stanowisko: "Kucharz", kiosk_pin: "123456" },
         // Czeka na decyzję kierownika: ma mieć plakietkę "na próbę" na liście
         // i skrócony zestaw zakładek po wejściu (bez Grafiku).
         { id: "u5", name: "Na Próbę", role: "open", active: true, archived: false,
@@ -353,32 +348,38 @@ const poprzedniMiesiac = (h) => {
     (async () => {
       try {
         await czekaj(500);
-        sprawdz("lista osób się pokazała", widac("Dorota") && widac("Ewa"));
+        sprawdz("lista osób się pokazała", widac("Dorota"));
 
-        // --- PIN czterocyfrowy: sam się nie zatwierdzi, otwiera przycisk ---
         klik("Dorota"); await czekaj(200);
         sprawdz("osoba z PIN-em prowadzi do klawiatury", widac("Ten profil jest zablokowany"));
+
+        // ⚠️ Żadnego przycisku zatwierdzania. PIN ma sześć cyfr i zatwierdza
+        // się sam — przy urządzeniu obsługiwanym jedną ręką w biegu każde
+        // dodatkowe dotknięcie jest kosztem płaconym kilkanaście razy dziennie.
+        sprawdz("nie ma przycisku zatwierdzania", !widac("Otwórz"));
+
+        // Niepełny PIN nie może niczego otworzyć ani wywołać błędu — dopóki
+        // nie ma sześciu cyfr, ekran po prostu czeka.
         await wpisz("1234"); await czekaj(400);
-        sprawdz("cztery cyfry NIE otwierają same", widac("Ten profil jest zablokowany"));
-        klik("Otwórz"); await czekaj(400);
-        sprawdz("cztery cyfry + Otwórz wpuszczają", !widac("Ten profil jest zablokowany"), 
+        sprawdz("cztery cyfry nic nie robią", widac("Ten profil jest zablokowany") && !widac("Niepoprawny"));
+
+        await wpisz("56"); await czekaj(500);
+        sprawdz("szósta cyfra otwiera sama", !widac("Ten profil jest zablokowany"),
           (document.getElementById("app").innerText || "").slice(0, 60));
 
-        // --- PIN sześciocyfrowy: zatwierdza się sam ---
-        klik("Zmień"); await czekaj(300);
-        klik("Ewa"); await czekaj(200);
-        sprawdz("druga osoba też ma blokadę", widac("Ten profil jest zablokowany"));
-        await wpisz("123401"); await czekaj(500);
-        sprawdz("sześć cyfr otwiera BEZ przycisku", !widac("Ten profil jest zablokowany"));
-
-        // --- zły PIN ---
+        // --- zły PIN, też sześciocyfrowy ---
         klik("Zmień"); await czekaj(300);
         klik("Dorota"); await czekaj(200);
-        await wpisz("9999"); await czekaj(100);
-        klik("Otwórz"); await czekaj(300);
+        await wpisz("999999"); await czekaj(400);
         sprawdz("zły PIN nie wpuszcza i mówi o tym", widac("Niepoprawny PIN"));
         await czekaj(1000);
         sprawdz("po błędzie pole samo się czyści", widac("Ten profil jest zablokowany"));
+
+        // Siódma cyfra nie ma gdzie wejść — inaczej po błędzie dałoby się
+        // wpisywać w nieskończoność i zatwierdzenie nigdy by nie wypadło.
+        await wpisz("1234567"); await czekaj(500);
+        sprawdz("po sześciu cyfrach klawiatura nie przyjmuje więcej",
+          !widac("Ten profil jest zablokowany") || widac("Niepoprawny PIN"));
       } catch (e) {
         sprawdz("przebieg bez wyjątku", false, e.message);
       }
