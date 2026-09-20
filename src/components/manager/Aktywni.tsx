@@ -79,7 +79,7 @@ export default function Aktywni({
                 </div>
                 <button
                   type="button"
-                  onClick={() => s.user_id && onNameClick(s.user_id)}
+                  onClick={() => s.user_id && onNameClick(s.user_id, s.start_time)}
                   className="flex-1 min-w-0 text-left"
                 >
                   <p className="font-['Archivo'] font-bold text-[13px] md:text-base truncate hover:underline hover:text-[#DE3A22]">
@@ -140,7 +140,7 @@ export default function Aktywni({
                   </div>
                   <button
                     type="button"
-                    onClick={() => s.user_id && onNameClick(s.user_id)}
+                    onClick={() => s.user_id && onNameClick(s.user_id, s.start_time)}
                     className="flex-1 min-w-0 text-left"
                   >
                     <p className="font-['Archivo'] font-bold text-[13px] md:text-base truncate hover:underline hover:text-[#DE3A22]">

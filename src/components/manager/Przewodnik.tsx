@@ -33,6 +33,10 @@ const CHANGELOG = [
       "Nowa osoba na próbę wprost z Tabletu Służbowego: imię i nazwisko, lokal, stanowisko — i już odbija godziny.",
       "Osoba na próbę nie pokazuje się w Grafiku i nie zaloguje się z własnego telefonu, dopóki kierownik jej nie zatwierdzi.",
       "Decyzja o niej czeka w Zatwierdzaniu zmian razem z liczbą odbitych godzin; odrzucenie przenosi konto do archiwum, a godziny zostają.",
+      "Raporty i koszty: koszt liczy się też dla umowy o pracę (kwota z umowy plus narzut), a nie tylko dla stawki godzinowej.",
+      "Zakładka otwiera się na miesiącu poprzednim; wejście z imienia w Rejestrze albo Aktywnych przenosi na miesiąc tamtej zmiany.",
+      "„Według lokalu\" pokazuje koszt, a pasek pod kafelkami porównuje godziny i koszt z poprzednim miesiącem.",
+      "W wierszu pracownika widać, kto nie ma odbitych godzin i czyje zmiany zostały bez zakończenia. Eksport CSV działa.",
     ],
   },
   {

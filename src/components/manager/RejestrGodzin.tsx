@@ -375,7 +375,7 @@ export default function RejestrGodzin({
                       </span>
                       <button
                         type="button"
-                        onClick={() => s.user_id && onNameClick(s.user_id)}
+                        onClick={() => s.user_id && onNameClick(s.user_id, s.start_time)}
                         className="flex-1 min-w-0 md:w-32 md:flex-none text-left font-bold text-[12px] md:text-sm truncate hover:underline hover:text-[#DE3A22]"
                       >
                         {s.user_name}

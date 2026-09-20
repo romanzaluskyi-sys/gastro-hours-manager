@@ -1669,6 +1669,48 @@ wtedy, gdy nie ma kogo zapytać o zgodę.
   pojawiłaby się na liście, a odrzucona nadal by na niej stała i dalej odbijała
   godziny — tablet stoi zalogowany tygodniami.
 
+## Raporty i koszty — przebudowa 2026-09-20 (0.40.0)
+
+⚠️ **Koszt liczy `kosztMiesiaca()` z `utils/umowy.ts`, NIE `godziny × users.stawka`.**
+Do 0.40.0 stała tam goła `users.stawka`, więc KAŻDY pracownik na umowie o pracę
+miał koszt `null`, wypadał z kafelka „Koszt" i cały miesiąc świecił „dane
+niepełne". To ta sama pomyłka, którą w 0.39.0 naprawiono w Pulsie
+(`autoPodsumowanie`) — jeśli znajdziesz trzecie miejsce liczące koszt ze
+stawki godzinowej, to jest ten sam błąd.
+
+- **Cała arytmetyka miesiąca siedzi w jednej funkcji `agreguj(rok, miesIdx)`**,
+  bo liczy się ją dwa razy: dla oglądanego miesiąca i dla poprzedniego (pasek
+  porównania). Skopiowana reguła rozjechałaby się przy pierwszej poprawce —
+  zwłaszcza reguła o dwóch zakresach, opisana niżej.
+- **Zakładka startuje na miesiącu POPRZEDNIM.** Wchodzi się tu raz na miesiąc i
+  po to, żeby przejrzeć miesiąc zamknięty; otwarta na bieżącym pokazywała połowę
+  danych i wyglądała na niekompletną. ⚠️ Dlatego `goToEmployeeReport` przekazuje
+  DATĘ klikniętej zmiany (`skok`) — bez tego klik w imię osoby stojącej właśnie
+  na zmianie otwierał jej pustą kartę w poprzednim miesiącu.
+- **Koszt per lokal to ALOKACJA proporcją godzin**, oznaczona `~`. Wynagrodzenie
+  etatowca jest miesięczne i nie da się go rozciąć po miejscach inaczej; dzielimy
+  właśnie tak, żeby rozbicie sumowało się DOKŁADNIE do kafelka wyżej. Znak `~`
+  stoi tylko tam, gdzie naprawdę było co dzielić (etat w kilku lokalach).
+- ⚠️ **Etatowiec bez ani jednej zmiany dostaje wiersz z pełnym kosztem — ale
+  tylko w miesiącu, w którym cokolwiek się działo.** Miesiąc bez żadnej zmiany
+  to prawie zawsze miesiąc sprzed wdrożenia, nie miesiąc na pełnej pensji bez
+  pracy; widmowa lista płac psuła też pasek porównania („bez zmian" wobec
+  miesiąca bez danych). Ta sama zasada co pomijanie pustych miesięcy w
+  `bilansOkresu`.
+- **Dwa sygnały zera i nie wolno ich zlepić**: `count === 0` to „brak odbitych
+  godzin" (pytanie o nieobecność, której nikt nie wpisał), a `bezKonca > 0` to
+  „zmiana bez zakończenia" (człowiek był, godziny czekają na decyzję — patrz
+  „Zmiany bez zakończenia" wyżej).
+- **Porównanie z poprzednim miesiącem jest BEZ zieleni i czerwieni.** Wyższy
+  koszt przy wyższym utargu nie jest porażką, a więcej godzin nie jest ani dobre,
+  ani złe samo z siebie. Koszt porównujemy tylko wtedy, gdy OBA miesiące są
+  policzone do końca — inaczej spadek znaczyłby tylko tyle, że komuś nie wpisano
+  wynagrodzenia.
+- **Kwoty formatuje `zl()` z `utils/budzet.ts`**, to samo co w Grafiku i Pulsie:
+  własny `toFixed(0) + " zł"` nie grupował tysięcy.
+- **CSV eksportuje podsumowanie OSÓB, nie listę zmian** — tamtą eksportuje
+  Rejestr Godzin. Brak wynagrodzenia wychodzi jako pusta komórka, nie zero.
+
 ⚠️ **Raporty i koszty mają DWA zakresy i nie wolno ich zlepić w jeden.**
 `periodShifts` (górny pasek, `matchesLokalFilter`) decyduje tylko o tym, KOGO
 widać na liście — to nawigacja. Wszystkie liczby idą z `zakresOsob`: pełne

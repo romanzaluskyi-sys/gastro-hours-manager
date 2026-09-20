@@ -126,6 +126,8 @@ const ManagerDashboard = ({
   const [przewodnikTab, setPrzewodnikTab] = useState("pracownicy");
   const [selectedLokal, setSelectedLokal] = useState("ALL");
   const [reportUserId, setReportUserId] = useState(null);
+  // Miesiąc, na który ma przeskoczyć zakładka Raporty przy wejściu z imienia.
+  const [reportSkok, setReportSkok] = useState(null);
   // Imię pracownika w Rejestr Godzin/Aktywni prowadzi tu — patrz onNameClick
   // przekazywane do tych komponentów.
   // Skok z paska "dzień niezamknięty" na Pulpicie prosto do właściwej karty —
@@ -139,8 +141,15 @@ const ManagerDashboard = ({
     setTab("puls");
   };
 
-  const goToEmployeeReport = (userId) => {
+  // ⚠️ Raporty i koszty otwierają się na miesiącu ZAMKNIĘTYM (0.40.0), a imię
+  // klika się na zmianie z konkretnego dnia — najczęściej dzisiejszej. Bez
+  // przekazania tej daty kierownik lądowałby na poprzednim miesiącu i widział
+  // pustą kartę osoby, która właśnie stoi na zmianie. Ten sam wzorzec co
+  // goToPuls (initialLokal/initialDate).
+  const goToEmployeeReport = (userId, dataZmiany) => {
     setReportUserId(userId);
+    const d = dataZmiany ? new Date(dataZmiany) : new Date();
+    setReportSkok({ rok: d.getFullYear(), mies: d.getMonth(), seq: Date.now() });
     setTab("raporty");
   };
 
@@ -1332,11 +1341,13 @@ const ManagerDashboard = ({
           <RaportyIKoszty
             users={users}
             shifts={shifts}
+            lokale={lokale}
             matchesFilter={matchesLokalFilter}
             hasAccessToLokal={hasAccessToLokal}
             onEditShift={openEditShift}
             selectedUserId={reportUserId}
             setSelectedUserId={setReportUserId}
+            skok={reportSkok}
             planShifts={planShifts}
           />
         )}
