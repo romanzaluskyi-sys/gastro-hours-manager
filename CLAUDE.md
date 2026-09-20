@@ -177,13 +177,22 @@ przyjmie krótszego hasła). Podnosi je `scripts/utworz-konta-auth.py`,
 dopisując `01` — także kontom BEZ e-maila, żeby na tablecie nie powstała
 mieszanka długości (klawiatura ma zatwierdzać sama, a nie prosić o "OK").
 
-⚠️ **To siedzi za osobną flagą `--podnies-piny` i NIE wolno jej użyć przed
-Etapem 3b.** `KioskDashboard.tsx` ma dziś zaszyte `length === 4` w dwóch
-miejscach i zatwierdza sam na czwartej cyfrze, a PIN porównuje w przeglądarce.
-PIN podniesiony do sześciu cyfr zablokowałby tym osobom wejście na tablecie —
-nazajutrz rano, przed zmianą. Bez tej flagi skrypt zakłada konta tylko tym,
-których PIN już spełnia minimum (8 kont), a resztę wypisuje jako "czeka na
-Etap 3b".
+⚠️ **To siedzi za osobną flagą `--podnies-piny`** i do 0.41.1 nie wolno jej
+było użyć: `KioskDashboard.tsx` miał zaszyte `length === 4` w dwóch miejscach
+i zatwierdzał sam na czwartej cyfrze, więc podniesiony PIN zablokowałby tym
+osobom wejście na tablecie — nazajutrz rano, przed zmianą.
+
+**Od 0.41.1 klawiatura przyjmuje obie długości naraz** (`PIN_AUTO = 6`,
+`PIN_MIN = 4`): sześć cyfr zatwierdza się samo, krótszy PIN zatwierdza
+przycisk "Otwórz". Dopiero to czyni flagę bezpieczną — i dlatego ta zmiana
+poszła OSOBNYM deployem, przed podniesieniem PIN-ów. Kolejność jest tu całą
+treścią: odwrotna wyłącza lokal na jedno rano.
+
+⚠️ **Ekran świadomie nie zna długości cudzego PIN-u**, choć dziś mógłby ją
+odczytać z `pinTarget.kiosk_pin`. Po przejściu na RPC `sprawdz_kiosk_pin` PIN
+przestanie opuszczać bazę i ta wiedza zniknie — logika oparta na niej
+musiałaby wtedy powstać drugi raz, inaczej. Stąd też kropek jest tyle, ile
+wpisano, a nie tyle, ile "trzeba".
 
 **Etapy** (3a zrobione, reszta nie):
 - **3a — fundament.** Migracja `0025`: `users.auth_id`, helpery
@@ -196,9 +205,9 @@ Etap 3b".
   nie. Zostaje: `api/supabase.ts` ma wysyłać token użytkownika zamiast klucza
   publishable (i odświeżać po 401), LoginScreen ma przestać pobierać
   wszystkich `users` i porównywać PIN w przeglądarce, blokada PIN-em na
-  tablecie ma iść przez `sprawdz_kiosk_pin`, klawiatura kiosku ma przyjmować
-  PIN dłuższy niż 4 cyfry, a zmiana cudzego PIN-u przez kierownika potrzebuje
-  funkcji w root-level `api/` (patrz niżej o SERVICE ROLE).
+  tablecie ma iść przez `sprawdz_kiosk_pin`, a zmiana cudzego PIN-u przez
+  kierownika potrzebuje funkcji w root-level `api/` (patrz niżej o SERVICE
+  ROLE). Klawiatura kiosku jest już gotowa — 0.41.1, osobny deploy.
 
   ⚠️ **Trzy rzeczy w `api/auth.ts`, których nie widać przy ręcznym
   logowaniu, a każda wyłącza lokal:**
@@ -1255,7 +1264,8 @@ zakresem — wymaga Grafiku, którego nie ma.
   active, archived, stanowisko, sanepid_expiry, sanepid_last_notified,
   umowa_expiry, umowa_last_notified, kiosk_pin`. `sanepid_expiry`/
   `umowa_expiry`: `date`, nullable — terminy dokumentów pracownika, patrz
-  "Panel kierownika" wyżej. `kiosk_pin` (text, nullable, 4 cyfry, dodana
+  "Panel kierownika" wyżej. `kiosk_pin` (text, nullable, 4 LUB 6 cyfr — docelowo 6, patrz "Logowanie i
+  dostęp do danych"; klawiatura tabletu obsługuje obie długości, dodana
   2026-08-31) — blokada PIN-em na kiosku, patrz "Panel kierownika" i
   "Tablet Służbowy" wyżej; NIE mylić z kolumną `pin` (6-cyfrowy PIN
   logowania Email+PIN). Formularz kierownika do jej ustawiania istnieje

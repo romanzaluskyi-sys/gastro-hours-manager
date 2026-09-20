@@ -5,6 +5,15 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.41.1 — 2026-09-20
+
+- **Klawiatura PIN-u na Tablecie Służbowym przyjmuje dłuższy PIN.** Sześć cyfr
+  otwiera profil tak jak dotąd cztery — samo, bez potwierdzania. Krótszy PIN
+  zatwierdza się przyciskiem „Otwórz". Obie długości działają jednocześnie, bo
+  PIN-y będą podnoszone z czterech cyfr do sześciu stopniowo, osoba po osobie.
+- Pod spodem: przygotowanie do zmiany, po której PIN przestanie być
+  sprawdzany w przeglądarce, a zacznie w bazie.
+
 ## 0.41.0 — 2026-09-20
 
 Wydanie porządkujące wdrożenia — dla użytkownika w lokalu nic się nie zmienia.

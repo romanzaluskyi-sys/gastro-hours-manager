@@ -241,6 +241,11 @@ const poprzedniMiesiac = (h) => {
         // "zamień się" jest — bo wtedy oddaje własną zmianę.
         { id: "u4", name: "Dorota", role: "open", active: true, archived: false,
           default_lokal: "Ceglana", default_stanowisko: "Kucharz", kiosk_pin: "1234" },
+        // PIN sześciocyfrowy — taki, jaki będzie po `--podnies-piny`. Obie
+        // długości muszą działać JEDNOCZEŚNIE: między jednym a drugim
+        // deployem część załogi ma jeszcze cztery cyfry, a część już sześć.
+        { id: "u6", name: "Ewa", role: "open", active: true, archived: false,
+          default_lokal: "Ceglana", default_stanowisko: "Kucharz", kiosk_pin: "123401" },
         // Czeka na decyzję kierownika: ma mieć plakietkę "na próbę" na liście
         // i skrócony zestaw zakładek po wejściu (bez Grafiku).
         { id: "u5", name: "Na Próbę", role: "open", active: true, archived: false,
@@ -297,9 +302,91 @@ const poprzedniMiesiac = (h) => {
     }
 
     ReactDOM.createRoot(document.getElementById("app")).render(h(Harness));
-    setTimeout(() => {
-      if (status.className !== "zle") status.textContent = "Tablet Służbowy zamontowany";
-    }, 400);
+
+    // ------------------------------------------------------------------
+    // Blokada PIN-em, klikana automatycznie.
+    //
+    // Ten ekran stoi na sali i nikt na niego nie patrzy, dopóki nie przestanie
+    // działać — a od 0.41.1 musi obsłużyć DWIE długości PIN-u naraz, bo między
+    // deployem klawiatury a podniesieniem PIN-ów część załogi ma cztery cyfry,
+    // a część sześć. Ręczne sprawdzenie jednej z nich przepuściłoby drugą.
+    // ------------------------------------------------------------------
+    let zdanych = 0, oblanych = 0;
+    const wyniki = document.createElement("div");
+    wyniki.style.cssText = "padding:8px 16px;font:12px ui-monospace,monospace;background:#F1EEEB";
+    document.body.insertBefore(wyniki, document.getElementById("app"));
+    const sprawdz = (nazwa, warunek, szczegol = "") => {
+      const d = document.createElement("div");
+      if (warunek) { zdanych++; d.textContent = "  OK   " + nazwa; d.style.color = "#2C6A4F"; }
+      else { oblanych++; d.className = "zle"; d.style.color = "#DE3A22";
+             d.textContent = "  ŹLE  " + nazwa + (szczegol ? " — " + szczegol : ""); }
+      wyniki.appendChild(d);
+    };
+
+    const czekaj = (ms) => new Promise((r) => setTimeout(r, ms));
+    const widac = (tekst) => (document.getElementById("app").innerText || "").includes(tekst);
+    // ⚠️ Szukamy NAJGŁĘBSZEGO elementu z danym tekstem, a nie równego mu.
+    // Imię na liście dzieli element z ikoną kłódki (w harnessie ikony to
+    // "▪"), więc porównanie na równość nie trafia w nic — pierwsza wersja
+    // tego sprawdzianu wywracała się właśnie tu.
+    const klik = (tekst) => {
+      const kandydaci = [...document.querySelectorAll("button, [role=button], div, span")]
+        .filter((e) => (e.textContent || "").includes(tekst));
+      const cel = kandydaci
+        .reverse()
+        .find((e) => ![...e.children].some((c) => (c.textContent || "").includes(tekst)));
+      if (!cel) throw new Error("nie znalazłem elementu: " + tekst);
+      (cel.closest("button") || cel).dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    };
+    // Cyfry osobno: "1" zawiera się w "1234" i w połowie ekranu, więc tu
+    // musi być równość, i to na samym przycisku klawiatury.
+    const klikCyfre = (c) => {
+      const cel = [...document.querySelectorAll("button")]
+        .find((e) => (e.textContent || "").trim() === c);
+      if (!cel) throw new Error("nie znalazłem cyfry: " + c);
+      cel.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    };
+    const wpisz = async (cyfry) => {
+      for (const c of cyfry) { klikCyfre(c); await czekaj(30); }
+    };
+
+    (async () => {
+      try {
+        await czekaj(500);
+        sprawdz("lista osób się pokazała", widac("Dorota") && widac("Ewa"));
+
+        // --- PIN czterocyfrowy: sam się nie zatwierdzi, otwiera przycisk ---
+        klik("Dorota"); await czekaj(200);
+        sprawdz("osoba z PIN-em prowadzi do klawiatury", widac("Ten profil jest zablokowany"));
+        await wpisz("1234"); await czekaj(400);
+        sprawdz("cztery cyfry NIE otwierają same", widac("Ten profil jest zablokowany"));
+        klik("Otwórz"); await czekaj(400);
+        sprawdz("cztery cyfry + Otwórz wpuszczają", !widac("Ten profil jest zablokowany"), 
+          (document.getElementById("app").innerText || "").slice(0, 60));
+
+        // --- PIN sześciocyfrowy: zatwierdza się sam ---
+        klik("Zmień"); await czekaj(300);
+        klik("Ewa"); await czekaj(200);
+        sprawdz("druga osoba też ma blokadę", widac("Ten profil jest zablokowany"));
+        await wpisz("123401"); await czekaj(500);
+        sprawdz("sześć cyfr otwiera BEZ przycisku", !widac("Ten profil jest zablokowany"));
+
+        // --- zły PIN ---
+        klik("Zmień"); await czekaj(300);
+        klik("Dorota"); await czekaj(200);
+        await wpisz("9999"); await czekaj(100);
+        klik("Otwórz"); await czekaj(300);
+        sprawdz("zły PIN nie wpuszcza i mówi o tym", widac("Niepoprawny PIN"));
+        await czekaj(1000);
+        sprawdz("po błędzie pole samo się czyści", widac("Ten profil jest zablokowany"));
+      } catch (e) {
+        sprawdz("przebieg bez wyjątku", false, e.message);
+      }
+
+      if (status.className !== "zle") {
+        status.textContent = `Tablet Służbowy zamontowany — PIN ${zdanych}/${zdanych + oblanych}`;
+      }
+    })();
   } catch (e) { pokazBlad(e); }
 })();
 </script>

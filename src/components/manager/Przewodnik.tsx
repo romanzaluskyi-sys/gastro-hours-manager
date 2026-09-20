@@ -23,6 +23,14 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.41.1",
+    date: "2026-09-20",
+    items: [
+      "Klawiatura PIN-u na Tablecie Służbowym przyjmuje PIN dłuższy niż cztery cyfry: sześć otwiera profil samo, krótszy zatwierdza przycisk „Otwórz\".",
+      "Obie długości działają naraz — PIN-y będą podnoszone do sześciu cyfr stopniowo.",
+    ],
+  },
+  {
     version: "0.41.0",
     date: "2026-09-20",
     items: [
