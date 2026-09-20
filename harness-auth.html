@@ -1,0 +1,168 @@
+<meta charset="utf-8">
+<!-- Sprawdzian src/api/auth.ts. `fetch` jest podmieniony — nic nie leci do
+     sieci i nie trzeba znać niczyjego hasła. Sprawdzamy to, czego nie widać
+     przy jednym ręcznym logowaniu: rotację refresh tokenów przy równoległych
+     żądaniach i to, co się dzieje, gdy tabletowi urwie wi-fi. -->
+<title>Sprawdzian logowania</title>
+<style>
+  body { font: 14px/1.6 ui-monospace, Menlo, monospace; padding: 24px; background: #FBFAF9; color: #17120F; }
+  h1 { font: 700 18px/1.2 system-ui, sans-serif; }
+  .ok { color: #2C6A4F; } .zle { color: #DE3A22; font-weight: 700; }
+</style>
+<h1>Sprawdzian src/api/auth.ts</h1>
+<div id="out">ładowanie…</div>
+
+<script>
+  window.__SHIFTRO_ENV = {
+    REACT_APP_SUPABASE_URL: "https://harness.supabase.co",
+    REACT_APP_SUPABASE_KEY: "sb_publishable_harness",
+    REACT_APP_TENANT: "Harness",
+  };
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js"></script>
+<script>
+const out = document.getElementById("out");
+const log = (txt, cls = "") => {
+  const d = document.createElement("div");
+  d.className = cls; d.textContent = txt; out.appendChild(d);
+};
+
+// --- atrapa sieci ---
+// ⚠️ Prawdziwy fetch zapamiętany PRZED podmianą: loader modułów pobiera nim
+// pliki z /src. Bez tego atrapa przechwytuje własne ładowanie.
+const prawdziwyFetch = window.fetch.bind(window);
+const sposob = { tryb: "ok", wywolania: [] };
+let licznikTokenow = 0;
+window.fetch = async (url, opcje) => {
+  const u = String(url);
+  sposob.wywolania.push(u);
+  if (u.includes("grant_type=password")) {
+    if (sposob.tryb === "zle-haslo") return { ok: false, status: 400, json: async () => ({ error: "invalid_grant" }) };
+    return { ok: true, status: 200, json: async () => ({
+      access_token: "dostep-" + (++licznikTokenow), refresh_token: "odswiez-1",
+      expires_in: 3600, user: { id: "auth-1", email: "k@x.pl" } }) };
+  }
+  if (u.includes("grant_type=refresh_token")) {
+    if (sposob.tryb === "siec-padla") throw new TypeError("Failed to fetch");
+    if (sposob.tryb === "token-niewazny") return { ok: false, status: 400, json: async () => ({ error: "invalid_grant" }) };
+    // Rotacja: każde odświeżenie daje NOWY refresh token, stary przestaje działać.
+    return { ok: true, status: 200, json: async () => ({
+      access_token: "dostep-" + (++licznikTokenow), refresh_token: "odswiez-" + licznikTokenow,
+      expires_in: 3600, user: { id: "auth-1", email: "k@x.pl" } }) };
+  }
+  if (u.includes("/logout")) return { ok: true, status: 204, json: async () => ({}) };
+  throw new Error("nieoczekiwane żądanie: " + u);
+};
+
+let zdanych = 0, oblanych = 0;
+const sprawdz = (nazwa, warunek, szczegol = "") => {
+  if (warunek) { zdanych++; log("  OK   " + nazwa, "ok"); }
+  else { oblanych++; log("  ŹLE  " + nazwa + (szczegol ? " — " + szczegol : ""), "zle"); }
+};
+
+const cache = new Map();
+async function zaladuj(sciezka) {
+  if (cache.has(sciezka)) return cache.get(sciezka);
+  const p = (async () => {
+    let kod = null;
+    for (const ext of [".ts", ".tsx", ""]) {
+      const r = await prawdziwyFetch(sciezka + ext + "?cb=" + Date.now());
+      if (r.ok) { kod = await r.text(); break; }
+    }
+    if (kod === null) throw new Error("nie znaleziono " + sciezka);
+    const baza = sciezka.slice(0, sciezka.lastIndexOf("/"));
+    const spec = [...kod.matchAll(/from\s+"(\.[^"]+)"/g)].map((m) => m[1]);
+    const mapa = {};
+    for (const s of spec) mapa[s] = await zaladuj(new URL(baza + "/" + s, location.origin).pathname);
+    kod = kod.replace(/from\s+"(\.[^"]+)"/g, (m, s) => `from "${mapa[s]}"`);
+    return URL.createObjectURL(new Blob([
+      Babel.transform(kod, { presets: [["typescript", { allExtensions: true, isTSX: true }]] }).code
+    ], { type: "text/javascript" }));
+  })();
+  cache.set(sciezka, p);
+  return p;
+}
+
+(async () => {
+  try {
+    out.textContent = "";
+    const A = await import(await zaladuj("/src/api/auth"));
+    log("moduł załadowany", "ok");
+    log("");
+
+    localStorage.removeItem("shiftro_auth");
+
+    // --- logowanie ---
+    sprawdz("bez sesji nie ma tokenu", (await A.token()) === null);
+    const s = await A.zaloguj("k@x.pl", "123456");
+    sprawdz("logowanie zwraca sesję z tokenem", !!s.access_token && s.user_id === "auth-1");
+    sprawdz("sesja przeżywa w localStorage", !!A.wczytajSesje()?.refresh_token);
+    sprawdz("id zalogowanego bez sieci", A.idZalogowanego() === "auth-1");
+
+    // --- token ważny: nie odświeżamy bez potrzeby ---
+    let przed = sposob.wywolania.length;
+    const t1 = await A.token();
+    sprawdz("ważny token nie wywołuje sieci", sposob.wywolania.length === przed && t1 === s.access_token);
+
+    // --- złe hasło ---
+    sposob.tryb = "zle-haslo";
+    let blad = null;
+    try { await A.zaloguj("k@x.pl", "000000"); } catch (e) { blad = e; }
+    sprawdz("złe hasło rzuca po polsku", !!blad && blad.message.includes("Nieprawidłowe dane"), blad && blad.message);
+    sposob.tryb = "ok";
+
+    // --- ROTACJA: równoległe żądania muszą odświeżyć RAZ ---
+    // To jest ten błąd, który wylogowuje wszystkich przy wejściu do aplikacji:
+    // App.tsx startuje od Promise.all z pięcioma zapytaniami.
+    const sesja = A.wczytajSesje();
+    sesja.expires_at = Math.floor(Date.now() / 1000) + 10;   // zaraz wygasa
+    localStorage.setItem("shiftro_auth", JSON.stringify(sesja));
+    sposob.wywolania.length = 0;
+    const tokeny = await Promise.all([A.token(), A.token(), A.token(), A.token(), A.token()]);
+    const odswiezenia = sposob.wywolania.filter((u) => u.includes("grant_type=refresh_token")).length;
+    sprawdz("pięć równoległych żądań = JEDNO odświeżenie", odswiezenia === 1, "było " + odswiezenia);
+    sprawdz("wszystkie dostają ten sam nowy token", new Set(tokeny).size === 1 && !!tokeny[0]);
+    sprawdz("nowy refresh token zapisany", A.wczytajSesje().refresh_token !== "odswiez-1");
+
+    // --- kolejne odświeżenie po tym, jak poprzednie się skończyło ---
+    const s2 = A.wczytajSesje();
+    s2.expires_at = Math.floor(Date.now() / 1000) + 10;
+    localStorage.setItem("shiftro_auth", JSON.stringify(s2));
+    sposob.wywolania.length = 0;
+    await A.token();
+    sprawdz("po zakończeniu poprzedniego odświeża znowu",
+      sposob.wywolania.filter((u) => u.includes("grant_type=refresh_token")).length === 1);
+
+    // --- SIEĆ PADŁA: sesja MUSI przeżyć ---
+    sposob.tryb = "siec-padla";
+    const s3 = A.wczytajSesje();
+    s3.expires_at = Math.floor(Date.now() / 1000) + 10;
+    localStorage.setItem("shiftro_auth", JSON.stringify(s3));
+    const tokenPoAwarii = await A.token();
+    sprawdz("brak sieci NIE wylogowuje", !!A.wczytajSesje()?.refresh_token);
+    sprawdz("brak sieci zwraca stary token, nie null", tokenPoAwarii === s3.access_token, String(tokenPoAwarii));
+    sposob.tryb = "ok";
+
+    // --- SERWER MÓWI, ŻE TOKEN NIEWAŻNY: sesja ma zniknąć ---
+    sposob.tryb = "token-niewazny";
+    const s4 = A.wczytajSesje();
+    s4.expires_at = Math.floor(Date.now() / 1000) + 10;
+    localStorage.setItem("shiftro_auth", JSON.stringify(s4));
+    const poOdmowie = await A.token();
+    sprawdz("odmowa serwera czyści sesję", A.wczytajSesje() === null);
+    sprawdz("i nie oddaje tokenu", poOdmowie === null);
+    sposob.tryb = "ok";
+
+    // --- wylogowanie ---
+    await A.zaloguj("k@x.pl", "123456");
+    await A.wyloguj();
+    sprawdz("wylogowanie czyści sesję", A.wczytajSesje() === null);
+
+    log("");
+    log(`ZDANYCH ${zdanych}, OBLANYCH ${oblanych}`, oblanych ? "zle" : "ok");
+  } catch (e) {
+    log("BŁĄD: " + (e && e.message ? e.message : e), "zle");
+    log((e && e.stack) || "", "zle");
+  }
+})();
+</script>

@@ -43,6 +43,7 @@ wykonalne.
 | `0022` | budżet Grafiku: cel na dzień tygodnia (`grafik_budzet_cele`) i wyjątek na datę (`grafik_budzet_dni`) | nowe |
 | `0023` | zmiany bez odbitego końca (`shifts.rozliczenie`, progi na `lokale`) i pracownik na próbę (`users.probny_status`) | nowe |
 | `0024` | dziennik błędów aplikacji (`app_errors`) | nowe |
+| `0025` | tożsamość w Supabase Auth (`users.auth_id`), helpery do polityk, `sprawdz_kiosk_pin` | nowe |
 
 `0001`–`0004` odtworzono ze zrzutu prawdziwej bazy
 (`docs/sql/tools/zrzut-schematu.sql`, 2026-09-07), a nie z opisu w
