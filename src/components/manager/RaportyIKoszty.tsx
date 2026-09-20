@@ -15,8 +15,15 @@ import {
   toLocalYMD,
   PLAN_FAKT_PROG_H,
 } from "../../utils/grafik";
-import { kosztMiesiaca, naEtacie, typUmowy, TYPY_UMOWY } from "../../utils/umowy";
+import {
+  kosztMiesiaca,
+  nadwyzkaPonadNorme,
+  naEtacie,
+  typUmowy,
+  TYPY_UMOWY,
+} from "../../utils/umowy";
 import { zl } from "../../utils/budzet";
+import { stanowiskoBadgeStyle } from "../../utils/stanowiska";
 import {
   pageTitleCls,
   sectionCardCls,
@@ -39,6 +46,58 @@ const fmtH = (n) => (n || 0).toFixed(1).replace(".", ",");
 // Własny `toFixed(0) + " zł"` nie grupował tysięcy i w jednej kolumnie stało
 // "6266 zł" obok "11086 zł", czyli liczby wyglądające na ten sam rząd.
 const fmtZl = (n) => zl(n);
+
+// Rozbicie godzin i kosztu na wymiary: lokal ("gdzie wydaliśmy") i stanowisko
+// ("na co"). Jeden komponent dla obu, bo obie sekcje odpowiadają tą samą miarą
+// i tym samym podziałem — dwie kopie rozjechałyby się przy pierwszej poprawce.
+const Rozbicie = ({ tytul, dane, badge = null, pusto }) => {
+  const wpisy = Object.entries(dane || {}).sort((a, b) => b[1].hours - a[1].hours);
+  const maAlokacje = wpisy.some(([, v]) => v.alokacja);
+  const maBraki = wpisy.some(([, v]) => v.brakKosztu);
+  return (
+    <div className={`${sectionCardCls} mb-6`}>
+      <div className={sectionHeaderCls}>{tytul}</div>
+      <div className="divide-y divide-[#B7B6AE]">
+        {wpisy.length === 0 && <p className="p-4 text-sm text-[#8F8E86]">{pusto}</p>}
+        {wpisy.map(([klucz, v]) => (
+          <div
+            key={klucz}
+            className="px-4 py-2.5 flex items-center justify-between gap-3 text-sm"
+          >
+            <span className="font-bold flex items-center gap-2 min-w-0">
+              {badge && badge(klucz)}
+              <span className="truncate">{klucz}</span>
+            </span>
+            <span className="flex items-baseline gap-3 flex-shrink-0">
+              {/* "~" znaczy ALOKACJA: wynagrodzenie etatowca jest miesięczne i
+                  rozkłada się proporcją godzin, a nie dlatego, że tyle tam
+                  wydano. */}
+              <span className="text-[#6E6E66] tabular-nums whitespace-nowrap">
+                {v.brakKosztu && v.cost === 0
+                  ? "brak wynagrodzenia"
+                  : `${v.alokacja ? "~" : ""}${fmtZl(v.cost)}${v.brakKosztu ? " +?" : ""}`}
+              </span>
+              <span className="font-['Archivo'] font-bold tabular-nums whitespace-nowrap">
+                {fmtH(v.hours)} h
+              </span>
+            </span>
+          </div>
+        ))}
+      </div>
+      {(maAlokacje || maBraki) && (
+        <p className="px-4 py-2 text-[11px] text-[#6E6E66] border-t border-[#B7B6AE]">
+          {maAlokacje && (
+            <>
+              „~" — wynagrodzenie z umowy o pracę rozłożone proporcją godzin;
+              suma zgadza się z kafelkiem „Koszt" wyżej.{" "}
+            </>
+          )}
+          {maBraki && '„+?" — jest tu ktoś bez wpisanego wynagrodzenia w karcie.'}
+        </p>
+      )}
+    </div>
+  );
+};
 
 // Porównanie z poprzednim miesiącem — świadomie BEZ zieleni i czerwieni.
 // Wyższy koszt przy wyższym utargu nie jest porażką, a więcej godzin nie jest
@@ -65,6 +124,7 @@ export default function RaportyIKoszty({
   users,
   shifts,
   lokale = [],
+  stanowiska = [],
   matchesFilter,
   hasAccessToLokal,
   onEditShift,
@@ -239,8 +299,9 @@ export default function RaportyIKoszty({
     // warta jest ta precyzja. Urlopu nie przypisujemy do lokalu: pracownik go
     // tam nie przepracował.
     const byLokal = {};
-    const dodaj = (klucz, godziny, koszt, alokacja) => {
-      const w = (byLokal[klucz] = byLokal[klucz] || {
+    const byStanowisko = {};
+    const dodaj = (mapa, klucz, godziny, koszt, alokacja) => {
+      const w = (mapa[klucz] = mapa[klucz] || {
         hours: 0,
         cost: 0,
         brakKosztu: false,
@@ -251,25 +312,43 @@ export default function RaportyIKoszty({
       else w.cost += koszt;
       if (alokacja) w.alokacja = true;
     };
+    // Ta sama proporcja godzin, dwa różne klucze: lokal ("gdzie wydaliśmy") i
+    // stanowisko ("na co wydaliśmy"). Jedna pętla, bo dwie rozjechałyby się
+    // przy pierwszej poprawce reguły podziału.
     rows.forEach((r) => {
-      const wg = {};
-      zakres
-        .filter((s) => s.user_id === r.uid)
-        .forEach((s) => {
-          const klucz = s.is_urlop ? "Urlop" : s.lokal;
+      const moje = zakres.filter((s) => s.user_id === r.uid);
+      const rozbij = (mapa, kluczOf, domyslny) => {
+        const wg = {};
+        moje.forEach((s) => {
+          const klucz = kluczOf(s);
           wg[klucz] = (wg[klucz] || 0) + hoursOf(s);
         });
-      const suma = Object.values(wg).reduce((a, h) => a + h, 0);
-      if (suma <= 0) {
-        dodaj(r.user.default_lokal || "—", 0, r.cost, false);
-        return;
-      }
-      // Znak "~" tylko tam, gdzie naprawdę było co dzielić: etatowiec w jednym
-      // lokalu kosztował ten lokal całą kwotę i żadnego szacunku tam nie ma.
-      const dzielone = naEtacie(r.user) && Object.keys(wg).length > 1;
-      Object.entries(wg).forEach(([klucz, h]) => {
-        dodaj(klucz, h, r.cost == null ? null : (r.cost * h) / suma, dzielone);
-      });
+        const suma = Object.values(wg).reduce((a, h) => a + h, 0);
+        if (suma <= 0) {
+          // Zero godzin i zero kosztu nie jest niczyim wierszem — ktoś z samą
+          // zmianą bez zakończenia dorzucałby pustą pozycję "—" i znak "+?"
+          // przy stanowisku, w którym nic się nie wydarzyło. Wiersz zostaje
+          // TYLKO dla kosztu, który naprawdę trzeba gdzieś położyć: etatowca
+          // bez ani jednej odbitej godziny.
+          if (r.cost > 0) dodaj(mapa, domyslny || "—", 0, r.cost, false);
+          return;
+        }
+        // Znak "~" tylko tam, gdzie naprawdę było co dzielić: etatowiec w
+        // jednym miejscu kosztował je całą kwotą i żadnego szacunku tam nie ma.
+        const dzielone = naEtacie(r.user) && Object.keys(wg).length > 1;
+        Object.entries(wg).forEach(([klucz, h]) => {
+          dodaj(mapa, klucz, h, r.cost == null ? null : (r.cost * h) / suma, dzielone);
+        });
+      };
+      rozbij(byLokal, (s) => (s.is_urlop ? "Urlop" : s.lokal), r.user.default_lokal);
+      // Urlop świadomie NIE trafia na stanowisko: pracownik go tam nie
+      // przepracował, a doliczony zawyżałby obsadę konkretnej roli — ta sama
+      // zasada co przy lokalach.
+      rozbij(
+        byStanowisko,
+        (s) => (s.is_urlop ? "Urlop" : s.stanowisko || "—"),
+        r.user.default_stanowisko
+      );
     });
 
     return {
@@ -281,6 +360,7 @@ export default function RaportyIKoszty({
       costIncomplete,
       urlopHours,
       byLokal,
+      byStanowisko,
     };
   };
 
@@ -297,6 +377,7 @@ export default function RaportyIKoszty({
   const urlopHours = M.urlopHours;
   const pracaHours = totalHours - urlopHours;
   const byLokal = M.byLokal;
+  const byStanowisko = M.byStanowisko;
 
   // Plan vs fakt za oglądany miesiąc — dla analityki, nie dla oceny. Urlop jest
   // z tego wyłączony po stronie faktu (nie ma go w grafiku), więc porównujemy
@@ -365,11 +446,12 @@ export default function RaportyIKoszty({
     .filter((s) => s.is_urlop)
     .reduce((a, s) => a + hoursOf(s), 0);
   const selectedCost = kosztOsoby(selectedUser, selectedHours, year, month);
-  // Przy umowie o pracę ta kwota NIE wynika z godzin — to wynagrodzenie z
-  // umowy plus narzut, i lokal płaci je tak samo w chudym, jak w gęstym
-  // miesiącu. Bez tego podpisu liczba obok godzin wygląda na iloczyn i
-  // pierwsze pytanie brzmi "dlaczego się nie zgadza".
-  const selectedStalyKoszt = selectedUser ? naEtacie(selectedUser) : false;
+  // Przy umowie o pracę ta kwota nie jest iloczynem godzin i stawki: do normy
+  // to wynagrodzenie z umowy, a ponad normę dochodzą dopłacone godziny. Bez
+  // tego podpisu pierwsze pytanie brzmi "dlaczego się nie zgadza".
+  const selectedNadwyzka = selectedUser
+    ? nadwyzkaPonadNorme(selectedUser, selectedHours, year, month + 1)
+    : null;
 
   // Podsumowanie osób, nie lista zmian — tamtą eksportuje Rejestr Godzin i
   // powielanie jej tutaj dałoby dwa pliki o tej samej nazwie w głowie
@@ -568,46 +650,29 @@ export default function RaportyIKoszty({
         </div>
       )}
 
-      <div className={`${sectionCardCls} mb-6`}>
-        <div className={sectionHeaderCls}>Według lokalu</div>
-        <div className="divide-y divide-[#B7B6AE]">
-          {Object.keys(byLokal).length === 0 && (
-            <p className="p-4 text-sm text-[#8F8E86]">Brak danych w tym okresie.</p>
-          )}
-          {Object.entries(byLokal)
-            .sort((a, b) => b[1].hours - a[1].hours)
-            .map(([lokal, v]) => (
-              <div key={lokal} className="px-4 py-2.5 flex items-center justify-between gap-3 text-sm">
-                <span className="font-bold">{lokal}</span>
-                <span className="flex items-baseline gap-3 flex-shrink-0">
-                  {/* "~" znaczy ALOKACJA: wynagrodzenie etatowca jest
-                      miesięczne i między lokale rozkłada się proporcją godzin,
-                      a nie dlatego, że tyle tam wydano. */}
-                  <span className="text-[#6E6E66] tabular-nums whitespace-nowrap">
-                    {v.brakKosztu && v.cost === 0
-                      ? "brak wynagrodzenia"
-                      : `${v.alokacja ? "~" : ""}${fmtZl(v.cost)}${v.brakKosztu ? " +?" : ""}`}
-                  </span>
-                  <span className="font-['Archivo'] font-bold tabular-nums whitespace-nowrap">
-                    {fmtH(v.hours)} h
-                  </span>
-                </span>
-              </div>
-            ))}
-        </div>
-        {Object.values(byLokal).some((v) => v.alokacja || v.brakKosztu) && (
-          <p className="px-4 py-2 text-[11px] text-[#6E6E66] border-t border-[#B7B6AE]">
-            {Object.values(byLokal).some((v) => v.alokacja) && (
-              <>
-                „~" — wynagrodzenie z umowy o pracę rozłożone między lokale
-                proporcją godzin; suma zgadza się z kafelkiem „Koszt" wyżej.{" "}
-              </>
-            )}
-            {Object.values(byLokal).some((v) => v.brakKosztu) &&
-              '„+?" — pracował tu ktoś, kto nie ma wpisanego wynagrodzenia w karcie.'}
-          </p>
-        )}
-      </div>
+      <Rozbicie
+        tytul="Według lokalu"
+        dane={byLokal}
+        pusto="Brak danych w tym okresie."
+      />
+
+      {/* Drugi wymiar tych samych pieniędzy: nie "gdzie", tylko "na co".
+          Przy planowaniu obsady to jest pytanie, które zadaje się najpierw —
+          ile kosztuje kuchnia, a ile sala. */}
+      <Rozbicie
+        tytul="Według stanowiska"
+        dane={byStanowisko}
+        pusto="Brak danych w tym okresie."
+        badge={(nazwa) => {
+          const styl = stanowiskoBadgeStyle(stanowiska, null, nazwa);
+          return (
+            <span
+              className="w-2.5 h-2.5 rounded-full flex-shrink-0 border border-[#B7B6AE]"
+              style={styl ? { backgroundColor: styl.color, borderColor: styl.color } : undefined}
+            />
+          );
+        }}
+      />
 
       <div className="grid md:grid-cols-[360px_1fr] gap-5">
         {/* --- Lista pracowników --- */}
@@ -722,9 +787,13 @@ export default function RaportyIKoszty({
                     </p>
                     <p className="text-xs text-[#6E6E66]">
                       {selectedCost != null ? fmtZl(selectedCost) : "brak wynagrodzenia"}
-                      {selectedCost != null && selectedStalyKoszt && (
+                      {selectedCost != null && selectedNadwyzka && (
                         <span className="block text-[11px] text-[#8F8E86]">
-                          wg umowy, niezależnie od godzin
+                          {selectedNadwyzka.godzin > 0
+                            ? `umowa + ${fmtH(selectedNadwyzka.godzin)} h ponad normą ${fmtH(
+                                selectedNadwyzka.norma
+                              )} h`
+                            : `wg umowy · norma ${fmtH(selectedNadwyzka.norma)} h`}
                         </span>
                       )}
                     </p>

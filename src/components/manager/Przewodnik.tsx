@@ -37,6 +37,8 @@ const CHANGELOG = [
       "Zakładka otwiera się na miesiącu poprzednim; wejście z imienia w Rejestrze albo Aktywnych przenosi na miesiąc tamtej zmiany.",
       "„Według lokalu\" pokazuje koszt, a pasek pod kafelkami porównuje godziny i koszt z poprzednim miesiącem.",
       "W wierszu pracownika widać, kto nie ma odbitych godzin i czyje zmiany zostały bez zakończenia. Eksport CSV działa.",
+      "Godziny ponad normę doliczają się do kosztu po stawce z umowy — kwota z umowy jest podłogą, nie całością.",
+      "Nowa sekcja „Według stanowiska\" obok „Według lokalu\": ile kosztuje kuchnia, a ile sala.",
     ],
   },
   {

@@ -34,6 +34,7 @@ import {
   normaMiesiaca,
   stawkaEfektywna,
   kosztMiesiaca,
+  nadwyzkaPonadNorme,
   bilansOkresu,
   opisBilansu,
 } from "../../utils/umowy";
@@ -166,6 +167,11 @@ export default function Pracownicy({
     : null;
   const stawkaEfekt = editingUser
     ? stawkaEfektywna(editingUser, now.getFullYear(), now.getMonth() + 1)
+    : null;
+  // Godziny ponad normę lokal dopłaca po stawce z umowy — podpis pod kwotą
+  // musi to powiedzieć, inaczej liczba wygląda na niezgodną z umową.
+  const nadwyzkaMies = editingUser
+    ? nadwyzkaPonadNorme(editingUser, monthHours, now.getFullYear(), now.getMonth() + 1)
     : null;
   const monthCost = editingUser
     ? kosztMiesiaca({
@@ -1149,9 +1155,11 @@ export default function Pracownicy({
                         <p className="text-[11px] text-[#8F8E86]">
                           {monthCost == null
                             ? "brak danych o wynagrodzeniu"
-                            : naEtacie(editingUser)
-                            ? "koszt lokalu (kwota z umowy)"
-                            : "koszt lokalu (godziny × stawka)"}
+                            : !naEtacie(editingUser)
+                            ? "koszt lokalu (godziny × stawka)"
+                            : nadwyzkaMies && nadwyzkaMies.godzin > 0
+                            ? `koszt lokalu (umowa + ${fmtH(nadwyzkaMies.godzin)} h ponad normą)`
+                            : "koszt lokalu (kwota z umowy)"}
                         </p>
                       </div>
                     </div>

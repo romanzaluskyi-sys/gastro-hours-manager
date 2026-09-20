@@ -1435,11 +1435,20 @@ KP na to pozwala): normę i tak trzeba odebrać w innym dniu, a bez odejmowania
 wrzesień i grudzień miałyby tę samą normę — czyli zniknąłby cały powód, dla
 którego to liczymy.
 
+⚠️ **Kwota z umowy jest PODŁOGĄ kosztu, nie całością** (0.40.0). Poniżej normy
+koszt się nie zmniejsza (przestój, art. 81 KP), ale godziny PONAD normę lokal
+dopłaca — po stawce wynikającej z tej samej umowy, czyli `kwota / norma`
+(`stawkaEfektywna`). Liczy to `kosztMiesiaca`, a `nadwyzkaPonadNorme()` zwraca
+samą nadwyżkę do podpisów w UI. Bez tego koszt kłamał tym bardziej, im więcej
+ktoś nadrabiał. Godziny urlopu wchodzą do porównania z normą i tak ma być:
+`(fakt + urlop) − norma` daje dokładnie to samo co `fakt − (norma − urlop)`.
+
 ⚠️ **Dopłat za nadgodziny i pracę w święta (50/100%) świadomie NIE MA.**
 Ustalenie właściciela: w gastronomii praca w święta jest normą, a dopłaty
-ponad ustawowe minimum to decyzja restauracji, nie reguła prawa. Miejsce na
-przyszły słownik wyjątków ("ten dzień ×1,5") jest, ale puste — nie dopisuj go
-z własnej inicjatywy.
+ponad ustawowe minimum to decyzja restauracji, nie reguła prawa. Godzina ponad
+normę liczy się więc po ZWYKŁEJ stawce z umowy — to nie to samo co dodatek.
+Miejsce na przyszły słownik wyjątków ("ten dzień ×1,5") jest, ale puste — nie
+dopisuj go z własnej inicjatywy.
 
 ⚠️ **Ujemny bilans NIE jest długiem pracownika.** Jeśli lokal nie dał pracy w
 okresie rozliczeniowym, wynagrodzenie i tak się należy (przestój, art. 81 KP)
@@ -1710,6 +1719,14 @@ stawki godzinowej, to jest ten sam błąd.
   własny `toFixed(0) + " zł"` nie grupował tysięcy.
 - **CSV eksportuje podsumowanie OSÓB, nie listę zmian** — tamtą eksportuje
   Rejestr Godzin. Brak wynagrodzenia wychodzi jako pusta komórka, nie zero.
+- **Dwa rozbicia tych samych pieniędzy, jednym komponentem `Rozbicie`**:
+  „Według lokalu" (gdzie wydaliśmy) i „Według stanowiska" (na co). Ten sam
+  podział proporcją godzin liczy JEDNA pętla w `agreguj` — dwie rozjechałyby
+  się przy pierwszej poprawce reguły.
+- ⚠️ **Wiersz z zerem godzin i zerem kosztu nie powstaje.** Osoba, której cała
+  zmiana wisi bez zakończenia, dorzucała pustą pozycję „—" i znak „+?" przy
+  stanowisku, w którym nic się nie wydarzyło. Wiersz bez godzin zostaje TYLKO
+  dla kosztu, który trzeba gdzieś położyć (etatowiec bez odbitych godzin).
 
 ⚠️ **Raporty i koszty mają DWA zakresy i nie wolno ich zlepić w jeden.**
 `periodShifts` (górny pasek, `matchesLokalFilter`) decyduje tylko o tym, KOGO

@@ -1342,6 +1342,7 @@ const ManagerDashboard = ({
             users={users}
             shifts={shifts}
             lokale={lokale}
+            stanowiska={stanowiska}
             matchesFilter={matchesLokalFilter}
             hasAccessToLokal={hasAccessToLokal}
             onEditShift={openEditShift}

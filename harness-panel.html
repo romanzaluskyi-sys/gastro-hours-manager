@@ -385,6 +385,13 @@ const poprzedniMiesiac = (h) => {
             wynagrodzenie_mies: 4000, active: true, archived: false, role: "closed",
             email: "f@x.pl", pin: "123456", default_lokal: "Ceglana",
             default_stanowisko: "Kucharz" },
+          // Ćwierć etatu (norma 44 h we wrześniu) z 48 odbitymi godzinami —
+          // jedyny w tej atrapie przypadek NADWYŻKI ponad normę, czyli kwoty
+          // z umowy powiększonej o dopłacone godziny.
+          { id: "u8", name: "Gosia", typ_umowy: "umowa_o_prace", wymiar_etatu: 0.25,
+            wynagrodzenie_mies: 1400, active: true, archived: false, role: "closed",
+            email: "g@x.pl", pin: "123456", default_lokal: "Ceglana",
+            default_stanowisko: "Kelner" },
           // Stare konto: typ umowy siedzi jeszcze w kolumnie `etat`.
           { id: "u5", name: "Ewa", etat: "zlecenie", stawka: 31.4, active: true,
             archived: false, role: "open", default_lokal: "Ceglana" },
@@ -426,6 +433,13 @@ const poprzedniMiesiac = (h) => {
             start_time: godz(9), end_time: null },
           { id: "sh5", user_id: "u6", user_name: "Nowa Osoba", lokal: "Bułka i Jacek",
             stanowisko: "Kucharz", start_time: godz(7), end_time: null },
+          // Gosia: sześć ośmiogodzinnych zmian = 48 h przy normie 44 h.
+          ...[1, 2, 3, 4, 5, 6].map((d) => {
+            const od = new Date(); od.setDate(d); od.setHours(10, 0, 0, 0);
+            const doG = new Date(od); doG.setHours(18, 0, 0, 0);
+            return { id: "shG" + d, user_id: "u8", user_name: "Gosia", lokal: "Ceglana",
+                     stanowisko: "Kelner", start_time: od, end_time: doG };
+          }),
         ],
         issues: [
           // anonimowe: user_id === null, lokalu nie da się odczytać

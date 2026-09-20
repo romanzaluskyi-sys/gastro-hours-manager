@@ -60,6 +60,14 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 - **Eksport CSV działa** — podsumowanie na osobę za wybrany miesiąc (godziny, w
   tym urlop, liczba zmian, koszt). Pusta komórka zamiast zera tam, gdzie
   wynagrodzenia nie wpisano.
+- **Godziny ponad normę są doliczane do kosztu.** Przy umowie o pracę kwota z
+  umowy to podłoga: poniżej normy koszt się nie zmniejsza, ale każda godzina
+  ponad normę dolicza się po stawce wynikającej z tej samej umowy (kwota
+  podzielona przez normę miesiąca). Widać to też w karcie pracownika —
+  „umowa + 4 h ponad normą 44 h" zamiast dawnego „wg umowy, niezależnie od
+  godzin", które było po prostu nieprawdą.
+- **Nowa sekcja „Według stanowiska"** obok „Według lokalu": te same pieniądze w
+  drugim przekroju — ile kosztuje kuchnia, a ile sala.
 
 ## 0.39.0 — 2026-09-17
 
