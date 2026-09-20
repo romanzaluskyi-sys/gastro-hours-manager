@@ -23,6 +23,15 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.41.2",
+    date: "2026-09-20",
+    items: [
+      "Pole „PIN blokady\" w karcie pracownika przyjmuje sześć cyfr — wcześniej nie dało się wpisać szóstej.",
+      "Ten sam PIN otwiera profil na tablecie i loguje na prywatnym telefonie.",
+      "Na Tablecie Służbowym PIN to dokładnie sześć cyfr i otwiera profil sam, bez przycisku — profil z krótszym PIN-em nie otworzy się w ogóle, popraw go w karcie.",
+    ],
+  },
+  {
     version: "0.41.1",
     date: "2026-09-20",
     items: [

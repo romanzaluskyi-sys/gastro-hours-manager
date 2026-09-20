@@ -182,17 +182,18 @@ było użyć: `KioskDashboard.tsx` miał zaszyte `length === 4` w dwóch miejsca
 i zatwierdzał sam na czwartej cyfrze, więc podniesiony PIN zablokowałby tym
 osobom wejście na tablecie — nazajutrz rano, przed zmianą.
 
-**Od 0.41.1 klawiatura przyjmuje obie długości naraz** (`PIN_AUTO = 6`,
-`PIN_MIN = 4`): sześć cyfr zatwierdza się samo, krótszy PIN zatwierdza
-przycisk "Otwórz". Dopiero to czyni flagę bezpieczną — i dlatego ta zmiana
-poszła OSOBNYM deployem, przed podniesieniem PIN-ów. Kolejność jest tu całą
-treścią: odwrotna wyłącza lokal na jedno rano.
+**Od 0.41.2 PIN ma DOKŁADNIE sześć cyfr i zatwierdza się sam**
+(`DLUGOSC_PIN = 6` w `KioskDashboard.tsx`) — tak jak wcześniej cztery, bez
+przycisku i bez potwierdzania. 0.41.1 miała przejściowo dwa progi (sześć
+zatwierdzało samo, od czterech przycisk "Otwórz"); właściciel odrzucił to
+jako zbędne dotknięcie płacone kilkanaście razy dziennie przy urządzeniu
+obsługiwanym jedną ręką w biegu. Przycisku nie ma i nie dokładaj go.
 
-⚠️ **Ekran świadomie nie zna długości cudzego PIN-u**, choć dziś mógłby ją
-odczytać z `pinTarget.kiosk_pin`. Po przejściu na RPC `sprawdz_kiosk_pin` PIN
-przestanie opuszczać bazę i ta wiedza zniknie — logika oparta na niej
-musiałaby wtedy powstać drugi raz, inaczej. Stąd też kropek jest tyle, ile
-wpisano, a nie tyle, ile "trzeba".
+⚠️ **Wynika z tego twardy warunek na dane: KAŻDY ustawiony `kiosk_pin` musi
+mieć sześć cyfr.** Krótszego nie da się na tym ekranie wpisać, więc profil z
+PIN-em czterocyfrowym jest nie do otwarcia — nie "trudniej", tylko wcale.
+Pole w karcie pracownika ma `maxLength="6"` (0.41.2), ale wiersze sprzed tej
+wersji trzeba poprawić ręcznie.
 
 **Etapy** (3a zrobione, reszta nie):
 - **3a — fundament.** Migracja `0025`: `users.auth_id`, helpery
@@ -207,7 +208,7 @@ wpisano, a nie tyle, ile "trzeba".
   wszystkich `users` i porównywać PIN w przeglądarce, blokada PIN-em na
   tablecie ma iść przez `sprawdz_kiosk_pin`, a zmiana cudzego PIN-u przez
   kierownika potrzebuje funkcji w root-level `api/` (patrz niżej o SERVICE
-  ROLE). Klawiatura kiosku jest już gotowa — 0.41.1, osobny deploy.
+  ROLE). Klawiatura kiosku jest już gotowa — 0.41.1/0.41.2, osobne deploye.
 
   ⚠️ **Trzy rzeczy w `api/auth.ts`, których nie widać przy ręcznym
   logowaniu, a każda wyłącza lokal:**
