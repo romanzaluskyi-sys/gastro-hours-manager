@@ -2,7 +2,7 @@
 // Kolejka decyzji kierownika dla issues.type === "correction" (poprawka
 // godzin / "zapomniałem odbić" zgłoszone przez pracownika w Zgłoś). Biржа
 // zmian z Grafiku — świadomie poza zakresem, patrz plan realizacji.
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   Check,
   Edit2,
@@ -95,6 +95,24 @@ export default function ZatwierdzanieZmian({
   onResolveSwap,
   showMsg,
 }) {
+  // ⚠️ Zamek na REF, nie na stanie. Wszystkie decyzje na tej stronie pilnował
+  // dotąd zwykły `useState` ("busy id"), a stan Reacta aktualizuje się
+  // asynchronicznie: dwa wywołania w tym samym takcie widzą to samo `null` i
+  // oba przechodzą dalej. 08.09.2026 jedno kliknięcie "Dopisz godziny" dało
+  // przez to dwa wiersze godzin oddalone o 3,7 ms — czyli Dawidowi 20 h
+  // zamiast 10. Ref zmienia się od razu, więc drugie wejście odpada.
+  //
+  // To jest zamek na czas jednego zapisu, a nie zabezpieczenie przed
+  // duplikatem w ogóle — tym jest pytanie do bazy tuż przed zapisem
+  // (znajdzKolizjeWBazie w utils/odbicia.ts i utils/corrections.ts).
+  const wTrakcie = useRef(new Set());
+  const zajmij = (klucz) => {
+    if (wTrakcie.current.has(klucz)) return false;
+    wTrakcie.current.add(klucz);
+    return true;
+  };
+  const zwolnij = (klucz) => wTrakcie.current.delete(klucz);
+
   const [selected, setSelected] = useState({});
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState(null);
@@ -131,6 +149,7 @@ export default function ZatwierdzanieZmian({
   const probni = probniDoDecyzji({ users, lokalOk: hasAccessToLokal });
 
   const rozliczZmiane = async (poz, decyzja) => {
+    if (!zajmij(`porzucona:${poz.shift.id}`)) return;
     setPorzuconeBusyId(poz.shift.id);
     try {
       await rozliczPorzucona({
@@ -147,10 +166,12 @@ export default function ZatwierdzanieZmian({
     } catch (e) {
       showMsg(e.message || "Błąd zapisu", "error");
     }
+    zwolnij(`porzucona:${poz.shift.id}`);
     setPorzuconeBusyId(null);
   };
 
   const decyzjaOProbnym = async (user, decyzja) => {
+    if (!zajmij(`probny:${user.id}`)) return;
     setProbnyBusyId(user.id);
     try {
       const zapisany =
@@ -166,10 +187,12 @@ export default function ZatwierdzanieZmian({
     } catch (e) {
       showMsg(`Błąd zapisu: ${e.message || "nieznany błąd"}`, "error");
     }
+    zwolnij(`probny:${user.id}`);
     setProbnyBusyId(null);
   };
 
   const rozliczOdbicie = async (poz, decyzja) => {
+    if (!zajmij(`odbicie:${poz.plan.id}`)) return;
     setOdbicieBusyId(poz.plan.id);
     try {
       const g = odbicieGodziny[poz.plan.id] || {};
@@ -192,6 +215,7 @@ export default function ZatwierdzanieZmian({
     } catch (e) {
       showMsg(e.message || "Błąd zapisu", "error");
     }
+    zwolnij(`odbicie:${poz.plan.id}`);
     setOdbicieBusyId(null);
   };
 
@@ -221,10 +245,13 @@ export default function ZatwierdzanieZmian({
         ? prev.map((s) => (s.id === shift.id ? shift : s))
         : [...prev, shift];
     });
-    setShiftEdits((prev) => [...prev, shiftEdit]);
+    // shiftEdit bywa pusty, gdy wiersz godzin już istniał i nie tworzyliśmy
+    // go drugi raz — patrz znajdzKolizjeWBazie w utils/corrections.ts.
+    if (shiftEdit) setShiftEdits((prev) => [...prev, shiftEdit]);
   };
 
   const handleZatwierdz = async (row) => {
+    if (!zajmij(`korekta:${row.issue.id}`)) return;
     setBusy(true);
     try {
       const saved = await resolveCorrection({
@@ -244,6 +271,7 @@ export default function ZatwierdzanieZmian({
     } catch (err) {
       showMsg(`Błąd zatwierdzania: ${err.message || "nieznany błąd"}`, "error");
     }
+    zwolnij(`korekta:${row.issue.id}`);
     setBusy(false);
   };
 
@@ -294,6 +322,7 @@ export default function ZatwierdzanieZmian({
     if (!editForm.reason.trim()) {
       return showMsg("Podaj powód korekty — pracownik go zobaczy.", "error");
     }
+    if (!zajmij(`korekta:${row.issue.id}`)) return;
     setBusy(true);
     try {
       const saved = await resolveCorrection({
@@ -310,6 +339,7 @@ export default function ZatwierdzanieZmian({
     } catch (err) {
       showMsg(`Błąd zapisu: ${err.message || "nieznany błąd"}`, "error");
     }
+    zwolnij(`korekta:${row.issue.id}`);
     setBusy(false);
   };
 

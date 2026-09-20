@@ -37,6 +37,18 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
   wiadomości: tablet stoi zalogowany tygodniami i musi widzieć zmiany zrobione
   gdzie indziej.
 
+### Podwójne wpisy godzin z panelu
+
+- **Jedno kliknięcie w kolejce decyzji nie może już zapisać godzin dwa razy.**
+  08.09 jedno naciśnięcie „Dopisz godziny" utworzyło dwa identyczne wpisy
+  oddalone o cztery milisekundy — Dawidowi wyszło 20 godzin zamiast 10.
+  Blokada przycisku była zwykłym stanem ekranu, a ten aktualizuje się z
+  opóźnieniem, więc oba wywołania zdążyły przejść.
+- Teraz blokada działa natychmiast, a przed dopisaniem godzin aplikacja pyta
+  bazy, czy taka zmiana już tam nie jest — to samo zabezpieczenie, które
+  Tablet Służbowy ma od 0.36.2. Dotyczy zarówno kolejki „Był w grafiku, nie
+  odbił", jak i zatwierdzania zgłoszeń „Zapomniałem odbić".
+
 ### Raporty i koszty
 
 - **Koszt liczy się wreszcie dla wszystkich.** Do tej pory brana była wyłącznie

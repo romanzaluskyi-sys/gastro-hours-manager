@@ -1804,6 +1804,26 @@ Pełny opis, dane i propozycje (unikalny indeks `(user_id, start_time)`,
 `created_by` + osobna tożsamość urządzeń):
 [`docs/DUPLIKATY-I-SWIEZOSC-DANYCH.md`](docs/DUPLIKATY-I-SWIEZOSC-DANYCH.md).
 
+⚠️ **Ta sama klasa błędu wróciła 08.09.2026 z PANELU, nie z tabletu** (naprawione
+w 0.40.0). Jedno kliknięcie „Dopisz godziny" w kolejce „Był w grafiku, nie odbił"
+dało dwa wiersze w `shifts` oddalone o **3,7 ms**, a `grafik_shifts.rozliczenie`
+ustawiło się raz — więc kolejka wyglądała na rozliczoną i nikt tego nie zauważył,
+dopóki Dawidowi nie wyszło 20 h zamiast 10.
+
+Powód: jedynym zamkiem był `useState` („busy id"), a **stan Reacta aktualizuje
+się asynchronicznie** — dwa wywołania w tym samym takcie widzą to samo `null` i
+oba przechodzą dalej. Odtąd:
+- zamek stoi na `useRef` (`zajmij`/`zwolnij` w `ZatwierdzanieZmian.tsx`) i
+  obejmuje WSZYSTKIE decyzje tego ekranu, bo każda miała tę samą wadę;
+- `rozliczBrakOdbicia` i `resolveCorrection` pytają BAZY (`znajdzKolizjeWBazie`)
+  tuż przed dopisaniem godzin — gdy wiersz już jest, biorą istniejący zamiast
+  tworzyć drugi, ale i tak kończą resztę (oznaczenie grafiku, rozwiązanie
+  zgłoszenia), inaczej pozycja wróciłaby do kolejki jutro.
+
+⚠️ **Każde nowe miejsce, które TWORZY wiersz w `shifts`, musi zadać to pytanie
+bazie.** Zamek w komponencie chroni przed podwójnym wywołaniem, ale nie przed
+nieaktualnym stanem ani przed drugą sesją.
+
 ## Znane błędy — JUŻ NAPRAWIONE, nie wprowadzaj ponownie
 
 1. **Supabase domyślnie zwraca max 1000 wierszy na request.** `api.get()`
