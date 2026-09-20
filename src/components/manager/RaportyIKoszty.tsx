@@ -7,7 +7,7 @@
 // pracownika w Rejestr Godzin/Aktywni nawiguje tu przez selectedUserId
 // sterowany z ManagerDashboard.tsx — patrz onNameClick tam.
 import React, { useState, useEffect } from "react";
-import { Edit2, Download } from "lucide-react";
+import { Edit2, Download, ChevronDown, ChevronRight } from "lucide-react";
 import { getDayOfWeek, getMonthName } from "../../utils/format";
 import {
   buildPlanFactMap,
@@ -50,7 +50,10 @@ const fmtZl = (n) => zl(n);
 // Rozbicie godzin i kosztu na wymiary: lokal ("gdzie wydaliśmy") i stanowisko
 // ("na co"). Jeden komponent dla obu, bo obie sekcje odpowiadają tą samą miarą
 // i tym samym podziałem — dwie kopie rozjechałyby się przy pierwszej poprawce.
-const Rozbicie = ({ tytul, dane, badge = null, pusto }) => {
+const Rozbicie = ({ tytul, dane, badge = null, pusto, onOsoba }) => {
+  // ⚠️ Domyślnie WSZYSTKO zwinięte. Rozwinięte z góry, rozbicie zjadałoby
+  // cały ekran i zasłaniało to, po co się tu wchodzi — sumę miesiąca.
+  const [otwarte, setOtwarte] = useState({});
   const wpisy = Object.entries(dane || {}).sort((a, b) => b[1].hours - a[1].hours);
   const maAlokacje = wpisy.some(([, v]) => v.alokacja);
   const maBraki = wpisy.some(([, v]) => v.brakKosztu);
@@ -59,30 +62,74 @@ const Rozbicie = ({ tytul, dane, badge = null, pusto }) => {
       <div className={sectionHeaderCls}>{tytul}</div>
       <div className="divide-y divide-[#B7B6AE]">
         {wpisy.length === 0 && <p className="p-4 text-sm text-[#8F8E86]">{pusto}</p>}
-        {wpisy.map(([klucz, v]) => (
-          <div
-            key={klucz}
-            className="px-4 py-2.5 flex items-center justify-between gap-3 text-sm"
-          >
-            <span className="font-bold flex items-center gap-2 min-w-0">
-              {badge && badge(klucz)}
-              <span className="truncate">{klucz}</span>
-            </span>
-            <span className="flex items-baseline gap-3 flex-shrink-0">
-              {/* "~" znaczy ALOKACJA: wynagrodzenie etatowca jest miesięczne i
-                  rozkłada się proporcją godzin, a nie dlatego, że tyle tam
-                  wydano. */}
-              <span className="text-[#6E6E66] tabular-nums whitespace-nowrap">
-                {v.brakKosztu && v.cost === 0
-                  ? "brak wynagrodzenia"
-                  : `${v.alokacja ? "~" : ""}${fmtZl(v.cost)}${v.brakKosztu ? " +?" : ""}`}
-              </span>
-              <span className="font-['Archivo'] font-bold tabular-nums whitespace-nowrap">
-                {fmtH(v.hours)} h
-              </span>
-            </span>
-          </div>
-        ))}
+        {wpisy.map(([klucz, v]) => {
+          const rozwiniete = !!otwarte[klucz];
+          const osoby = [...(v.osoby || [])].sort((a, b) => b.hours - a.hours);
+          return (
+            <div key={klucz}>
+              <button
+                type="button"
+                onClick={() => setOtwarte((o) => ({ ...o, [klucz]: !o[klucz] }))}
+                className="w-full px-4 py-2.5 flex items-center justify-between gap-3 text-sm text-left hover:bg-[#F1F1EE]"
+              >
+                <span className="font-bold flex items-center gap-2 min-w-0">
+                  {rozwiniete ? (
+                    <ChevronDown size={15} className="flex-shrink-0 text-[#6E6E66]" />
+                  ) : (
+                    <ChevronRight size={15} className="flex-shrink-0 text-[#6E6E66]" />
+                  )}
+                  {badge && badge(klucz)}
+                  <span className="truncate">{klucz}</span>
+                  <span className="text-[11px] font-semibold text-[#8F8E86] flex-shrink-0">
+                    {osoby.length} os.
+                  </span>
+                </span>
+                <span className="flex items-baseline gap-3 flex-shrink-0">
+                  {/* "~" znaczy ALOKACJA: wynagrodzenie etatowca jest miesięczne
+                      i rozkłada się proporcją godzin, a nie dlatego, że tyle
+                      tam wydano. */}
+                  <span className="text-[#6E6E66] tabular-nums whitespace-nowrap">
+                    {v.brakKosztu && v.cost === 0
+                      ? "brak wynagrodzenia"
+                      : `${v.alokacja ? "~" : ""}${fmtZl(v.cost)}${v.brakKosztu ? " +?" : ""}`}
+                  </span>
+                  <span className="font-['Archivo'] font-bold tabular-nums whitespace-nowrap">
+                    {fmtH(v.hours)} h
+                  </span>
+                </span>
+              </button>
+              {rozwiniete && (
+                <div className="bg-[#F7F7F4] border-t border-[#DEDDD7]">
+                  {osoby.length === 0 && (
+                    <p className="px-4 py-2 text-[13px] text-[#8F8E86]">
+                      Brak osób do pokazania.
+                    </p>
+                  )}
+                  {osoby.map((o) => (
+                    <button
+                      key={o.uid + klucz}
+                      type="button"
+                      onClick={() => onOsoba && onOsoba(o.uid)}
+                      className="w-full pl-10 pr-4 py-1.5 flex items-center justify-between gap-3 text-[13px] text-left hover:bg-[#EDECE6]"
+                    >
+                      <span className="truncate text-[#171714] hover:underline">
+                        {o.name}
+                      </span>
+                      <span className="flex items-baseline gap-3 flex-shrink-0 tabular-nums">
+                        <span className="text-[#8F8E86] whitespace-nowrap">
+                          {o.cost == null ? "brak wynagrodzenia" : fmtZl(o.cost)}
+                        </span>
+                        <span className="font-semibold whitespace-nowrap">
+                          {fmtH(o.hours)} h
+                        </span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
       {(maAlokacje || maBraki) && (
         <p className="px-4 py-2 text-[11px] text-[#6E6E66] border-t border-[#B7B6AE]">
@@ -138,6 +185,9 @@ export default function RaportyIKoszty({
   // wypłatą — otwarta na bieżącym pokazywała połowę danych i wyglądała, jakby
   // brakowało w niej informacji. Powrót jest jednym kliknięciem ("Bieżący
   // miesiąc"), a wybrany miesiąc stoi w czarnej plakietce w nagłówku.
+  // Który przekrój oglądamy. Domyślnie lokale — to jest pytanie, od którego
+  // zaczyna się przegląd miesiąca; do konkretnej osoby schodzi się później.
+  const [widok, setWidok] = useState("lokale");
   const [month, setMonth] = useState(() => (new Date().getMonth() + 11) % 12);
   const [year, setYear] = useState(() => {
     const d = new Date();
@@ -300,17 +350,21 @@ export default function RaportyIKoszty({
     // tam nie przepracował.
     const byLokal = {};
     const byStanowisko = {};
-    const dodaj = (mapa, klucz, godziny, koszt, alokacja) => {
+    const dodaj = (mapa, klucz, godziny, koszt, alokacja, osoba) => {
       const w = (mapa[klucz] = mapa[klucz] || {
         hours: 0,
         cost: 0,
         brakKosztu: false,
         alokacja: false,
+        osoby: [],
       });
       w.hours += godziny;
       if (koszt == null) w.brakKosztu = true;
       else w.cost += koszt;
       if (alokacja) w.alokacja = true;
+      // Skład pozycji — bez niego liczba w wierszu jest nie do sprawdzenia
+      // inaczej niż przez przeliczanie wszystkich ludzi po kolei.
+      if (osoba) w.osoby.push({ ...osoba, hours: godziny, cost: koszt });
     };
     // Ta sama proporcja godzin, dwa różne klucze: lokal ("gdzie wydaliśmy") i
     // stanowisko ("na co wydaliśmy"). Jedna pętla, bo dwie rozjechałyby się
@@ -324,20 +378,28 @@ export default function RaportyIKoszty({
           wg[klucz] = (wg[klucz] || 0) + hoursOf(s);
         });
         const suma = Object.values(wg).reduce((a, h) => a + h, 0);
+        const kto = { uid: r.uid, name: r.user.name };
         if (suma <= 0) {
           // Zero godzin i zero kosztu nie jest niczyim wierszem — ktoś z samą
           // zmianą bez zakończenia dorzucałby pustą pozycję "—" i znak "+?"
           // przy stanowisku, w którym nic się nie wydarzyło. Wiersz zostaje
           // TYLKO dla kosztu, który naprawdę trzeba gdzieś położyć: etatowca
           // bez ani jednej odbitej godziny.
-          if (r.cost > 0) dodaj(mapa, domyslny || "—", 0, r.cost, false);
+          if (r.cost > 0) dodaj(mapa, domyslny || "—", 0, r.cost, false, kto);
           return;
         }
         // Znak "~" tylko tam, gdzie naprawdę było co dzielić: etatowiec w
         // jednym miejscu kosztował je całą kwotą i żadnego szacunku tam nie ma.
         const dzielone = naEtacie(r.user) && Object.keys(wg).length > 1;
         Object.entries(wg).forEach(([klucz, h]) => {
-          dodaj(mapa, klucz, h, r.cost == null ? null : (r.cost * h) / suma, dzielone);
+          dodaj(
+            mapa,
+            klucz,
+            h,
+            r.cost == null ? null : (r.cost * h) / suma,
+            dzielone,
+            kto
+          );
         });
       };
       rozbij(byLokal, (s) => (s.is_urlop ? "Urlop" : s.lokal), r.user.default_lokal);
@@ -410,6 +472,14 @@ export default function RaportyIKoszty({
     r.faktH += v.faktH;
   });
 
+  // Kliknięcie nazwiska w rozwiniętej pozycji prowadzi do jego karty — bez
+  // tego rozbicie kończy się na liczbie i trzeba szukać tej samej osoby
+  // jeszcze raz, ręcznie, w trzeciej zakładce.
+  const pokazOsobe = (uid) => {
+    setSelectedUserId(uid);
+    setWidok("pracownicy");
+  };
+
   useEffect(() => {
     if (selectedUserId && !users.find((u) => u.id === selectedUserId)) {
       setSelectedUserId(null);
@@ -424,6 +494,7 @@ export default function RaportyIKoszty({
     if (!skok) return;
     setMonth(skok.mies);
     setYear(skok.rok);
+    setWidok("pracownicy");
   }, [skok?.seq]);
 
   const selectedUser = selectedUserId ? users.find((u) => u.id === selectedUserId) : null;
@@ -650,30 +721,65 @@ export default function RaportyIKoszty({
         </div>
       )}
 
-      <Rozbicie
-        tytul="Według lokalu"
-        dane={byLokal}
-        pusto="Brak danych w tym okresie."
-      />
+      {/* Kafelki i pasek porównania zostają nad wszystkim — to rama, w której
+          czyta się każdy z przekrojów. Niżej zmienia się tylko OŚ: gdzie
+          wydaliśmy, na co, czy komu. Trzy sekcje jedna pod drugą robiły z tej
+          strony stos, przez który trzeba było przewijać do właściwej. */}
+      <div className="flex gap-2 mb-5 flex-wrap">
+        {[
+          // Krótkie etykiety: pełną nazwę przekroju niesie nagłówek karty pod
+          // spodem, a "Według lokalu" w obu miejscach czytało się jak błąd.
+          { key: "lokale", label: "Lokale" },
+          { key: "stanowiska", label: "Stanowiska" },
+          { key: "pracownicy", label: "Pracownicy" },
+        ].map((w) => (
+          <button
+            key={w.key}
+            onClick={() => setWidok(w.key)}
+            className={`px-3.5 py-2 rounded border-[2px] font-['Archivo'] font-bold text-sm ${
+              widok === w.key
+                ? "bg-[#171714] text-white border-[#171714]"
+                : "bg-white text-[#171714] border-[#B7B6AE]"
+            }`}
+          >
+            {w.label}
+          </button>
+        ))}
+      </div>
+
+      {widok === "lokale" && (
+        <Rozbicie
+          tytul="Według lokalu"
+          dane={byLokal}
+          pusto="Brak danych w tym okresie."
+          onOsoba={pokazOsobe}
+        />
+      )}
 
       {/* Drugi wymiar tych samych pieniędzy: nie "gdzie", tylko "na co".
           Przy planowaniu obsady to jest pytanie, które zadaje się najpierw —
           ile kosztuje kuchnia, a ile sala. */}
-      <Rozbicie
-        tytul="Według stanowiska"
-        dane={byStanowisko}
-        pusto="Brak danych w tym okresie."
-        badge={(nazwa) => {
-          const styl = stanowiskoBadgeStyle(stanowiska, null, nazwa);
-          return (
-            <span
-              className="w-2.5 h-2.5 rounded-full flex-shrink-0 border border-[#B7B6AE]"
-              style={styl ? { backgroundColor: styl.color, borderColor: styl.color } : undefined}
-            />
-          );
-        }}
-      />
+      {widok === "stanowiska" && (
+        <Rozbicie
+          tytul="Według stanowiska"
+          dane={byStanowisko}
+          pusto="Brak danych w tym okresie."
+          onOsoba={pokazOsobe}
+          badge={(nazwa) => {
+            const styl = stanowiskoBadgeStyle(stanowiska, null, nazwa);
+            return (
+              <span
+                className="w-2.5 h-2.5 rounded-full flex-shrink-0 border border-[#B7B6AE]"
+                style={
+                  styl ? { backgroundColor: styl.color, borderColor: styl.color } : undefined
+                }
+              />
+            );
+          }}
+        />
+      )}
 
+      {widok === "pracownicy" && (
       <div className="grid md:grid-cols-[360px_1fr] gap-5">
         {/* --- Lista pracowników --- */}
         <div className={`${!selectedUser ? "block" : "hidden md:block"} ${sectionCardCls}`}>
@@ -886,6 +992,7 @@ export default function RaportyIKoszty({
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }

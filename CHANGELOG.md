@@ -66,8 +66,14 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
   podzielona przez normę miesiąca). Widać to też w karcie pracownika —
   „umowa + 4 h ponad normą 44 h" zamiast dawnego „wg umowy, niezależnie od
   godzin", które było po prostu nieprawdą.
-- **Nowa sekcja „Według stanowiska"** obok „Według lokalu": te same pieniądze w
-  drugim przekroju — ile kosztuje kuchnia, a ile sala.
+- **Trzy przekroje zamiast stosu sekcji**: przełącznik Lokale / Stanowiska /
+  Pracownicy pod kafelkami. Kafelki i porównanie z poprzednim miesiącem
+  zostają nad wszystkim — zmienia się tylko oś: gdzie wydaliśmy, na co, czy
+  komu. „Według stanowiska" jest przy okazji nowe: ile kosztuje kuchnia, a ile
+  sala.
+- **Każdą pozycję da się rozwinąć strzałką** i zobaczyć, z kogo się składa —
+  domyślnie wszystko zwinięte. Kliknięcie nazwiska w środku prowadzi wprost do
+  karty tej osoby.
 
 ## 0.39.0 — 2026-09-17
 

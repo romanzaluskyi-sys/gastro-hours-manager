@@ -1719,10 +1719,22 @@ stawki godzinowej, to jest ten sam błąd.
   własny `toFixed(0) + " zł"` nie grupował tysięcy.
 - **CSV eksportuje podsumowanie OSÓB, nie listę zmian** — tamtą eksportuje
   Rejestr Godzin. Brak wynagrodzenia wychodzi jako pusta komórka, nie zero.
+- **Trzy przekroje pod jednym przełącznikiem** (`widok`: lokale / stanowiska /
+  pracownicy). Kafelki i pasek porównania zostają NAD przełącznikiem — to rama,
+  w której czyta się każdy z przekrojów; zmienia się tylko oś (gdzie wydaliśmy,
+  na co, komu). Trzy sekcje jedna pod drugą robiły z tej strony stos.
+  ⚠️ Etykiety pigułek są KRÓTKIE („Lokale"), bo pełną nazwę niesie nagłówek
+  karty pod spodem — to samo zdanie w obu miejscach czytało się jak błąd.
 - **Dwa rozbicia tych samych pieniędzy, jednym komponentem `Rozbicie`**:
   „Według lokalu" (gdzie wydaliśmy) i „Według stanowiska" (na co). Ten sam
   podział proporcją godzin liczy JEDNA pętla w `agreguj` — dwie rozjechałyby
   się przy pierwszej poprawce reguły.
+- **Każda pozycja rozwija się strzałką, domyślnie ZWINIĘTA.** Skład zbiera
+  `dodaj()` przy okazji liczenia (`osoby`), więc rozwinięcie niczego nie
+  przelicza. Rozwinięte z góry, rozbicie zjadałoby ekran i zasłaniało sumę
+  miesiąca, po którą się tu wchodzi. Kliknięcie nazwiska w środku woła
+  `pokazOsobe` — przełącza na przekrój „pracownicy" i otwiera kartę; bez tego
+  rozbicie kończy się na liczbie i tę samą osobę trzeba szukać ręcznie.
 - ⚠️ **Wiersz z zerem godzin i zerem kosztu nie powstaje.** Osoba, której cała
   zmiana wisi bez zakończenia, dorzucała pustą pozycję „—" i znak „+?" przy
   stanowisku, w którym nic się nie wydarzyło. Wiersz bez godzin zostaje TYLKO
