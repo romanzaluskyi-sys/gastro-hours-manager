@@ -18,12 +18,32 @@
 // ⚠️ Model silo: adres bazy NIE MOŻE stać w kodzie — jedno repozytorium
 // obsługuje N projektów Vercel, każdy z własnym projektem Supabase. Zmienne
 // ustawia się w Vercel → Project Settings → Environment Variables, obok
-// istniejącego CRON_SECRET. Fallback na wartości pierwszego klienta zostaje,
-// żeby ta zmiana nie zgasiła działającego crona przed ich ustawieniem.
-const SUPABASE_URL =
-  process.env.SUPABASE_URL || "https://gdzossvaauznqsrfqovw.supabase.co";
-const SUPABASE_KEY =
-  process.env.SUPABASE_KEY || "sb_publishable_4SuEM6I6VujiuBtqGze1Nw_vFoeoM3S";
+// istniejącego CRON_SECRET.
+//
+// ⚠️ NIE MA TU FALLBACKU i nie wolno go dopisywać. Do 0.41.0 stał tu adres i
+// klucz pierwszego klienta — bezpiecznik na czas wdrażania modelu silo, żeby
+// zmiana z 0.33.0 nie zgasiła działającego crona, zanim ktokolwiek ustawi
+// zmienne. Skutek uboczny był gorszy niż problem, który rozwiązywał: projekt
+// NOWEGO klienta bez ustawionych zmiennych pisałby powiadomienia i prognozy do
+// bazy PIERWSZEGO. Front ma na taki wypadek nazwę najemcy na ekranie logowania;
+// cron nie ma ekranu, więc nikt by tego nie zobaczył. Brak zmiennej kończy się
+// teraz błędem 500 z wyjaśnieniem — cron widoczny jako czerwony w Vercelu jest
+// nieporównanie lepszy niż cron piszący po cichu do cudzej bazy.
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_KEY;
+
+// Wołane w handlerze PO autoryzacji: komu z ulicy nic do tego, czego nam brakuje.
+const brakKonfiguracji = () => {
+  const brak = [];
+  if (!SUPABASE_URL) brak.push("SUPABASE_URL");
+  if (!SUPABASE_KEY) brak.push("SUPABASE_KEY");
+  if (!brak.length) return null;
+  return (
+    `Brak zmiennych środowiskowych: ${brak.join(", ")}. ` +
+    "Ustaw je w Vercel → Project Settings → Environment Variables " +
+    "(procedura: docs/NOWY-KLIENT.md)."
+  );
+};
 
 const headers = {
   apikey: SUPABASE_KEY,
@@ -97,10 +117,24 @@ const zapisz = async (wiersze) => {
 };
 
 module.exports = async function handler(req, res) {
-  const authHeader = req.headers.authorization || req.headers.Authorization;
+  // ⚠️ Sprawdzenie PRZED porównaniem nagłówka, nie po. Przy nieustawionym
+  // CRON_SECRET `Bearer ${process.env.CRON_SECRET}` daje dosłowny string
+  // "Bearer undefined" — i każdy, kto wyśle taki nagłówek, przechodzi
+  // autoryzację. Brakująca zmienna otwierała więc endpoint zamiast go zamknąć.
+  if (!process.env.CRON_SECRET) {
+    return res.status(500).json({
+      error:
+        "CRON_SECRET nie jest ustawiony w tym projekcie Vercel — " +
+        "bez niego nie da się odróżnić wywołania z harmonogramu od cudzego " +
+        "(procedura: docs/NOWY-KLIENT.md).",
+    });
+  }
+  const authHeader = req.headers.authorization || req.headers.Authorization || "";
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return res.status(401).json({ error: "Unauthorized" });
   }
+  const brak = brakKonfiguracji();
+  if (brak) return res.status(500).json({ error: brak });
 
   const dzis = ymd(new Date());
   const wczoraj = ymd(new Date(Date.now() - 86400000));

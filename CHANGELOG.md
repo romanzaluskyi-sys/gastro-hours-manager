@@ -5,6 +5,31 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.41.0 — 2026-09-20
+
+Wydanie porządkujące wdrożenia — dla użytkownika w lokalu nic się nie zmienia.
+Zmiana jest po stronie tego, jak aplikacja łączy się z bazą, i przygotowuje
+uruchomienie drugiego klienta.
+
+- **Aplikacja nie ma już w kodzie adresu żadnej bazy.** Do tej pory, gdyby
+  nowe wdrożenie zostało postawione bez ustawionych zmiennych, po cichu
+  pokazywałoby i zapisywało dane pierwszego klienta — wyglądając przy tym na
+  poprawnie działające. Teraz w takiej sytuacji pojawia się ekran „wdrożenie
+  nieskonfigurowane" z listą brakujących ustawień.
+- **Nazwa sieci na ekranie logowania nie ma już domyślnej wartości.** Jeśli
+  jej nie ustawiono, stoi tam czerwone ostrzeżenie zamiast nazwy — to jedyne
+  miejsce, po którym widać, czyje dane czyta dane wdrożenie.
+- **Codzienne zadania w tle (przypomnienia o terminach, o niezamkniętym dniu,
+  o zmianach bez odbicia) przestają działać po cichu przy złej konfiguracji** —
+  zgłaszają błąd, zamiast pisać do przypadkowej bazy. Przy okazji zamknięta
+  luka: brak hasła do tych zadań sprawiał, że można było je wywołać z zewnątrz.
+- **Zamiast białej strony — ekran z wyjaśnieniem.** Jeśli coś się w aplikacji
+  wywali, widać teraz komunikat „Coś się zepsuło", przycisk odświeżenia i
+  zapewnienie, że zapisane godziny są bezpieczne. Wcześniej ekran po prostu
+  gasł i nie dało się tego odróżnić od zerwanego internetu.
+- **Błędy zapisują się same**, razem z wersją aplikacji i ekranem, na którym
+  wystąpiły — zgłoszenie „nie działa" przestaje być jedyną informacją.
+
 ## 0.40.0 — 2026-09-19
 
 - **Zmiana, której nikt nie zakończył, przestaje udawać, że trwa.** Jeśli ktoś

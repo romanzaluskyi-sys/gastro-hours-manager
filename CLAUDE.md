@@ -114,12 +114,42 @@ dziś `index.tsx`, który jest w pełni otypowany.
   Cicha awaria najgorszego rodzaju: aplikacja działa, tylko pokazuje cudze
   dane.
 
-⚠️ **Fallback na wartości pierwszego klienta zostaje świadomie** — bez niego
-merge tej zmiany zgasiłby produkcję, zanim ktokolwiek zdąży ustawić zmienne.
-Jest jednocześnie pułapką, dlatego `REACT_APP_TENANT` (nazwa klienta) stoi na
-ekranie logowania pod nazwą produktu i w panelu pod nazwiskiem kierownika. To
-JEDYNY widoczny gołym okiem sygnał, że wdrożenie czyta właściwą bazę — jeśli u
-nowego klienta stoi tam nazwa starego, zmiennych nie ustawiono.
+⚠️ **Fallbacku na dane pierwszego klienta NIE MA od 0.41.0 — ani w
+`src/config.ts`, ani w żadnym z pięciu kronów. Nie dopisuj go z powrotem.**
+Do 0.40.0 stał w sześciu miejscach jako bezpiecznik na czas wdrażania modelu
+silo (bez niego merge 0.33.0 zgasiłby produkcję, zanim ktokolwiek ustawi
+zmienne). Bezpiecznik zrobił swoje i zamienił się w pułapkę odwrotną do
+zamierzonej: wdrożenie NOWEGO klienta bez ustawionych zmiennych po cichu
+czytało i **zapisywało** bazę pierwszego, wyglądając przy tym na sprawne.
+
+Co się dzieje dziś, gdy zmiennych brakuje:
+- **front** — `isConfigured` jest `false` i App renderuje
+  [`KonfiguracjaBrak.tsx`](src/components/KonfiguracjaBrak.tsx): ekran z listą
+  brakujących zmiennych (`brakujaceZmienne` w `config.ts`) zamiast logowania;
+- **crony** — 500 z nazwą brakującej zmiennej zamiast zapisu gdziekolwiek.
+  ⚠️ Przy okazji naprawione: nieustawiony `CRON_SECRET` sprawiał, że
+  `` `Bearer ${process.env.CRON_SECRET}` `` dawało dosłowne `"Bearer undefined"`
+  — czyli brakująca zmienna OTWIERAŁA endpoint każdemu, kto wyśle taki nagłówek.
+  Sprawdzenie obecności sekretu stoi teraz PRZED porównaniem nagłówka.
+
+⚠️ `REACT_APP_TENANT` świadomie **nie** wchodzi do `isConfigured` — brak nazwy
+klienta nie jest powodem, żeby zgasić działającą aplikację. Wchodzi za to do
+`brakujaceZmienne`, a tam, gdzie nazwa najemcy stoi na ekranie (logowanie,
+sidebar kierownika), pusta wartość renderuje się jako czerwone
+„⚠ brak REACT_APP_TENANT". Nazwa najemcy dalej jest JEDYNYM widocznym gołym
+okiem sygnałem, czyją bazę czyta to wdrożenie — ale przestała być sygnałem
+fałszywie uspokajającym, bo nie ma już domyślnej wartości „Gastro Emka".
+
+⚠️ **Zmienne muszą być ustawione dla Production, Preview i Development.**
+Ustawione tylko dla produkcji dają podgląd PR-a z ekranem „brak konfiguracji" —
+każdy PR wygląda wtedy na zepsuty, choć zepsute są ustawienia projektu.
+
+⚠️ **Harnessy nie przechodzą przez build CRA**, więc nie mają skąd wziąć
+zmiennych. Ten, który ich potrzebuje, ustawia `window.__SHIFTRO_ENV` PRZED
+załadowaniem modułu (`harness-karta.html` — prawdziwa baza, `harness-app.html`
+— atrapa wyglądająca jak prawdziwa, bo `api/supabase` jest tam podmienione).
+To jedyna droga podania konfiguracji z pominięciem builda i ma być jawna:
+harness sięgający do prawdziwej bazy musi mieć to napisane u siebie.
 
 ## Struktura plików
 
@@ -139,11 +169,27 @@ api/                         — root-level, POZA src/ — funkcje Vercel Cron
                                  odbitego końca (pracownik + kierownik),
                                  patrz "Zmiany bez zakończenia" niżej
 vercel.json                  — harmonogram crona
+.github/workflows/ci.yml     — CI na każdym PR-ze: zgodność numeru wersji i
+                                 przebieg harnessów. ⚠️ Świadomie BEZ zadania
+                                 `npm run build` — Vercel buduje każdy PR jako
+                                 Preview i drugi build mówiłby to samo
 CHANGELOG.md                 — historia wersji, patrz "Wersjonowanie i CHANGELOG" niżej
 docs/GRAFIK.md               — pełna specyfikacja Grafiku z uzasadnieniami decyzji właściciela
+docs/KOPIE-ZAPASOWE.md       — co obejmuje kopia, czego NIE obejmuje, kolejność
+                                 odtwarzania i ćwiczenie odtworzenia
 docs/sql/migrations/          — migracje, stosowane przez scripts/migrate.py (NIE ręcznie w SQL Editor)
-docs/sql/tools/               — zapytania pomocnicze (zrzut schematu, weryfikacja Grafiku)
+docs/sql/tools/               — zapytania pomocnicze (zrzut schematu, weryfikacja Grafiku,
+                                 ostatnie-bledy.sql — dziennik błędów aplikacji)
 scripts/migrate.py            — runner migracji, domyślnie SUCHY przebieg
+scripts/sprawdz-wersje.py     — czy numer wersji stoi ten sam w czterech
+                                 miejscach (config.ts, version.json,
+                                 CHANGELOG.md, Przewodnik.tsx); woła go CI
+scripts/harness-ci.cjs        — uruchamia harness-*.html bez głowy (Playwright).
+                                 ⚠️ Kontrakt: harness kończy pracę zmieniając
+                                 `#status` albo dopisując "ZDANYCH n, OBLANYCH m"
+                                 do `#out`, a awarię oznacza klasą "zle" albo
+                                 słowem "BŁĄD". harness-karta.html jest pominięty
+                                 (jako jedyny rozmawia z prawdziwą bazą)
 scripts/import-grafik.py     — import grafiku z arkusza Google (domyślnie SUCHY przebieg)
 public/
   version.json                — { "version": "X.Y.Z" }, czytany przez
@@ -159,6 +205,9 @@ src/
   api/
     supabase.ts               — obiekt `api` (get z paginacją/post/patch/delete/patchByFilter)
     googleSheets.ts            — sendToGoogleSheets, toLocalYMD
+    errors.ts                  — zapiszBlad/ustawKontekstBledow/
+                                  wlaczGlobalneNasluchy: dziennik błędów do
+                                  tabeli app_errors, patrz "Błędy" niżej
     notifications.ts           — createManagerNotification(lokal, message, type),
                                   createEmployeeNotification(userName, message, type)
   utils/
@@ -212,6 +261,13 @@ src/
                                   dziennik.ts importuje z tasks.ts i
                                   sięgnięcie w drugą stronę zrobiłoby cykl.
   components/
+    ErrorBoundary.tsx           siatka pod całym drzewem (index.tsx) — ekran
+                                  "Coś się zepsuło" zamiast białej strony;
+                                  komponent KLASOWY, bo componentDidCatch nie
+                                  ma odpowiednika w hookach
+    KonfiguracjaBrak.tsx        ekran "wdrożenie nieskonfigurowane" z listą
+                                  brakujących zmiennych — to on pozwala nie
+                                  mieć fallbacku na bazę pierwszego klienta
     LoginScreen.tsx             redesign 2026-09-02, ten sam język wizualny
                                   co reszta apki (patrz niżej)
     UpdateBanner.tsx            pasek "dostępna nowa wersja — odśwież
@@ -585,6 +641,43 @@ dokleja z przodu `user_name` (`"Wojtek: Twój termin: ..."`) — bez tego,
 przy kilku pracownikach `open` na jednym urządzeniu nie było wiadomo, do
 kogo należy powiadomienie.
 
+## Błędy aplikacji — dodane 2026-09-20 (0.41.0)
+
+[`api/errors.ts`](src/api/errors.ts) + [`components/ErrorBoundary.tsx`](src/components/ErrorBoundary.tsx)
++ tabela `app_errors` (migracja `0024`) + `docs/sql/tools/ostatnie-bledy.sql`.
+
+Do 0.41.0 błąd w przeglądarce nie zostawiał żadnego śladu, a wyjątek przy
+renderowaniu gasił CAŁĄ stronę na biało. Na tablecie w kuchni biała strona jest
+nie do odróżnienia od zepsutego internetu, więc zgłoszeniem był telefon „nie
+działa" — zwykle następnego dnia, bez wersji, bez ekranu, bez treści błędu.
+
+- **`ErrorBoundary` stoi w `index.tsx`, nad `<App/>`.** Świadomie BEZ przycisku
+  „spróbuj ponownie": render, który się wywalił, wywali się drugi raz na tych
+  samych danych, a przycisk, który nic nie zmienia, uczy ludzi, że klikanie nie
+  pomaga. Jest za to „Odśwież stronę" i zdanie o tym, że **zapisane godziny są
+  bezpieczne** — to pierwsze, o co pyta pracownik.
+- ⚠️ **Musi być komponentem KLASOWYM** — `componentDidCatch` nie ma
+  odpowiednika w hookach.
+- **Nasłuchy globalne** (`wlaczGlobalneNasluchy` w `index.tsx`, przed pierwszym
+  renderem) łapią to, czego boundary nie łapie: błędy w handlerach, w
+  `setTimeout` i odrzucone obietnice, czyli m.in. każde nieobsłużone `api.get`.
+- ⚠️ **`zapiszBlad` NIE MOŻE rzucić.** Woła się ją tam, gdzie już coś poszło
+  nie tak; wyjątek w obsłudze wyjątku zamienia jeden zepsuty ekran w zepsutą
+  całą aplikację. Stąd try/catch dookoła wszystkiego, `catch(() => {})` na
+  fetchu i świadome ominięcie `api.post` (tamto rzuca przy `!res.ok`).
+- ⚠️ **Limit pięciu zapisów na sesję i odsiewanie powtórzeń** (`LIMIT_NA_SESJE`,
+  `juzWidziane`). Jeden błąd w pętli renderowania potrafi wywołać się tysiące
+  razy w minutę — czyli akurat wtedy, gdy baza jest najbardziej potrzebna do
+  pracy. Licznik jest per-sesja przeglądarki; odświeżenie zaczyna od nowa i tak
+  ma być, bo odświeżenie po awarii to nowy przypadek.
+- **`ustawKontekstBledow` woła App.tsx** przy zmianie użytkownika i widoku —
+  bez tego wiersz mówi „coś się wywaliło" i nic poza tym.
+- ⚠️ **Nie zapisujemy niczego, czego nie ma już w bazie**: imię zalogowanej
+  osoby i lokal owszem, ale żadnych treści formularzy ani wpisów.
+- **Właściwe pytanie do tej tabeli brzmi „co się POWTARZA", nie „co było
+  ostatnie"** — drugie zapytanie w `ostatnie-bledy.sql`. Błąd, który zdarzył
+  się raz, zwykle był jednorazowy.
+
 ## Pogoda — zaimplementowane 2026-09-03
 
 Mały wskaźnik pogody (ikona + temperatura) w pasku górnym Panelu
@@ -797,7 +890,19 @@ odpadają. Zamiast tego dwa pliki w katalogu głównym, uruchamiane przez
   można klikać wszystko). To jedyny sprawdzian, który łapie propsy gubione
   między poziomami — dwa pozostałe renderują komponenty w izolacji i taki błąd
   przepuszczą. Lista ikon lucide jest w nim wygenerowana ze wszystkich importów
-  w `src/`, więc obejmuje każdy komponent panelu.
+  w `src/`, więc obejmuje każdy komponent panelu;
+- `harness-bledy.html` — dziennik błędów: limit zapisów na sesję, odsiewanie
+  powtórzeń, komplet pól wiersza i to, czy `ErrorBoundary` pokazuje ekran
+  zamiast białej strony. `fetch` jest podmieniony, nic nie leci do sieci.
+
+⚠️ **Od 0.41.0 harnessy chodzą też w CI** (`.github/workflows/ci.yml` →
+`scripts/harness-ci.cjs`, Playwright na każdym PR-ze). Dokładając NOWY
+harness, trzymaj kontrakt, po którym CI poznaje wynik: koniec przebiegu to
+zmiana tekstu `#status` (ekrany) albo linia `ZDANYCH n, OBLANYCH m` w `#out`
+(arytmetyka), a awaria to klasa `zle` na elemencie albo słowo `BŁĄD` w
+treści. Harness bez tego CI uzna za wiszący i PR stanie na czerwono.
+`harness-karta.html` jest z CI wyłączony — jako jedyny rozmawia z prawdziwą
+bazą i testy nie mają chodzić po danych klienta.
 
 To jedyna działająca tu forma weryfikacji i to ona wyłapała błąd
 `parseDaysOfWeek` opisany wyżej. Pliki są poza `src/` i `public/`, więc build
@@ -1300,6 +1405,13 @@ zakresem — wymaga Grafiku, którego nie ma.
   jednostka,min,max}]), kolejnosc (int), archived (bool), created_at`.
   Szablon się ARCHIWIZUJE, nie kasuje — wpisy sprzed miesięcy odwołują się do
   niego przez `template_key` i muszą mieć skąd wziąć nazwę i normy.
+- **app_errors** — dziennik błędów aplikacji (migracja `0024`), patrz "Błędy
+  aplikacji" niżej. `id (uuid), created_at, app_version, tenant, typ
+  ('render'|'window'|'promise'), komunikat, stos, ekran, user_name, rola,
+  lokal, url, user_agent`. Pisze tu WYŁĄCZNIE `zapiszBlad` z
+  [`api/errors.ts`](src/api/errors.ts) — nie zapisuj tu nic z innego miejsca.
+  RLS: otwarta polityka, jak reszta. ⚠️ Nie jest archiwum: czyść starsze niż
+  90 dni (`docs/sql/tools/ostatnie-bledy.sql`, ostatnie zapytanie).
 - **weather_forecasts** — archiwum prognoz, patrz "Archiwum prognoz" wyżej.
   `id (uuid), miasto, target_date (date), horizon_days (int, 0 = FAKT),
   temp_max, temp_min, opady_mm (numeric), opady_prawdopodobienstwo (int),

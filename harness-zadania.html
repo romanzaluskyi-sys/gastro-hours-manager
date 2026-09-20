@@ -388,7 +388,7 @@ const sprawdz = (nazwa, warunek, szczegol = "") => {
       "filtr w UI to za mało — zapis musi bronić się sam");
 
     log("");
-    log(`${zdanych} zdanych, ${oblanych} oblanych`, oblanych ? "zle" : "ok");
+    log(`ZDANYCH ${zdanych}, OBLANYCH ${oblanych}`, oblanych ? "zle" : "ok");
   } catch (e) {
     log("BŁĄD: " + (e && e.message), "zle");
     const pre = document.createElement("pre");

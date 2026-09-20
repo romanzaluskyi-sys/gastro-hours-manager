@@ -11,6 +11,19 @@
 </style>
 <div id="status">ładowanie…</div>
 <div id="root"></div>
+<script>
+  // App.tsx od 0.41.0 renderuje ekran "brak konfiguracji", gdy nie ma adresu
+  // bazy — a harness nie przechodzi przez build CRA, więc żadnych zmiennych
+  // by nie zobaczył i zatrzymałby się na tym ekranie zamiast montować panel.
+  // Wartości są ATRAPĄ i mają nią zostać: api/supabase jest tu podmienione,
+  // nic nie leci do sieci. Muszą tylko wyglądać jak prawdziwe, bo isConfigured
+  // sprawdza "supabase.co" i "sb_".
+  window.__SHIFTRO_ENV = {
+    REACT_APP_SUPABASE_URL: "https://harness.supabase.co",
+    REACT_APP_SUPABASE_KEY: "sb_publishable_harness",
+    REACT_APP_TENANT: "Harness",
+  };
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js" crossorigin="anonymous"></script>

@@ -23,6 +23,17 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.41.0",
+    date: "2026-09-20",
+    items: [
+      "Wydanie porządkujące wdrożenia — w codziennej pracy nic się nie zmienia.",
+      "Aplikacja nie ma już wpisanego w kodzie adresu bazy: nowe wdrożenie bez ustawień pokaże ekran „wdrożenie nieskonfigurowane\" zamiast po cichu czytać dane innej sieci.",
+      "Nazwa sieci na ekranie logowania i w panelu ostrzega czerwonym napisem, gdy nie została ustawiona.",
+      "Codzienne zadania w tle zgłaszają błąd zamiast działać po cichu przy złej konfiguracji.",
+      "Zamiast białej strony przy awarii — ekran „Coś się zepsuło\" z przyciskiem odświeżenia; błędy zapisują się same razem z wersją i ekranem.",
+    ],
+  },
+  {
     version: "0.40.0",
     date: "2026-09-19",
     items: [

@@ -1,0 +1,150 @@
+<meta charset="utf-8">
+<!-- Sprawdzian dziennika błędów: src/api/errors.ts + components/ErrorBoundary.tsx.
+     Nic nie leci do sieci — `fetch` jest podmieniony i tylko liczy wywołania. -->
+<title>Sprawdzian dziennika błędów</title>
+<style>
+  body { font: 14px/1.6 ui-monospace, Menlo, monospace; padding: 24px; background: #FBFAF9; color: #17120F; }
+  h1 { font: 700 18px/1.2 system-ui, sans-serif; }
+  .ok { color: #2C6A4F; } .zle { color: #DE3A22; font-weight: 700; }
+  #scena { position: fixed; left: -3000px; width: 800px; height: 600px; }
+</style>
+<h1>Sprawdzian src/api/errors.ts i ErrorBoundary.tsx</h1>
+<div id="out">ładowanie…</div>
+<div id="scena"></div>
+
+<script>
+  // Atrapa konfiguracji: `isConfigured` musi być prawdą, inaczej zapiszBlad
+  // świadomie nic nie robi i cały sprawdzian mierzyłby ciszę.
+  window.__SHIFTRO_ENV = {
+    REACT_APP_SUPABASE_URL: "https://harness.supabase.co",
+    REACT_APP_SUPABASE_KEY: "sb_publishable_harness",
+    REACT_APP_TENANT: "Harness",
+  };
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js" crossorigin="anonymous"></script>
+<script>
+const out = document.getElementById("out");
+const log = (txt, cls = "") => {
+  const d = document.createElement("div");
+  d.className = cls; d.textContent = txt; out.appendChild(d);
+};
+
+// ⚠️ Podmiana fetcha MUSI stać przed załadowaniem modułu — errors.ts woła
+// globalny fetch w chwili zapisu, więc wystarczy podmienić go tutaj.
+const wyslane = [];
+const prawdziwyFetch = window.fetch.bind(window);
+window.fetch = (url, opcje) => {
+  if (String(url).includes("/app_errors")) {
+    wyslane.push(JSON.parse(opcje.body));
+    return Promise.resolve({ ok: true, json: async () => [{}] });
+  }
+  return prawdziwyFetch(url, opcje);
+};
+
+const stub = (kod) => URL.createObjectURL(new Blob([kod], { type: "text/javascript" }));
+const PAKIETY = {
+  react: stub(`const R = window.React;
+    export default R;
+    export const useState = R.useState, useMemo = R.useMemo, useEffect = R.useEffect,
+      useRef = R.useRef, useCallback = R.useCallback, Fragment = R.Fragment;`),
+  "lucide-react": stub(
+    `const ikona = (n) => (p) => window.React.createElement("span", { "data-ikona": n }, "▪");
+     export const AlertTriangle = ikona("AlertTriangle");`
+  ),
+};
+
+const cache = new Map();
+async function zaladuj(sciezka) {
+  if (cache.has(sciezka)) return cache.get(sciezka);
+  const p = (async () => {
+    let kod = null;
+    for (const ext of [".tsx", ".ts", ""]) {
+      const r = await fetch(sciezka + ext + "?cb=" + Date.now());
+      if (r.ok) { kod = await r.text(); break; }
+    }
+    if (kod === null) throw new Error("nie znaleziono " + sciezka);
+    const baza = sciezka.slice(0, sciezka.lastIndexOf("/"));
+    const spec = [...kod.matchAll(/from\s+"([^"]+)"/g)].map((m) => m[1]);
+    const mapa = {};
+    for (const s of spec) {
+      mapa[s] = PAKIETY[s] ? PAKIETY[s]
+        : await zaladuj(new URL(baza + "/" + s, location.origin).pathname);
+    }
+    kod = kod.replace(/from\s+"([^"]+)"/g, (m, s) => `from "${mapa[s]}"`);
+    return URL.createObjectURL(new Blob([
+      Babel.transform(kod, { presets: [["typescript", { allExtensions: true, isTSX: true }], "react"] }).code
+    ], { type: "text/javascript" }));
+  })();
+  cache.set(sciezka, p);
+  return p;
+}
+
+let zdanych = 0, oblanych = 0;
+const sprawdz = (nazwa, warunek, szczegol = "") => {
+  if (warunek) { zdanych++; log("  OK   " + nazwa, "ok"); }
+  else { oblanych++; log("  ŹLE  " + nazwa + (szczegol ? " — " + szczegol : ""), "zle"); }
+};
+
+(async () => {
+  try {
+    out.textContent = "";
+    const E = await import(await zaladuj("/src/api/errors"));
+    log("moduł załadowany", "ok");
+    log("");
+
+    // --- kontekst ---
+    E.ustawKontekstBledow({ user_name: "Ala", rola: "open", lokal: "Bułka i Jacek", ekran: "open_dashboard" });
+    E.zapiszBlad("render", new Error("pierwszy"), "stos testowy");
+    sprawdz("zapis poszedł do app_errors", wyslane.length === 1);
+    const w = wyslane[0] || {};
+    sprawdz("niesie kto i gdzie", w.user_name === "Ala" && w.lokal === "Bułka i Jacek" && w.ekran === "open_dashboard",
+      JSON.stringify({ kto: w.user_name, lokal: w.lokal, ekran: w.ekran }));
+    sprawdz("niesie wersję i najemcę", !!w.app_version && w.tenant === "Harness");
+    sprawdz("niesie typ i komunikat", w.typ === "render" && w.komunikat === "pierwszy");
+
+    // --- odsiewanie powtórzeń ---
+    E.zapiszBlad("render", new Error("pierwszy"));
+    sprawdz("ten sam błąd drugi raz nie idzie do bazy", wyslane.length === 1, "wysłano " + wyslane.length);
+
+    // --- limit na sesję: to on chroni bazę przed pętlą renderowania ---
+    for (let i = 0; i < 20; i++) E.zapiszBlad("window", new Error("kolejny " + i));
+    sprawdz("limit 5 zapisów na sesję trzyma", wyslane.length === 5, "wysłano " + wyslane.length);
+
+    // --- brak konfiguracji = brak zapisu (nie da się sprawdzić po imporcie,
+    //     bo isConfigured liczy się raz; sprawdzamy sam kontrakt kształtu) ---
+    sprawdz("wiersz nie niesie nic ponad ustalone pola",
+      Object.keys(w).sort().join(",") ===
+      "app_version,ekran,komunikat,lokal,rola,stos,tenant,typ,url,user_agent,user_name",
+      Object.keys(w).sort().join(","));
+
+    // --- ErrorBoundary ---
+    log("");
+    const EB = (await import(await zaladuj("/src/components/ErrorBoundary"))).default;
+    const R = window.React;
+    const Wybuchowy = () => { throw new Error("celowy wybuch"); };
+    const korzen = window.ReactDOM.createRoot(document.getElementById("scena"));
+    // React w trybie deweloperskim wypisuje złapany błąd do konsoli — to nie
+    // jest awaria sprawdzianu, tylko jego treść. Wyciszamy, żeby CI nie czytał
+    // tego jako błędu strony.
+    const poprzedniError = console.error;
+    console.error = () => {};
+    korzen.render(R.createElement(EB, null, R.createElement(Wybuchowy)));
+    await new Promise((r) => setTimeout(r, 300));
+    console.error = poprzedniError;
+
+    const tekst = document.getElementById("scena").innerText || "";
+    sprawdz("ErrorBoundary pokazał ekran zamiast białej strony", tekst.includes("Coś się zepsuło"), tekst.slice(0, 80));
+    sprawdz("ekran uspokaja co do godzin", tekst.includes("godziny są bezpieczne"));
+    sprawdz("ekran niesie wersję i treść błędu", tekst.includes("celowy wybuch"));
+    sprawdz("wybuch NIE poszedł do bazy — limit sesji już wyczerpany", wyslane.length === 5);
+
+    log("");
+    log(`ZDANYCH ${zdanych}, OBLANYCH ${oblanych}`, oblanych ? "zle" : "ok");
+  } catch (e) {
+    log("BŁĄD: " + (e && e.message ? e.message : e), "zle");
+    log((e && e.stack) || "", "zle");
+  }
+})();
+</script>
