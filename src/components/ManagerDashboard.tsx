@@ -17,6 +17,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { api } from "../api/supabase";
+import { ustawHasloPracownika } from "../api/auth";
 import { sendToGoogleSheets } from "../api/googleSheets";
 import { getShort, getDayOfWeek, getMonthName, getAvailableYears } from "../utils/format";
 import { findOverlappingShift, opisKolidujacej, znajdzKolizjeWBazie } from "../utils/shifts";
@@ -692,16 +693,48 @@ const ManagerDashboard = ({
             : null;
       }
 
+      let zapisany;
       if (editingUser.id) {
-        const u = await api.patch("users", editingUser.id, dataToSave);
-        setUsers(users.map((user) => (user.id === u.id ? u : user)));
+        zapisany = await api.patch("users", editingUser.id, dataToSave);
+        setUsers(users.map((user) => (user.id === zapisany.id ? zapisany : user)));
       } else {
         delete dataToSave.id;
-        const u = await api.post("users", dataToSave);
-        setUsers([...users, u]);
+        zapisany = await api.post("users", dataToSave);
+        setUsers([...users, zapisany]);
       }
+
+      // ⚠️ PIN jest DWIEMA rzeczami naraz: wpisem w kartotece (blokada profilu
+      // na tablecie) i hasłem konta w Supabase Auth (logowanie z prywatnego
+      // telefonu). Zapis samej kolumny rozjechałby je po cichu — tablet
+      // otwierałby się nowym PIN-em, a logowanie dalej chciało starego.
+      // Konto otwarte loguje się `kiosk_pin`, reszta `pin` (patrz LoginScreen).
+      const pinTeraz =
+        String((dataToSave.role === "open" ? dataToSave.kiosk_pin : dataToSave.pin) || "");
+      const pinPrzed = String(
+        (existingUser
+          ? existingUser.role === "open"
+            ? existingUser.kiosk_pin
+            : existingUser.pin
+          : "") || ""
+      );
+      let ostrzezenie = "";
+      if (pinTeraz && pinTeraz !== pinPrzed) {
+        try {
+          await ustawHasloPracownika(zapisany.id, pinTeraz);
+        } catch (e) {
+          // Kartoteka jest już zapisana, więc NIE udajemy, że nic się nie
+          // stało — ale i nie cofamy zapisu. Mówimy dokładnie, co się
+          // rozjechało, bo to jedyna informacja, z którą da się coś zrobić.
+          ostrzezenie =
+            ` UWAGA: PIN na tablecie zmieniony, ale hasło do logowania NIE — ${
+              e.message || "nieznany błąd"
+            }`;
+        }
+      }
+
       setEditingUser(null);
-      showMsg("Zapisano pracownika!");
+      if (ostrzezenie) showMsg(`Zapisano pracownika.${ostrzezenie}`, "error");
+      else showMsg("Zapisano pracownika!");
     } catch (err) {
       showMsg(`Błąd zapisu pracownika: ${err.message || "nieznany błąd"}`, "error");
     }

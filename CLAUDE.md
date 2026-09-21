@@ -201,14 +201,16 @@ wersji trzeba poprawić ręcznie.
   `sprawdz_kiosk_pin`. Konta zakłada `scripts/utworz-konta-auth.py`
   (SUCHY przebieg domyślnie, wymaga klucza SERVICE ROLE z pominięciem repo).
   Nic jeszcze tego nie używa.
-- **3b — logowanie przez Auth.** Klient GoTrue jest gotowy
-  ([`api/auth.ts`](src/api/auth.ts), sprawdzian `harness-auth.html`); reszta
-  nie. Zostaje: `api/supabase.ts` ma wysyłać token użytkownika zamiast klucza
-  publishable (i odświeżać po 401), LoginScreen ma przestać pobierać
-  wszystkich `users` i porównywać PIN w przeglądarce, blokada PIN-em na
-  tablecie ma iść przez `sprawdz_kiosk_pin`, a zmiana cudzego PIN-u przez
-  kierownika potrzebuje funkcji w root-level `api/` (patrz niżej o SERVICE
-  ROLE). Klawiatura kiosku jest już gotowa — 0.41.1/0.41.2, osobne deploye.
+- **3b — logowanie przez Auth. ZROBIONE w 0.42.0.** Klient GoTrue
+  ([`api/auth.ts`](src/api/auth.ts), sprawdzian `harness-auth.html`),
+  `api/supabase.ts` wysyła token użytkownika i ponawia raz po 401, LoginScreen
+  nie pobiera już `users` ani nie porównuje PIN-u, App wznawia sesję z Auth i
+  pobiera dane DOPIERO po zalogowaniu, a `api/admin/ustaw-haslo.js` pilnuje,
+  żeby PIN w karcie i hasło w Auth były tą samą rzeczą.
+
+  ⚠️ **Blokada PIN-em na tablecie NADAL porównuje w przeglądarce.** Przejście
+  na RPC `sprawdz_kiosk_pin` zostawiono do 3c — dopóki polityki są otwarte,
+  tablet i tak czyta `users`, a osobny deploy tej zmiany nic by nie zabezpieczył.
 
   ⚠️ **Trzy rzeczy w `api/auth.ts`, których nie widać przy ręcznym
   logowaniu, a każda wyłącza lokal:**
@@ -240,10 +242,17 @@ się rozjadą, ekran pokaże coś, czego baza nie wyda (albo odwrotnie), a to
 wygląda jak losowa awaria, nie jak błąd uprawnień.
 
 ⚠️ **Zmiana cudzego hasła wymaga klucza SERVICE ROLE**, którego front mieć nie
-może. Kierownik ustawiający PIN w karcie pracownika będzie więc potrzebował
-funkcji w root-level `api/` (sprawdzającej token i rolę wołającego), a nie
-kolejnego zapisu z przeglądarki. Tej funkcji jeszcze NIE MA — powstaje w 3b,
-razem z logowaniem.
+może — dlatego robi to [`api/admin/ustaw-haslo.js`](api/admin/ustaw-haslo.js).
+Funkcja weryfikuje token wołającego W SUPABASE (samodzielne rozkodowanie JWT
+bez sprawdzenia podpisu znaczyłoby tyle, co uwierzenie na słowo komuś, kto
+właśnie prosi o zmianę cudzego hasła), sprawdza rolę i — dla
+`manager_lokalu` — czy pracownik jest z jego lokalu. Zakłada też konto, gdy
+pracownik dostaje e-mail i PIN po raz pierwszy.
+
+⚠️ **Wymaga NOWEJ zmiennej `SUPABASE_SERVICE_KEY` w Vercelu.** Bez niej
+endpoint zwraca 500 z wyjaśnieniem, a kierownik widzi "PIN na tablecie
+zmieniony, ale hasło do logowania NIE". Klucz omija RLS — nigdy w repo, nigdy
+z przedrostkiem `REACT_APP_`, nigdy w przeglądarce.
 
 ## Struktura plików
 
@@ -262,6 +271,10 @@ api/                         — root-level, POZA src/ — funkcje Vercel Cron
     check-porzucone.js         — codzienne przypomnienie o zmianach bez
                                  odbitego końca (pracownik + kierownik),
                                  patrz "Zmiany bez zakończenia" niżej
+  admin/
+    ustaw-haslo.js             — zmiana PIN-u pracownika RAZEM z hasłem jego
+                                 konta w Auth; wymaga SUPABASE_SERVICE_KEY,
+                                 patrz "Logowanie i dostęp do danych" wyżej
 vercel.json                  — harmonogram crona
 .github/workflows/ci.yml     — CI na każdym PR-ze: zgodność numeru wersji i
                                  przebieg harnessów. ⚠️ Świadomie BEZ zadania
@@ -2234,17 +2247,17 @@ Aplikacja ma numer wersji (`APP_VERSION` w `src/config.ts`), widoczny na
 ekranie logowania. Historia zmian jest w [`CHANGELOG.md`](CHANGELOG.md)
 w katalogu głównym repo.
 
-⚠️ Od 2026-08-31 `APP_VERSION` ma dodatkowy efekt: sesja w `localStorage`
-(`App.tsx`, `SESSION_KEY = "gastro_session"`) jest otagowana wersją, z
-którą powstała, i przy ładowaniu apki `loadSession()` porównuje ją z
-aktualnym `APP_VERSION` — przy niezgodności czyści sesję i wraca do ekranu
-logowania. Innymi słowy: **każdy bump `APP_VERSION` wylogowuje wszystkich
-użytkowników przy ich najbliższym odświeżeniu strony** (nie ma tabeli
-sesji w bazie, więc "wyloguj wszystkich" nie da się zrobić zapytaniem SQL
-— to jedyny mechanizm). To NIE wymusza samo z siebie odświeżenia już
-otwartej karty przeglądarki (np. na kiosku) — dopiero po ręcznym
-odświeżeniu/restarcie urządzenie dostanie i nowy bundle JS, i czysty ekran
-logowania zamiast wznowienia starej sesji.
+⚠️ **Do 0.41.2 każdy bump `APP_VERSION` wylogowywał wszystkich** — sesja
+leżała w `localStorage` otagowana wersją i przy niezgodności była kasowana.
+Był to jedyny sposób na "wyloguj wszystkich", bo nie istniała tabela sesji.
+**Od 0.42.0 to nieprawda**: sesję trzyma Supabase Auth, przeżywa aktualizacje,
+a unieważnić ją da się po stronie serwera. Podbicie wersji jest znowu
+zwykłym podbiciem wersji i nie kosztuje nikogo ponownego logowania.
+
+⚠️ Zostaje za to drugi, niezmieniony fakt: **podbicie `APP_VERSION` nie
+wymusza samo z siebie odświeżenia otwartej karty**. Tablet, którego nikt nie
+przeładuje, dalej chodzi na starym bundlu — od tego jest `UpdateBanner`
+(pasek "dostępna nowa wersja", czyta `public/version.json` co 5 minut).
 
 ⚠️ Od 2026-09-02 (redesign Panelu Kierownika) doszły dwa kolejne miejsca,
 które trzeba aktualizować razem z `APP_VERSION`, inaczej cicho wyjdą z

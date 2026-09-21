@@ -1,28 +1,57 @@
 // @ts-nocheck
 import { SUPABASE_URL, SUPABASE_KEY } from "../config";
+import { token, odswiezPoBledzie } from "./auth";
 
 // --- API SUPABASE (REST) ---
-export const api = {
-  headers: {
+//
+// ⚠️ Od 0.42.0 `Authorization` niesie token ZALOGOWANEGO UŻYTKOWNIKA, a nie
+// klucz publishable. Klucz zostaje w `apikey` (PostgREST wymaga go zawsze) i
+// w `Authorization` tylko wtedy, gdy nikt nie jest zalogowany — ekran
+// logowania nie ma jeszcze czym się przedstawić.
+//
+// Dopóki polityki RLS są otwarte, jedno i drugie daje ten sam dostęp, więc ta
+// zmiana niczego nie odcina. Robimy ją osobno właśnie dlatego: gdy polityki
+// zaczną odróżniać kto pyta (Etap 3c), transport ma już działać i być
+// sprawdzony.
+const naglowki = async (dodatkowe) => {
+  const t = await token();
+  return {
     apikey: SUPABASE_KEY,
-    Authorization: `Bearer ${SUPABASE_KEY}`,
+    Authorization: `Bearer ${t || SUPABASE_KEY}`,
     "Content-Type": "application/json",
     Prefer: "return=representation",
-  },
+    ...(dodatkowe || {}),
+  };
+};
+
+// ⚠️ Jedna próba odświeżenia po 401 i powtórzenie żądania. Powód jest ten sam,
+// dla którego `odswiezPoBledzie` w ogóle istnieje: zegar tabletu bywa
+// przestawiony, więc token "ważny jeszcze 40 minut" według urządzenia potrafi
+// być martwy według serwera. Bez tego pracownik zobaczyłby "błąd zapisu" przy
+// odbijaniu zmiany i nie miałby co z tym zrobić.
+//
+// ⚠️ Dokładnie JEDNA próba. Pętla ponawiania przy odmowie, która nie wynika z
+// wygaśnięcia (np. polityka RLS mówi "nie wolno"), zamieniłaby jeden czytelny
+// błąd w nieskończone kręcenie się aplikacji.
+const wyslij = async (url, opcje = {}, dodatkoweNaglowki) => {
+  const res = await fetch(url, { ...opcje, headers: await naglowki(dodatkoweNaglowki) });
+  if (res.status !== 401) return res;
+  const swiezy = await odswiezPoBledzie();
+  if (!swiezy) return res;
+  return fetch(url, { ...opcje, headers: await naglowki(dodatkoweNaglowki) });
+};
+
+export const api = {
   get: async (table, filter) => {
     const pageSize = 1000;
     let allRows = [];
     let from = 0;
     while (true) {
-      const res = await fetch(
+      const res = await wyslij(
         `${SUPABASE_URL}/rest/v1/${table}?select=*&order=id.asc` +
           (filter ? `&${filter}` : ""),
-        {
-          headers: {
-            ...api.headers,
-            Range: `${from}-${from + pageSize - 1}`,
-          },
-        }
+        {},
+        { Range: `${from}-${from + pageSize - 1}` }
       );
       const json = await res.json();
       if (!res.ok)
@@ -37,9 +66,8 @@ export const api = {
     return allRows;
   },
   post: async (table, data) => {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+    const res = await wyslij(`${SUPABASE_URL}/rest/v1/${table}`, {
       method: "POST",
-      headers: api.headers,
       body: JSON.stringify(data),
     });
     const json = await res.json();
@@ -47,9 +75,8 @@ export const api = {
     return json[0];
   },
   patch: async (table, id, data) => {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`, {
+    const res = await wyslij(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`, {
       method: "PATCH",
-      headers: api.headers,
       body: JSON.stringify(data),
     });
     const json = await res.json();
@@ -64,9 +91,8 @@ export const api = {
     if (id == null || id === "") {
       throw new Error(`Nie mam id wiersza do usunięcia (${table}).`);
     }
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`, {
+    const res = await wyslij(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`, {
       method: "DELETE",
-      headers: api.headers,
     });
     if (!res.ok) {
       let powod = "";
@@ -82,9 +108,8 @@ export const api = {
     return true;
   },
   patchByFilter: async (table, filterQuery, data) => {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${filterQuery}`, {
+    const res = await wyslij(`${SUPABASE_URL}/rest/v1/${table}?${filterQuery}`, {
       method: "PATCH",
-      headers: api.headers,
       body: JSON.stringify(data),
     });
     if (!res.ok) throw new Error("Błąd aktualizacji");

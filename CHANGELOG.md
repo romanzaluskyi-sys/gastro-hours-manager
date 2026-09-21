@@ -5,6 +5,26 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.42.0 — 2026-09-21
+
+- **Hasło sprawdza teraz serwer, a nie przeglądarka.** Dla wchodzącego nie
+  zmienia się nic — ten sam e-mail, ten sam PIN. Zmienia się to, czego nie
+  było widać: dotąd aplikacja pobierała całą listę pracowników **razem z
+  PIN-ami** i porównywała je u siebie, więc każdy, kto otworzył stronę
+  logowania, miał u siebie poświadczenia całej załogi, zanim cokolwiek wpisał.
+- **Dane pobierają się dopiero po zalogowaniu.** Wcześniej leciały przy
+  otwarciu strony, bo ekran logowania ich potrzebował.
+- **Sesja przestaje zależeć od numeru wersji.** Do tej pory każda aktualizacja
+  wylogowywała wszystkich — to był jedyny sposób, żeby to zrobić. Teraz sesja
+  żyje po stronie Supabase i aktualizacja nie wyrzuca nikogo z aplikacji.
+  ⚠️ To jedno wdrożenie jeszcze wyloguje — stare sesje nie pasują do nowego
+  mechanizmu. Tablety mają zapisane dane logowania, więc to jedno dotknięcie.
+- **Zmiana PIN-u w karcie pracownika zmienia też hasło do logowania.** PIN jest
+  dwiema rzeczami naraz — blokadą profilu na tablecie i hasłem do konta — i
+  dotąd zmiana w karcie ruszała tylko pierwszą z nich.
+- Gdy z jakiegoś powodu uda się jedno, a nie drugie, kierownik dostaje o tym
+  wyraźną wiadomość zamiast cichego „zapisano".
+
 ## 0.41.2 — 2026-09-20
 
 - **Pole „PIN blokady" w karcie pracownika przyjmuje sześć cyfr.** Wcześniej

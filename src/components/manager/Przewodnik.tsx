@@ -23,6 +23,16 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.42.0",
+    date: "2026-09-21",
+    items: [
+      "Hasło sprawdza teraz serwer, a nie przeglądarka — dla wchodzącego nic się nie zmienia (ten sam e-mail i PIN).",
+      "Aplikacja nie pobiera już listy pracowników z PIN-ami, zanim ktokolwiek się zaloguje.",
+      "Aktualizacja aplikacji nie wylogowuje już wszystkich; to jedno wdrożenie jeszcze tak, bo stare sesje nie pasują do nowego mechanizmu.",
+      "Zmiana PIN-u w karcie pracownika zmienia też hasło do logowania — dotąd ruszała tylko blokadę na tablecie.",
+    ],
+  },
+  {
     version: "0.41.2",
     date: "2026-09-20",
     items: [

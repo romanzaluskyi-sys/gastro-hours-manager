@@ -16,6 +16,15 @@
 <div id="status">ładowanie…</div>
 <div id="app"></div>
 
+<script>
+  // Konfiguracja-atrapa: bez niej SUPABASE_URL jest pusty (kod nie ma już
+  // wpisanego adresu żadnej bazy) i logowanie poleciałoby w nicość.
+  window.__SHIFTRO_ENV = {
+    REACT_APP_SUPABASE_URL: "https://harness.supabase.co",
+    REACT_APP_SUPABASE_KEY: "sb_publishable_harness",
+    REACT_APP_TENANT: "Harness",
+  };
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js" crossorigin="anonymous"></script>
@@ -79,6 +88,29 @@ const PAKIETY = {
   ),
 };
 
+// ⚠️ Prawdziwy fetch zapamiętany PRZED podmianą: loader modułów pobiera nim
+// pliki z /src. Podmieniamy WYŁĄCZNIE wywołania do GoTrue — reszta (ładowanie
+// modułów) ma iść normalnie.
+const prawdziwyFetch = window.fetch.bind(window);
+const HASLO = "123456";
+window.__logowania = [];
+window.fetch = (url, opcje) => {
+  const u = String(url);
+  if (u.includes("/auth/v1/token")) {
+    const body = JSON.parse((opcje && opcje.body) || "{}");
+    window.__logowania.push(body.email);
+    if (body.password !== HASLO) {
+      return Promise.resolve({ ok: false, status: 400, json: async () => ({ error: "invalid_grant" }) });
+    }
+    return Promise.resolve({ ok: true, status: 200, json: async () => ({
+      access_token: "dostep", refresh_token: "odswiez", expires_in: 3600,
+      user: { id: "auth-1", email: body.email },
+    }) });
+  }
+  if (u.includes("/auth/v1/logout")) return Promise.resolve({ ok: true, status: 204, json: async () => ({}) });
+  return prawdziwyFetch(url, opcje);
+};
+
 const cache = new Map();
 async function zaladuj(sciezka) {
   if (sciezka.endsWith("/api/supabase")) return API_STUB;
@@ -86,7 +118,7 @@ async function zaladuj(sciezka) {
   const p = (async () => {
     let kod = null;
     for (const ext of [".tsx", ".ts", ""]) {
-      const r = await fetch(sciezka + ext + "?cb=" + Date.now());
+      const r = await prawdziwyFetch(sciezka + ext + "?cb=" + Date.now());
       if (r.ok) { kod = await r.text(); break; }
     }
     if (kod === null) throw new Error("nie znaleziono " + sciezka);
@@ -177,15 +209,76 @@ const poprzedniMiesiac = (h) => {
 
 (async () => {
   try {
+    localStorage.removeItem("shiftro_auth");
+
     const LS = (await import(await zaladuj("/src/components/LoginScreen"))).default;
+
+    // ⚠️ DOPIERO PO imporcie. Atrapa `api/supabase` przy ładowaniu ustawia
+    // `window.__tabele` od zera, więc kartoteka wpisana wcześniej znikała —
+    // a logowanie kończyło się komunikatem "konto nie jest powiązane".
+    window.__tabele = window.__tabele || {};
+    window.__tabele.users = [
+      { id: "u9", name: "Roman", role: "manager_lokalu", active: true, archived: false,
+        allowed_lokale: "Ceglana", auth_id: "auth-1" },
+    ];
     const { createElement: h } = React;
+    const zalogowany = [];
+    const widoki = [];
     ReactDOM.createRoot(document.getElementById("app")).render(
       h("div", { style: { padding: 20 } },
-        h(LS, { users: [], onLogin: () => {}, isLoading: false, dbError: null, showMsg: () => {} }))
+        h(LS, {
+          setCurrentUser: (u) => zalogowany.push(u),
+          setCurrentView: (w) => widoki.push(w),
+          dbError: null,
+        }))
     );
-    setTimeout(() => {
-      if (status.className !== "zle") status.textContent = "ekran logowania zamontowany";
-    }, 400);
+
+    // --- sprawdziany ---
+    let zdanych = 0, oblanych = 0;
+    const wyniki = document.createElement("div");
+    wyniki.style.cssText = "padding:8px 16px;font:12px ui-monospace,monospace;background:#F1EEEB";
+    document.body.insertBefore(wyniki, document.getElementById("app"));
+    const sprawdz = (nazwa, warunek, szczegol = "") => {
+      const d = document.createElement("div");
+      if (warunek) { zdanych++; d.textContent = "  OK   " + nazwa; d.style.color = "#2C6A4F"; }
+      else { oblanych++; d.className = "zle"; d.style.color = "#DE3A22";
+             d.textContent = "  ŹLE  " + nazwa + (szczegol ? " — " + szczegol : ""); }
+      wyniki.appendChild(d);
+    };
+    const czekaj = (ms) => new Promise((r) => setTimeout(r, ms));
+    const wpisz = (typ, wartosc) => {
+      const pole = document.querySelector(`input[type=${typ}]`);
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+      setter.call(pole, wartosc);
+      pole.dispatchEvent(new Event("input", { bubbles: true }));
+    };
+    const zaloguj = () => document.querySelector("form").dispatchEvent(
+      new Event("submit", { bubbles: true, cancelable: true }));
+
+    await czekaj(400);
+    sprawdz("ekran się zamontował", !!document.querySelector("form"));
+
+    // ⚠️ Najważniejsze w tej wersji: hasło sprawdza SERWER. Ekran nie dostaje
+    // już tabeli `users` z PIN-ami wszystkich, więc nie ma jak porównać sam.
+    wpisz("email", "roman@x.pl"); wpisz("password", "000000");
+    zaloguj(); await czekaj(400);
+    sprawdz("złe hasło nie wpuszcza", zalogowany.length === 0);
+    sprawdz("i mówi o tym po polsku",
+      (document.getElementById("app").innerText || "").includes("Nieprawidłowe dane"));
+
+    wpisz("password", "123456");
+    zaloguj(); await czekaj(500);
+    sprawdz("dobre hasło loguje", zalogowany.length === 1, JSON.stringify(zalogowany));
+    sprawdz("zalogowany to wiersz z kartoteki, nie z Auth",
+      zalogowany[0] && zalogowany[0].name === "Roman" && zalogowany[0].role === "manager_lokalu");
+    sprawdz("kierownik trafia do panelu", widoki[widoki.length - 1] === "manager_dashboard",
+      String(widoki));
+    sprawdz("e-mail poszedł do Auth małymi literami",
+      window.__logowania[window.__logowania.length - 1] === "roman@x.pl");
+
+    if (status.className !== "zle") {
+      status.textContent = `ekran logowania zamontowany — logowanie ${zdanych}/${zdanych + oblanych}`;
+    }
   } catch (e) { pokazBlad(e); }
 })();
 </script>

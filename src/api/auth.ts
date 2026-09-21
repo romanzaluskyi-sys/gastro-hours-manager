@@ -179,3 +179,66 @@ export const wyloguj = async () => {
 };
 
 export const idZalogowanego = () => wczytajSesje()?.user_id || null;
+
+// Ustawia PIN pracownika także jako hasło jego konta w Auth.
+//
+// ⚠️ Idzie przez funkcję serwerową (`api/admin/ustaw-haslo.js`), bo zmiana
+// CUDZEGO hasła wymaga klucza SERVICE ROLE — a ten omija RLS i nie ma prawa
+// znaleźć się w przeglądarce. Front wysyła tylko swój token; kim jest i czy
+// wolno mu, rozstrzyga serwer.
+export const ustawHasloPracownika = async (userId, haslo) => {
+  const t = await token();
+  if (!t) throw new Error("Brak sesji — zaloguj się ponownie.");
+  const res = await fetch("/api/admin/ustaw-haslo", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` },
+    body: JSON.stringify({ user_id: userId, haslo }),
+  });
+  const odp = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(odp.error || `Nie udało się ustawić PIN-u (${res.status}).`);
+  }
+  return odp;
+};
+
+// Dokąd trafia dana rola po zalogowaniu.
+//
+// ⚠️ Mieszka TUTAJ, a nie w LoginScreen, bo pytają o to dwa miejsca: ekran
+// logowania i wznowienie sesji przy starcie aplikacji. Dwie kopie tego
+// mapowania rozjechałyby się przy pierwszej nowej roli, a objawem byłby
+// pracownik lądujący w panelu kierownika albo odwrotnie.
+//
+// ⚠️ W bazie istnieje rola `manager` OBOK `manager_lokalu` (patrz CLAUDE.md) —
+// obie prowadzą do panelu kierownika i nie zakładaj, że to zamknięty zbiór.
+export const widokDlaRoli = (user) => {
+  if (!user) return "login";
+  if (["admin", "manager", "manager_lokalu"].includes(user.role)) {
+    return "manager_dashboard";
+  }
+  if (user.role === "kiosk") return "open_dashboard";
+  return "closed_dashboard";
+};
+
+// Kto jest zalogowany, jako wiersz z `users` — po `auth_id`.
+//
+// ⚠️ Konto w Supabase Auth i kartoteka pracownika to DWIE różne rzeczy: Auth
+// wie tylko, że ktoś zna hasło. Wszystko, na czym stoi aplikacja (rola, lokal,
+// stanowisko, imię), leży w `users`. Konto bez powiązanej kartoteki jest więc
+// zalogowane i bezużyteczne — mówimy o tym wprost zamiast pokazywać pusty
+// ekran.
+// ⚠️ `api` przychodzi ARGUMENTEM, a nie importem: `api/supabase.ts` importuje
+// ten plik (po token), więc sięgnięcie w drugą stronę zrobiłoby cykl. Ta sama
+// pułapka co `utils/pola.ts` wobec `utils/dziennik.ts`.
+export const wczytajKonto = async (api, userId) => {
+  const wiersze = await api.get("users", `auth_id=eq.${userId}`);
+  const u = Array.isArray(wiersze) ? wiersze[0] : null;
+  if (!u) {
+    throw new Error(
+      "To konto nie jest powiązane z kartoteką pracownika. Zgłoś to kierownikowi."
+    );
+  }
+  if (!u.active || u.archived) {
+    throw new Error("Konto jest nieaktywne.");
+  }
+  return u;
+};

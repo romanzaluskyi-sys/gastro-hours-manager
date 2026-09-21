@@ -1,9 +1,16 @@
 // @ts-nocheck
 import React, { useState, useEffect } from "react";
 import { CheckCircle, AlertCircle } from "lucide-react";
-import { isConfigured, APP_VERSION } from "./config";
+import { isConfigured } from "./config";
 import { api } from "./api/supabase";
 import { ustawKontekstBledow } from "./api/errors";
+import {
+  wczytajSesje,
+  wczytajKonto,
+  widokDlaRoli,
+  token,
+  wyloguj,
+} from "./api/auth";
 import { toLocalYMD } from "./api/googleSheets";
 import LoginScreen from "./components/LoginScreen";
 import PersonalDashboard from "./components/PersonalDashboard";
@@ -12,37 +19,18 @@ import ManagerDashboard from "./components/ManagerDashboard";
 import UpdateBanner from "./components/UpdateBanner";
 import KonfiguracjaBrak from "./components/KonfiguracjaBrak";
 
-// Trzyma zalogowanego użytkownika w localStorage, żeby odświeżenie strony
-// nie wylogowywało — bez tego sesja żyła tylko w pamięci Reacta. `pin`
-// świadomie pomijamy przy zapisie, nie jest już potrzebny po zalogowaniu.
+// Sesję trzyma od 0.42.0 SUPABASE AUTH (patrz api/auth.ts), a nie własny wpis
+// w localStorage. Różnica nie jest kosmetyczna: dotąd "zalogowany" znaczyło
+// tylko tyle, że w przeglądarce leży obiekt z rolą — dopisanie sobie tam
+// `role: "admin"` wystarczyło, żeby zobaczyć panel kierownika. Teraz
+// tożsamość niesie token podpisany przez serwer.
 //
-// Sesja jest też otagowana wersją apki (`appVersion`, patrz APP_VERSION w
-// config.ts). Loginy/widoki nie sprawdzają się z serwerem — nie ma tabeli
-// sesji w bazie, więc nie da się "wylogować wszystkich" zapytaniem SQL.
-// Zamiast tego: przy każdym MINOR/MAJOR bumpie APP_VERSION (patrz
-// "Wersjonowanie i CHANGELOG" w CLAUDE.md) stara, zapisana sesja przestaje
-// pasować i zostaje odrzucona — użytkownik ląduje z powrotem na ekranie
-// logowania, świeży JS bundle jest już wtedy pobrany. To NIE działa samo z
-// siebie na już otwartej karcie przeglądarki (kiosk musi dostać
-// odświeżenie/reload, żeby w ogóle pobrać nowy bundle) — dopiero PO
-// odświeżeniu ten mechanizm gwarantuje czysty ekran logowania zamiast
-// starej sesji.
-const SESSION_KEY = "gastro_session";
-
-const loadSession = () => {
-  try {
-    const raw = localStorage.getItem(SESSION_KEY);
-    if (!raw) return { currentUser: null, currentView: "login" };
-    const parsed = JSON.parse(raw);
-    if (parsed.appVersion !== APP_VERSION) {
-      localStorage.removeItem(SESSION_KEY);
-      return { currentUser: null, currentView: "login" };
-    }
-    return parsed;
-  } catch {
-    return { currentUser: null, currentView: "login" };
-  }
-};
+// ⚠️ Stary klucz `gastro_session` czyścimy przy starcie. Był otagowany
+// wersją aplikacji, bo podbicie APP_VERSION było JEDYNYM sposobem na
+// "wyloguj wszystkich" (nie było tabeli sesji). Dziś sesje żyją w Supabase,
+// ale ten wpis zostałby na urządzeniach w nieskończoność — razem z imieniem,
+// rolą i lokalem.
+const STARY_KLUCZ_SESJI = "gastro_session";
 
 export default function App() {
   const [users, setUsers] = useState([]);
@@ -74,9 +62,12 @@ export default function App() {
   const [budzetCele, setBudzetCele] = useState([]);
   const [budzetDni, setBudzetDni] = useState([]);
 
-  const [currentView, setCurrentView] = useState(() => loadSession().currentView);
-  const [currentUser, setCurrentUser] = useState(() => loadSession().currentUser);
-  const [isLoading, setIsLoading] = useState(false);
+  const [currentView, setCurrentView] = useState("login");
+  const [currentUser, setCurrentUser] = useState(null);
+  // Dopóki trwa, nie pokazujemy NICZEGO. Ekran logowania mignięty na sekundę
+  // przy każdym odświeżeniu wygląda jak wylogowanie — a na tablecie, który
+  // ktoś odświeża w środku zmiany, to wystarczy, żeby przestać ufać systemowi.
+  const [bootowanie, setBootowanie] = useState(true);
   const [dbError, setDbError] = useState("");
   const [toast, setToast] = useState({
     show: false,
@@ -89,35 +80,56 @@ export default function App() {
     setTimeout(() => setToast({ show: false }), 3000);
   };
 
-  // Zapisuje sesję przy każdej zmianie loginu/widoku. "Wyloguj" w każdym
-  // dashboardzie ustawia tylko currentView na "login" (nie czyści
-  // currentUser) — tu i tak usuwamy zapisaną sesję, gdy widok wraca do
-  // ekranu logowania, więc osobne czyszczenie currentUser nie jest potrzebne.
+  // Wznowienie sesji przy starcie: token leży w localStorage, ale kim jest
+  // jego właściciel, wie dopiero baza.
   useEffect(() => {
-    try {
-      if (currentUser && currentView !== "login") {
-        const { pin, ...userToStore } = currentUser;
-        localStorage.setItem(
-          SESSION_KEY,
-          JSON.stringify({
-            currentUser: userToStore,
-            currentView,
-            appVersion: APP_VERSION,
-          })
-        );
-      } else {
-        localStorage.removeItem(SESSION_KEY);
+    (async () => {
+      try {
+        try {
+          localStorage.removeItem(STARY_KLUCZ_SESJI);
+        } catch (e) {
+          /* tryb prywatny — nie ma czego sprzątać */
+        }
+        if (!isConfigured) return;
+        const sesja = wczytajSesje();
+        if (!sesja?.user_id) return;
+        // ⚠️ `token()` odświeży wygasły dostęp albo zwróci null, gdy sesji już
+        // nie ma. Bez tego pierwsze zapytanie poleciałoby z martwym tokenem.
+        if (!(await token())) return;
+        const user = await wczytajKonto(api, sesja.user_id);
+        setCurrentUser(user);
+        setCurrentView(widokDlaRoli(user));
+      } catch (e) {
+        // Konto bez kartoteki, nieaktywne albo brak sieci — zostajemy na
+        // ekranie logowania. ⚠️ Sesję trzeba przy tym zamknąć, inaczej przy
+        // każdym odświeżeniu wracamy tu po to samo.
+        await wyloguj();
+        setDbError(e.message || "Nie udało się wznowić sesji.");
+      } finally {
+        setBootowanie(false);
       }
-    } catch {
-      // localStorage niedostępny (np. tryb prywatny) — sesja po prostu nie
-      // przetrwa odświeżenia, reszta apki działa normalnie.
-    }
-  }, [currentUser, currentView]);
+    })();
+  }, []);
 
+  // Wylogowanie. Dashboardy sygnalizują je jedynym gestem, jaki znały od
+  // zawsze — `setCurrentView("login")`. Zamieniamy to tutaj, w JEDNYM
+  // miejscu, na prawdziwe zamknięcie sesji; przepisywanie pięciu wywołań w
+  // komponentach (dwa z nich w dashboardach trzymanych już tylko jako
+  // rollback) dałoby pięć okazji do zapomnienia.
   useEffect(() => {
-    if (!isConfigured) return;
+    if (currentView !== "login" || !currentUser) return;
+    setCurrentUser(null);
+    wyloguj();
+  }, [currentView, currentUser]);
+
+  // ⚠️ Dane pobieramy DOPIERO po zalogowaniu. Do 0.41.2 leciało to przy
+  // starcie, bo ekran logowania potrzebował tabeli `users` do porównania
+  // PIN-u — czyli każdy, kto otworzył stronę, dostawał całą kartotekę, zanim
+  // cokolwiek wpisał. Teraz nie ma po co, a od Etapu 3c nie będzie i czym:
+  // polityki przestaną wydawać dane anonimowym.
+  useEffect(() => {
+    if (!isConfigured || !currentUser) return;
     const fetchData = async () => {
-      setIsLoading(true);
       setDbError("");
       try {
         const [u, l, s, sh, i] = await Promise.all([
@@ -141,7 +153,6 @@ export default function App() {
       } catch (err) {
         setDbError(err.message || "Błąd bazy.");
       }
-      setIsLoading(false);
     };
     fetchData();
 
@@ -320,7 +331,7 @@ export default function App() {
       loadUsers();
     }, 45000);
     return () => clearInterval(pollInterval);
-  }, []);
+  }, [currentUser?.id]);
 
   // Kto i na którym ekranie — dopisywane do każdego zapisu w app_errors.
   // Bez tego dziennik błędów mówi "coś się wywaliło" i nic poza tym, a przy
@@ -338,6 +349,16 @@ export default function App() {
   // ekran logowania stałby pusty i mówił "Nieprawidłowe dane" na poprawny PIN
   // — diagnoza, która kosztuje godzinę zamiast sekundy. Patrz config.ts.
   if (!isConfigured) return <KonfiguracjaBrak />;
+
+  // Patrz `bootowanie` wyżej: lepiej pusty ekran przez chwilę niż ekran
+  // logowania, który zaraz sam zniknie.
+  if (bootowanie) {
+    return (
+      <div className="min-h-screen bg-[#F1F1EE] flex items-center justify-center font-['Archivo'] font-bold text-[#8F8E86]">
+        Wczytywanie…
+      </div>
+    );
+  }
 
   return (
     <div className="font-sans text-gray-900">
@@ -360,10 +381,8 @@ export default function App() {
       <UpdateBanner />
       {currentView === "login" && (
         <LoginScreen
-          users={users}
           setCurrentUser={setCurrentUser}
           setCurrentView={setCurrentView}
-          isLoading={isLoading}
           dbError={dbError}
         />
       )}
