@@ -15,7 +15,22 @@ Decyzje sterowane flagami (patrz docs/GRAFIK.md, sekcja "Import"):
 import argparse, csv, datetime, json, sys, urllib.request, collections
 
 SUPABASE_URL = "https://gdzossvaauznqsrfqovw.supabase.co"
-SUPABASE_KEY = "sb_publishable_4SuEM6I6VujiuBtqGze1Nw_vFoeoM3S"
+# ⚠️ SERVICE ROLE z ENV, nie wpisany w kod klucz publishable.
+#
+# Dwa powody, oba zdobyte po drodze. Po pierwsze: od Etapu 3c polityki RLS nie
+# wydają niczego anonimowym, a klucz publishable to właśnie anonim — ten skrypt
+# przestałby cokolwiek zapisywać. Po drugie: klucz wpisany w kod wiąże skrypt z
+# JEDNYM klientem, a w modelu silo każdy ma własną bazę (patrz 0.41.0, gdzie ta
+# sama pomyłka siedziała w sześciu miejscach naraz).
+#
+#     export SUPABASE_SERVICE_KEY=sb_secret_...
+SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY")
+if not SUPABASE_KEY:
+    sys.exit(
+        "Brak SUPABASE_SERVICE_KEY w środowisku.\n"
+        "Supabase → Settings → API Keys → klucz sekretny, potem:\n"
+        "    export SUPABASE_SERVICE_KEY=sb_secret_..."
+    )
 URLOP_START_HOUR, URLOP_HOURS = 9, 8
 
 

@@ -225,9 +225,41 @@ wersji trzeba poprawić ręcznie.
      przestawiony: token "ważny jeszcze 40 minut" według urządzenia może być
      martwy według serwera, więc samo wyprzedzające odświeżanie nie
      wystarcza — potrzebna jest reakcja na 401.
-- **3c — zawężenie polityk** tabela po tabeli, z `scripts/sprawdz-dostep.py`
-  jako regresją: skrypt próbuje zestawu zapytań kluczem anonimowym i sprawdza,
-  co ma przejść, a co nie.
+- **3c — zawężenie polityk.** Rozbite na trzy, bo to trzy różne rozmiary
+  ryzyka i tylko pierwszy nie dotyka aplikacji:
+  - **3c-1 (migracja `0026`, gotowa):** anonim traci WSZYSTKO. Zalogowani
+    widzą dokładnie to, co widzieli — ani jeden ekran się nie zmienia. To jest
+    największa część bezpieczeństwa za najmniejsze ryzyko: dziś do danych
+    wystarczy adres strony, po tej migracji trzeba konta.
+  - **3c-2:** zawężenie per rola (kierownik lokalu tylko swoje lokale, tablet
+    tylko swój). Tu przechodzi też blokada PIN-em na RPC `sprawdz_kiosk_pin`,
+    bo dopiero wtedy tablet przestaje czytać `users.kiosk_pin`.
+  - **3c-3:** kolumny — stawki, daty urodzenia, telefony niewidoczne dla
+    kolegów. ⚠️ Wymaga zmian w aplikacji: `GRANT` działa na ROLĘ, a kierownik
+    i pracownik to oba `authenticated`, więc rozróżnienie musi dać widok albo
+    RPC, a ekrany czytające dziś `users` wprost trzeba na nie przepiąć.
+
+  ⚠️ **Regresją jest [`scripts/sprawdz-dostep.py`](scripts/sprawdz-dostep.py)**
+  — chodzi po WSZYSTKICH tabelach (bierze listę z migracji, nie z pamięci) i
+  sprawdza odczyt oraz zapis. Zapis testuje `PATCH`-em z filtrem, który nie
+  trafia w żaden wiersz: dostajemy odpowiedź "czy wolno" bez dotykania danych.
+  Uruchom `--etap przed` PRZED migracją (zdjęcie stanu) i `--etap po` po niej.
+
+  ⚠️ **Crony i skrypty chodziły jako ANONIM** — `api/cron/*.js` oraz
+  `import-grafik.py`/`backfill-pogoda.py` autoryzowały się kluczem
+  publishable. Po 3c-1 przestałyby cokolwiek zapisywać, więc wszystkie sześć
+  przeszło na `SUPABASE_SERVICE_KEY` (kod serwerowy i skrypty właściciela to
+  miejsca, w których klucz z pełnymi prawami jest na miejscu). Przy okazji
+  zniknął ostatni wpisany w kod klucz klienta.
+
+  ⚠️ **Jedyny wyjątek w `0026`: anonim może ZAPISAĆ do `app_errors`** (INSERT
+  tak, SELECT nie). Awaria, która najbardziej potrzebuje śladu, zdarza się
+  przed zalogowaniem — komponent wywala się na ekranie logowania i zostaje
+  biała strona. Bez tego wyjątku dokładnie ta klasa błędów byłaby niewidoczna.
+
+  ⚠️ **Poza repo zostaje Google Apps Script** (`syncFormEntriesToSupabase`),
+  który pisze do Supabase własnym kluczem. Nie widać go stąd — jeśli używa
+  publishable, po 3c-1 przestanie działać i zrobi to po cichu.
 
 ⚠️ **Helpery MUSZĄ być `security definer` i `stable`, z `set search_path`.**
 Polityka na `users`, która czyta `users` po rolę, zapętliłaby się bez definera;
@@ -288,6 +320,10 @@ docs/sql/migrations/          — migracje, stosowane przez scripts/migrate.py (
 docs/sql/tools/               — zapytania pomocnicze (zrzut schematu, weryfikacja Grafiku,
                                  ostatnie-bledy.sql — dziennik błędów aplikacji)
 scripts/migrate.py            — runner migracji, domyślnie SUCHY przebieg
+scripts/sprawdz-dostep.py     — co widzi i co może zmienić ktoś, kto ma sam
+                                 klucz z paczki; regresja Etapu 3c, NICZEGO
+                                 nie zapisuje (zapis sprawdza PATCH-em w
+                                 filtr, który nie trafia w żaden wiersz)
 scripts/utworz-konta-auth.py  — zakłada konta w Supabase Auth dla tych 12 kont,
                                  które faktycznie się logują, i podnosi PIN-y
                                  do 6 znaków; SUCHY przebieg domyślnie

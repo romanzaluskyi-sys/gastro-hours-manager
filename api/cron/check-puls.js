@@ -25,13 +25,18 @@
 // teraz błędem 500 z wyjaśnieniem — cron widoczny jako czerwony w Vercelu jest
 // nieporównanie lepszy niż cron piszący po cichu do cudzej bazy.
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_KEY;
+// ⚠️ SERVICE ROLE, nie publishable. Od Etapu 3c polityki RLS nie wydają
+// niczego anonimowym, a klucz publishable to właśnie anonim — cron pisałby
+// wtedy w próżnię (albo, gorzej, zgłaszał sukces po nieudanym zapisie).
+// Kod serwerowy to miejsce, w którym klucz z pełnymi prawami jest na miejscu:
+// nie opuszcza Vercela i nikt go nie zobaczy w przeglądarce.
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
 // Wołane w handlerze PO autoryzacji: komu z ulicy nic do tego, czego nam brakuje.
 const brakKonfiguracji = () => {
   const brak = [];
   if (!SUPABASE_URL) brak.push("SUPABASE_URL");
-  if (!SUPABASE_KEY) brak.push("SUPABASE_KEY");
+  if (!SUPABASE_KEY) brak.push("SUPABASE_SERVICE_KEY");
   if (!brak.length) return null;
   return (
     `Brak zmiennych środowiskowych: ${brak.join(", ")}. ` +
