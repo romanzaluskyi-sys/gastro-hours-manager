@@ -2,6 +2,8 @@
 import React, { useState } from "react";
 import { LogIn, RefreshCw, WifiOff } from "lucide-react";
 import { APP_VERSION, PRODUKT, TENANT } from "../config";
+import { api } from "../api/supabase";
+import { zaloguj, wczytajKonto, widokDlaRoli, wyloguj } from "../api/auth";
 import ShiftroMark from "./ShiftroMark";
 import {
   fieldLabelCls,
@@ -16,65 +18,51 @@ import {
 // Używany przez wszystkie role, więc żyje na poziomie App.tsx, nie w
 // żadnym konkretnym dashboardzie.
 // ==========================================
-const LoginScreen = ({
-  users,
-  setCurrentUser,
-  setCurrentView,
-  isLoading,
-  dbError,
-}) => {
+const LoginScreen = ({ setCurrentUser, setCurrentView, dbError }) => {
   const [email, setEmail] = useState("");
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
+  const [loguje, setLoguje] = useState(false);
 
-  const handleLogin = (e) => {
+  // ⚠️ Od 0.42.0 hasło sprawdza SUPABASE AUTH, a nie przeglądarka.
+  //
+  // Do 0.41.2 wyglądało to tak: App pobierał CAŁĄ tabelę `users` — razem z
+  // PIN-ami wszystkich — a ten ekran szukał w niej pasującego wiersza. Czyli
+  // każdy, kto otworzył stronę logowania, miał już u siebie poświadczenia
+  // całej załogi, zanim cokolwiek wpisał. Teraz w drugą stronę: najpierw
+  // dowodzimy, kim jesteśmy, potem dostajemy dane.
+  //
+  // Dla użytkownika nie zmienia się NIC: ten sam e-mail, ten sam PIN.
+  // Kierownicy i tablety logują się 6-cyfrowym `pin`, pracownik z prywatnego
+  // telefonu 6-cyfrowym `kiosk_pin` — w Auth jest to po prostu jego hasło, bo
+  // skrypt zakładający konta wziął je z tej właśnie kolumny.
+  const handleLogin = async (e) => {
     e.preventDefault();
-    // Pracownik kiosku (role "open") może zalogować się na PRYWATNYM
-    // telefonie tylko wtedy, gdy ma ustawiony PIN blokady (kiosk_pin) i
-    // e-mail — ustalenie właściciela: kto jest chroniony PIN-em, ten ma
-    // własny dostęp; kto nie ma PIN-u, nie ma i dostępu. Loguje się tym
-    // samym PIN-em co na tablecie, żeby nie pamiętać dwóch.
-    // Porównanie bez rozróżniania wielkości liter i bez spacji — na telefonie
-    // klawiatura sama podnosi pierwszą literę, a stare wpisy w bazie mogą
-    // mieć dowolną pisownię.
     const wpisany = email.trim().toLowerCase();
-    // Bez tego pusty e-mail zrównałby się z pustym e-mailem w bazie (konta
-    // otwarte miały go pustego do 0.26.1) i wystarczyłby sam PIN.
     if (!wpisany || !pin) {
       setError("Podaj e-mail i PIN.");
       return;
     }
-    const user = users.find((u) => {
-      if ((u.email || "").trim().toLowerCase() !== wpisany) return false;
-      if (!u.active || u.archived) return false;
-      if (u.role === "open") return !!u.kiosk_pin && u.kiosk_pin === pin;
-      return u.pin === pin;
-    });
-    if (user) {
+    setError("");
+    setLoguje(true);
+    try {
+      const sesja = await zaloguj(wpisany, pin);
+      // Auth wie tylko, że ktoś zna hasło. Rola, lokal i stanowisko leżą w
+      // `users` — i dopiero to jest "zalogowany użytkownik" w rozumieniu tej
+      // aplikacji.
+      const user = await wczytajKonto(api, sesja.user_id);
       setCurrentUser(user);
-      if (
-        user.role === "manager" ||
-        user.role === "manager_lokalu" ||
-        user.role === "admin"
-      ) {
-        setCurrentView("manager_dashboard");
-      } else if (user.role === "kiosk") {
-        setCurrentView("open_dashboard");
-      } else {
-        setCurrentView("closed_dashboard");
-      }
-    } else {
-      setError("Nieprawidłowe dane, brak dostępu lub konto nieaktywne.");
+      setCurrentView(widokDlaRoli(user));
+    } catch (err) {
+      // ⚠️ Konto, które przeszło uwierzytelnienie, ale nie ma kartoteki albo
+      // jest nieaktywne, musi zostać WYLOGOWANE. Inaczej zostaje ważna sesja
+      // przy ekranie logowania i przy następnym odświeżeniu aplikacja wznowi
+      // ją w pół drogi.
+      await wyloguj();
+      setError(err.message || "Nie udało się zalogować.");
     }
+    setLoguje(false);
   };
-
-  if (isLoading)
-    return (
-      <div className="min-h-screen flex items-center justify-center font-['Archivo'] font-bold text-xl bg-[#F1F1EE] text-[#171714]">
-        <RefreshCw className="animate-spin mr-2 text-[#DE3A22]" /> Łączenie z
-        bazą...
-      </div>
-    );
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-[#F1F1EE] p-4">
@@ -138,8 +126,27 @@ const LoginScreen = ({
           {error && (
             <p className="text-[#DE3A22] text-sm text-center font-bold">{error}</p>
           )}
-          <button type="submit" className={`${ctaPrimaryCls} flex items-center justify-center gap-2`}>
-            <LogIn size={20} /> Zaloguj się
+          {/* ⚠️ Przycisk musi być zablokowany na czas żądania. Logowanie
+              chodzi teraz do serwera, więc między kliknięciem a odpowiedzią
+              jest realna chwila — a na tablecie z opornym ekranem ludzie
+              klikają drugi raz. Dwa równoległe logowania tym samym hasłem to
+              dwie sesje i wyścig o to, która zapisze się w localStorage. */}
+          <button
+            type="submit"
+            disabled={loguje}
+            className={`${ctaPrimaryCls} flex items-center justify-center gap-2 ${
+              loguje ? "opacity-60" : ""
+            }`}
+          >
+            {loguje ? (
+              <>
+                <RefreshCw size={20} className="animate-spin" /> Logowanie…
+              </>
+            ) : (
+              <>
+                <LogIn size={20} /> Zaloguj się
+              </>
+            )}
           </button>
         </form>
         <p className={`${helperTextCls} text-center mt-5`}>

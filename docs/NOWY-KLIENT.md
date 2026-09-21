@@ -39,6 +39,12 @@ Environment Variables:
 | `SUPABASE_URL` | crony (`api/cron/*.js`) | jak wyżej |
 | `SUPABASE_KEY` | crony | jak wyżej |
 | `CRON_SECRET` | autoryzacja crona | losowy ciąg |
+| `SUPABASE_SERVICE_KEY` | `api/admin/ustaw-haslo.js` — zmiana PIN-u pracownika razem z hasłem konta | `sb_secret_...` |
+
+⚠️ **`SUPABASE_SERVICE_KEY` omija RLS i może wszystko.** Nigdy z przedrostkiem
+`REACT_APP_` (trafiłby do paczki w przeglądarce), nigdy w repozytorium. Bez
+niego aplikacja działa, ale zmiana PIN-u w karcie pracownika nie zmieni hasła
+do logowania — kierownik zobaczy o tym wyraźną wiadomość.
 
 ⚠️ **Ustaw każdą z nich dla WSZYSTKICH trzech środowisk** (Production,
 Preview, Development). Ustawione tylko dla produkcji dają podgląd każdego PR-a

@@ -48,7 +48,13 @@ const wczoraj = ymd(new Date(Date.now() - 86400000));
 // Atrapa z danymi na starcie — dokładnie taka sytuacja jak po odświeżeniu
 // strony: w bazie coś jest, App to pobiera.
 window.__tabele = {
-  users: [{ id: "u1", name: "Ala", stawka: 32, active: true, archived: false, role: "open", default_lokal: "Bułka i Jacek" }],
+  users: [
+    { id: "u1", name: "Ala", stawka: 32, active: true, archived: false, role: "open", default_lokal: "Bułka i Jacek" },
+    // Kartoteka zalogowanego. App szuka jej po `auth_id` — od 0.42.0 to ona,
+    // a nie wpis w localStorage, decyduje o roli i widoku.
+    { id: "u0", name: "Roman", role: "admin", active: true, archived: false,
+      allowed_lokale: "", auth_id: "auth-harness" },
+  ],
   lokale: [{ id: "l1", name: "Bułka i Jacek", miasto: "Koszalin", archived: false }],
   stanowiska: [{ id: "s1", name: "Kucharz", lokal_name: "Bułka i Jacek", archived: false }],
   shifts: [], issues: [], notifications: [],
@@ -90,7 +96,14 @@ window.__tabele = {
 window.__zapisy = [];
 const API_STUB = stub(`
   export const api = {
-    get: async (tabela) => (window.__tabele[String(tabela).split("?")[0]] || []).slice(),
+    get: async (tabela, filtr) => {
+      const wiersze = (window.__tabele[String(tabela).split("?")[0]] || []).slice();
+      // Prosty filtr "kolumna=eq.wartość" — App pyta tak o kartotekę
+      // zalogowanego. Bez tego wracałby pierwszy lepszy wiersz i harness
+      // montowałby cudzy dashboard.
+      const m = /^([a-z_]+)=eq\.(.*)$/.exec(filtr || "");
+      return m ? wiersze.filter((r) => String(r[m[1]] ?? "") === m[2]) : wiersze;
+    },
     post: async (t, d) => { window.__zapisy.push([t, d]);
       const w = { id: "n" + (window.__zapisy.length), created_at: new Date().toISOString(),
                   recorded_at: new Date().toISOString(), ...d };
@@ -144,10 +157,13 @@ async function zaladuj(sciezka) {
 (async () => {
   try {
     const { APP_VERSION } = await import(await zaladuj("/src/config"));
-    localStorage.setItem("gastro_session", JSON.stringify({
-      currentUser: { id: "u0", name: "Roman", role: "admin", allowed_lokale: "" },
-      currentView: "manager_dashboard",
-      appVersion: APP_VERSION,
+    // Sesja Supabase Auth zamiast dawnego wpisu `gastro_session`. Token jest
+    // atrapą i nigdzie nie leci: `api/supabase` jest tu podmienione, a
+    // `token()` przy ważnym `expires_at` nie rusza sieci.
+    localStorage.setItem("shiftro_auth", JSON.stringify({
+      access_token: "atrapa", refresh_token: "atrapa",
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+      user_id: "auth-harness", email: "roman@harness",
     }));
     const App = (await import(await zaladuj("/src/App"))).default;
     ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
