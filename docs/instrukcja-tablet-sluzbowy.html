@@ -173,7 +173,7 @@
 <div class="sheet">
 
   <header class="doc-head">
-    <div class="eyebrow">Instrukcja dla pracownika · wersja aplikacji 0.26.3</div>
+    <div class="eyebrow">Instrukcja dla pracownika · wersja aplikacji 0.38.0</div>
     <h1>Tablet Służbowy</h1>
     <p class="lead">Jak odbić zmianę, sprawdzić grafik, odhaczyć zadania i zgłosić sprawę
       do kierownika — krok po kroku, na wspólnym tablecie w lokalu.</p>
@@ -191,7 +191,7 @@
       <li><a href="#s1"><span class="n">1</span> Wybór pracownika i oznaczenia</a></li>
       <li><a href="#s2"><span class="n">2</span> Pulpit</a></li>
       <li><a href="#s3"><span class="n">3</span> Zapis godzin — dwie metody</a></li>
-      <li><a href="#s4"><span class="n">4</span> Grafik i giełda zmian</a></li>
+      <li><a href="#s4"><span class="n">4</span> Grafik, giełda i zamiany</a></li>
       <li><a href="#s5"><span class="n">5</span> Raport</a></li>
       <li><a href="#s6"><span class="n">6</span> Zadania</a></li>
       <li><a href="#s7"><span class="n">7</span> Więcej → Zgłoś</a></li>
@@ -281,8 +281,10 @@
           kierownika. Jeśli dziś nie pracujesz, zobaczysz kafelek
           <strong>Następna zmiana</strong> (np. „jutro · 09:00 – 17:00”); naciśnięcie go
           przenosi do zakładki <span class="b">Grafik</span>.</li>
-        <li><strong>Zadania dziś</strong> — lista do odhaczenia, jeśli kierownik coś
-          wyznaczył (punkt 6).</li>
+        <li><strong>Zadania dziś</strong> — nagłówki bloków z licznikiem
+          (np. <em>„Otwarcie lokalu · 0/2”</em>), jeśli kierownik coś wyznaczył.
+          Naciśnięcie otwiera ten blok w zakładce <span class="b">Zadania</span>
+          (punkt 6).</li>
         <li>Na dole duży czerwony przycisk <span class="b">Rozpocznij zmianę</span>.</li>
       </ul>
 
@@ -294,7 +296,8 @@
         <li><strong>Do końca zmiany</strong> — ile zostało do godziny z grafiku. Gdy
           przekroczysz planowany koniec, ramka robi się czerwona i napis zmienia się na
           <strong>Po planowanym końcu</strong>.</li>
-        <li><strong>Zadania na zmianę</strong> — pasek postępu i lista do odhaczenia.</li>
+        <li><strong>Zadania na zmianę</strong> — karty bloków z paskiem postępu,
+          rozwijane na miejscu (punkt 6).</li>
         <li>W nagłówku ekranu widnieje różowa plakietka <strong>na zmianie</strong>.</li>
       </ul>
       <p>Zmianę kończysz stąd (albo z zakładki <span class="b">Zmiana</span>) przyciskiem
@@ -365,24 +368,44 @@
     <div class="sec-head">
       <span class="n">4</span>
       <div>
-        <h2>Grafik i giełda zmian</h2>
+        <h2>Grafik, giełda i zamiany</h2>
         <div class="sub">Zakładka <em>Grafik</em> — widzisz tylko grafik wysłany przez kierownika</div>
       </div>
     </div>
     <div class="body">
-      <p>U góry trzy przyciski przełączające widok:</p>
+      <h3>Przewijanie grafiku — tydzień po tygodniu, miesiąc po miesiącu</h3>
+      <p>U góry są dwa przyciski widoku, a pod nimi pasek do przechodzenia w czasie:</p>
       <table>
-        <tr><th>Przycisk</th><th>Co pokazuje</th></tr>
-        <tr><td><span class="b">Ten tydzień</span></td>
-            <td>Bieżący tydzień, dzień po dniu (poniedziałek – niedziela). Dzisiejszy dzień
-              ma czerwoną plakietkę <strong>DZIŚ</strong>.</td></tr>
-        <tr><td><span class="b">Następny</span></td>
-            <td>Ten sam widok dla kolejnego tygodnia — do sprawdzenia, kiedy pracujesz
-              w przyszłym tygodniu.</td></tr>
+        <tr><th>Element</th><th>Co robi</th></tr>
+        <tr><td><span class="b">Tydzień</span></td>
+            <td>Siedem dni, dzień po dniu (poniedziałek – niedziela), z Twoimi zmianami
+              i osobami, które pracują z Tobą. Dzisiejszy dzień ma czerwoną plakietkę
+              <strong>DZIŚ</strong>.</td></tr>
         <tr><td><span class="b">Miesiąc</span></td>
-            <td>Lista wszystkich Twoich zmian w bieżącym miesiącu plus podsumowanie
-              u góry, np. <span class="tabular">„18 zmian · 144 h”</span>.</td></tr>
+            <td>Lista wszystkich Twoich zmian w danym miesiącu plus podsumowanie u góry,
+              np. <span class="tabular">„18 zmian · 144,0 h”</span>. Dni, które już
+              minęły, są szare; dzisiejszy podpisany jest słowem <em>dziś</em>.</td></tr>
+        <tr><td><span class="b">‹</span> &nbsp;i&nbsp; <span class="b">›</span></td>
+            <td>Cofają i przesuwają do przodu — o tydzień albo o miesiąc, zależnie od
+              wybranego widoku. Między strzałkami stoi zakres, na który patrzysz
+              (<span class="tabular">„15.09 – 21.09”</span> albo
+              <span class="tabular">„Wrzesień 2026”</span>).</td></tr>
+        <tr><td><span class="b">Dziś</span></td>
+            <td>Wraca do bieżącego tygodnia/miesiąca. Pokazuje się <strong>tylko wtedy,
+              gdy odszedłeś/odeszłaś od dzisiaj</strong> — jego brak sam mówi, że
+              stoisz na bieżącym okresie.</td></tr>
       </table>
+      <p>Do przodu możesz przewijać bez ograniczeń — tak daleko, jak kierownik wpisał
+        grafik. Do tyłu do początku poprzedniego miesiąca; starsze godziny są w
+        zakładce <span class="b">Raport</span>.</p>
+      <div class="note">Jeśli przewiniesz na tydzień, którego kierownik jeszcze nie
+        wysłał, zobaczysz u góry wyjaśnienie: <em>„Grafik na ten tydzień nie został
+        jeszcze wysłany”</em>. To co innego niż tydzień wolny — dni niżej będą puste,
+        dopóki kierownik nie opublikuje grafiku.</div>
+      <div class="out"><span class="lbl">Po co to</span>
+        Żebyś mogła/mógł zajrzeć dalej niż na dwa tygodnie i <strong>zawczasu</strong>
+        oddać albo zamienić zmianę, o której już wiesz, że nie dasz rady — a nie dzień
+        wcześniej, gdy nikt chętny się nie znajdzie.</div>
 
       <h3>Jak czytać dzień</h3>
       <ul class="plain">
@@ -397,54 +420,89 @@
           <span class="b">Pokaż tylko moje</span>).</li>
       </ul>
 
-      <h3>Wystawienie swojej zmiany na giełdę</h3>
-      <p>Gdy nie możesz przyjść, nie musisz szukać zastępstwa przez telefon — wystaw zmianę
-        na giełdę.</p>
+      <h3>Oddanie zmiany — trzy sposoby</h3>
+      <p>Gdy nie możesz przyjść, nie musisz szukać zastępstwa przez telefon. Wejście
+        jest jedno, a za nim trzy drogi.</p>
       <ol class="steps">
-        <li>Znajdź swoją zmianę w <span class="b">Ten tydzień</span> lub
-          <span class="b">Następny</span>.</li>
+        <li>Znajdź swoją zmianę w widoku <span class="b">Tydzień</span> (możesz przewinąć
+          strzałką <span class="b">›</span> na dowolny przyszły tydzień).</li>
         <li>Naciśnij mały przycisk <span class="b">na giełdę</span> obok godzin.</li>
-        <li>Potwierdź przyciskiem <span class="b">Wystaw na giełdę</span>
-          (albo wycofaj się przez <span class="b">Anuluj</span>).</li>
+        <li>Wybierz sposób:</li>
       </ol>
-      <div class="out"><span class="lbl">Efekt</span>
-        Twoja zmiana ma teraz <strong>żółte tło</strong> i status
-        <strong>Na giełdzie</strong>. Dopóki nikt jej nie wziął, możesz ją zabrać z powrotem
-        przyciskiem <span class="b">Wycofaj</span>. Gdy ktoś się zgłosi, status zmienia się
-        na <strong>Czeka na kierownika</strong> (tło niebieskie) i widnieje imię osoby,
-        która ją przejmuje.</div>
-      <div class="note">Zmianę można wystawić <strong>najpóźniej 12 godzin przed jej
+      <table>
+        <tr><th>Sposób</th><th>Kto zobaczy ofertę i co się dzieje</th></tr>
+        <tr><td><span class="b">Wystaw na giełdę</span></td>
+            <td>Zobaczą <strong>wszyscy</strong>, którzy mogą wziąć tę zmianę. Bierze ją
+              ten, kto pierwszy się zgłosi.</td></tr>
+        <tr><td><span class="b">Oddaj konkretnej osobie</span></td>
+            <td>Ofertę zobaczy <strong>tylko ta jedna osoba</strong>. Nikt inny jej nie
+              widzi i nikt inny nie może jej przejąć.</td></tr>
+        <tr><td><span class="b">Zamień się zmianami</span></td>
+            <td>Bierzesz jej zmianę, ona Twoją — <strong>dwie zmiany naraz</strong>,
+              w obie strony.</td></tr>
+      </table>
+      <ol class="steps" start="4">
+        <li>Przy <span class="b">Oddaj konkretnej osobie</span> pojawia się lista
+          <strong>Komu oddajesz</strong> — są na niej wyłącznie osoby, które naprawdę
+          mogą tę zmianę wziąć. Naciśnij imię.</li>
+        <li>Przy <span class="b">Zamień się zmianami</span> najpierw wybierasz osobę
+          (<strong>Z kim się zamieniasz</strong>), a potem jej zmianę
+          (<strong>Którą zmianę bierzesz od: …</strong>).</li>
+        <li>Potwierdź przyciskiem na dole: <span class="b">Wystaw na giełdę</span>,
+          <span class="b">Oddaj: Marta</span> albo
+          <span class="b">Wyślij propozycję do: Marta</span>. Wycofujesz się przez
+          <span class="b">Anuluj</span>.</li>
+      </ol>
+      <div class="out">
+        <span class="lbl">Efekt</span>
+        Twoja zmiana dostaje kolorowe tło i status. <strong>Na giełdzie</strong> (żółte) —
+        czeka na chętnego. <strong>Czeka na: Marta</strong> — oferta leży u tej jednej
+        osoby. Dopóki nikt jej nie wziął, możesz ją cofnąć przyciskiem
+        <span class="b">Wycofaj</span>. Gdy ktoś się zgodzi, status zmienia się na
+        <strong>Czeka na kierownika</strong> (tło niebieskie) i widnieje imię osoby,
+        która ją przejmuje.
+      </div>
+      <div class="note">Zmianę można oddać <strong>najpóźniej 12 godzin przed jej
         rozpoczęciem</strong>. Później zamiast przycisku pojawia się napis
         <em>„za późno na giełdę”</em> — wtedy zgłoś sprawę kierownikowi.
-        <strong>Zamianę zawsze zatwierdza kierownik.</strong></div>
+        <strong>Ostatnie słowo zawsze ma kierownik</strong>, także przy zamianie: on
+        zatwierdza obie zmiany naraz.</div>
+      <p>Jeśli nie ma komu oddać, aplikacja mówi to wprost: <em>„Nikt inny nie może wziąć
+        tej zmiany — brak wolnych osób z tym stanowiskiem”</em>, a przy zamianie
+        <em>„… nie ma zmiany, którą mógłbyś/mogłabyś wziąć”</em>. To nie awaria — po
+        prostu tego dnia nikt pasujący nie jest wolny.</p>
 
-      <h3>Wzięcie cudzej zmiany</h3>
-      <p>Zmianę z giełdy widzą tylko osoby, które <strong>mogą ją wziąć</strong>: mają to
-        stanowisko przypisane w swojej karcie, są tego dnia wolne i nie mają zatwierdzonego
-        urlopu. Taka osoba pozna to po dwóch znakach:</p>
+      <h3>Gdy ktoś oddaje zmianę Tobie</h3>
+      <p>Ofertę widzą tylko osoby, które mogą ją wziąć: mają to stanowisko w swojej
+        karcie, są tego dnia wolne i nie mają zatwierdzonego urlopu. Przy
+        <strong>zamianie</strong> jest jeden wyjątek — możesz dostać propozycję także
+        wtedy, gdy tego dnia pracujesz, bo swoją zmianę wtedy oddajesz.</p>
       <ul class="plain">
-        <li>Na ekranie <strong>Wybierz siebie</strong> jej kafelek jest
+        <li>Na ekranie <strong>Wybierz siebie</strong> Twój kafelek jest
           <span class="chip chip-gielda">żółty</span> z opisem
           <em>„⇄ Giełda: propozycja jutro · 09:00 – 17:00”</em>.</li>
         <li>W zakładce <span class="b">Grafik</span>, <strong>na dole tygodnia</strong>,
           jest <span class="chip chip-plan">zielony</span> blok
-          <strong>Giełda — możesz wziąć</strong> z datą, godzinami, lokalem i imieniem
-          osoby, która zmianę oddaje.</li>
+          <strong>Do wzięcia</strong>. Oferta skierowana imiennie ma nad godzinami
+          podpis <strong>Oddane Tobie</strong> albo <strong>Propozycja zamiany</strong>;
+          bez podpisu to zwykła giełda dla wszystkich.</li>
+        <li>Przy propozycji zamiany widzisz obie strony: co bierzesz i — pod kreską —
+          <strong>Oddajesz swoją:</strong> z datą i godzinami Twojej zmiany.</li>
       </ul>
       <ol class="steps">
-        <li>Naciśnij <span class="b">Wezmę tę zmianę</span> w zielonym bloku.</li>
+        <li>Naciśnij <span class="b">Wezmę tę zmianę</span>, a przy zamianie
+          <span class="b">Zgadzam się na zamianę</span>.</li>
       </ol>
       <div class="out"><span class="lbl">Efekt</span>
         Pod danym dniem pojawia się wpis <em>„Zgłosiłeś(-aś) się po tę zmianę — czeka na
-        zgodę kierownika”</em>. Po zatwierdzeniu przez kierownika zmiana przechodzi do
-        Twojego grafiku, a Ty dostajesz wiadomość (punkt 8).</div>
+        zgodę kierownika”</em>. Po zatwierdzeniu zmiana przechodzi do Twojego grafiku,
+        a Ty dostajesz wiadomość (punkt 8). Przy zamianie kierownik przepisuje obie
+        zmiany jednocześnie — albo obie, albo żadna.</div>
 
       <p>Na dole zakładki jest też skrót <span class="b">Wniosek o wolne</span> —
         prowadzi do formularza opisanego w punkcie 7.2.</p>
     </div>
   </section>
-
-  <!-- ============ 5 ============ -->
   <section id="s5">
     <div class="sec-head">
       <span class="n">5</span>
@@ -489,16 +547,50 @@
       <span class="n">6</span>
       <div>
         <h2>Zadania</h2>
-        <div class="sub">Checklista na dziś — jeśli kierownik coś wyznaczył</div>
+        <div class="sub">Checklisty ułożone w bloki — jeśli kierownik coś wyznaczył</div>
       </div>
     </div>
     <div class="body">
-      <p>Te same zadania widzisz w trzech miejscach: na <span class="b">Pulpicie</span>,
-        w trakcie zmiany jako <strong>Zadania na zmianę</strong> oraz w zakładce
-        <span class="b">Zadania</span>. Czerwona liczba na ikonie zakładki mówi, ile
-        zostało do zrobienia.</p>
+      <div class="note"><strong>Zadania widzi ten, kto danego dnia pracuje</strong> —
+        masz zmianę w grafiku albo właśnie odbiłaś/odbiłeś start. W dniu wolnym ekran
+        mówi wprost: <em>„Nie masz dziś zmiany w grafiku. Zadania pokażą się w dniu
+        Twojej zmiany albo zaraz po jej rozpoczęciu”</em>. Wchodzisz na zastępstwo bez
+        wpisu w grafiku? Odbij zmianę — checklista pojawi się od razu.</div>
 
-      <h3>Jak odhaczyć wykonanie</h3>
+      <h3>Blok, czyli grupa zadań</h3>
+      <p>Zadania nie są jedną długą listą, tylko leżą w blokach —
+        <em>Otwarcie lokalu</em>, <em>HACCP</em>, <em>Mycie i dezynfekcja</em>,
+        <em>Zamknięcie</em>. Każdy blok to jedna karta:</p>
+      <ul class="plain">
+        <li><strong>Nazwa bloku</strong>, a przy pilnym czerwone <span class="b">Ważne</span>.</li>
+        <li>Pod nazwą: <strong>pora</strong> (Poranne / Obiadowe / Wieczorne / Ogólne /
+          Cykliczne), <strong>dni</strong>, jeśli blok nie jest codzienny
+          (np. <em>tylko Pon, Śr</em>), i <strong>termin</strong> (np. <em>do 11:00</em>).</li>
+        <li>Z prawej <strong>licznik</strong> <span class="tabular">2/5</span>, a pod
+          nagłówkiem czerwony <strong>pasek postępu</strong>. Blok zrobiony w całości
+          blednie i schodzi na drugi plan.</li>
+      </ul>
+      <p>Blok otwierasz i zamykasz naciśnięciem jego nagłówka. Sam z siebie rozwinięty
+        jest pierwszy blok, w którym coś jeszcze zostało.</p>
+
+      <h3>Gdzie je znajdziesz</h3>
+      <table>
+        <tr><th>Miejsce</th><th>Co widzisz</th></tr>
+        <tr><td><span class="b">Pulpit</span></td>
+            <td>Same nagłówki bloków z licznikiem (np. <em>„Otwarcie lokalu · 0/2”</em>).
+              Naciśnięcie przenosi do zakładki <span class="b">Zadania</span> i od razu
+              otwiera ten blok.</td></tr>
+        <tr><td>Ekran trwającej zmiany</td>
+            <td>Te same karty, rozwijane na miejscu, plus przypomnienie, ile zostało.</td></tr>
+        <tr><td><span class="b">Zadania</span></td>
+            <td>Pełna lista bloków, przełącznik <span class="b">Twoje stanowisko</span> /
+              <span class="b">Wszystkie</span> i Twój wynik
+              <em>„Ostatnie 7 dni: 24 z 27 zadań”</em>.</td></tr>
+      </table>
+      <p>Czerwona liczba na ikonie zakładki <span class="b">Zadania</span> mówi, ile
+        pozycji zostało na dziś.</p>
+
+      <h3>Zwykłe zadanie — odhaczenie</h3>
       <ol class="steps">
         <li>Naciśnij wiersz zadania — kwadracik po lewej zapełnia się na czerwono.</li>
         <li>Tytuł zostaje <s>przekreślony</s>, a pod nim pojawia się
@@ -510,25 +602,54 @@
         dla całego lokalu</strong> — jeśli zrobiła je koleżanka, u Ciebie też jest
         odhaczone. Nie robicie tego samego dwa razy.</div>
 
+      <h3>Zadanie z pomiarem — wpisujesz wartość</h3>
+      <p>Część zadań prosi o liczbę zamiast samego „zrobione”: temperatura lodówki,
+        temperatura dostawy, kwota. Poznasz je po <strong>ikonie termometru</strong> przy
+        tytule i po podpisie <em>„wpisz pomiar”</em> (albo <em>„wpisz pomiar · do 11:00”</em>).</p>
+      <ol class="steps">
+        <li>Naciśnij wiersz — zamiast odhaczenia otwiera się okno z polami do wypełnienia
+          (np. <em>Temperatura (°C)</em>), z normą podaną przy polu.</li>
+        <li>Wpisz wartości i naciśnij <span class="b">Zapisz</span>. Jeśli czegoś brakuje,
+          okno samo wypisze czego: <em>„Wypełnij: Temperatura”</em>. Wyjście bez zapisu:
+          <span class="b">Anuluj</span>.</li>
+      </ol>
+      <div class="out"><span class="lbl">Efekt</span>
+        Zadanie jest odhaczone, a wpisana wartość widnieje w wierszu
+        (np. <em>„Temperatura: 4 °C”</em>). Wartość <strong>poza normą</strong> jest
+        czerwona i podpisana <em>„— poza normą”</em>. Pomiar trafia od razu do dziennika
+        dnia, więc nikt nie poprosi Cię o tę samą liczbę drugi raz.</div>
+
+      <h3>Poprawa pomiaru</h3>
+      <p>Zadania z pomiarem <strong>nie da się po prostu odznaczyć</strong> — aplikacja
+        powie: <em>„Tego zadania nie da się odznaczyć — jest z nim zapisany pomiar.
+        Popraw wartość”</em>. Pomyloną liczbę zmienia się inaczej:</p>
+      <ol class="steps">
+        <li>Naciśnij <span class="b">Popraw pomiar</span> pod wierszem zadania.</li>
+        <li>Wpisz właściwą wartość i uzupełnij <strong>Powód poprawki</strong>
+          (np. „pomyłka przy odczycie”) — bez powodu przycisk
+          <span class="b">Zapisz</span> jest nieaktywny.</li>
+      </ol>
+      <div class="out"><span class="lbl">Efekt</span>
+        Nowa wartość wchodzi na miejsce starej, ale <strong>stara nie znika</strong> —
+        pod wierszem zostaje podpis o poprawce. To zapis kontrolny (HACCP): ma być
+        widać, że wartość poprawiono i dlaczego.</div>
+
       <h3>Oznaczenia przy zadaniu</h3>
       <ul class="plain">
-        <li><span class="b">Ważne</span> (czerwony napis) — zadanie o wysokim priorytecie,
-          jest na górze listy.</li>
-        <li><em>do 12:00</em> — termin, do którego zadanie ma być zrobione.</li>
-        <li>Szara plakietka z prawej: dla kogo jest zadanie
-          (np. <em>kuchnia</em> albo <em>wszyscy</em>), a przy zadaniach cyklicznych
-          postęp cyklu, np. <span class="tabular">„2/3 dni”</span>.</li>
+        <li><span class="b">Ważne</span> (czerwony napis) — zadanie o wysokim
+          priorytecie, jest na górze listy. Ten sam napis przy nazwie bloku znaczy,
+          że coś pilnego zostało w środku.</li>
+        <li><em>do 12:00</em> — termin, do którego zadanie ma być zrobione (własny
+          termin zadania albo termin całego bloku).</li>
+        <li>Szara plakietka <em>co 3 dni</em> — zadanie nie jest codzienne, wraca co tyle
+          dni od ostatniego wykonania.</li>
+        <li>Pod tytułem bywa <strong>opis albo procedura</strong> — krótka instrukcja od
+          kierownika, jak to zrobić.</li>
       </ul>
-      <p>Na ekranie <span class="b">Zadania</span> masz jeszcze dwa przełączniki:
-        <span class="b">Twoje stanowisko</span> (domyślnie — Twoje zadania i te dla
-        wszystkich) oraz <span class="b">Wszystkie</span> (wszystkie zadania lokalu na
-        dziś). U góry widnieje też Twój wynik: <em>„Ostatnie 7 dni: 24 z 27 zadań”</em>.</p>
-      <div class="note">Niewykonane zadania <strong>nie blokują</strong> zakończenia zmiany —
-        zobaczysz tylko przypomnienie, ile zostało.</div>
+      <div class="note">Niewykonane zadania <strong>nie blokują</strong> zakończenia
+        zmiany — zobaczysz tylko przypomnienie, ile zostało.</div>
     </div>
   </section>
-
-  <!-- ============ 7 ============ -->
   <section id="s7">
     <div class="sec-head">
       <span class="n">7</span>
@@ -647,6 +768,6 @@
 
   <footer>
     <span>Tablet Służbowy · instrukcja dla pracownika</span>
-    <span class="tabular">Wersja aplikacji 0.26.3</span>
+    <span class="tabular">Wersja aplikacji 0.38.0</span>
   </footer>
 </div>

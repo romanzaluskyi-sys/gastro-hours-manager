@@ -19,7 +19,22 @@ cron, jest źródłem prawdy i backfill go nie nadpisuje, tylko zapełnia dziury
 import argparse, collections, datetime, json, sys, urllib.parse, urllib.request
 
 SUPABASE_URL = "https://gdzossvaauznqsrfqovw.supabase.co"
-SUPABASE_KEY = "sb_publishable_4SuEM6I6VujiuBtqGze1Nw_vFoeoM3S"
+# ⚠️ SERVICE ROLE z ENV, nie wpisany w kod klucz publishable.
+#
+# Dwa powody, oba zdobyte po drodze. Po pierwsze: od Etapu 3c polityki RLS nie
+# wydają niczego anonimowym, a klucz publishable to właśnie anonim — ten skrypt
+# przestałby cokolwiek zapisywać. Po drugie: klucz wpisany w kod wiąże skrypt z
+# JEDNYM klientem, a w modelu silo każdy ma własną bazę (patrz 0.41.0, gdzie ta
+# sama pomyłka siedziała w sześciu miejscach naraz).
+#
+#     export SUPABASE_SERVICE_KEY=sb_secret_...
+SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY")
+if not SUPABASE_KEY:
+    sys.exit(
+        "Brak SUPABASE_SERVICE_KEY w środowisku.\n"
+        "Supabase → Settings → API Keys → klucz sekretny, potem:\n"
+        "    export SUPABASE_SERVICE_KEY=sb_secret_..."
+    )
 HORYZONTY = [1, 2, 3, 4, 5, 6, 7]   # więcej niż prosił właściciel (3 i 7) —
                                     # pełna krzywa pokazuje, GDZIE prognoza się
                                     # psuje, a nie tylko że w dwóch punktach
