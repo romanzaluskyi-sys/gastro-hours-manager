@@ -5,9 +5,17 @@ nie zmienia po zastosowaniu, treść pliku **nigdy** nie jest edytowana po
 zastosowaniu — poprawka to nowa migracja z kolejnym numerem.
 
 ```bash
-python3 scripts/migrate.py --projekt <REF>            # plan, nic nie zmienia
-python3 scripts/migrate.py --projekt <REF> --wykonaj  # zapis
+python3 scripts/migrate.py --projekt <REF>              # plan, nic nie zmienia
+python3 scripts/migrate.py --projekt <REF> --wykonaj    # zapis WSZYSTKIEGO, co czeka
+python3 scripts/migrate.py --projekt <REF> --do 0029 --wykonaj   # zapis do 0029 włącznie
 ```
+
+⚠️ **`--wykonaj` bez `--do` stosuje WSZYSTKIE czekające migracje naraz.** Gdy
+migracja jest związana z kolejnością wdrożenia — jedna przed deployem, druga po
+nim (patrz `0029`/`0030`) — bez `--do` polecą obie i zostawią okno, w którym
+aplikacja i baza mówią co innego. 22.09.2026 zdarzyło się dokładnie to: `0030`
+poszła przy aplikacji w wersji 0.42.2, która czyta listę załogi wprost z
+`users`, i ekran wyboru osoby na tablecie zrobił się pusty.
 
 Runner trzyma stan w tabeli `schema_migrations` i pilnuje sumy kontrolnej
 każdego zastosowanego pliku. Zmiana treści zastosowanej migracji zatrzymuje

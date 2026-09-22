@@ -94,6 +94,9 @@ def main():
     ap.add_argument("--wykonaj", action="store_true")
     ap.add_argument("--oznacz-zastosowane", nargs="*", default=[], metavar="NR",
                     help="zapisz jako zastosowane BEZ uruchamiania (istniejąca baza)")
+    ap.add_argument("--do", dest="do_numeru", metavar="NR",
+                    help="zatrzymaj się na tej migracji włącznie — dla migracji, "
+                         "która musi poczekać na deploy (patrz 0030)")
     args = ap.parse_args()
 
     token = os.environ.get("SUPABASE_PAT")
@@ -136,6 +139,19 @@ def main():
         print("  Bazy klientów już się rozjechały albo zaraz się rozjadą.")
         print("  Nie edytuj zastosowanych plików — dopisz nową migrację.\n")
         sys.exit(1)
+
+    # ⚠️ Migracja bywa związana z KOLEJNOŚCIĄ wdrożenia i nie wolno jej puścić
+    # razem z poprzednią: `0029` musiała pójść przed deployem 0.43.0, a `0030`
+    # dopiero po nim — puszczone razem zostawiały tablety z pustym ekranem
+    # wyboru osoby. Domyślnie runner stosuje WSZYSTKO, co czeka, więc taki
+    # przypadek trzeba ograniczyć jawnie.
+    if args.do_numeru:
+        granica = args.do_numeru.zfill(4)
+        odrzucone = [w for _, w, _, _ in do_zrobienia if w[:4] > granica]
+        do_zrobienia = [x for x in do_zrobienia if x[1][:4] <= granica]
+        if odrzucone:
+            print(f"  Zatrzymuję się na {granica}. Czekają dalej: "
+                  + ", ".join(odrzucone) + "\n")
 
     if not do_zrobienia:
         print("  Nic do zrobienia, baza jest aktualna.\n")
