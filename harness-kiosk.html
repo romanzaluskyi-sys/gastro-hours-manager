@@ -65,6 +65,19 @@ const API_STUB = stub(`
     },
     delete: async () => true,
     patchByFilter: async () => true,
+    // ⚠️ Odpowiedzi ustawia TEST, nie atrapa. PIN blokady sprawdza od 0.42.1
+    // baza (RPC \`sprawdz_kiosk_pin\`), więc tablet nie ma już z czego
+    // wywnioskować odpowiedzi sam — i dokładnie o to chodziło.
+    rpc: async (nazwa, args) => {
+      window.__rpcWywolania.push([nazwa, args]);
+      const f = window.__rpcOdpowiedzi[nazwa];
+      if (!f) throw new Error("atrapa nie zna funkcji " + nazwa);
+      return f(args);
+    },
+  };
+  window.__rpcWywolania = [];
+  window.__rpcOdpowiedzi = {
+    sprawdz_kiosk_pin: (a) => a.p_user_id === "u4" && a.p_pin === "123456",
   };
 `);
 
@@ -239,8 +252,16 @@ const poprzedniMiesiac = (h) => {
         // Z PIN-em blokady — po kliknięciu ma wyjść klawiatura, nie konto.
         // Pracuje tego samego dnia co Bo: przy "oddaj" jej nie ma, przy
         // "zamień się" jest — bo wtedy oddaje własną zmianę.
+        // ⚠️ BEZ \`kiosk_pin\`. Od 0.42.1 tablet nie dostaje PIN-u z bazy i ma
+        // sobie radzić samą flagą — gdyby wciąż go potrzebował, ten wiersz
+        // odblokowałby profil i sprawdzian by to pokazał.
         { id: "u4", name: "Dorota", role: "open", active: true, archived: false,
-          default_lokal: "Ceglana", default_stanowisko: "Kucharz", kiosk_pin: "123456" },
+          default_lokal: "Ceglana", default_stanowisko: "Kucharz", ma_kiosk_pin: true },
+        // Wiersz sprzed migracji 0027: kolumny wyliczanej jeszcze nie ma.
+        // Kłódka ma stać dalej — inaczej aktualizacja aplikacji przed
+        // migracją po cichu zdjęłaby blokady wszystkim.
+        { id: "u6", name: "Emil", role: "open", active: true, archived: false,
+          default_lokal: "Ceglana", default_stanowisko: "Kucharz", kiosk_pin: "654321" },
         // Czeka na decyzję kierownika: ma mieć plakietkę "na próbę" na liście
         // i skrócony zestaw zakładek po wejściu (bez Grafiku).
         { id: "u5", name: "Na Próbę", role: "open", active: true, archived: false,
@@ -367,19 +388,66 @@ const poprzedniMiesiac = (h) => {
         sprawdz("szósta cyfra otwiera sama", !widac("Ten profil jest zablokowany"),
           (document.getElementById("app").innerText || "").slice(0, 60));
 
+        // ⚠️ PIN sprawdziła BAZA, nie przeglądarka. Wiersz Doroty w ogóle nie
+        // zawiera \`kiosk_pin\` — gdyby tablet dalej porównywał u siebie,
+        // otwarcie profilu nie miałoby prawa się udać.
+        const ostatnie = window.__rpcWywolania[window.__rpcWywolania.length - 1];
+        sprawdz("PIN sprawdziła baza, nie przeglądarka",
+          !!ostatnie && ostatnie[0] === "sprawdz_kiosk_pin",
+          JSON.stringify(window.__rpcWywolania));
+        sprawdz("zapytanie niesie osobę i wpisane cyfry",
+          !!ostatnie && ostatnie[1].p_user_id === "u4" && ostatnie[1].p_pin === "123456",
+          JSON.stringify(ostatnie && ostatnie[1]));
+
         // --- zły PIN, też sześciocyfrowy ---
         klik("Zmień"); await czekaj(300);
         klik("Dorota"); await czekaj(200);
-        await wpisz("999999"); await czekaj(400);
+        await wpisz("999999"); await czekaj(500);
         sprawdz("zły PIN nie wpuszcza i mówi o tym", widac("Niepoprawny PIN"));
         await czekaj(1000);
-        sprawdz("po błędzie pole samo się czyści", widac("Ten profil jest zablokowany"));
+        sprawdz("po błędzie kropki same się czyszczą", widac("Ten profil jest zablokowany"));
 
         // Siódma cyfra nie ma gdzie wejść — inaczej po błędzie dałoby się
         // wpisywać w nieskończoność i zatwierdzenie nigdy by nie wypadło.
-        await wpisz("1234567"); await czekaj(500);
+        const ileWywolan = window.__rpcWywolania.length;
+        await wpisz("9999999"); await czekaj(500);
+        const poSiodmej = window.__rpcWywolania[window.__rpcWywolania.length - 1];
         sprawdz("po sześciu cyfrach klawiatura nie przyjmuje więcej",
-          !widac("Ten profil jest zablokowany") || widac("Niepoprawny PIN"));
+          window.__rpcWywolania.length === ileWywolan + 1 &&
+            poSiodmej[1].p_pin.length === 6,
+          JSON.stringify(poSiodmej && poSiodmej[1]));
+
+        // --- zerwane połączenie ---
+        //
+        // ⚠️ Najważniejszy przypadek na tym ekranie: PIN jest POPRAWNY, a
+        // profil się nie otwiera, bo wi-fi w kuchni padło. Komunikat
+        // "niepoprawny PIN" kazałby człowiekowi wpisywać w kółko coś, co jest
+        // dobre, i po trzech próbach iść po kierownika.
+        await czekaj(1000);
+        const dobre = window.__rpcOdpowiedzi.sprawdz_kiosk_pin;
+        window.__rpcOdpowiedzi.sprawdz_kiosk_pin = () => {
+          throw new Error("Failed to fetch");
+        };
+        await wpisz("123456"); await czekaj(500);
+        sprawdz("brak sieci nie udaje złego PIN-u", !widac("Niepoprawny PIN"),
+          (document.getElementById("app").innerText || "").slice(0, 200));
+        sprawdz("brak sieci mówi, gdzie szukać przyczyny", widac("sprawdź połączenie"));
+        sprawdz("profil zostaje zamknięty przy błędzie", widac("Ten profil jest zablokowany"));
+        window.__rpcOdpowiedzi.sprawdz_kiosk_pin = dobre;
+
+        // --- wiersz sprzed migracji 0027 ---
+        await czekaj(1000);
+        klik("Zmień"); await czekaj(300);
+        klik("Cezary"); await czekaj(300);
+        sprawdz("profil bez PIN-u wchodzi od razu bez pytania",
+          !widac("Ten profil jest zablokowany"),
+          (document.getElementById("app").innerText || "").slice(0, 120));
+
+        klik("Zmień"); await czekaj(300);
+        klik("Emil"); await czekaj(300);
+        sprawdz("stary wiersz (sam kiosk_pin) dalej jest zablokowany",
+          widac("Ten profil jest zablokowany"),
+          (document.getElementById("app").innerText || "").slice(0, 120));
       } catch (e) {
         sprawdz("przebieg bez wyjątku", false, e.message);
       }

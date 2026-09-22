@@ -5,6 +5,27 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.42.1 — 2026-09-22
+
+- **PIN blokady profilu na Tablecie Służbowym sprawdza teraz baza.** Dla
+  pracownika nic się nie zmienia — te same sześć cyfr, profil otwiera się sam.
+  Zmienia się to, czego nie było widać: dotąd tablet miał u siebie PIN-y
+  wszystkich osób z lokalu, bo pobierał je razem z listą pracowników i
+  porównywał na miejscu. Urządzenie stoi na sali cały dzień, więc blokada
+  chroniąca profil przed kolegą z tej samej zmiany była warta tyle, co
+  otwarta konsola przeglądarki.
+- **Zerwane wi-fi nie udaje już złego PIN-u.** Jeśli tabletowi nie uda się
+  zapytać bazy, mówi „nie udało się sprawdzić PIN-u — sprawdź połączenie",
+  zamiast twierdzić, że wpisane cyfry są błędne. Wcześniej takiej sytuacji nie
+  było, bo sprawdzenie nie wymagało sieci; teraz wymaga i musi to umieć
+  powiedzieć.
+- **Wypożyczeni otworzą swój profil w cudzym lokalu.** Osoba, którą grafik
+  stawia dziś w innym lokalu, widzi się na tamtejszym tablecie — i od teraz
+  jej PIN też tam działa.
+
+⚠️ Wymaga migracji `0027` PRZED wdrożeniem — bez niej tablet nie ma czym
+sprawdzić PIN-u i profile zostaną zamknięte.
+
 ## 0.42.0 — 2026-09-21
 
 - **Hasło sprawdza teraz serwer, a nie przeglądarka.** Dla wchodzącego nie

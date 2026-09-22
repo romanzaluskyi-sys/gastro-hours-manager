@@ -45,6 +45,7 @@ wykonalne.
 | `0024` | dziennik błędów aplikacji (`app_errors`) | nowe |
 | `0025` | tożsamość w Supabase Auth (`users.auth_id`), helpery do polityk, `sprawdz_kiosk_pin` | nowe |
 | `0026` | polityki bez anonima — klucz z przeglądarki przestaje otwierać bazę | nowe |
+| `0027` | PIN blokady tabletu przestaje wychodzić z bazy (`users.ma_kiosk_pin`, poprawka `sprawdz_kiosk_pin`) | nowe |
 
 `0001`–`0004` odtworzono ze zrzutu prawdziwej bazy
 (`docs/sql/tools/zrzut-schematu.sql`, 2026-09-07), a nie z opisu w

@@ -632,6 +632,15 @@ const ManagerDashboard = ({
     e.preventDefault();
     try {
       const dataToSave = { ...editingUser };
+      // ⚠️ Kolumny WYLICZANE trzeba wyrzucić z payloadu. Payload powstaje z
+      // rozsypania wiersza pobranego z bazy, więc niesie wszystko, co baza
+      // oddała — a Postgres odrzuca CAŁY zapis, gdy w środku jest kolumna
+      // `generated always as` (`ma_kiosk_pin`, migracja 0027). Objaw byłby
+      // mylący: "Błąd zapisu pracownika" przy KAŻDEJ karcie, także takiej,
+      // której nikt nie tknął w okolicy PIN-u.
+      //
+      // Dopisując kolejną kolumnę wyliczaną, dopisz ją TUTAJ.
+      for (const wyliczana of ["ma_kiosk_pin"]) delete dataToSave[wyliczana];
       if (dataToSave.role === "open") {
         // E-mail ZOSTAJE: razem z kiosk_pin daje pracownikowi dostęp do jego
         // ekranów z prywatnego telefonu. Czyścimy tylko `pin` — sześciocyfrowy
