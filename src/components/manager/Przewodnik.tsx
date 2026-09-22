@@ -23,6 +23,15 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.42.2",
+    date: "2026-09-22",
+    items: [
+      "Zmiana zdjęta z grafiku znika też z giełdy — nie wisi już przy nazwisku jako „na giełdzie”.",
+      "Obie strony dostają wiadomość, że propozycja przestała być aktualna.",
+      "Nie da się przejąć zmiany, którą kierownik zdążył usunąć.",
+    ],
+  },
+  {
     version: "0.42.1",
     date: "2026-09-22",
     items: [

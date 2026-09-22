@@ -51,7 +51,11 @@ import {
 } from "../../utils/grafik";
 import { budzetDnia, budzetTygodnia, zl, pct0 } from "../../utils/budzet";
 import { KartyBudzetu, WierszeBudzetu } from "./GrafikBudzet";
-import { activeSwapFor, pendingSwapDelta } from "../../utils/swaps";
+import {
+  activeSwapFor,
+  pendingSwapDelta,
+  wycofajOfertyDlaZmian,
+} from "../../utils/swaps";
 import { addUrlopDirectly, addNiedostepnoscDirectly } from "../../utils/absences";
 import { stanowiskoShort, stanowiskoBadgeStyle } from "../../utils/stanowiska";
 import { normaMiesiaca } from "../../utils/umowy";
@@ -1392,6 +1396,14 @@ export default function GrafikTydzien({
         await api.delete("grafik_shifts", shift.id);
         setPlanShifts((planShifts || []).filter((s) => s.id !== shift.id));
       }
+      // Zmiana zdjęta z grafiku zabiera ze sobą swoją ofertę — inaczej autor
+      // dalej widzi „na giełdzie", a chętny może wziąć pracę, której nie ma.
+      const { bledy } = await wycofajOfertyDlaZmian({
+        swaps: shiftSwaps,
+        shiftIds: [shift.id],
+      });
+      if (bledy.length > 0)
+        showMsg("Zmiana usunięta, ale nie udało się wycofać jej oferty z giełdy.", "error");
       setModalCtx(null);
     } catch (err) {
       showMsg(`Błąd usuwania: ${err.message || "nieznany błąd"}`, "error");
@@ -1538,10 +1550,19 @@ export default function GrafikTydzien({
           .filter((s) => !skasowane.has(String(s.id)))
           .map((s) => zmienione.get(String(s.id)) || s)
       );
+      const { bledy } = await wycofajOfertyDlaZmian({
+        swaps: shiftSwaps,
+        shiftIds: doUsuniecia.map((z) => z.id),
+      });
+      const ogon =
+        bledy.length > 0
+          ? ` ⚠ Nie udało się wycofać ${bledy.length} ofert z giełdy.`
+          : "";
       showMsg(
-        wyslanych > 0
+        (wyslanych > 0
           ? `Usunięto ${doUsuniecia.length} zmian. Wyślij grafik, żeby pracownicy o tym wiedzieli.`
-          : `Usunięto ${doUsuniecia.length} zmian.`
+          : `Usunięto ${doUsuniecia.length} zmian.`) + ogon,
+        bledy.length > 0 ? "error" : undefined
       );
     } catch (err) {
       showMsg(`Błąd usuwania: ${err.message || "nieznany błąd"}`, "error");

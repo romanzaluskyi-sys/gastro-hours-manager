@@ -40,7 +40,11 @@ import Pracownicy from "./manager/Pracownicy";
 import RaportyIKoszty from "./manager/RaportyIKoszty";
 import Przewodnik from "./manager/Przewodnik";
 import Grafik from "./manager/Grafik";
-import { resolveSwap, wzajemnaZmiana } from "../utils/swaps";
+import {
+  resolveSwap,
+  wzajemnaZmiana,
+  wycofajOfertyDlaZmian,
+} from "../utils/swaps";
 import { typUmowy } from "../utils/umowy";
 import {
   futureShiftsOfUser,
@@ -767,6 +771,15 @@ const ManagerDashboard = ({
         await api.delete("grafik_shifts", zm.id);
       }
     }
+    // Zmiana zdjęta z grafiku zabiera ze sobą swoją ofertę z giełdy — bez
+    // tego zostaje wiersz wskazujący na nieistniejącą zmianę (patrz
+    // `wycofajOfertyDlaZmian`). Wołamy tu, bo `utils/grafik.ts` nie może
+    // importować `utils/swaps.ts`: zależność idzie w drugą stronę i powstałby
+    // cykl.
+    await wycofajOfertyDlaZmian({
+      swaps: shiftSwaps,
+      shiftIds: zmianyDoZdjecia.map((z) => z.id),
+    });
     const zdjete = new Set(zmianyDoZdjecia.map((z) => String(z.id)));
     const mapa = new Map(poZmianie.map((z) => [String(z.id), z]));
     setPlanShifts(
@@ -830,6 +843,15 @@ const ManagerDashboard = ({
         setPlanShifts(
           (planShifts || []).map((z) => mapa.get(String(z.id)) || z)
         );
+        // Zmiana zmieniła właściciela, więc oferta wystawiona przez
+        // odchodzącego przestaje mieć sens — „oddaję swoją zmianę" po
+        // przepisaniu dotyczy cudzej. Zdjęte zmiany załatwia `zdejmijZmiany`
+        // niżej, więc tu tylko przepisane.
+        await wycofajOfertyDlaZmian({
+          swaps: shiftSwaps,
+          shiftIds: przepisane.map((z) => z.id),
+          powod: `zmiana przeszła na osobę: ${nastepca.name}`,
+        });
         // Pominięte zostają na odchodzącym — zdejmujemy je, żeby nie udawały
         // obsady po jego odejściu.
         if (pominiete.length > 0) await zdejmijZmiany(pominiete.map((x) => x.zmiana));

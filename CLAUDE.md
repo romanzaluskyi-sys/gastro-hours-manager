@@ -2719,6 +2719,29 @@ trzy miejsca, w których można zapomnieć o kierowniku.
 - Ekrany pracownika potrzebują listy współpracowników, więc `users` idzie teraz
   także do `PersonalDashboard` (kiosk miał je wcześniej). Nazwiska i tak widać
   w grafiku („Z tobą: …"), więc nic nowego się nie odsłania.
+- ⚠️ **Oferta PRZEŻYWA usunięcie zmiany z grafiku** — `shift_swaps` wiąże się ze
+  zmianą luźnym `grafik_shift_id` bez klucza obcego, więc nic jej nie sprząta
+  samo. Naprawione w 0.42.2 z dwóch stron i obie są potrzebne:
+  - **przy zapisie** — `wycofajOfertyDlaZmian()` w `utils/swaps.ts` wołane z
+    KAŻDEJ ścieżki zdejmowania zmiany (pojedyncze usunięcie i czyszczenie
+    zakresu w `GrafikTydzien.tsx`, `zdejmijZmiany` i przepisanie na następcę w
+    `ManagerDashboard.tsx`). ⚠️ Nie da się tego zawołać z `utils/grafik.ts` —
+    `swaps.ts` importuje stamtąd, więc zależność w drugą stronę zrobiłaby cykl;
+    dlatego wołają komponenty. Funkcja NIE rzuca: zmiana jest już usunięta,
+    więc wyjątek pokazałby „Błąd usuwania" po operacji, która się udała —
+    zwraca listę niepowodzeń do pokazania.
+  - **przy odczycie** — `offersForUser`, `claimedByUser` i `ofertyWystawione`
+    sprawdzają, czy zmiana istnieje i nie ma `deleted_at`. To jest siatka
+    bezpieczeństwa dla wierszy osieroconych wcześniej i dla ścieżki usuwania, o
+    której ktoś zapomni. **Dokładając miejsce czytające `shift_swaps`, zadaj to
+    samo pytanie** — filtr po samym `status` wystarczał do 0.42.1 i dlatego
+    Tablet Służbowy pisał Olenie „Giełda: na giełdzie" przy zmianie, której nie
+    było (22.09.2026).
+  - ⚠️ `deleted_at` liczy się jak brak zmiany. Wysłana zmiana po usunięciu
+    czeka na publikację z ustawioną datą skasowania — do 0.42.1 w tym czasie
+    dalej stała na giełdzie i dało się WZIĄĆ pracę, której już nie ma.
+  - Wiersze osierocone wcześniej sprząta migracja `0028` (status `wycofana`, nie
+    kasowanie — giełda jest zapisem tego, co się działo).
 - Migracja `0021`. Sprawdziany: `harness-zadania.html` (21 przypadków na samą
   giełdę — kto widzi ofertę, kto jest kandydatem, jak liczą się godziny).
 

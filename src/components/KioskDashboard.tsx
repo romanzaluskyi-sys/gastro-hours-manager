@@ -11,7 +11,7 @@ import {
   Hourglass,
 } from "lucide-react";
 import { getTodaysShiftsForUser } from "../utils/shifts";
-import { offersForUser, STATUS_LABEL } from "../utils/swaps";
+import { offersForUser, ofertyWystawione, STATUS_LABEL } from "../utils/swaps";
 import { mozeZamykacPuls } from "./manager/PulsZmiany";
 import { trimTime, toLocalYMD } from "../utils/grafik";
 import {
@@ -439,11 +439,15 @@ const KioskDashboard = ({
                   n.user_name === u.name &&
                   !n.is_read
               ).length;
-              const wystawione = (shiftSwaps || []).filter(
-                (sw) =>
-                  ["na_gieldzie", "przyjeta"].includes(sw.status) &&
-                  String(sw.author_user_id) === String(u.id)
-              );
+              // ⚠️ Przez `ofertyWystawione`, a nie filtrem po samym statusie:
+              // wiersz oferty przeżywa usunięcie zmiany z grafiku i bez
+              // sprawdzenia, czy zmiana wciąż istnieje, podpis „na giełdzie"
+              // wisiał tu w nieskończoność (22.09.2026, Olena).
+              const wystawione = ofertyWystawione({
+                swaps: shiftSwaps,
+                planShifts,
+                user: u,
+              });
               return (
                 <button
                   key={u.id}
@@ -504,7 +508,7 @@ const KioskDashboard = ({
                       </div>
                     ) : wystawione.length > 0 ? (
                       <div className="text-[13px] text-[#6E6E66] mt-1">
-                        ⇄ Giełda: {STATUS_LABEL[wystawione[0].status].toLowerCase()}
+                        ⇄ Giełda: {STATUS_LABEL[wystawione[0].sw.status].toLowerCase()}
                       </div>
                     ) : null}
                   </div>

@@ -5,6 +5,23 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.42.2 — 2026-09-22
+
+- **Zmiana zdjęta z grafiku znika też z giełdy.** Dotąd oferta zostawała: jej
+  autor widział przy swoim nazwisku na Tablecie Służbowym „Giełda: na
+  giełdzie" bez końca, choć zmiany dawno nie było, a osoba, której zmianę
+  zaproponowano, nie dostawała żadnej wiadomości, że propozycja jest już
+  nieaktualna. Teraz usunięcie zmiany wycofuje ofertę i powiadamia obie
+  strony.
+- **Nie da się już wziąć zmiany, którą kierownik usunął.** Wysłana zmiana po
+  usunięciu czeka na najbliższą wysyłkę grafiku — do tej pory w tym czasie
+  wciąż stała na giełdzie i ktoś mógł przejąć pracę, której nie ma.
+- Dotyczy to też zdejmowania zmian odchodzącemu pracownikowi, czyszczenia
+  całego tygodnia i przepisania zmian na następcę.
+
+⚠️ Migracja `0028` sprząta oferty osierocone wcześniej — bez niej stare wpisy
+zostają w historii giełdy jako „na giełdzie".
+
 ## 0.42.1 — 2026-09-22
 
 - **PIN blokady profilu na Tablecie Służbowym sprawdza teraz baza.** Dla
