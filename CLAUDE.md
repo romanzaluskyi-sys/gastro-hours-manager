@@ -261,7 +261,14 @@ wersji trzeba poprawić ręcznie.
 
   ⚠️ **Regresją jest [`scripts/sprawdz-dostep.py`](scripts/sprawdz-dostep.py)**
   — chodzi po WSZYSTKICH tabelach (bierze listę z migracji, nie z pamięci) i
-  sprawdza odczyt oraz zapis. Zapis testuje `PATCH`-em z filtrem, który nie
+  sprawdza odczyt oraz zapis. Od 0.43.0 ma też sekcję **KARTOTEKA**: bierze
+  `users_widok` oczami zalogowanego i sprawdza CUDZE wiersze — czy stawki, dane
+  osobowe, PIN-y i notatki faktycznie są puste, czy tabela `users` wydaje sam
+  własny wiersz i czy zapis do niej jest zamknięty. ⚠️ Uruchom ją kontem
+  TABLETU albo pracownika: kierownik ma widzieć wszystko, więc jego kontem nie
+  da się tego zmierzyć (skrypt mówi to wprost zamiast udawać „OK"). Ekran, na
+  którym „lista pracowników jest", nie mówi nic o tym, CO w tej liście
+  przyjechało. Zapis testuje `PATCH`-em z filtrem, który nie
   trafia w żaden wiersz: dostajemy odpowiedź "czy wolno" bez dotykania danych.
   Uruchom `--etap przed` PRZED migracją (zdjęcie stanu) i `--etap po` po niej.
 

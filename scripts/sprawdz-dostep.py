@@ -132,6 +132,106 @@ def zaloguj(url, klucz, email, haslo):
     return json.loads(tresc).get("access_token")
 
 
+# Kolumny, których kolega z sali widzieć NIE MOŻE (Etap 3c-3, migracja 0029).
+# Widok `users_widok` maskuje je na null dla wszystkich poza kierownikiem i
+# samym zainteresowanym.
+ZAKRYTE_PRZED_KOLEGAMI = [
+    "stawka", "wynagrodzenie_mies", "telefon", "data_urodzenia",
+    "data_zatrudnienia", "pin", "kiosk_pin", "email",
+    "sanepid_expiry", "umowa_expiry", "ostatni_dzien",
+]
+ZAKRYTE_PRZED_WSZYSTKIMI_POZA_KIEROWNIKIEM = [
+    "notatki", "notatki_updated_by", "notatki_updated_at",
+]
+
+
+def kartoteka(url, klucz, token, email):
+    """Czy `users_widok` faktycznie zakrywa cudze dane (Etap 3c-3).
+
+    Ekran, na którym „lista pracowników jest", nie mówi nic o tym, CO w tej
+    liście przyjechało. Ta sekcja pyta o to wprost: bierze kartotekę oczami
+    zalogowanego i sprawdza wiersze INNYCH osób.
+    """
+    print("\n  KARTOTEKA (users_widok) — co widać o innych")
+    print("  " + "-" * 58)
+
+    kod, tresc = zapytanie(url, klucz, "/auth/v1/user", token=token)
+    moje_auth = json.loads(tresc).get("id") if kod == 200 else None
+
+    kod, tresc = zapytanie(url, klucz, "/rest/v1/users_widok?select=*&limit=200", token=token)
+    if kod != 200:
+        print(f"    AWARIA: widok nie oddaje kartoteki (HTTP {kod}) — "
+              "aplikacja pokaże pustą listę osób.")
+        return {"ok": False, "kierownik": False}
+    wiersze = json.loads(tresc)
+    if not isinstance(wiersze, list) or len(wiersze) == 0:
+        print("    AWARIA: kartoteka pusta — na tablecie nie będzie kogo wybrać.")
+        return {"ok": False, "kierownik": False}
+
+    moje = [w for w in wiersze if moje_auth and w.get("auth_id") == moje_auth]
+    cudze = [w for w in wiersze if not (moje_auth and w.get("auth_id") == moje_auth)]
+    rola = (moje[0].get("role") if moje else "") or "?"
+    print(f"    wierszy: {len(wiersze)}, rola zalogowanego: {rola}")
+
+    kierownik = rola in ("admin", "manager", "manager_lokalu")
+    if kierownik:
+        print("    To konto PROWADZI kartotekę — ma widzieć wszystko. "
+              "Żeby zmierzyć zakrycie, zaloguj się kontem tabletu albo pracownika.")
+        return {"ok": True, "kierownik": True}
+
+    def wycieki(kolumny):
+        zle = {}
+        for w in cudze:
+            for k in kolumny:
+                v = w.get(k)
+                # '' i null znaczą tu to samo: nic nie wyszło.
+                if v not in (None, ""):
+                    zle.setdefault(k, 0)
+                    zle[k] += 1
+        return zle
+
+    problem = False
+    z1 = wycieki(ZAKRYTE_PRZED_KOLEGAMI)
+    z2 = wycieki(ZAKRYTE_PRZED_WSZYSTKIMI_POZA_KIEROWNIKIEM)
+    if z1 or z2:
+        problem = True
+        for k, ile in sorted({**z1, **z2}.items()):
+            print(f"    WYCIEK: {k} widoczne w {ile} cudzych wierszach")
+    else:
+        print(f"    OK: w {len(cudze)} cudzych wierszach żadna z "
+              f"{len(ZAKRYTE_PRZED_KOLEGAMI) + len(ZAKRYTE_PRZED_WSZYSTKIMI_POZA_KIEROWNIKIEM)} "
+              "wrażliwych kolumn nie ma wartości")
+
+    # Drugi bok: to, co widać, musi wystarczyć do pracy.
+    braki = [k for k in ("id", "name", "role", "default_lokal") if not wiersze[0].get(k)]
+    if braki and wiersze[0].get("name") is None:
+        problem = True
+        print(f"    AWARIA: w kartotece brakuje kolumn potrzebnych do pracy: {braki}")
+
+    # Tabela `users` ma wydawać wyłącznie własny wiersz (migracja 0030).
+    kod, tresc = zapytanie(url, klucz, "/rest/v1/users?select=id&limit=200", token=token)
+    ile = len(json.loads(tresc)) if kod == 200 and tresc.strip().startswith("[") else None
+    if kod != 200:
+        print(f"    tabela users: odmowa (HTTP {kod}) — dobrze")
+    elif ile is not None and ile <= 1:
+        print(f"    tabela users: {ile} wiersz (własny) — dobrze")
+    else:
+        problem = True
+        print(f"    WYCIEK: tabela users wydaje {ile} wierszy wprost — "
+              "migracja 0030 nie zadziałała.")
+
+    # Zapis do kartoteki ma być zamknięty — inaczej maskowanie jest teatrem.
+    wolno, opis = pisze(url, klucz, "users", token=token)
+    if wolno:
+        problem = True
+        print("    WYCIEK: to konto MOŻE pisać do kartoteki — "
+              "czyli może podnieść sobie uprawnienia.")
+    else:
+        print(f"    zapis do users: zablokowany ({opis}) — dobrze")
+
+    return {"ok": not problem, "kierownik": False}
+
+
 def sekcja(url, klucz, tytul, token=None):
     print(f"\n=== {tytul} ===\n")
     print(f"  {'tabela':<18} {'odczyt':<14} {'zapis':<12} co tam jest")
@@ -162,6 +262,7 @@ def main():
     )
     args = p.parse_args()
 
+    kartoteka_ok = None
     klucz = args.klucz or os.environ.get("REACT_APP_SUPABASE_KEY") or os.environ.get("SUPABASE_KEY")
     if not klucz:
         print("Podaj --klucz (publishable) albo ustaw REACT_APP_SUPABASE_KEY.", file=sys.stderr)
@@ -180,6 +281,7 @@ def main():
         token = zaloguj(args.url, klucz, email.strip().lower(), haslo)
         if token:
             zalogowany = sekcja(args.url, klucz, f"ZALOGOWANY: {email}", token)
+            kartoteka_ok = kartoteka(args.url, klucz, token, email)
     else:
         print(
             "\n⚠️ SPRAWDZ_EMAIL / SPRAWDZ_PIN nieustawione — sprawdzam TYLKO\n"
@@ -230,6 +332,15 @@ def main():
 
     bez_odczytu = [t for t, (czyta, _) in zalogowany.items() if not czyta]
     bez_zapisu = [t for t, (_, pisze_) in zalogowany.items() if not pisze_]
+
+    # ⚠️ Od Etapu 3c-3 odmowa na `users` dla konta, które nie prowadzi
+    # kartoteki, jest ZAMIERZONA — listę załogi ta osoba bierze z
+    # `users_widok`. Bez tego wyjątku skrypt krzyczałby "awaria" dokładnie o
+    # tej zmianie, którą miał potwierdzić. Sekcja KARTOTEKA wyżej ocenia to
+    # osobno i po swojemu.
+    if kartoteka_ok and not kartoteka_ok["kierownik"]:
+        bez_odczytu = [x for x in bez_odczytu if x != "users"]
+        bez_zapisu = [x for x in bez_zapisu if x != "users"]
     if bez_odczytu or bez_zapisu:
         if bez_odczytu:
             print("\nZALOGOWANY NIE CZYTA: " + ", ".join(bez_odczytu))
@@ -242,7 +353,18 @@ def main():
         )
         return 1
 
-    print("\nOK — anonim nic nie dostaje, zalogowany czyta i zapisuje wszystko.")
+    if kartoteka_ok is None:
+        print("\nOK — anonim nic nie dostaje, zalogowany czyta i zapisuje wszystko.")
+        return 0
+    if not kartoteka_ok["ok"]:
+        print("\nKARTOTEKA NIE JEST ZAKRYTA — patrz sekcja wyżej. Etap 3c-3 nie zadziałał.")
+        return 1
+    if kartoteka_ok["kierownik"]:
+        print("\nOK dla konta kierownika. ⚠️ Zakrycia kartoteki NIE zmierzyłem —\n"
+              "   kierownik ma widzieć wszystko. Powtórz kontem tabletu albo pracownika.")
+        return 0
+    print("\nOK — anonim nic nie dostaje, zalogowany pracuje, a cudze stawki,\n"
+          "   dane osobowe i PIN-y są dla niego zakryte.")
     return 0
 
 
