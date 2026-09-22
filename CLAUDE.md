@@ -189,6 +189,22 @@ zatwierdzało samo, od czterech przycisk "Otwórz"); właściciel odrzucił to
 jako zbędne dotknięcie płacone kilkanaście razy dziennie przy urządzeniu
 obsługiwanym jedną ręką w biegu. Przycisku nie ma i nie dokładaj go.
 
+⚠️ **Od 0.42.1 PIN-u sprawdza BAZA** (`api.rpc("sprawdz_kiosk_pin", …)` w
+`KioskDashboard.tsx`, migracja `0027`). Trzy rzeczy, które z tego wynikają i
+których nie widać przy ręcznym kliknięciu:
+1. **Kłódkę przy nazwisku rysuje kolumna wyliczana `users.ma_kiosk_pin`**, nie
+   obecność PIN-u. Helper `maPin()` spada z powrotem na `kiosk_pin`, gdy tej
+   kolumny nie ma — baza bez migracji `0027` inaczej po cichu odblokowałaby
+   wszystkie profile przy samej aktualizacji aplikacji.
+2. **Błąd wywołania to NIE zły PIN.** Sprawdzenie wymaga teraz sieci, a wi-fi w
+   kuchni pada kilka razy dziennie; komunikat „niepoprawny PIN" kazałby
+   człowiekowi wpisywać w kółko coś, co jest dobre. Stąd osobny tekst o
+   połączeniu i profil, który przy błędzie zostaje ZAMKNIĘTY (fail-closed).
+3. **`sprawdz_kiosk_pin` wpuszcza też WYPOŻYCZONYCH** — wersja z `0025`
+   sprawdzała sam `default_lokal`, a ekran wyboru osoby pokazuje również tych,
+   których opublikowany grafik stawia dziś tutaj. Okno grafiku to wczoraj–jutro,
+   bo baza liczy `current_date` w UTC, a lokale pracują w czasie polskim.
+
 ⚠️ **Wynika z tego twardy warunek na dane: KAŻDY ustawiony `kiosk_pin` musi
 mieć sześć cyfr.** Krótszego nie da się na tym ekranie wpisać, więc profil z
 PIN-em czterocyfrowym jest nie do otwarcia — nie "trudniej", tylko wcale.
@@ -208,9 +224,13 @@ wersji trzeba poprawić ręcznie.
   pobiera dane DOPIERO po zalogowaniu, a `api/admin/ustaw-haslo.js` pilnuje,
   żeby PIN w karcie i hasło w Auth były tą samą rzeczą.
 
-  ⚠️ **Blokada PIN-em na tablecie NADAL porównuje w przeglądarce.** Przejście
-  na RPC `sprawdz_kiosk_pin` zostawiono do 3c — dopóki polityki są otwarte,
-  tablet i tak czyta `users`, a osobny deploy tej zmiany nic by nie zabezpieczył.
+  ⚠️ **Blokada PIN-em na tablecie przeszła na RPC w 0.42.1** (pierwsza część
+  3c-2, migracja `0027`). Do 0.42.0 tablet porównywał wpisane cyfry z kolumną
+  `kiosk_pin`, którą pobierał razem z całą tabelą `users` — czyli PIN-y
+  wszystkich osób z lokalu leżały w pamięci urządzenia stojącego na sali.
+  Dziś pyta `sprawdz_kiosk_pin` i dostaje wyłącznie tak/nie. Świadomie zrobione
+  DOPIERO po `0026`: dopóki polityki były otwarte, osobny deploy tej zmiany
+  niczego by nie zabezpieczył, bo tablet i tak czytał `users`.
 
   ⚠️ **Trzy rzeczy w `api/auth.ts`, których nie widać przy ręcznym
   logowaniu, a każda wyłącza lokal:**
@@ -232,8 +252,8 @@ wersji trzeba poprawić ręcznie.
     największa część bezpieczeństwa za najmniejsze ryzyko: dziś do danych
     wystarczy adres strony, po tej migracji trzeba konta.
   - **3c-2:** zawężenie per rola (kierownik lokalu tylko swoje lokale, tablet
-    tylko swój). Tu przechodzi też blokada PIN-em na RPC `sprawdz_kiosk_pin`,
-    bo dopiero wtedy tablet przestaje czytać `users.kiosk_pin`.
+    tylko swój). **Blokada PIN-em jest już na RPC** (0.42.1, migracja `0027`,
+    patrz niżej); zawężenie samych polityk czeka.
   - **3c-3:** kolumny — stawki, daty urodzenia, telefony niewidoczne dla
     kolegów. ⚠️ Wymaga zmian w aplikacji: `GRANT` działa na ROLĘ, a kierownik
     i pracownik to oba `authenticated`, więc rozróżnienie musi dać widok albo
@@ -256,6 +276,15 @@ wersji trzeba poprawić ręcznie.
   tak, SELECT nie). Awaria, która najbardziej potrzebuje śladu, zdarza się
   przed zalogowaniem — komponent wywala się na ekranie logowania i zostaje
   biała strona. Bez tego wyjątku dokładnie ta klasa błędów byłaby niewidoczna.
+
+  ⚠️ **Stara, nieodświeżona karta przeglądarki przestaje działać po 3c-1** i
+  wygląda to na błąd uprawnień w bazie. Bundle sprzed 0.42.0 wysyłał żądania
+  kluczem publishable, czyli jako anonim — dopóki anonimowi było wszystko
+  wolno, działało. Objaw: `permission denied for table ...` przy zapisie i
+  puste listy przy odczycie, u zalogowanego kierownika, na jednym urządzeniu,
+  gdy na innych jest dobrze. Lekarstwo to odświeżenie strony; `UpdateBanner`
+  mówi o tym sam, ale pasek trzeba zauważyć. **Sprawdź to PRZED szukaniem
+  dziury w GRANT-ach** (22.09.2026 zdarzyło się dokładnie to).
 
   ⚠️ **Poza repo zostaje Google Apps Script** (`syncFormEntriesToSupabase`),
   który pisze do Supabase własnym kluczem. Nie widać go stąd — jeśli używa
@@ -349,7 +378,11 @@ src/
                                  patrz "Konfiguracja najemcy" niżej
   types.ts                   — (jeszcze nie istnieje — miejsce na wspólne typy przy przyszłej migracji)
   api/
-    supabase.ts               — obiekt `api` (get z paginacją/post/patch/delete/patchByFilter)
+    supabase.ts               — obiekt `api` (get z paginacją/post/patch/
+                                  delete/patchByFilter/rpc). `rpc` istnieje po
+                                  to, żeby zadać bazie pytanie BEZ pobierania
+                                  danych, na których opiera się odpowiedź —
+                                  i rozróżnia błąd wywołania od odpowiedzi "nie" 
     googleSheets.ts            — sendToGoogleSheets, toLocalYMD
     auth.ts                    — logowanie przez Supabase Auth (GoTrue) pisane
                                   ręcznie na fetchu: zaloguj/odswiez/token/
@@ -1318,7 +1351,11 @@ zakresem — wymaga Grafiku, którego nie ma.
   dostęp do danych"; klawiatura tabletu obsługuje obie długości, dodana
   2026-08-31) — blokada PIN-em na kiosku, patrz "Panel kierownika" i
   "Tablet Służbowy" wyżej; NIE mylić z kolumną `pin` (6-cyfrowy PIN
-  logowania Email+PIN). Formularz kierownika do jej ustawiania istnieje
+  logowania Email+PIN). Od migracji `0027` towarzyszy jej `ma_kiosk_pin`
+  (boolean, GENERATED — `kiosk_pin is not null and <> ''`): tablet rysuje po
+  niej kłódkę, nie znając samego PIN-u, i to ona pozwoli w 3c-3 odebrać
+  uprawnienie do kolumny `kiosk_pin`. Kolumna wyliczana jest tylko do odczytu —
+  nie próbuj jej zapisywać. Formularz kierownika do jej ustawiania istnieje
   od 2026-09-02 (`Pracownicy.tsx`). Od 2026-09-02 dodatkowo: `stawka`
   (numeric, nullable, zł/h — puste = brak, NIE `0`; liczone w Pulpit/
   Raporty i koszty/karcie pracownika, z jawnym "brak stawki"/"dane
@@ -2682,6 +2719,29 @@ trzy miejsca, w których można zapomnieć o kierowniku.
 - Ekrany pracownika potrzebują listy współpracowników, więc `users` idzie teraz
   także do `PersonalDashboard` (kiosk miał je wcześniej). Nazwiska i tak widać
   w grafiku („Z tobą: …"), więc nic nowego się nie odsłania.
+- ⚠️ **Oferta PRZEŻYWA usunięcie zmiany z grafiku** — `shift_swaps` wiąże się ze
+  zmianą luźnym `grafik_shift_id` bez klucza obcego, więc nic jej nie sprząta
+  samo. Naprawione w 0.42.2 z dwóch stron i obie są potrzebne:
+  - **przy zapisie** — `wycofajOfertyDlaZmian()` w `utils/swaps.ts` wołane z
+    KAŻDEJ ścieżki zdejmowania zmiany (pojedyncze usunięcie i czyszczenie
+    zakresu w `GrafikTydzien.tsx`, `zdejmijZmiany` i przepisanie na następcę w
+    `ManagerDashboard.tsx`). ⚠️ Nie da się tego zawołać z `utils/grafik.ts` —
+    `swaps.ts` importuje stamtąd, więc zależność w drugą stronę zrobiłaby cykl;
+    dlatego wołają komponenty. Funkcja NIE rzuca: zmiana jest już usunięta,
+    więc wyjątek pokazałby „Błąd usuwania" po operacji, która się udała —
+    zwraca listę niepowodzeń do pokazania.
+  - **przy odczycie** — `offersForUser`, `claimedByUser` i `ofertyWystawione`
+    sprawdzają, czy zmiana istnieje i nie ma `deleted_at`. To jest siatka
+    bezpieczeństwa dla wierszy osieroconych wcześniej i dla ścieżki usuwania, o
+    której ktoś zapomni. **Dokładając miejsce czytające `shift_swaps`, zadaj to
+    samo pytanie** — filtr po samym `status` wystarczał do 0.42.1 i dlatego
+    Tablet Służbowy pisał Olenie „Giełda: na giełdzie" przy zmianie, której nie
+    było (22.09.2026).
+  - ⚠️ `deleted_at` liczy się jak brak zmiany. Wysłana zmiana po usunięciu
+    czeka na publikację z ustawioną datą skasowania — do 0.42.1 w tym czasie
+    dalej stała na giełdzie i dało się WZIĄĆ pracę, której już nie ma.
+  - Wiersze osierocone wcześniej sprząta migracja `0028` (status `wycofana`, nie
+    kasowanie — giełda jest zapisem tego, co się działo).
 - Migracja `0021`. Sprawdziany: `harness-zadania.html` (21 przypadków na samą
   giełdę — kto widzi ofertę, kto jest kandydatem, jak liczą się godziny).
 

@@ -11,7 +11,7 @@ import {
   Hourglass,
 } from "lucide-react";
 import { getTodaysShiftsForUser } from "../utils/shifts";
-import { offersForUser, STATUS_LABEL } from "../utils/swaps";
+import { offersForUser, ofertyWystawione, STATUS_LABEL } from "../utils/swaps";
 import { mozeZamykacPuls } from "./manager/PulsZmiany";
 import { trimTime, toLocalYMD } from "../utils/grafik";
 import {
@@ -25,6 +25,18 @@ import { dodajProbnego, czekaNaDecyzje } from "../utils/probni";
 import WeatherBadge from "./WeatherBadge";
 import ShiftroMark from "./ShiftroMark";
 import { PRODUKT } from "../config";
+import { api } from "../api/supabase";
+
+// Czy profil jest zablokowany PIN-em.
+//
+// ⚠️ Od migracji 0027 odpowiada na to kolumna wyliczana `ma_kiosk_pin`, a nie
+// obecność samego PIN-u — bo celem tej zmiany jest to, żeby PIN w ogóle nie
+// docierał do przeglądarki. Odwołanie do `kiosk_pin` zostaje jako zachowanie
+// sprzed tej migracji: baza, w której jej jeszcze nie ma, nie odda kolumny
+// `ma_kiosk_pin` i bez tego kroku WSZYSTKIE profile wyglądałyby na odblokowane
+// — czyli aktualizacja aplikacji po cichu zdjęłaby blokady.
+export const maPin = (u) =>
+  u && u.ma_kiosk_pin !== undefined ? !!u.ma_kiosk_pin : !!(u && u.kiosk_pin);
 
 // ==========================================
 // KIOSK SŁUŻBOWY — nowy design ("Tablet Służbowy")
@@ -72,7 +84,11 @@ const KioskDashboard = ({
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [pinTarget, setPinTarget] = useState(null);
   const [pinEntered, setPinEntered] = useState("");
-  const [pinError, setPinError] = useState(false);
+  // Komunikat pod kropkami. Pusty = wszystko w porządku. Trzyma TEKST, a nie
+  // samo "źle": odmowa bazy i zerwane wi-fi wyglądają dla człowieka tak samo
+  // (profil się nie otwiera), a znaczą co innego i co innego się z nimi robi.
+  const [pinBlad, setPinBlad] = useState("");
+  const [pinSprawdza, setPinSprawdza] = useState(false);
   const [now, setNow] = useState(new Date());
   // Szybkie dodanie osoby na dzień próbny. Trzy pola i nic więcej: resztę
   // karty wypełnia kierownik, jeśli w ogóle zdecyduje się ją przyjąć.
@@ -217,7 +233,8 @@ const KioskDashboard = ({
     setSelectedEmployee(null);
     setPinTarget(null);
     setPinEntered("");
-    setPinError(false);
+    setPinBlad("");
+    setPinSprawdza(false);
     setNowyForm(null);
     setScreen("LIST");
   };
@@ -268,10 +285,10 @@ const KioskDashboard = ({
   };
 
   const selectEmployee = (u) => {
-    if (u.kiosk_pin) {
+    if (maPin(u)) {
       setPinTarget(u);
       setPinEntered("");
-      setPinError(false);
+      setPinBlad("");
       setScreen("PIN");
     } else {
       setSelectedEmployee(u);
@@ -295,28 +312,59 @@ const KioskDashboard = ({
   // krótszy, jest w docs/sql/tools/ostatnie-bledy.sql.
   const DLUGOSC_PIN = 6;
 
-  const zatwierdzPin = (wpisany) => {
+  // ⚠️ PIN sprawdza BAZA, nie przeglądarka (migracja 0027, RPC
+  // `sprawdz_kiosk_pin`). Wcześniej tablet porównywał wpisane cyfry z kolumną
+  // `kiosk_pin`, którą pobierał razem z całą tabelą `users` — czyli PIN-y
+  // wszystkich osób z lokalu leżały w pamięci urządzenia stojącego na sali.
+  // Blokada, której sekret ma przy sobie ten, przed kim broni, nie jest
+  // blokadą.
+  //
+  // ⚠️ Nieudane sprawdzenie i zła odpowiedź to DWIE różne rzeczy. "Niepoprawny
+  // PIN" przy zerwanym wi-fi każe człowiekowi wpisywać w kółko coś, co jest
+  // poprawne — i po trzeciej próbie iść po kierownika. Dlatego błąd wywołania
+  // ma własny komunikat i mówi, gdzie szukać przyczyny.
+  const zatwierdzPin = async (wpisany) => {
     const target = pinTarget;
-    if (target && wpisany === String(target.kiosk_pin)) {
-      setSelectedEmployee(target);
-      setPinTarget(null);
-      setPinEntered("");
-      setPinError(false);
-      setScreen("SESSION");
-    } else {
-      setPinError(true);
-      setTimeout(() => {
+    if (!target) return;
+    setPinSprawdza(true);
+    try {
+      const ok = await api.rpc("sprawdz_kiosk_pin", {
+        p_user_id: target.id,
+        p_pin: wpisany,
+      });
+      if (ok === true) {
+        setSelectedEmployee(target);
+        setPinTarget(null);
         setPinEntered("");
-        setPinError(false);
-      }, 900);
+        setPinBlad("");
+        setScreen("SESSION");
+        return;
+      }
+      nieudanyPin("Niepoprawny PIN, spróbuj ponownie");
+    } catch {
+      nieudanyPin("Nie udało się sprawdzić PIN-u — sprawdź połączenie");
+    } finally {
+      setPinSprawdza(false);
     }
   };
 
+  // Kropki gasną po chwili, komunikat zostaje do następnej cyfry. Przy
+  // czterech słowach o połączeniu 900 ms to za mało, żeby zdążyć przeczytać.
+  const nieudanyPin = (tekst) => {
+    setPinBlad(tekst);
+    setTimeout(() => setPinEntered(""), 900);
+  };
+
   const handlePinDigit = (k) => {
+    // W trakcie pytania do bazy klawiatura milczy — inaczej dosypane cyfry
+    // wpadłyby do następnej próby i człowiek zobaczyłby odmowę PIN-u, którego
+    // nie wpisał.
+    if (pinSprawdza) return;
     if (k === "back") {
       setPinEntered((p) => p.slice(0, -1));
       return;
     }
+    setPinBlad("");
     setPinEntered((prev) => {
       if (prev.length >= DLUGOSC_PIN) return prev;
       const next = prev + k;
@@ -391,11 +439,15 @@ const KioskDashboard = ({
                   n.user_name === u.name &&
                   !n.is_read
               ).length;
-              const wystawione = (shiftSwaps || []).filter(
-                (sw) =>
-                  ["na_gieldzie", "przyjeta"].includes(sw.status) &&
-                  String(sw.author_user_id) === String(u.id)
-              );
+              // ⚠️ Przez `ofertyWystawione`, a nie filtrem po samym statusie:
+              // wiersz oferty przeżywa usunięcie zmiany z grafiku i bez
+              // sprawdzenia, czy zmiana wciąż istnieje, podpis „na giełdzie"
+              // wisiał tu w nieskończoność (22.09.2026, Olena).
+              const wystawione = ofertyWystawione({
+                swaps: shiftSwaps,
+                planShifts,
+                user: u,
+              });
               return (
                 <button
                   key={u.id}
@@ -409,7 +461,7 @@ const KioskDashboard = ({
                   <div className="min-w-0">
                     <div className="font-['Archivo'] font-extrabold text-[21px] text-[#171714] flex items-center gap-1.5">
                       {u.name}{" "}
-                      {u.kiosk_pin && <Lock size={14} strokeWidth={2.3} />}
+                      {maPin(u) && <Lock size={14} strokeWidth={2.3} />}
                     </div>
                     <div className="text-[13px] text-[#6E6E66] mt-0.5 flex items-center gap-1.5 flex-wrap">
                       {u.default_stanowisko || ""}
@@ -456,7 +508,7 @@ const KioskDashboard = ({
                       </div>
                     ) : wystawione.length > 0 ? (
                       <div className="text-[13px] text-[#6E6E66] mt-1">
-                        ⇄ Giełda: {STATUS_LABEL[wystawione[0].status].toLowerCase()}
+                        ⇄ Giełda: {STATUS_LABEL[wystawione[0].sw.status].toLowerCase()}
                       </div>
                     ) : null}
                   </div>
@@ -604,6 +656,10 @@ const KioskDashboard = ({
   // EKRAN: PIN — blokada wybranego pracownika
   // ==========================================
   if (screen === "PIN") {
+    // Czerwone kropki tylko dopóki cyfry stoją na ekranie. Komunikat zostaje
+    // dłużej (do następnej cyfry), a czerwone puste kółka wyglądałyby jak
+    // druga, osobna awaria.
+    const zlePinKropki = !!pinBlad && pinEntered.length > 0;
     return (
       <div className="h-screen bg-white flex flex-col items-center overflow-hidden">
         <div className="w-full max-w-md bg-white h-full flex flex-col shadow-lg overflow-hidden">
@@ -636,10 +692,10 @@ const KioskDashboard = ({
                 <div
                   key={i}
                   className={`w-[18px] h-[18px] rounded-full border-[2.5px] ${
-                    pinError ? "border-[#DE3A22]" : "border-[#171714]"
+                    zlePinKropki ? "border-[#DE3A22]" : "border-[#171714]"
                   } ${
                     i < pinEntered.length
-                      ? pinError
+                      ? zlePinKropki
                         ? "bg-[#DE3A22]"
                         : "bg-[#171714]"
                       : "bg-transparent"
@@ -648,11 +704,11 @@ const KioskDashboard = ({
               ))}
             </div>
             <div
-              className={`h-5 mt-3.5 text-[13px] font-semibold ${
-                pinError ? "text-[#DE3A22]" : "text-[#171714]"
+              className={`min-h-[20px] mt-3.5 text-[13px] font-semibold px-4 ${
+                pinBlad ? "text-[#DE3A22]" : "text-[#6E6E66]"
               }`}
             >
-              {pinError ? "Niepoprawny PIN, spróbuj ponownie" : ""}
+              {pinBlad || (pinSprawdza ? "Sprawdzam…" : "")}
             </div>
             <div className="grid grid-cols-3 gap-3.5 mt-7 w-full max-w-[280px]">
               {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((k) => (

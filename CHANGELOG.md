@@ -5,6 +5,44 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.42.2 — 2026-09-22
+
+- **Zmiana zdjęta z grafiku znika też z giełdy.** Dotąd oferta zostawała: jej
+  autor widział przy swoim nazwisku na Tablecie Służbowym „Giełda: na
+  giełdzie" bez końca, choć zmiany dawno nie było, a osoba, której zmianę
+  zaproponowano, nie dostawała żadnej wiadomości, że propozycja jest już
+  nieaktualna. Teraz usunięcie zmiany wycofuje ofertę i powiadamia obie
+  strony.
+- **Nie da się już wziąć zmiany, którą kierownik usunął.** Wysłana zmiana po
+  usunięciu czeka na najbliższą wysyłkę grafiku — do tej pory w tym czasie
+  wciąż stała na giełdzie i ktoś mógł przejąć pracę, której nie ma.
+- Dotyczy to też zdejmowania zmian odchodzącemu pracownikowi, czyszczenia
+  całego tygodnia i przepisania zmian na następcę.
+
+⚠️ Migracja `0028` sprząta oferty osierocone wcześniej — bez niej stare wpisy
+zostają w historii giełdy jako „na giełdzie".
+
+## 0.42.1 — 2026-09-22
+
+- **PIN blokady profilu na Tablecie Służbowym sprawdza teraz baza.** Dla
+  pracownika nic się nie zmienia — te same sześć cyfr, profil otwiera się sam.
+  Zmienia się to, czego nie było widać: dotąd tablet miał u siebie PIN-y
+  wszystkich osób z lokalu, bo pobierał je razem z listą pracowników i
+  porównywał na miejscu. Urządzenie stoi na sali cały dzień, więc blokada
+  chroniąca profil przed kolegą z tej samej zmiany była warta tyle, co
+  otwarta konsola przeglądarki.
+- **Zerwane wi-fi nie udaje już złego PIN-u.** Jeśli tabletowi nie uda się
+  zapytać bazy, mówi „nie udało się sprawdzić PIN-u — sprawdź połączenie",
+  zamiast twierdzić, że wpisane cyfry są błędne. Wcześniej takiej sytuacji nie
+  było, bo sprawdzenie nie wymagało sieci; teraz wymaga i musi to umieć
+  powiedzieć.
+- **Wypożyczeni otworzą swój profil w cudzym lokalu.** Osoba, którą grafik
+  stawia dziś w innym lokalu, widzi się na tamtejszym tablecie — i od teraz
+  jej PIN też tam działa.
+
+⚠️ Wymaga migracji `0027` PRZED wdrożeniem — bez niej tablet nie ma czym
+sprawdzić PIN-u i profile zostaną zamknięte.
+
 ## 0.42.0 — 2026-09-21
 
 - **Hasło sprawdza teraz serwer, a nie przeglądarka.** Dla wchodzącego nie

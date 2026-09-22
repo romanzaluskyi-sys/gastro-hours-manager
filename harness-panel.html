@@ -363,9 +363,15 @@ const poprzedniMiesiac = (h) => {
         setCurrentView: () => {},
         users: [
           // Zlecenie — stawka godzinowa, koszt = godziny × stawka.
+          // ⚠️ Niesie `ma_kiosk_pin` — kolumnę WYLICZANĄ (migracja 0027). Wiersz
+          // z bazy taką kolumnę ma, a payload zapisu powstaje z jego rozsypania:
+          // Postgres odrzuca CAŁY zapis, gdy wyliczana kolumna trafi do PATCH-a.
+          // To jedyna osoba w tej atrapie z kompletem pól wymaganych przez
+          // formularz (lokal i stanowisko), więc tylko jej kartę da się zapisać
+          // — patrz sprawdzian na końcu pliku.
           { id: "u1", name: "Ala", stawka: 32, typ_umowy: "zlecenie", active: true,
             archived: false, role: "open", default_lokal: "Bułka i Jacek",
-            default_stanowisko: "Kucharz" },
+            default_stanowisko: "Kucharz", kiosk_pin: "123456", ma_kiosk_pin: true },
           // Umowa o pracę — norma z kalendarza, koszt = kwota z umowy.
           { id: "u2", name: "Bo", typ_umowy: "umowa_o_prace", wymiar_etatu: 1,
             wynagrodzenie_mies: 5200, active: true, archived: false, role: "closed",
@@ -504,9 +510,72 @@ const poprzedniMiesiac = (h) => {
     }
 
     ReactDOM.createRoot(document.getElementById("app")).render(h(Harness));
-    setTimeout(() => {
-      if (status.className !== "zle") status.textContent = "panel zamontowany";
-    }, 400);
+
+    // ------------------------------------------------------------------
+    // Zapis karty pracownika — payload nie może nieść kolumn wyliczanych.
+    //
+    // Panel jest tu montowany w całości właśnie po to, żeby łapać błędy
+    // powstające MIĘDZY warstwami. Ten jest tej klasy: kolumna dochodzi w
+    // migracji, payload powstaje z rozsypania wiersza, a objawem jest "Błąd
+    // zapisu pracownika" przy KAŻDEJ karcie — także takiej, której nikt nie
+    // tknął w okolicy PIN-u.
+    // ------------------------------------------------------------------
+    let zdanych = 0, oblanych = 0;
+    const wyniki = document.createElement("div");
+    wyniki.style.cssText = "padding:8px 16px;font:12px ui-monospace,monospace;background:#F1EEEB";
+    document.body.insertBefore(wyniki, document.getElementById("app"));
+    const sprawdz = (nazwa, warunek, szczegol = "") => {
+      const d = document.createElement("div");
+      if (warunek) { zdanych++; d.textContent = "  OK   " + nazwa; d.style.color = "#2C6A4F"; }
+      else { oblanych++; d.className = "zle"; d.style.color = "#DE3A22";
+             d.textContent = "  ŹLE  " + nazwa + (szczegol ? " — " + szczegol : ""); }
+      wyniki.appendChild(d);
+    };
+    const czekaj = (ms) => new Promise((r) => setTimeout(r, ms));
+    // Najgłębszy element z danym tekstem — nazwiska i etykiety zakładek dzielą
+    // element z ikoną (w harnessie "▪"), więc porównanie na równość nie trafia
+    // w nic. Ta sama pułapka co w harness-kiosk.
+    const klik = (tekst) => {
+      // ⚠️ Szukamy po WSZYSTKICH elementach wewnątrz #app, nie po wybranej
+      // liście tagów: nazwisko na liście pracowników siedzi w <p>, a lista
+      // "button, div, span" (skopiowana z harness-kiosk) po cichu go omijała
+      // i sprawdzian mówił "nie znalazłem Doroty", choć stała na ekranie.
+      const kandydaci = [...document.getElementById("app").querySelectorAll("*")]
+        .filter((e) => !["SCRIPT", "STYLE"].includes(e.tagName))
+        .filter((e) => (e.textContent || "").includes(tekst));
+      const cel = kandydaci.reverse()
+        .find((e) => ![...e.children].some((c) => (c.textContent || "").includes(tekst)));
+      if (!cel) throw new Error("nie znalazłem elementu: " + tekst);
+      (cel.closest("button") || cel).dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    };
+
+    (async () => {
+      await czekaj(600);
+      try {
+        klik("Pracownicy"); await czekaj(400);
+        klik("Ala"); await czekaj(400);
+        const form = [...document.querySelectorAll("form")]
+          .find((f) => f.querySelector('input[maxlength="6"]') || /Zapisz/.test(f.textContent));
+        if (!form) throw new Error("nie znalazłem formularza karty pracownika");
+        form.requestSubmit ? form.requestSubmit() : form.dispatchEvent(
+          new Event("submit", { bubbles: true, cancelable: true }));
+        await czekaj(500);
+
+        const zapisyUsers = window.__zapisy.filter((z) => z[0] === "users");
+        const ostatni = zapisyUsers[zapisyUsers.length - 1];
+        sprawdz("karta pracownika w ogóle się zapisuje", !!ostatni,
+          JSON.stringify(window.__zapisy.map((z) => z[0])));
+        sprawdz("payload nie niesie kolumny wyliczanej ma_kiosk_pin",
+          !!ostatni && !("ma_kiosk_pin" in (ostatni[2] || ostatni[1] || {})),
+          String(JSON.stringify(ostatni && (ostatni[2] || ostatni[1]))).slice(0, 200));
+      } catch (e) {
+        sprawdz("przebieg bez wyjątku", false, e.message);
+      }
+      if (status.className !== "zle") {
+        status.textContent =
+          `panel zamontowany — karta pracownika ${zdanych}/${zdanych + oblanych}`;
+      }
+    })();
   } catch (e) { pokazBlad(e); }
 })();
 </script>

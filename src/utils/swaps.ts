@@ -142,15 +142,33 @@ export const monthPlanHours = (planShifts, user, monthPrefix) =>
     )
     .reduce((sum, s) => sum + shiftHours(s), 0);
 
-// Aktywna oferta dotycząca zmiany danego pracownika — do podświetlenia
-// jego własnego grafiku (jest autorem) oraz oznaczenia u przejmującego.
-export const swapsForUser = (swaps, user) =>
-  (swaps || []).filter(
-    (sw) =>
-      ["na_gieldzie", "przyjeta"].includes(sw.status) &&
-      (String(sw.author_user_id) === String(user?.id) ||
-        String(sw.taker_user_id) === String(user?.id))
-  );
+// Oferty WYSTAWIONE przez tę osobę i wciąż żywe — podpis „na giełdzie" przy
+// jej nazwisku na Tablecie Służbowym.
+//
+// ⚠️ Wiersz w `shift_swaps` PRZEŻYWA usunięcie zmiany z grafiku: tabele wiąże
+// luźne `grafik_shift_id`, bez klucza obcego, więc nic go nie sprząta samo.
+// Dlatego każda odpowiedź na pytanie „czy ta oferta istnieje" musi sięgnąć po
+// samą zmianę. Bez tego zdjęta z grafiku zmiana Oleny świeciła na tablecie
+// jako „na giełdzie" w nieskończoność, choć nikt już nie mógł jej wziąć
+// (22.09.2026). Usunięcie wycofuje dziś ofertę samo (`wycofajOfertyDlaZmian`),
+// ale ta osłona zostaje: jest jedynym miejscem, które działa także dla
+// wierszy osieroconych wcześniej i dla ścieżki usuwania, o której ktoś
+// zapomni.
+//
+// ⚠️ `deleted_at` liczy się jak brak zmiany. Wysłana zmiana po usunięciu
+// czeka na publikację z ustawioną datą skasowania — dla giełdy jej już nie ma.
+export const ofertyWystawione = ({ swaps, planShifts, user }) =>
+  (swaps || [])
+    .filter(
+      (sw) =>
+        ["na_gieldzie", "przyjeta"].includes(sw.status) &&
+        String(sw.author_user_id) === String(user?.id)
+    )
+    .map((sw) => ({
+      sw,
+      ps: (planShifts || []).find((p) => String(p.id) === String(sw.grafik_shift_id)),
+    }))
+    .filter(({ ps }) => ps && !ps.deleted_at);
 
 // Czy ta osoba realnie może wziąć tę zmianę. JEDEN predykat dla wszystkich
 // trzech trybów: lista ofert na giełdzie, lista kandydatów przy oddaniu i
@@ -233,7 +251,11 @@ export const offersForUser = ({ swaps, planShifts, absences, user }) =>
       sw,
       ps: (planShifts || []).find((p) => String(p.id) === String(sw.grafik_shift_id)),
     }))
-    .filter(({ ps }) => ps && canOfferSwap(ps))
+    // ⚠️ `!ps.deleted_at` jest tu ważniejsze niż wygląda: bez tego zmiana
+    // usunięta przez kierownika (wysłana, więc czekająca na publikację z
+    // `deleted_at`) dalej stała na giełdzie i ktoś mógł ją WZIĄĆ — przejmując
+    // pracę, której już nie ma.
+    .filter(({ ps }) => ps && !ps.deleted_at && canOfferSwap(ps))
     // Przy zamianie autor oddaje adresatowi swoją zmianę, a bierze jego —
     // więc dzień adresata nie musi być wolny, o ile zwalnia go właśnie ta
     // zmiana, którą oddaje.
@@ -258,7 +280,7 @@ export const claimedByUser = ({ swaps, planShifts, user }) =>
       sw,
       ps: (planShifts || []).find((p) => String(p.id) === String(sw.grafik_shift_id)),
     }))
-    .filter(({ ps }) => ps);
+    .filter(({ ps }) => ps && !ps.deleted_at);
 
 export const offerSwap = async ({
   planShift,
@@ -331,6 +353,53 @@ export const offerSwap = async ({
     "swap_offer"
   );
   return swap;
+};
+
+// Zmiana zdjęta z grafiku zabiera ze sobą swoją ofertę.
+//
+// ⚠️ Usuwanie zmiany nie dotykało dotąd `shift_swaps` w ŻADNEJ ze ścieżek
+// (pojedyncze usunięcie, czyszczenie zakresu, zdejmowanie zmian odchodzącemu,
+// przepisanie na następcę). Wiersz oferty zostawał aktywny i wskazywał na
+// nieistniejącą zmianę — autor widział „na giełdzie" bez końca, a odbiorca
+// nie dostawał żadnej wiadomości, że propozycja przestała być aktualna.
+//
+// ⚠️ NIE RZUCA. Zmiana jest już usunięta, więc wyjątek tutaj kazałby
+// kierownikowi zobaczyć „Błąd usuwania" po operacji, która się udała. Zamiast
+// tego zwracamy listę niepowodzeń — wołający ma o nich powiedzieć, zamiast
+// udawać pełny sukces (ta sama zasada co w cronach, błąd #8 w CLAUDE.md).
+export const wycofajOfertyDlaZmian = async ({
+  swaps,
+  shiftIds,
+  powod = "zmiana została zdjęta z grafiku",
+}) => {
+  const cele = new Set((shiftIds || []).map((x) => String(x)));
+  const doWycofania = (swaps || []).filter(
+    (sw) =>
+      ["na_gieldzie", "przyjeta"].includes(sw.status) &&
+      cele.has(String(sw.grafik_shift_id))
+  );
+  const wycofane = [];
+  const bledy = [];
+  for (const sw of doWycofania) {
+    try {
+      wycofane.push(await api.patch("shift_swaps", sw.id, { status: "wycofana" }));
+      // Autora też, i to jego przede wszystkim: to on wystawił zmianę i to
+      // on inaczej dalej czekałby, aż ktoś ją weźmie.
+      const komu = [sw.author_user_name, sw.taker_user_name, sw.target_user_name].filter(
+        (n, i, arr) => n && arr.indexOf(n) === i
+      );
+      for (const kto of komu) {
+        await createEmployeeNotification(
+          kto,
+          `Oferta zmiany z ${sw.date} jest nieaktualna — ${powod}.`,
+          "swap"
+        );
+      }
+    } catch (e) {
+      bledy.push({ swap: sw, powod: e.message || "nieznany błąd" });
+    }
+  }
+  return { wycofane, bledy };
 };
 
 export const withdrawSwap = async (swap) => {

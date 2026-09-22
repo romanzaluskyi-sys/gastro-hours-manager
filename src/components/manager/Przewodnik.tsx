@@ -23,6 +23,25 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.42.2",
+    date: "2026-09-22",
+    items: [
+      "Zmiana zdjęta z grafiku znika też z giełdy — nie wisi już przy nazwisku jako „na giełdzie”.",
+      "Obie strony dostają wiadomość, że propozycja przestała być aktualna.",
+      "Nie da się przejąć zmiany, którą kierownik zdążył usunąć.",
+    ],
+  },
+  {
+    version: "0.42.1",
+    date: "2026-09-22",
+    items: [
+      "PIN blokady profilu na Tablecie Służbowym sprawdza teraz baza — dla pracownika bez zmian, te same sześć cyfr.",
+      "Tablet nie ma już u siebie PIN-ów wszystkich osób z lokalu.",
+      "Gdy tablet straci połączenie, mówi o tym wprost zamiast twierdzić, że PIN jest zły.",
+      "Osoba wypożyczona do innego lokalu otworzy swój profil na tamtejszym tablecie.",
+    ],
+  },
+  {
     version: "0.42.0",
     date: "2026-09-21",
     items: [

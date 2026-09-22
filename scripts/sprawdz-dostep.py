@@ -139,7 +139,7 @@ def sekcja(url, klucz, tytul, token=None):
     for tabela, opis in TABELE:
         mozna_czytac, jak = czyta(url, klucz, tabela, token)
         mozna_pisac, jak_pisac = pisze(url, klucz, tabela, token)
-        wynik[tabela] = mozna_czytac
+        wynik[tabela] = (mozna_czytac, mozna_pisac)
         print(
             f"  {tabela:<18} {('TAK ' + jak) if mozna_czytac else ('nie ' + jak):<14} "
             f"{('TAK') if mozna_pisac else ('nie ' + jak_pisac):<12} {opis}"
@@ -175,12 +175,18 @@ def main():
     # 2. Opcjonalnie: konkretne zalogowane konto.
     email = os.environ.get("SPRAWDZ_EMAIL")
     haslo = os.environ.get("SPRAWDZ_PIN")
+    zalogowany = None
     if email and haslo:
         token = zaloguj(args.url, klucz, email.strip().lower(), haslo)
         if token:
-            sekcja(args.url, klucz, f"ZALOGOWANY: {email}", token)
+            zalogowany = sekcja(args.url, klucz, f"ZALOGOWANY: {email}", token)
     else:
-        print("\n(SPRAWDZ_EMAIL / SPRAWDZ_PIN nieustawione — pomijam część zalogowaną)")
+        print(
+            "\n⚠️ SPRAWDZ_EMAIL / SPRAWDZ_PIN nieustawione — sprawdzam TYLKO\n"
+            "   połowę zmiany. Ten skrypt widzi wyłącznie to, czego NIE WOLNO\n"
+            "   anonimowi, i nie odróżni odmowy słusznej od tej, która zablokuje\n"
+            "   kierownikowi zapis. Podaj konto, żeby zmierzyć drugą stronę."
+        )
 
     # 2b. Wyjątek: anonim MUSI móc zapisać błąd (patrz migracja 0026).
     if args.sprawdz_wpis_bledu:
@@ -202,13 +208,41 @@ def main():
         print("\nZdjęcie stanu wyjściowego. Powtórz z --etap po po zawężeniu polityk.")
         return 0
 
-    zle = [t for t, otwarte in anon.items() if otwarte and not OCZEKIWANE_PO[t]]
+    zle = [t for t, (czyta, _) in anon.items() if czyta and not OCZEKIWANE_PO[t]]
     if zle:
         print("\nWCIĄŻ OTWARTE DLA KAŻDEGO: " + ", ".join(zle))
         print("Polityka na tych tabelach nie zadziałała — sprawdź, czy RLS jest włączone")
         print("(przy WYŁĄCZONYM RLS Postgres IGNORUJE polityki, patrz migracja 0011).")
         return 1
-    print("\nOK — anonim nie czyta niczego, co nie powinno być publiczne.")
+    # ⚠️ Druga połowa werdyktu: czy ZALOGOWANY nadal może pracować.
+    #
+    # 3c-1 nie zawęża niczego zalogowanym — jeśli więc kierownik czegoś nie
+    # może, to nie jest "bezpieczniej", tylko zepsute. Sekcja powstała, bo
+    # pierwsza wersja skryptu mierzyła sam dostęp anonima i na tej podstawie
+    # orzekała "OK" o całej zmianie. Wystarczyłby jeden nieudany GRANT, żeby
+    # to "OK" dotyczyło bazy, w której nikt nie może pracować.
+    if zalogowany is None:
+        print(
+            "\nAnonim odcięty. ⚠️ Ale NIE WIEM, czy zalogowany dalej może pracować —\n"
+            "   uruchom ponownie z SPRAWDZ_EMAIL i SPRAWDZ_PIN."
+        )
+        return 0
+
+    bez_odczytu = [t for t, (czyta, _) in zalogowany.items() if not czyta]
+    bez_zapisu = [t for t, (_, pisze_) in zalogowany.items() if not pisze_]
+    if bez_odczytu or bez_zapisu:
+        if bez_odczytu:
+            print("\nZALOGOWANY NIE CZYTA: " + ", ".join(bez_odczytu))
+        if bez_zapisu:
+            print("ZALOGOWANY NIE ZAPISZE: " + ", ".join(bez_zapisu))
+        print(
+            "To nie jest zabezpieczenie, tylko awaria — użytkownik zobaczy\n"
+            '"permission denied" albo pustą listę. Sprawdź GRANT dla roli\n'
+            "`authenticated` na tych tabelach."
+        )
+        return 1
+
+    print("\nOK — anonim nic nie dostaje, zalogowany czyta i zapisuje wszystko.")
     return 0
 
 

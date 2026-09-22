@@ -379,6 +379,37 @@ const sprawdz = (nazwa, warunek, szczegol = "") => {
     sprawdz("etykieta giełdy bez zmian", S.statusLabelFor(ofertaGieldy) === "Na giełdzie");
     sprawdz("stary wiersz bez kolumny typ to giełda", S.typWymiany({}) === "gielda");
 
+    // --- zmiana zdjęta z grafiku, oferta osierocona ---
+    //
+    // 22.09.2026: Ala wystawiła zmianę, nikt jej nie wziął, kierownik usunął ją
+    // z grafiku — a tablet przy nazwisku dalej pisał „na giełdzie". Wiersz
+    // oferty przeżywa zmianę, bo wiąże je luźne `grafik_shift_id` bez klucza
+    // obcego, więc KAŻDY odczyt musi sprawdzić, czy zmiana wciąż jest.
+    const planBezP1 = plan.filter((p) => p.id !== "p1");
+    const planZUsunieta = plan.map((p) =>
+      p.id === "p1" ? { ...p, deleted_at: new Date().toISOString() } : p
+    );
+    const widziW = (swapy, kto, gdzie) =>
+      S.offersForUser({ swaps: swapy, planShifts: gdzie, absences: wolne, user: kto })
+        .map((o) => o.sw.id);
+    sprawdz("skasowanej zmiany nikt już nie widzi na giełdzie",
+      widziW([ofertaGieldy], bo, planBezP1).length === 0);
+    sprawdz("zmiany oznaczonej do usunięcia też nie",
+      widziW([ofertaGieldy], bo, planZUsunieta).length === 0,
+      "inaczej ktoś przejmuje pracę, której już nie ma");
+
+    const wystawioneAli = (gdzie) =>
+      S.ofertyWystawione({ swaps: [ofertaGieldy], planShifts: gdzie, user: ala });
+    sprawdz("autor widzi swoją ofertę, dopóki zmiana istnieje",
+      wystawioneAli(plan).length === 1);
+    sprawdz("po skasowaniu zmiany podpis autora znika",
+      wystawioneAli(planBezP1).length === 0,
+      "to jest ten napis, który wisiał Olenie bez końca");
+    sprawdz("po oznaczeniu do usunięcia też znika",
+      wystawioneAli(planZUsunieta).length === 0);
+    sprawdz("cudza oferta nie trafia do wystawionych",
+      S.ofertyWystawione({ swaps: [ofertaGieldy], planShifts: plan, user: bo }).length === 0);
+
     let odmowa = "";
     try {
       await S.acceptSwap({ swap: ofertaDlaBo, planShift: zmianaAli, taker: dorota,

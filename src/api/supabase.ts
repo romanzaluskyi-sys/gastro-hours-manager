@@ -107,6 +107,27 @@ export const api = {
     }
     return true;
   },
+  // Wywołanie funkcji w bazie (PostgREST `/rpc/`). Istnieje po to, żeby
+  // pytanie dało się zadać BEZ pobierania danych, na których odpowiedź się
+  // opiera — pierwszym takim pytaniem jest "czy ten PIN blokady jest dobry"
+  // (patrz `sprawdz_kiosk_pin`, migracje 0025 i 0027).
+  //
+  // ⚠️ Błąd sieci i odpowiedź "nie" to DWIE RÓŻNE rzeczy i ta funkcja ich nie
+  // skleja: przy problemie rzuca wyjątek, a `false` zwraca tylko wtedy, gdy
+  // baza faktycznie odpowiedziała "nie". Wywołujący musi to rozróżnić, inaczej
+  // zerwane wi-fi pokaże się człowiekowi jako "niepoprawny PIN".
+  rpc: async (nazwa, args) => {
+    const res = await wyslij(`${SUPABASE_URL}/rest/v1/rpc/${nazwa}`, {
+      method: "POST",
+      body: JSON.stringify(args || {}),
+    });
+    const json = await res.json();
+    if (!res.ok)
+      throw new Error(
+        json.message || json.error_description || `Błąd wywołania ${nazwa}`
+      );
+    return json;
+  },
   patchByFilter: async (table, filterQuery, data) => {
     const res = await wyslij(`${SUPABASE_URL}/rest/v1/${table}?${filterQuery}`, {
       method: "PATCH",
