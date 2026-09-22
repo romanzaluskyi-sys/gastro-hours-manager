@@ -5,6 +5,29 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.43.0 — 2026-09-22
+
+- **Stawki, wynagrodzenia, daty urodzenia, telefony i PIN-y widzi już tylko
+  kierownik — i każdy swoje własne.** Dotąd wystarczyło dowolne konto: cztery
+  tablety stojące w salach i prywatne telefony pracowników miały u siebie
+  komplet danych całej załogi. Teraz aplikacja pobiera listę osób przez widok,
+  który pokazuje każdemu dokładnie tyle, ile mu potrzeba: imię, lokal,
+  stanowisko, czy profil ma blokadę PIN-em.
+- **Notatki kierownika o pracowniku widzi wyłącznie kierownik** — także nie
+  sam zainteresowany. To notatnik prowadzącego, nie dokument.
+- **Kartotekę może zmieniać tylko kierownik.** Wcześniej każde zalogowane
+  konto mogło zapisać dowolny wiersz — łącznie z podniesieniem sobie
+  uprawnień.
+- **Osobę na próbę zakłada teraz sama baza**, a nie tablet. Dla obsługi bez
+  zmian: te same trzy pola i od razu jego sesja. Zmienia się to, że warunki
+  (konto bez danych logowania, zawsze w lokalu tego urządzenia) sprawdza
+  serwer, a nie przeglądarka.
+- Raport pracownika i norma godzin działają jak dotąd — to godziny, nie
+  pieniądze, więc zostają widoczne również na tablecie.
+
+⚠️ Wdrożenie dwustopniowe: migracja `0029` PRZED, a `0030` DOPIERO PO deployu
+i po odświeżeniu wszystkich tabletów.
+
 ## 0.42.2 — 2026-09-22
 
 - **Zmiana zdjęta z grafiku znika też z giełdy.** Dotąd oferta zostawała: jej

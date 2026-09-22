@@ -254,10 +254,10 @@ wersji trzeba poprawić ręcznie.
   - **3c-2:** zawężenie per rola (kierownik lokalu tylko swoje lokale, tablet
     tylko swój). **Blokada PIN-em jest już na RPC** (0.42.1, migracja `0027`,
     patrz niżej); zawężenie samych polityk czeka.
-  - **3c-3:** kolumny — stawki, daty urodzenia, telefony niewidoczne dla
-    kolegów. ⚠️ Wymaga zmian w aplikacji: `GRANT` działa na ROLĘ, a kierownik
-    i pracownik to oba `authenticated`, więc rozróżnienie musi dać widok albo
-    RPC, a ekrany czytające dziś `users` wprost trzeba na nie przepiąć.
+  - **3c-3 — ZROBIONE w 0.43.0** (migracje `0029` i `0030`). `GRANT` działa na
+    ROLĘ, a kierownik i pracownik to oboje `authenticated`, więc rozróżnienie
+    daje **widok `users_widok`** maskujący kolumny zależnie od tego, kto pyta.
+    Szczegóły niżej, w „Kartoteka pracownika".
 
   ⚠️ **Regresją jest [`scripts/sprawdz-dostep.py`](scripts/sprawdz-dostep.py)**
   — chodzi po WSZYSTKICH tabelach (bierze listę z migracji, nie z pamięci) i
@@ -289,6 +289,51 @@ wersji trzeba poprawić ręcznie.
   ⚠️ **Poza repo zostaje Google Apps Script** (`syncFormEntriesToSupabase`),
   który pisze do Supabase własnym kluczem. Nie widać go stąd — jeśli używa
   publishable, po 3c-1 przestanie działać i zrobi to po cichu.
+
+### Kartoteka pracownika — kto co widzi (0.43.0, migracje `0029`/`0030`)
+
+**Aplikacja czyta listę załogi WYŁĄCZNIE przez `users_widok`** — dwa miejsca:
+`App.tsx` (pierwszy fetch i poll) oraz `wczytajKonto` w `api/auth.ts`. Zapis
+idzie dalej wprost do tabeli `users`. Dokładając odczyt kartoteki, użyj widoku;
+`harness-app.html` sprawdza to wprost (rejestruje, o co App pytał, i wywraca
+się na odczycie z `users`).
+
+Trzy poziomy widoczności w widoku:
+- **jawne** — `id, auth_id, name, role, active, archived, default_lokal,
+  default_stanowisko, allowed_lokale, allowed_stanowiska, probny_*, puls_do,
+  ma_kiosk_pin, typ_umowy, etat, wymiar_etatu, created_at`. ⚠️ Dane umowy są tu
+  świadomie: z nich liczy się NORMA GODZIN w Raporcie pracownika, a Raport
+  pokazuje się także na tablecie, gdzie patrzącym nie jest właściciel konta. To
+  są godziny, nie pieniądze — `stawka` i `wynagrodzenie_mies` zostają zakryte.
+- **własne albo kierownik** — `email, pin, kiosk_pin, stawka,
+  wynagrodzenie_mies, telefon, data_urodzenia, data_zatrudnienia,
+  sanepid_*, umowa_*, ostatni_dzien`.
+- **tylko kierownik** — `notatki` i jej ślad. To notatnik prowadzącego, nie
+  dokument dla zainteresowanego.
+
+⚠️ **Widok ma prawa WŁAŚCICIELA (bez `security_invoker`) i to jest cały
+mechanizm.** Z prawami wołającego potrzebowałby od niego uprawnienia do
+`users` — a wtedy każdy pominąłby widok i odpytał tabelę wprost. Konsekwencja:
+widok NIE przechodzi przez RLS `users`, więc **warunek 3c-2 na WIERSZE trzeba
+będzie dopisać w `where` widoku**, a nie w polityce tabeli.
+
+⚠️ **Lista kolumn w widoku jest wypisana ręcznie — to świadome.** Kolumna
+dopisana w przyszłości ma NIE przeciekać sama z siebie. Ceną jest ryzyko
+pominięcia czegoś, co aplikacja czyta, więc `0029` kończy się zapytaniem
+wypisującym kolumny `users`, których w widoku nie ma. **Dodając kolumnę do
+`users`, dopisz ją do widoku** i zdecyduj, do którego poziomu należy.
+
+⚠️ **Zapis do `users` tylko dla kierownika** (`admin`/`manager`/
+`manager_lokalu`, helper `widzi_kartoteke()`). Maskowanie odczytu przy otwartym
+zapisie byłoby teatrem: nie przeczytasz cudzej stawki, ale przestawisz sobie
+`role` na `admin`. Dlatego tablet zakłada osobę na próbę przez RPC
+`dodaj_probnego` (`utils/probni.ts`), a nie INSERT-em — warunki sprawdza baza.
+
+⚠️ **Kolejność wdrożenia jest DWUSTOPNIOWA i nie wolno jej skleić.** `0029`
+(widok + RPC) idzie PRZED deployem, bo nowy bundle pyta o `users_widok`.
+`0030` (polityki na tabeli) DOPIERO PO deployu i po odświeżeniu tabletów, bo
+stary bundle pyta o `users` i po tej migracji dostanie z niej sam swój wiersz —
+czyli pustą listę osób na ekranie wyboru.
 
 ⚠️ **Helpery MUSZĄ być `security definer` i `stable`, z `set search_path`.**
 Polityka na `users`, która czyta `users` po rolę, zapętliłaby się bez definera;

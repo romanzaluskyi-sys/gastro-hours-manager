@@ -17,7 +17,6 @@
 // fizyczną kontrolą. To jest całe zabezpieczenie przed tym, żeby ktoś z sali
 // nie naprodukował kont.
 import { api } from "../api/supabase";
-import { toLocalYMD } from "../api/googleSheets";
 import { createManagerNotification } from "../api/notifications";
 
 export const PROBNY_OCZEKUJE = "oczekuje";
@@ -52,19 +51,17 @@ export const dodajProbnego = async ({ name, lokal, stanowisko, przez }) => {
   if (!lokal) throw new Error("Wybierz lokal.");
   if (!stanowisko) throw new Error("Wybierz stanowisko.");
 
-  const utworzony = await api.post("users", {
-    name: imie,
-    role: "open",
-    default_lokal: lokal,
-    default_stanowisko: stanowisko,
-    // Bez danych logowania — patrz komentarz na górze pliku.
-    email: "",
-    pin: "",
-    active: true,
-    archived: false,
-    probny_status: PROBNY_OCZEKUJE,
-    probny_od: toLocalYMD(new Date()),
-    probny_przez: przez || null,
+  // ⚠️ Przez funkcję w bazie, nie przez INSERT do `users`. Od migracji 0029
+  // tablet nie ma prawa zapisu do kartoteki — urządzenie stojące na sali nie
+  // może tworzyć dowolnych kont. Warunki (konto `open`, bez danych logowania,
+  // zawsze „oczekuje", zawsze w lokalu tego urządzenia) sprawdza baza, a nie
+  // przeglądarka; wcześniej były tylko tutaj, czyli po stronie, którą da się
+  // pominąć.
+  const utworzony = await api.rpc("dodaj_probnego", {
+    p_name: imie,
+    p_lokal: lokal,
+    p_stanowisko: stanowisko,
+    p_przez: przez || null,
   });
 
   // Kierownik dowiaduje się od razu, a nie wtedy, gdy przypadkiem wejdzie w

@@ -47,6 +47,8 @@ wykonalne.
 | `0026` | polityki bez anonima — klucz z przeglądarki przestaje otwierać bazę | nowe |
 | `0027` | PIN blokady tabletu przestaje wychodzić z bazy (`users.ma_kiosk_pin`, poprawka `sprawdz_kiosk_pin`) | nowe |
 | `0028` | sprzątnięcie ofert giełdy wskazujących na usunięte zmiany | nowe |
+| `0029` | widok kartoteki bez stawek (`users_widok`) i `dodaj_probnego` — PRZED deployem 0.43.0 | nowe |
+| `0030` | `users` wydaje tylko własny wiersz i kierownikom — PO deployu 0.43.0 i odświeżeniu tabletów | nowe |
 
 `0001`–`0004` odtworzono ze zrzutu prawdziwej bazy
 (`docs/sql/tools/zrzut-schematu.sql`, 2026-09-07), a nie z opisu w

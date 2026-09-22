@@ -217,7 +217,11 @@ const poprzedniMiesiac = (h) => {
     // `window.__tabele` od zera, więc kartoteka wpisana wcześniej znikała —
     // a logowanie kończyło się komunikatem "konto nie jest powiązane".
     window.__tabele = window.__tabele || {};
-    window.__tabele.users = [
+    // ⚠️ `users_widok`, nie `users`: od migracji 0029 `wczytajKonto` pyta o
+    // kartotekę przez widok, bo tabela wydaje wiersz wyłącznie właścicielowi
+    // konta i kierownikom. Klucz `users` zostawiony w atrapie przepuściłby
+    // powrót do starego odczytu bez słowa.
+    window.__tabele.users_widok = [
       { id: "u9", name: "Roman", role: "manager_lokalu", active: true, archived: false,
         allowed_lokale: "Ceglana", auth_id: "auth-1" },
     ];
