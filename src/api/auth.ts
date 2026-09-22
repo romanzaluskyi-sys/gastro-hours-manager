@@ -230,7 +230,10 @@ export const widokDlaRoli = (user) => {
 // ten plik (po token), więc sięgnięcie w drugą stronę zrobiłoby cykl. Ta sama
 // pułapka co `utils/pola.ts` wobec `utils/dziennik.ts`.
 export const wczytajKonto = async (api, userId) => {
-  const wiersze = await api.get("users", `auth_id=eq.${userId}`);
+  // Też przez widok, żeby w całej aplikacji było DOKŁADNIE jedno miejsce
+  // czytające kartotekę. Własny wiersz widok pokazuje w całości, więc
+  // zalogowany dostaje o sobie tyle samo co wcześniej.
+  const wiersze = await api.get("users_widok", `auth_id=eq.${userId}`);
   const u = Array.isArray(wiersze) ? wiersze[0] : null;
   if (!u) {
     throw new Error(

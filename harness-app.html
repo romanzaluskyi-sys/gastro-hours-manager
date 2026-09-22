@@ -48,7 +48,12 @@ const wczoraj = ymd(new Date(Date.now() - 86400000));
 // Atrapa z danymi na starcie — dokładnie taka sytuacja jak po odświeżeniu
 // strony: w bazie coś jest, App to pobiera.
 window.__tabele = {
-  users: [
+  // ⚠️ `users_widok`, nie `users`. Od migracji 0029 aplikacja czyta kartotekę
+  // WYŁĄCZNIE przez widok, który maskuje stawki i dane osobowe zależnie od
+  // tego, kto pyta. Atrapa celowo nie zna klucza `users` — gdyby ktoś wrócił
+  // odczytem do tabeli, App dostałby pustą listę i ten sprawdzian by to
+  // pokazał, zamiast pozwolić cicho obejść widok.
+  users_widok: [
     { id: "u1", name: "Ala", stawka: 32, active: true, archived: false, role: "open", default_lokal: "Bułka i Jacek" },
     // Kartoteka zalogowanego. App szuka jej po `auth_id` — od 0.42.0 to ona,
     // a nie wpis w localStorage, decyduje o roli i widoku.
@@ -94,9 +99,13 @@ window.__tabele = {
   }],
 };
 window.__zapisy = [];
+window.__odczyty = [];
 const API_STUB = stub(`
   export const api = {
     get: async (tabela, filtr) => {
+      // Zapisujemy, o CO App pytał — na tym stoi sprawdzian drogi do
+      // kartoteki (patrz komentarz przy \`users_widok\` wyżej).
+      window.__odczyty.push(String(tabela));
       const wiersze = (window.__tabele[String(tabela).split("?")[0]] || []).slice();
       // Prosty filtr "kolumna=eq.wartość" — App pyta tak o kartotekę
       // zalogowanego. Bez tego wracałby pierwszy lepszy wiersz i harness
@@ -167,9 +176,43 @@ async function zaladuj(sciezka) {
     }));
     const App = (await import(await zaladuj("/src/App"))).default;
     ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+    // ⚠️ Samo zamontowanie to za mało. Gdy App nie potrafi wczytać kartoteki
+    // zalogowanego (np. ktoś wróci odczytem z `users_widok` na `users`),
+    // zostaje na ekranie logowania — a to też jest „zamontowany". Dlatego
+    // pytamy o TREŚĆ: pulpit kierownika renderuje się tylko wtedy, gdy cała
+    // droga sesja → kartoteka → rola → widok faktycznie zadziałała.
     setTimeout(() => {
-      if (status.className !== "zle") status.textContent = "App zamontowany (v" + APP_VERSION + ")";
-    }, 600);
+      const widac = (document.body.innerText || "");
+      if (status.className === "zle") return;
+      // ⚠️ Kartoteki nie wolno czytać z tabeli `users` — od migracji 0029
+      // robi to widok `users_widok`, który maskuje stawki i dane osobowe.
+      // Sam widok pulpitu tego nie złapie: App wstaje także wtedy, gdy lista
+      // załogi przyjdzie pusta, bo tożsamość zalogowanego idzie osobnym
+      // zapytaniem.
+      const zTabeli = (window.__odczyty || []).filter((x) => /^users(\?|$)/.test(x));
+      const zWidoku = (window.__odczyty || []).filter((x) => /^users_widok(\?|$)/.test(x));
+      if (zTabeli.length > 0) {
+        status.className = "zle";
+        status.textContent =
+          "BŁĄD: App czytał kartotekę wprost z tabeli users (" + zTabeli.join(", ") +
+          ") — po migracji 0029 wolno tylko przez users_widok.";
+        return;
+      }
+      if (zWidoku.length === 0) {
+        status.className = "zle";
+        status.textContent = "BŁĄD: App w ogóle nie pytał o users_widok.";
+        return;
+      }
+      if (widac.includes("Dziś w liczbach")) {
+        status.textContent =
+          "App zamontowany (v" + APP_VERSION + ") — kartoteka wczytana przez widok";
+        return;
+      }
+      status.className = "zle";
+      status.textContent =
+        "BŁĄD: App nie doszedł do pulpitu — kartoteka zalogowanego nie wczytana. " +
+        widac.slice(0, 120);
+    }, 1200);
   } catch (e) { pokazBlad(e); }
 })();
 </script>

@@ -133,7 +133,12 @@ export default function App() {
       setDbError("");
       try {
         const [u, l, s, sh, i] = await Promise.all([
-          api.get("users"),
+          // ⚠️ `users_widok`, nie `users` — od migracji 0029 tabela wydaje
+          // wiersz wyłącznie właścicielowi konta i kierownikom, a listę załogi
+          // wydaje widok, który maskuje stawki, dane osobowe i PIN-y zależnie
+          // od tego, kto pyta. To JEDYNA droga do listy pracowników w tej
+          // aplikacji; zapis idzie dalej do `users`.
+          api.get("users_widok"),
           api.get("lokale"),
           api.get("stanowiska"),
           api.get("shifts"),
@@ -184,7 +189,7 @@ export default function App() {
     // odbijała godziny. Tabela ma kilkadziesiąt wierszy, więc to tani zapyt.
     const loadUsers = () => {
       api
-        .get("users")
+        .get("users_widok")
         .then((u) => setUsers(Array.isArray(u) ? u : []))
         .catch((err) => {
           console.error("Błąd pobierania pracowników:", err.message || err);

@@ -78,6 +78,14 @@ const API_STUB = stub(`
   window.__rpcWywolania = [];
   window.__rpcOdpowiedzi = {
     sprawdz_kiosk_pin: (a) => a.p_user_id === "u4" && a.p_pin === "123456",
+    // Od migracji 0029 tablet nie ma prawa zapisu do \`users\` — osobę na
+    // próbę zakłada funkcja w bazie, która sama pilnuje warunków.
+    dodaj_probnego: (a) => ({
+      id: "nowy-1", name: a.p_name, role: "open",
+      default_lokal: a.p_lokal, default_stanowisko: a.p_stanowisko,
+      email: "", pin: "", active: true, archived: false,
+      probny_status: "oczekuje", probny_od: "2026-09-22", probny_przez: a.p_przez,
+    }),
   };
 `);
 
@@ -442,6 +450,46 @@ const poprzedniMiesiac = (h) => {
         sprawdz("profil bez PIN-u wchodzi od razu bez pytania",
           !widac("Ten profil jest zablokowany"),
           (document.getElementById("app").innerText || "").slice(0, 120));
+
+        // --- nowa osoba na próbę ---
+        //
+        // ⚠️ Tablet NIE MOŻE pisać do \`users\` (migracja 0029) — zakłada konto
+        // przez funkcję w bazie. Gdyby ktoś wrócił do INSERT-a, na produkcji
+        // wyszłoby to rano, przy człowieku stojącym przy tablecie na dzień
+        // próbny, i wyglądałoby na awarię tabletu.
+        klik("Zmień"); await czekaj(300);
+        klik("Nowa osoba na próbę"); await czekaj(300);
+        const pole = document.querySelector('input[placeholder="np. Anna Kowalska"]');
+        sprawdz("ekran nowej osoby się otwiera", !!pole);
+        if (pole) {
+          const setter = Object.getOwnPropertyDescriptor(
+            window.HTMLInputElement.prototype, "value").set;
+          setter.call(pole, "Testowa Osoba");
+          pole.dispatchEvent(new Event("input", { bubbles: true }));
+          await czekaj(200);
+          // Stanowisko startuje puste i bez niego przycisk jest wyłączony —
+          // lokal i stanowisko są tu wymagane, tak samo jak w karcie
+          // pracownika u kierownika.
+          const selekty = [...document.querySelectorAll("select")];
+          const selStanowisko = selekty[selekty.length - 1];
+          const setSel = Object.getOwnPropertyDescriptor(
+            window.HTMLSelectElement.prototype, "value").set;
+          setSel.call(selStanowisko, "Kucharz");
+          selStanowisko.dispatchEvent(new Event("change", { bubbles: true }));
+          await czekaj(200);
+          const zapisyPrzed = window.__zapisy.length;
+          klik("Dodaj i zacznij zmianę"); await czekaj(500);
+          const rpc = window.__rpcWywolania.filter((w) => w[0] === "dodaj_probnego");
+          sprawdz("osobę na próbę zakłada funkcja w bazie", rpc.length === 1,
+            JSON.stringify(window.__rpcWywolania.map((w) => w[0])));
+          sprawdz("zapytanie niesie imię, lokal i stanowisko",
+            rpc.length === 1 && rpc[0][1].p_name === "Testowa Osoba" &&
+              rpc[0][1].p_lokal === "Ceglana" && !!rpc[0][1].p_stanowisko,
+            JSON.stringify(rpc[0] && rpc[0][1]));
+          sprawdz("tablet nie pisze wprost do kartoteki",
+            window.__zapisy.slice(zapisyPrzed).every((z) => z[0] !== "users"),
+            JSON.stringify(window.__zapisy.slice(zapisyPrzed).map((z) => z[0])));
+        }
 
         klik("Zmień"); await czekaj(300);
         klik("Emil"); await czekaj(300);

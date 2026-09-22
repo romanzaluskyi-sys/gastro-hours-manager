@@ -23,6 +23,16 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.43.0",
+    date: "2026-09-22",
+    items: [
+      "Stawki, wynagrodzenia, daty urodzenia, telefony i PIN-y widzi już tylko kierownik — i każdy swoje własne.",
+      "Notatki o pracowniku widzi wyłącznie kierownik.",
+      "Kartotekę pracownika może zmieniać tylko kierownik.",
+      "Osobę na próbę zakłada teraz serwer, a nie tablet — dla obsługi bez zmian.",
+    ],
+  },
+  {
     version: "0.42.2",
     date: "2026-09-22",
     items: [
