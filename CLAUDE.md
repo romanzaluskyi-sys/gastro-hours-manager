@@ -257,6 +257,15 @@ wersji trzeba poprawić ręcznie.
   przed zalogowaniem — komponent wywala się na ekranie logowania i zostaje
   biała strona. Bez tego wyjątku dokładnie ta klasa błędów byłaby niewidoczna.
 
+  ⚠️ **Stara, nieodświeżona karta przeglądarki przestaje działać po 3c-1** i
+  wygląda to na błąd uprawnień w bazie. Bundle sprzed 0.42.0 wysyłał żądania
+  kluczem publishable, czyli jako anonim — dopóki anonimowi było wszystko
+  wolno, działało. Objaw: `permission denied for table ...` przy zapisie i
+  puste listy przy odczycie, u zalogowanego kierownika, na jednym urządzeniu,
+  gdy na innych jest dobrze. Lekarstwo to odświeżenie strony; `UpdateBanner`
+  mówi o tym sam, ale pasek trzeba zauważyć. **Sprawdź to PRZED szukaniem
+  dziury w GRANT-ach** (22.09.2026 zdarzyło się dokładnie to).
+
   ⚠️ **Poza repo zostaje Google Apps Script** (`syncFormEntriesToSupabase`),
   który pisze do Supabase własnym kluczem. Nie widać go stąd — jeśli używa
   publishable, po 3c-1 przestanie działać i zrobi to po cichu.
