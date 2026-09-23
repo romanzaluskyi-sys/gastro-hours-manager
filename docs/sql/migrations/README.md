@@ -61,6 +61,7 @@ wykonalne.
 | `0032` | zdjęcie starych otwartych polityk, o których `0026` nie wiedziała (unieważniały `0031`) | nowe |
 | `0033` | czyje to dane: wiadomości, zgłoszenia, wolne, giełda, wykonania i wiersze `users_widok` (Etap 3c-2, porcja 2) | nowe |
 | `0034` | poprawka do `0033`: lokal wisi też na `allowed_lokale` (tablety wypadały z kartoteki) | nowe |
+| `0035` | AWARIA: polityka wołała funkcję raz na wiersz — timeout na `notifications`, puste wiadomości na tablecie | nowe |
 
 `0001`–`0004` odtworzono ze zrzutu prawdziwej bazy
 (`docs/sql/tools/zrzut-schematu.sql`, 2026-09-07), a nie z opisu w

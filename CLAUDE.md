@@ -350,6 +350,18 @@ rzeczy, które trzeba znać:
 - ⚠️ **Wiersz BEZ żadnego lokalu zostaje widoczny dla kierownika** (konto
   właściciela). Wiersz, którego nie widzi nikt, znika z administracji po cichu.
 
+⚠️ **W polityce RLS funkcja `stable` BEZ ARGUMENTÓW liczy się RAZ na
+zapytanie; ta sama funkcja z argumentem z wiersza — raz na WIERSZ.** Dlatego
+w polityce pisz `kolumna = any (funkcja_bez_argumentow())`, a NIE
+`funkcja_z_argumentem(kolumna)`. Wynik logiczny ten sam, koszt różni się o
+rząd wielkości: `widzi_lokal(lokal)` w polityce `notifications` (553 wiersze)
+dał `57014 — canceling statement due to statement timeout`, a na Tablecie
+Służbowym **wszystkie wiadomości zniknęły** — `loadNotifications` w `App.tsx`
+celowo nie przerywa reszty, więc awaria wygląda jak „nikt nic nie napisał"
+(23.09.2026, naprawione w `0035`). Tabele z `0031` przeżyły tę samą pomyłkę
+tylko dlatego, że mają po kilkadziesiąt wierszy. **Zanim zawęzisz `shifts`
+(3071 wierszy) czy `grafik_shifts` (1613), sprawdź kształt predykatu.**
+
 ⚠️ **Sposób, w jaki to wyszło, jest wart zapamiętania.** Kierownik z KOMPLETEM
 lokali po zawężeniu per lokal nie ma prawa stracić ani jednego wiersza — więc
 każdy spadek u niego to perezawężenie. Zmierz nim PRZED i PO każdą kolejną
