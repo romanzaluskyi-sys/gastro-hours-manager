@@ -350,10 +350,18 @@ rzeczy, które trzeba znać:
 - ⚠️ **Wiersz BEZ żadnego lokalu zostaje widoczny dla kierownika** (konto
   właściciela). Wiersz, którego nie widzi nikt, znika z administracji po cichu.
 
-⚠️ **W polityce RLS funkcja `stable` BEZ ARGUMENTÓW liczy się RAZ na
-zapytanie; ta sama funkcja z argumentem z wiersza — raz na WIERSZ.** Dlatego
-w polityce pisz `kolumna = any (funkcja_bez_argumentow())`, a NIE
-`funkcja_z_argumentem(kolumna)`. Wynik logiczny ten sam, koszt różni się o
+⚠️ **W polityce RLS każde wywołanie funkcji owijaj w PODZAPYTANIE SKALARNE:**
+`kolumna = any ((select public.funkcja()))`, nigdy `any (public.funkcja())`.
+Podzapytanie bez odwołań do wiersza planer robi InitPlanem i liczy RAZ; gołe
+wywołanie — zwykle raz na wiersz, nawet gdy funkcja jest `stable` i bez
+argumentów. To ten sam powód, dla którego w Supabase pisze się
+`(select auth.uid())`. Owijaj też wywołania WEWNĄTRZ funkcji pomocniczych:
+`moi_ludzie()` woła `moje_lokale()` w `where` nad `users`, czyli raz na każdego
+z 42 pracowników.
+
+⚠️ **Nie pisz też `funkcja_z_argumentem(kolumna)`** — argument z wiersza
+gwarantuje wywołanie na każdy wiersz i żadne owijanie tego nie uratuje.
+Dlatego `kolumna = any (…)` zamiast `widzi_lokal(kolumna)`. Wynik logiczny ten sam, koszt różni się o
 rząd wielkości: `widzi_lokal(lokal)` w polityce `notifications` (553 wiersze)
 dał `57014 — canceling statement due to statement timeout`, a na Tablecie
 Służbowym **wszystkie wiadomości zniknęły** — `loadNotifications` w `App.tsx`
