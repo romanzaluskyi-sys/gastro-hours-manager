@@ -121,18 +121,28 @@ def policz(url, klucz, tabela, token=None):
             "User-Agent": "gastro-dostep/1.0",
         },
     )
+    # ⚠️ Zwraca liczbę ALBO krótki powód, dla którego jej nie ma. Samo „?"
+    # nie mówiło nic, a różnica jest zasadnicza: przekroczony limit czasu
+    # znaczy, że polityka jest za wolna i aplikacja też się o to potknie,
+    # a brak nagłówka znaczy tylko tyle, że PostgREST nie policzył.
     try:
-        with urllib.request.urlopen(req) as r:
+        with urllib.request.urlopen(req, timeout=30) as r:
             zakres = r.headers.get("Content-Range", "")
     except urllib.error.HTTPError as e:
         zakres = e.headers.get("Content-Range", "") if e.headers else ""
-    except urllib.error.URLError:
-        return None
-    # "0-0/123" albo "*/0"
+        if "/" not in zakres:
+            tresc = ""
+            try:
+                tresc = e.read().decode()[:80]
+            except Exception:
+                pass
+            return f"HTTP {e.code}{(' ' + tresc) if tresc else ''}"
+    except urllib.error.URLError as e:
+        return f"sieć/limit czasu ({e.reason})"
     if "/" not in zakres:
-        return None
+        return "bez licznika"
     ogon = zakres.rsplit("/", 1)[1]
-    return int(ogon) if ogon.isdigit() else None
+    return int(ogon) if ogon.isdigit() else f"licznik={ogon}"
 
 
 def predykat(url, klucz, nazwa, token=None):
@@ -304,10 +314,13 @@ def sekcja(url, klucz, tytul, token=None):
         mozna_czytac, jak = czyta(url, klucz, tabela, token)
         mozna_pisac, jak_pisac = pisze(url, klucz, tabela, token)
         ile = policz(url, klucz, tabela, token) if mozna_czytac else 0
+        # Liczba wyrównana do prawej, powód do lewej — inaczej długi komunikat
+        # rozjeżdża kolumny i tabela przestaje się czytać.
+        ile_txt = f"{ile:>8}" if isinstance(ile, int) else f" {ile}"
         wynik[tabela] = {"czyta": mozna_czytac, "pisze": mozna_pisac, "ile": ile}
         print(
             f"  {tabela:<18} {('TAK') if mozna_czytac else ('nie ' + jak):<10} "
-            f"{('?' if ile is None else ile):>8}  "
+            f"{ile_txt}  "
             f"{('TAK') if mozna_pisac else ('nie ' + jak_pisac):<10} {opis}"
         )
     # ⚠️ Gwiazdka nie jest ozdobą. Kolumna „zapis" to PATCH w filtr, który nie
@@ -416,6 +429,13 @@ def main():
                 continue
             a, b = byl.get("ile"), teraz.get("ile")
             if a == b and byl.get("pisze") == teraz.get("pisze"):
+                continue
+            # Nie-liczba po jednej ze stron to nie jest zmiana dostępu, tylko
+            # brak pomiaru — mówimy to wprost zamiast pokazywać „123 → HTTP 500"
+            # jak różnicę wierszy.
+            if not isinstance(a, int) or not isinstance(b, int):
+                zmiany += 1
+                print(f"  {tabela:<20} NIE ZMIERZONO: {a} → {b}")
                 continue
             zmiany += 1
             opis_zapisu = ""
