@@ -103,6 +103,38 @@ def zapytanie(url, klucz, sciezka, metoda="GET", token=None, dane=None):
         return 0, str(e)
 
 
+def policz(url, klucz, tabela, token=None):
+    """Ile wierszy tej tabeli WIDZI pytający.
+
+    ⚠️ To jest miara, bez której Etapu 3c-2 nie da się bezpiecznie wdrożyć.
+    Zawężenie polityk nie wywala błędu — po prostu zwraca MNIEJ wierszy, a
+    ekran z pustą listą wygląda tak samo jak ekran, na którym nic dziś nie ma.
+    Liczba przed i po migracji mówi, co naprawdę zniknęło.
+    """
+    req = urllib.request.Request(
+        url.rstrip("/") + f"/rest/v1/{tabela}?select=id&limit=1",
+        headers={
+            "apikey": klucz,
+            "Authorization": f"Bearer {token or klucz}",
+            "Prefer": "count=exact",
+            "Range": "0-0",
+            "User-Agent": "gastro-dostep/1.0",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req) as r:
+            zakres = r.headers.get("Content-Range", "")
+    except urllib.error.HTTPError as e:
+        zakres = e.headers.get("Content-Range", "") if e.headers else ""
+    except urllib.error.URLError:
+        return None
+    # "0-0/123" albo "*/0"
+    if "/" not in zakres:
+        return None
+    ogon = zakres.rsplit("/", 1)[1]
+    return int(ogon) if ogon.isdigit() else None
+
+
 def czyta(url, klucz, tabela, token=None, kolumny="*"):
     kod, tresc = zapytanie(url, klucz, f"/rest/v1/{tabela}?select={kolumny}&limit=1", token=token)
     if kod == 200:
@@ -234,15 +266,17 @@ def kartoteka(url, klucz, token, email):
 
 def sekcja(url, klucz, tytul, token=None):
     print(f"\n=== {tytul} ===\n")
-    print(f"  {'tabela':<18} {'odczyt':<14} {'zapis':<12} co tam jest")
+    print(f"  {'tabela':<18} {'odczyt':<10} {'wierszy':>8}  {'zapis':<10} co tam jest")
     wynik = {}
     for tabela, opis in TABELE:
         mozna_czytac, jak = czyta(url, klucz, tabela, token)
         mozna_pisac, jak_pisac = pisze(url, klucz, tabela, token)
-        wynik[tabela] = (mozna_czytac, mozna_pisac)
+        ile = policz(url, klucz, tabela, token) if mozna_czytac else 0
+        wynik[tabela] = {"czyta": mozna_czytac, "pisze": mozna_pisac, "ile": ile}
         print(
-            f"  {tabela:<18} {('TAK ' + jak) if mozna_czytac else ('nie ' + jak):<14} "
-            f"{('TAK') if mozna_pisac else ('nie ' + jak_pisac):<12} {opis}"
+            f"  {tabela:<18} {('TAK') if mozna_czytac else ('nie ' + jak):<10} "
+            f"{('?' if ile is None else ile):>8}  "
+            f"{('TAK') if mozna_pisac else ('nie ' + jak_pisac):<10} {opis}"
         )
     return wynik
 
@@ -252,6 +286,10 @@ def main():
     p.add_argument("--url", required=True)
     p.add_argument("--klucz", help="publishable; domyślnie z REACT_APP_SUPABASE_KEY")
     p.add_argument("--etap", choices=["przed", "po"], default="przed")
+    p.add_argument("--zapisz", metavar="PLIK",
+                   help="zapisz pomiar do pliku JSON — zdjęcie stanu PRZED migracją")
+    p.add_argument("--porownaj", metavar="PLIK",
+                   help="porównaj z wcześniejszym pomiarem i wypisz, co zniknęło")
     p.add_argument(
         "--sprawdz-wpis-bledu",
         action="store_true",
@@ -305,12 +343,58 @@ def main():
         if not ok:
             print("  ⚠️ Awaria na ekranie logowania nie zostawi teraz śladu.")
 
+    # 2c. Zdjęcie stanu i porównanie.
+    #
+    # ⚠️ Przy Etapie 3c-2 to jest ważniejsze niż sam werdykt "TAK/nie".
+    # Zawężenie polityk NIE daje błędu — daje mniej wierszy. Ekran z pustą
+    # listą wygląda dokładnie jak ekran, na którym nic dziś nie ma, więc
+    # jedyne, co odróżnia zawężenie zamierzone od przypadkowego, to liczba
+    # sprzed migracji.
+    pomiar = {"anon": anon, "zalogowany": zalogowany, "konto": email or None}
+    if args.zapisz:
+        with open(args.zapisz, "w", encoding="utf-8") as f:
+            json.dump(pomiar, f, ensure_ascii=False, indent=1)
+        print(f"\n  Zdjęcie stanu zapisane: {args.zapisz}")
+
+    if args.porownaj:
+        try:
+            with open(args.porownaj, encoding="utf-8") as f:
+                stare = json.load(f)
+        except OSError as e:
+            print(f"\n  Nie mogę wczytać {args.porownaj}: {e}")
+            return 1
+        if stare.get("konto") != pomiar["konto"]:
+            print(f"\n  ⚠️ Zdjęcie robiono kontem {stare.get('konto')}, "
+                  f"a teraz mierzę kontem {pomiar['konto']} — porównanie nic nie znaczy.")
+            return 1
+        print("\n=== CO SIĘ ZMIENIŁO DLA ZALOGOWANEGO ===\n")
+        przed = (stare.get("zalogowany") or {})
+        zmiany = 0
+        for tabela, teraz in (zalogowany or {}).items():
+            byl = przed.get(tabela)
+            if not byl:
+                continue
+            a, b = byl.get("ile"), teraz.get("ile")
+            if a == b and byl.get("pisze") == teraz.get("pisze"):
+                continue
+            zmiany += 1
+            opis_zapisu = ""
+            if byl.get("pisze") and not teraz.get("pisze"):
+                opis_zapisu = "  + stracił ZAPIS"
+            print(f"  {tabela:<20} {a} → {b}{opis_zapisu}")
+        if zmiany == 0:
+            print("  Nic się nie zmieniło — dla tego konta zawężenie nie zadziałało\n"
+                  "  albo ono i tak widziało tylko swoje.")
+        else:
+            print("\n  Sprawdź, czy KAŻDA z tych pozycji jest zamierzona. Spadek do zera\n"
+                  "  na tabeli, z której korzysta ekran tej roli, to awaria, nie sukces.")
+
     # 3. Werdykt — tylko w trybie "po".
     if args.etap == "przed":
         print("\nZdjęcie stanu wyjściowego. Powtórz z --etap po po zawężeniu polityk.")
         return 0
 
-    zle = [t for t, (czyta, _) in anon.items() if czyta and not OCZEKIWANE_PO[t]]
+    zle = [t for t, w in anon.items() if w["czyta"] and not OCZEKIWANE_PO[t]]
     if zle:
         print("\nWCIĄŻ OTWARTE DLA KAŻDEGO: " + ", ".join(zle))
         print("Polityka na tych tabelach nie zadziałała — sprawdź, czy RLS jest włączone")
@@ -330,8 +414,8 @@ def main():
         )
         return 0
 
-    bez_odczytu = [t for t, (czyta, _) in zalogowany.items() if not czyta]
-    bez_zapisu = [t for t, (_, pisze_) in zalogowany.items() if not pisze_]
+    bez_odczytu = [t for t, w in zalogowany.items() if not w["czyta"]]
+    bez_zapisu = [t for t, w in zalogowany.items() if not w["pisze"]]
 
     # ⚠️ Od Etapu 3c-3 odmowa na `users` dla konta, które nie prowadzi
     # kartoteki, jest ZAMIERZONA — listę załogi ta osoba bierze z

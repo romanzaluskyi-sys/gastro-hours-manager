@@ -251,9 +251,11 @@ wersji trzeba poprawić ręcznie.
     widzą dokładnie to, co widzieli — ani jeden ekran się nie zmienia. To jest
     największa część bezpieczeństwa za najmniejsze ryzyko: dziś do danych
     wystarczy adres strony, po tej migracji trzeba konta.
-  - **3c-2:** zawężenie per rola (kierownik lokalu tylko swoje lokale, tablet
-    tylko swój). **Blokada PIN-em jest już na RPC** (0.42.1, migracja `0027`,
-    patrz niżej); zawężenie samych polityk czeka.
+  - **3c-2:** zawężenie per lokal. Rozbite na porcje, bo tabele różnią się
+    ryzykiem. Zrobione: blokada PIN-em na RPC (0.42.1, `0027`) i **porcja 1
+    polityk** (`0031`) — patrz „Dane lokalu" niżej. Zostają tabele „ludzkie"
+    (`shifts`, `grafik_shifts`, `absences`, `issues`, `notifications`,
+    `shift_swaps`, `task_completions`) oraz warunek na wiersze w `users_widok`.
   - **3c-3 — ZROBIONE w 0.43.0** (migracje `0029` i `0030`). `GRANT` działa na
     ROLĘ, a kierownik i pracownik to oboje `authenticated`, więc rozróżnienie
     daje **widok `users_widok`** maskujący kolumny zależnie od tego, kto pyta.
@@ -296,6 +298,45 @@ wersji trzeba poprawić ręcznie.
   ⚠️ **Poza repo zostaje Google Apps Script** (`syncFormEntriesToSupabase`),
   który pisze do Supabase własnym kluczem. Nie widać go stąd — jeśli używa
   publishable, po 3c-1 przestanie działać i zrobi to po cichu.
+
+### Dane lokalu zostają w lokalu (migracja `0031`, Etap 3c-2 porcja 1)
+
+Do `0031` każde zalogowane konto — w tym cztery tablety stojące w salach —
+czytało utargi, cele finansowe, wymagania obsady, godziny otwarcia i
+checklisty WSZYSTKICH lokali. Dziś:
+
+| Tabele | Kto widzi | Predykat |
+|---|---|---|
+| `day_logs`, `day_log_entries`, `staffing_rule_sets`, `grafik_wyjatki`, `lokale_godziny` | swój lokal | `widzi_lokal()` |
+| `tasks`, `task_blocks`, `day_log_templates` | swój lokal **albo ten, w którym dziś pracuję** | `pracuje_w_lokalu()` |
+| `staffing_rules` | przez `set_id`/`wyjatek_id` | oba skoki naraz |
+| `grafik_budzet_cele`, `grafik_budzet_dni` | swój lokal **i tylko kierownik** | + `jest_kierownikiem()` |
+| `shift_edits` | tylko kierownik | `jest_kierownikiem()` |
+| `app_errors` | pisze każdy, czyta tylko admin | `widzi_wszystko()` na SELECT |
+
+⚠️ **`pracuje_w_lokalu()` istnieje dla WYPOŻYCZONYCH.** Pracownik ma w karcie
+lokal macierzysty, a stoi dziś gdzie indziej — sama `widzi_lokal` zabrałaby mu
+checklistę tam, gdzie faktycznie pracuje. Dotyczy WYŁĄCZNIE zadań i tego, co
+się mierzy; utargi i budżet zostają przy `widzi_lokal`, bo do pracy na sali nie
+są potrzebne.
+
+⚠️ **`lokale` i `stanowiska` zostają OTWARTE świadomie.** Formularz „Popraw
+zmianę" używa pełnych słowników, bo opisuje przeszłą zmianę, która mogła być w
+innym lokalu — zawężenie zabrałoby wypożyczonemu możliwość poprawienia własnej
+zmiany. To same nazwy, bez danych osobowych.
+
+⚠️ **Tabele „ludzkie" zostały POZA tą porcją i to nie jest zapomnienie.** Mają
+udowodnione wyjątki: widok miesiąca POKAZUJE kierownikowi zmiany jego ludzi w
+CUDZYCH lokalach (ustalenie właściciela, patrz 5c), a `ostrzezeniaKodeksu` liczy
+odpoczynek przez wszystkie lokale naraz. Wrzucone razem z resztą, zepsułyby oba
+ekrany po cichu.
+
+⚠️ **Polityka RLS zwraca MNIEJ WIERSZY, nie błąd.** To zaleta (ekran, który
+tych danych nie używa, dostaje pustą listę zamiast „permission denied") i wada
+przy diagnozie: pustej listy nie odróżnisz okiem od dnia, w którym nic się nie
+działo. Dlatego `scripts/sprawdz-dostep.py` ma `--zapisz` i `--porownaj`:
+zdjęcie liczby wierszy per tabela PRZED migracją i różnica PO niej. **Bez tego
+porównania nie wdrażaj kolejnej porcji 3c-2.**
 
 ### Kartoteka pracownika — kto co widzi (0.43.0, migracje `0029`/`0030`)
 
