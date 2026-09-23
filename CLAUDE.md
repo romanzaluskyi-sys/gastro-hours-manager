@@ -339,6 +339,22 @@ rzeczy, które trzeba znać:
 - ⚠️ **Zgłoszenie anonimowe nie ma `user_id`**, więc nie da się z niego
   odczytać lokalu — polityka wpuszcza je KAŻDEMU kierownikowi. Inaczej wraca
   błąd z 0.32.0: znaczek w menu liczył zgłoszenie, którego ekran nie pokazywał.
+- ⚠️ **Pytanie „w którym lokalu jest ta osoba" ma w tej bazie DWIE
+  odpowiedzi**: `default_lokal` (pracownik) i `allowed_lokale` (tablet,
+  kierownik). Konta tabletów mają `default_lokal` PUSTY — `KioskDashboard.tsx`
+  czyta `allowed_lokale`. Pierwsza wersja `0033` pytała tylko o
+  `default_lokal`, więc cztery tablety wypadły kierownikowi z kartoteki i
+  przestał móc nimi administrować (`users_widok` 42→37, `notifications`
+  553→537). Naprawia to `0034`: odpowiedź siedzi w JEDNYM miejscu —
+  `moi_ludzie()` — i pytają o nią zarówno polityki, jak i widok.
+- ⚠️ **Wiersz BEZ żadnego lokalu zostaje widoczny dla kierownika** (konto
+  właściciela). Wiersz, którego nie widzi nikt, znika z administracji po cichu.
+
+⚠️ **Sposób, w jaki to wyszło, jest wart zapamiętania.** Kierownik z KOMPLETEM
+lokali po zawężeniu per lokal nie ma prawa stracić ani jednego wiersza — więc
+każdy spadek u niego to perezawężenie. Zmierz nim PRZED i PO każdą kolejną
+porcję (`--zapisz` / `--porownaj`); konto tabletu pokazuje drugą stronę, że
+zawężenie w ogóle zadziałało. Te dwa konta razem obejmują obie pomyłki.
 
 ⚠️ **`shifts` i `grafik_shifts` zostały POZA obiema porcjami i to nie jest
 zapomnienie.** Mają udowodnione wyjątki: widok miesiąca POKAZUJE kierownikowi
