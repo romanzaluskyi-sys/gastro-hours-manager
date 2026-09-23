@@ -135,6 +135,26 @@ def policz(url, klucz, tabela, token=None):
     return int(ogon) if ogon.isdigit() else None
 
 
+def predykat(url, klucz, nazwa, token=None):
+    """Wynik funkcji z bazy (`jest_kierownikiem`, `widzi_wszystko`, `moje_lokale`).
+
+    ⚠️ To zastąpiło próbę zapisu tam, gdzie o dostępie decyduje RLS. `PATCH` z
+    filtrem, który nie trafia w żaden wiersz, mówi „wolno" ZAWSZE: polityka
+    filtruje wiersze, a filtrować nie ma czego, więc zero zmienionych wierszy
+    to sukces niezależnie od uprawnień. Ta sztuczka działała, dopóki odmowa
+    szła z GRANT-a (anonim dostaje 401 od razu) — od Etapu 3c odmowa idzie z
+    polityki i trzeba zapytać inaczej. 23.09.2026 stary probe ogłosił, że
+    tablet „MOŻE pisać do kartoteki", choć nie mógł.
+    """
+    kod, tresc = zapytanie(url, klucz, f"/rest/v1/rpc/{nazwa}", "POST", token=token, dane={})
+    if kod != 200:
+        return None
+    try:
+        return json.loads(tresc)
+    except ValueError:
+        return None
+
+
 def czyta(url, klucz, tabela, token=None, kolumny="*"):
     kod, tresc = zapytanie(url, klucz, f"/rest/v1/{tabela}?select={kolumny}&limit=1", token=token)
     if kod == 200:
@@ -203,7 +223,12 @@ def kartoteka(url, klucz, token, email):
     moje = [w for w in wiersze if moje_auth and w.get("auth_id") == moje_auth]
     cudze = [w for w in wiersze if not (moje_auth and w.get("auth_id") == moje_auth)]
     rola = (moje[0].get("role") if moje else "") or "?"
+    lokale_moje = predykat(url, klucz, "moje_lokale", token)
     print(f"    wierszy: {len(wiersze)}, rola zalogowanego: {rola}")
+    # ⚠️ Od tej listy zależy KAŻDE zawężenie per lokal. Gdy tabela nie
+    # zmniejszyła się po migracji, pierwsze pytanie brzmi: ile lokali baza
+    # przypisuje temu kontu — a nie „czy polityka się zapisała".
+    print(f"    lokale wg bazy (moje_lokale): {lokale_moje}")
 
     kierownik = rola in ("admin", "manager", "manager_lokalu")
     if kierownik:
@@ -253,20 +278,27 @@ def kartoteka(url, klucz, token, email):
               "migracja 0030 nie zadziałała.")
 
     # Zapis do kartoteki ma być zamknięty — inaczej maskowanie jest teatrem.
-    wolno, opis = pisze(url, klucz, "users", token=token)
-    if wolno:
+    #
+    # ⚠️ Pytamy o PREDYKAT, nie próbujemy pisać. Pod RLS próba zapisu w filtr,
+    # który nie trafia w żaden wiersz, kończy się sukcesem zawsze — patrz
+    # `predykat()` wyżej.
+    kier = predykat(url, klucz, "jest_kierownikiem", token)
+    if kier is None:
+        print("    zapis do users: NIE WIEM — baza nie zna `jest_kierownikiem` "
+              "(migracja 0031 nie poszła?)")
+    elif kier:
         problem = True
-        print("    WYCIEK: to konto MOŻE pisać do kartoteki — "
-              "czyli może podnieść sobie uprawnienia.")
+        print("    WYCIEK: baza uważa to konto za kierownika — "
+              "czyli wolno mu pisać do kartoteki i czytać cudze dane.")
     else:
-        print(f"    zapis do users: zablokowany ({opis}) — dobrze")
+        print("    zapis do users: zablokowany przez politykę — dobrze")
 
     return {"ok": not problem, "kierownik": False}
 
 
 def sekcja(url, klucz, tytul, token=None):
     print(f"\n=== {tytul} ===\n")
-    print(f"  {'tabela':<18} {'odczyt':<10} {'wierszy':>8}  {'zapis':<10} co tam jest")
+    print(f"  {'tabela':<18} {'odczyt':<10} {'wierszy':>8}  {'zapis*':<10} co tam jest")
     wynik = {}
     for tabela, opis in TABELE:
         mozna_czytac, jak = czyta(url, klucz, tabela, token)
@@ -278,6 +310,14 @@ def sekcja(url, klucz, tytul, token=None):
             f"{('?' if ile is None else ile):>8}  "
             f"{('TAK') if mozna_pisac else ('nie ' + jak_pisac):<10} {opis}"
         )
+    # ⚠️ Gwiazdka nie jest ozdobą. Kolumna „zapis" to PATCH w filtr, który nie
+    # trafia w żaden wiersz — mierzy GRANT (anonim dostaje 401), ale NIE mierzy
+    # polityki RLS: nie ma czego filtrować, więc wychodzi „TAK" nawet tam,
+    # gdzie polityka by nie puściła. O prawa pod RLS pytamy predykatami,
+    # patrz sekcja KARTOTEKA.
+    if token:
+        print("\n  * kolumna zapisu mierzy GRANT, nie politykę RLS — "
+              "pod RLS wychodzi TAK także tam, gdzie zapis i tak by nie przeszedł.")
     return wynik
 
 
@@ -441,7 +481,7 @@ def main():
         print("\nOK — anonim nic nie dostaje, zalogowany czyta i zapisuje wszystko.")
         return 0
     if not kartoteka_ok["ok"]:
-        print("\nKARTOTEKA NIE JEST ZAKRYTA — patrz sekcja wyżej. Etap 3c-3 nie zadziałał.")
+        print("\nKARTOTEKA NIE JEST ZAKRYTA — patrz sekcja wyżej.")
         return 1
     if kartoteka_ok["kierownik"]:
         print("\nOK dla konta kierownika. ⚠️ Zakrycia kartoteki NIE zmierzyłem —\n"
