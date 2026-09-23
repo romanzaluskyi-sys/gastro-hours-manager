@@ -331,6 +331,20 @@ CUDZYCH lokalach (ustalenie właściciela, patrz 5c), a `ostrzezeniaKodeksu` lic
 odpoczynek przez wszystkie lokale naraz. Wrzucone razem z resztą, zepsułyby oba
 ekrany po cichu.
 
+⚠️ **Zdejmując politykę, ENUMERUJ ją z `pg_policies` — nigdy nie wypisuj nazw
+z pamięci.** Polityki permisywne składają się przez LUB, więc JEDNA
+zapomniana, otwarta polityka unieważnia każdą następną: nowa wygląda w
+katalogu poprawnie i nie robi nic. `0026` brała listę TABEL z `pg_tables`
+(żeby nie zapomnieć o nowej), ale listę NAZW POLITYK wypisała ręcznie — i pięć
+tabel miało nazwy spoza tej listy (`tasks_open_all`, `task_blocks_open_all`,
+`task_completions_open_all`, `notifications_public_all`, `"open access"`).
+Skutek: od `0026` do `0032` każde ZALOGOWANE konto czytało cudze powiadomienia,
+wykonania zadań i historię korekt, a `0031` nie zawęziło zadań ani bloków.
+Znalazł to dopiero inwentarz `pg_policies` — polecenie stoi na końcu `0032`
+i **warto je puścić po każdej migracji ruszającej polityki**: tabela z liczbą
+polityk > 1 (poza `app_errors` x3 i `users` x2) to polityka unieważniająca
+sąsiadkę.
+
 ⚠️ **Polityka RLS zwraca MNIEJ WIERSZY, nie błąd.** To zaleta (ekran, który
 tych danych nie używa, dostaje pustą listę zamiast „permission denied") i wada
 przy diagnozie: pustej listy nie odróżnisz okiem od dnia, w którym nic się nie
