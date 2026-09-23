@@ -59,6 +59,7 @@ wykonalne.
 | `0030` | `users` wydaje tylko własny wiersz i kierownikom — PO deployu 0.43.0 i odświeżeniu tabletów | nowe |
 | `0031` | dane lokalu zostają w lokalu: utargi, budżet, wymagania obsady, checklisty (Etap 3c-2, porcja 1) | nowe |
 | `0032` | zdjęcie starych otwartych polityk, o których `0026` nie wiedziała (unieważniały `0031`) | nowe |
+| `0033` | czyje to dane: wiadomości, zgłoszenia, wolne, giełda, wykonania i wiersze `users_widok` (Etap 3c-2, porcja 2) | nowe |
 
 `0001`–`0004` odtworzono ze zrzutu prawdziwej bazy
 (`docs/sql/tools/zrzut-schematu.sql`, 2026-09-07), a nie z opisu w

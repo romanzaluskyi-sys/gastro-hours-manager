@@ -325,11 +325,27 @@ zmianę" używa pełnych słowników, bo opisuje przeszłą zmianę, która mog�
 innym lokalu — zawężenie zabrałoby wypożyczonemu możliwość poprawienia własnej
 zmiany. To same nazwy, bez danych osobowych.
 
-⚠️ **Tabele „ludzkie" zostały POZA tą porcją i to nie jest zapomnienie.** Mają
-udowodnione wyjątki: widok miesiąca POKAZUJE kierownikowi zmiany jego ludzi w
-CUDZYCH lokalach (ustalenie właściciela, patrz 5c), a `ostrzezeniaKodeksu` liczy
-odpoczynek przez wszystkie lokale naraz. Wrzucone razem z resztą, zepsułyby oba
-ekrany po cichu.
+**Porcja 2 (migracja `0033`)** — „czyje to dane": `notifications`, `issues`,
+`absences`, `shift_swaps`, `task_completions` i WIERSZE `users_widok`. Trzy
+rzeczy, które trzeba znać:
+- ⚠️ **Tablet widzi wiadomości WSZYSTKICH osób ze swojego lokalu** —
+  `imiona_moich_ludzi()`, nie samo swoje imię. Koperta przy nazwisku na liście
+  wyboru jest jedynym sygnałem, że ktoś ma nieprzeczytaną wiadomość; nikt nie
+  wchodzi na wspólnym urządzeniu na cudzą stronę.
+- ⚠️ **`with check (true)` na tych tabelach jest ŚWIADOME.** Powiadomienie
+  tworzy się DLA KOGOŚ INNEGO — pracownik budzi kierownika, kierownik
+  odpowiada pracownikowi. Warunek zapisu lustrzany do odczytu zablokowałby to,
+  po co te tabele istnieją.
+- ⚠️ **Zgłoszenie anonimowe nie ma `user_id`**, więc nie da się z niego
+  odczytać lokalu — polityka wpuszcza je KAŻDEMU kierownikowi. Inaczej wraca
+  błąd z 0.32.0: znaczek w menu liczył zgłoszenie, którego ekran nie pokazywał.
+
+⚠️ **`shifts` i `grafik_shifts` zostały POZA obiema porcjami i to nie jest
+zapomnienie.** Mają udowodnione wyjątki: widok miesiąca POKAZUJE kierownikowi
+zmiany jego ludzi w CUDZYCH lokalach (ustalenie właściciela, patrz 5c), a
+`ostrzezeniaKodeksu` liczy odpoczynek przez wszystkie lokale naraz. Do tego
+3071 i 1613 wierszy, na których pomyłka wygląda jak pusty ekran, nie jak błąd.
+Godziny są też mniej wrażliwe niż czyjaś wiadomość — dlatego idą na końcu.
 
 ⚠️ **Zdejmując politykę, ENUMERUJ ją z `pg_policies` — nigdy nie wypisuj nazw
 z pamięci.** Polityki permisywne składają się przez LUB, więc JEDNA
