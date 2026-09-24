@@ -63,6 +63,8 @@ wykonalne.
 | `0034` | poprawka do `0033`: lokal wisi też na `allowed_lokale` (tablety wypadały z kartoteki) | nowe |
 | `0035` | AWARIA: polityka wołała funkcję raz na wiersz — timeout na `notifications`, puste wiadomości na tablecie | nowe |
 | `0036` | `(select funkcja())` w politykach — wymuszony InitPlan, dokończenie naprawy z `0035` | nowe |
+| `0037` | rejestracja godzin na lokalu: `tryb_wpisu`, `start_wstecz_min`, `koniec_wstecz_min` — PRZED deployem 0.45.0 | nowe |
+| `0038` | tablet widzi korekty godzin swoich ludzi (`issues`, rola `kiosk`, tylko `type='correction'`) | nowe |
 
 `0001`–`0004` odtworzono ze zrzutu prawdziwej bazy
 (`docs/sql/tools/zrzut-schematu.sql`, 2026-09-07), a nie z opisu w

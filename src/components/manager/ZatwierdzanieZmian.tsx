@@ -64,6 +64,7 @@ const odKiedyCzeka = (prog, teraz = new Date()) => {
 
 import { zmianyBezOdbicia, rozliczBrakOdbicia } from "../../utils/odbicia";
 import { zmianyPorzucone, rozliczPorzucona } from "../../utils/porzucone";
+import { czekaNaKoniecOdKierownika } from "../../utils/wpisy";
 import {
   probniDoDecyzji,
   zatwierdzProbnego,
@@ -138,13 +139,16 @@ export default function ZatwierdzanieZmian({
     lokalOk: hasAccessToLokal,
   });
 
+  // Zmiana, o której koniec pracownik już poprosił (wpis poza oknem
+  // tolerancji lokalu), stoi w kolejce korekt z konkretną godziną. Druga
+  // pozycja o tę samą zmianę tutaj kazałaby rozstrzygać ją dwa razy.
   const porzucone = zmianyPorzucone({
     shifts,
     planShifts,
     lokale,
     users,
     lokalOk: hasAccessToLokal,
-  });
+  }).filter((poz) => !czekaNaKoniecOdKierownika(poz.shift, issues));
 
   const probni = probniDoDecyzji({ users, lokalOk: hasAccessToLokal });
 
@@ -313,7 +317,13 @@ export default function ZatwierdzanieZmian({
       lokal: row.issue.proposed_lokal || row.lokal || availableLokale[0]?.name || "",
       stanowisko: row.issue.proposed_stanowisko || "",
       start: row.issue.proposed_start_time || "",
-      end: row.issue.proposed_end_time || "",
+      // Prośba o sam start (wpis poza oknem tolerancji) nie ma końca — koniec
+      // zostaje taki, jaki jest w zmianie, więc od niego zaczynamy.
+      end:
+        row.issue.proposed_end_time ||
+        (row.existingShift && row.existingShift.end_time
+          ? fmtHHMM(row.existingShift.end_time)
+          : ""),
       reason: "",
     });
   };
@@ -832,11 +842,19 @@ export default function ZatwierdzanieZmian({
         {rows.map((row) => {
           const { issue: iss, existingShift } = row;
           const isEditing = editingId === iss.id;
+          // Bez proponowanego końca przy ISTNIEJĄCEJ zmianie koniec się nie
+          // zmienia (resolveCorrection go zachowuje) — pokazujemy więc ten,
+          // który jest, a nie "brak", który wyglądał jak prośba o skasowanie.
+          const proposedEnd =
+            iss.proposed_end_time ||
+            (existingShift && existingShift.end_time
+              ? fmtHHMM(existingShift.end_time)
+              : "");
           const proposedH =
-            iss.proposed_start_time && iss.proposed_end_time
+            iss.proposed_start_time && proposedEnd
               ? (() => {
                   const [sh, sm] = iss.proposed_start_time.split(":").map(Number);
-                  const [eh, em] = iss.proposed_end_time.split(":").map(Number);
+                  const [eh, em] = proposedEnd.split(":").map(Number);
                   let mins = eh * 60 + em - (sh * 60 + sm);
                   if (mins < 0) mins += 24 * 60;
                   return mins / 60;
@@ -906,10 +924,10 @@ export default function ZatwierdzanieZmian({
                           existingShift && existingShift.end_time
                             ? fmtHHMM(existingShift.end_time)
                             : "",
-                          iss.proposed_end_time || ""
+                          proposedEnd
                         )}
                       >
-                        {iss.proposed_end_time || "brak"}
+                        {proposedEnd || "brak"}
                       </span>
                       {delta != null && delta !== 0 && (
                         <span className="text-[#DE3A22] font-bold ml-2">
@@ -923,7 +941,10 @@ export default function ZatwierdzanieZmian({
 
                 {!isEditing && (
                   <div className="flex gap-2 flex-shrink-0">
-                    {iss.proposed_end_time ? (
+                    {/* Zatwierdzić da się także prośbę bez końca, gdy dotyczy
+                        istniejącej zmiany — koniec zostaje wtedy nietknięty.
+                        "Zapytaj" zostaje dla nowego wpisu bez końca. */}
+                    {iss.proposed_end_time || existingShift ? (
                       <button
                         onClick={() => handleZatwierdz(row)}
                         disabled={busy}

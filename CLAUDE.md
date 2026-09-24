@@ -579,6 +579,10 @@ src/
     swaps.ts                    giełda zmian — jedyne miejsce piszące do
                                   shift_swaps i przepisujące zmianę na
                                   innego pracownika (resolveSwap)
+    wpisy.ts                    jak w lokalu wolno wpisywać godziny: sposób
+                                  wpisu i okna tolerancji (regulyWpisu,
+                                  sprawdzGodzine, czekaNaKoniecOdKierownika) —
+                                  patrz "Rejestracja godzin" niżej
     porzucone.ts                zmiany zaczęte i niezakończone: progi lokalu,
                                   rozpoznanie (czyPorzucona/zmianaTrwa) i
                                   decyzja kierownika. NIE licz nigdzie indziej,
@@ -1258,6 +1262,9 @@ odpadają. Zamiast tego dwa pliki w katalogu głównym, uruchamiane przez
 - `harness-auth.html` — logowanie: rotacja refresh tokenów przy równoległych
   żądaniach, zachowanie przy braku sieci i przy odmowie serwera. `fetch` jest
   podmieniony, więc nie trzeba znać niczyjego hasła;
+- `harness-wpisy.html` — okna tolerancji wpisu godzin: lokal bez ustawień
+  niczego nie odrzuca, granice okna co do minuty, godzina wpisana po północy,
+  i to, kiedy zmiana czekająca na kierownika przestaje być trwającą;
 - `harness-bledy.html` — dziennik błędów: limit zapisów na sesję, odsiewanie
   powtórzeń, komplet pól wiersza i to, czy `ErrorBoundary` pokazuje ekran
   zamiast białej strony. `fetch` jest podmieniony, nic nie leci do sieci.
@@ -1567,7 +1574,10 @@ zakresem — wymaga Grafiku, którego nie ma.
   okres_rozliczeniowy (int, nullable, puste = 1), narzut_umowa/narzut_zlecenie
   (numeric, nullable, procent ponad wynagrodzenie, puste = 0),
   tolerancja_po_grafiku_h/max_dlugosc_zmiany_h (numeric, nullable, puste = 4 i
-  17 — progi zmian bez odbitego końca, migracja 0023)`. Trzy z nich
+  17 — progi zmian bez odbitego końca, migracja 0023), tryb_wpisu (text:
+  'odbicie'|'cala', NULL = oba), start_wstecz_min/koniec_wstecz_min (int,
+  NULL = bez limitu, 0 = tylko "teraz" — migracja 0037, patrz "Rejestracja
+  godzin")`. Trzy z nich
   z migracji `0018` — ustawienia płacowe siedzą na LOKALU, nie na pracowniku:
   to decyzje organizacyjne, jednakowe dla całej załogi, a skopiowane do
   kilkudziesięciu kart rozjadą się przy pierwszej pomyłce. `miasto` (text, nullable,
@@ -2117,6 +2127,57 @@ Szczegóły, które łatwo zepsuć:
   co innego.
 - `harness-porzucone.html` sprawdza całą arytmetykę progów na ręcznie
   policzonych przykładach (39 przypadków, razem z pracownikiem na próbę).
+
+## Rejestracja godzin — sposób wpisu i okna tolerancji (0.45.0)
+
+[`utils/wpisy.ts`](src/utils/wpisy.ts) + sekcja "Rejestracja godzin" w karcie
+lokalu (Ustawienia) + `renderPozaOknem` w `employeeSessionShared.tsx`.
+Migracja `0037` (kolumny na `lokale`), `0038` (tablet widzi korekty).
+
+Lokal ustawia: `tryb_wpisu` (`odbicie` | `cala` | NULL = oba), oraz
+`start_wstecz_min` / `koniec_wstecz_min` — o ile minut PO FAKCIE pracownik
+może SAM wpisać godzinę. Przy „całej zmianie” liczy się okno KOŃCA. Trzeci
+próg — do kiedy zmianę w ogóle da się zamknąć samemu — to istniejące
+`tolerancja_po_grafiku_h`/`max_dlugosc_zmiany_h` (patrz "Zmiany bez
+zakończenia"); stoją w tej samej sekcji karty.
+
+⚠️ **NULL = zachowanie sprzed 0.45.0, a 0 to NIE to samo co NULL.** NULL: bez
+limitu, nic się nie przesuwa przez północ. 0: tylko „teraz”. Ustawienie
+domyślne dla nowych lokali to NULL (decyzja właściciela, 2026-09-24).
+
+⚠️ **Wpis spoza okna nie przepada — idzie do kierownika jako zwykła korekta**
+(`issues.type = 'correction'`, decyzja właściciela). Trzy przypadki:
+- **spóźniony start** — zmiana startuje TERAZ (człowiek stoi przy tablecie i
+  ma być odbity), a korekta z samym `proposed_start_time` jest przypięta do
+  tej zmiany;
+- **spóźniona cała zmiana** — korekta bez `shift_id`, ta sama droga co
+  „Zapomniałem odbić”;
+- **spóźniony koniec** — korekta z `proposed_end_time` przypięta do trwającej
+  zmiany. `czekaNaKoniecOdKierownika` wyłącza wtedy tę zmianę z „trwających”
+  u pracownika i z kolejki porzuconych u kierownika — inaczej blokowałaby
+  kolejne odbicie, a jedynym wyjściem byłoby „Zakończ teraz”, czyli dopisanie
+  sobie godzin.
+
+⚠️ **`resolveCorrection` przy pustym końcu i ISTNIEJĄCEJ zmianie ZACHOWUJE
+koniec.** Do 0.45.0 patchował `end_time: null` — prośba o wcześniejszy start
+zatwierdzona po zakończeniu zmiany otwierałaby ją i zerowała godziny. Tę
+regresję łapie `harness-panel.html`.
+
+⚠️ **Godzina w przyszłości** (ponad `W_PRZOD_MIN` = 5 min zapasu na zegar)
+przy ustawionym oknie dostaje tylko wyjaśnienie, bez wysyłki — to nie jest
+spóźnienie, tylko wpis z wyprzedzeniem.
+
+⚠️ **Tablet a `issues` (migracja `0038`).** `api.post` to INSERT … RETURNING, a
+Postgres sprawdza zwracany wiersz polityką SELECT. Polityka z `0033` nie
+pokazywała tabletowi zgłoszeń jego ludzi, więc korekta wysłana z tabletu była
+odrzucana w CAŁOŚCI — `with check (true)` tego nie ratuje. `0038` wpuszcza
+rolę `kiosk` do KOREKT osób z jej lokalu; zgłoszenia problemów zostają poza
+zasięgiem tabletu, a ich nieanonimowa wersja z tabletu ma ten sam problem —
+to osobna decyzja. **Każda nowa tabela, do której tablet pisze w imieniu
+pracownika, potrzebuje SELECT dla tabletu na tych wierszach.**
+
+⚠️ Kontrola jest w przeglądarce. Twardy zamek (trigger na `shifts`) — razem z
+zawężeniem `shifts` w Etapie 3c-2.
 
 ## Pracownik na próbę — dodane 2026-09-19 (0.40.0)
 

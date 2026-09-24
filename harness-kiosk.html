@@ -303,7 +303,11 @@ const poprzedniMiesiac = (h) => {
           allowed_lokale: "Ceglana",
         },
         setCurrentView: () => {},
-        lokale: [{ id: "l2", name: "Ceglana", miasto: "Koszalin", archived: false }],
+        // Okna tolerancji wpisu (0.45.0): start 15 min, koniec 30 min, sposób
+        // wpisu dowolny. Reszta sprawdzianów nie wpisuje godzin ręcznie, więc
+        // okna jej nie dotyczą.
+        lokale: [{ id: "l2", name: "Ceglana", miasto: "Koszalin", archived: false,
+          start_wstecz_min: 15, koniec_wstecz_min: 30 }],
         stanowiska: [
           { id: "s2", name: "Kucharz", lokal_name: "Ceglana", archived: false },
           { id: "s3", name: "Kelner", lokal_name: "Ceglana", archived: false },
@@ -450,6 +454,61 @@ const poprzedniMiesiac = (h) => {
         sprawdz("profil bez PIN-u wchodzi od razu bez pytania",
           !widac("Ten profil jest zablokowany"),
           (document.getElementById("app").innerText || "").slice(0, 120));
+
+        // --- okno tolerancji wpisu (0.45.0) ---
+        //
+        // Spóźniony start nie przepada: zmiana zaczyna się TERAZ, a wcześniejsza
+        // godzina idzie do kierownika jako korekta przypięta do tej zmiany.
+        const hhmm = (d) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+        const ustawCzas = (input, wartosc) => {
+          Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")
+            .set.call(input, wartosc);
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+          input.dispatchEvent(new Event("change", { bubbles: true }));
+        };
+        const zakladka = [...document.querySelectorAll("button")]
+          .find((b) => b.textContent.replace(/▪/g, "").trim() === "Zmiana");
+        if (!zakladka) throw new Error("nie znalazłem zakładki Zmiana");
+        zakladka.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(300);
+        sprawdz("formularz mówi z góry, gdzie jest granica",
+          widac("Start możesz sam cofnąć najwyżej o 15 min"));
+        const godzinaTemu = new Date(Date.now() - 60 * 60000);
+        ustawCzas(document.querySelector('input[type="time"]'), hhmm(godzinaTemu));
+        await czekaj(200);
+        const przedStartem = window.__zapisy.length;
+        klik("Rozpocznij zmianę"); await czekaj(300);
+        sprawdz("start sprzed godziny: okno zamiast zapisu",
+          widac("Za późno na samodzielny wpis") &&
+            window.__zapisy.slice(przedStartem).length === 0,
+          JSON.stringify(window.__zapisy.slice(przedStartem).map((z) => z[0])));
+        klik("Rozpocznij i wyślij do kierownika"); await czekaj(500);
+        const noweZapisy = window.__zapisy.slice(przedStartem);
+        const zmianaZapis = noweZapisy.find((z) => z[0] === "shifts");
+        const korektaZapis = noweZapisy.find((z) => z[0] === "issues");
+        const startZapisany = zmianaZapis && new Date(zmianaZapis[1].start_time);
+        sprawdz("zmiana zaczyna się teraz, nie godzinę temu",
+          !!startZapisany && Math.abs(startZapisany - Date.now()) < 2 * 60000,
+          startZapisany ? startZapisany.toISOString() : "brak zapisu shifts");
+        sprawdz("wcześniejszy start idzie do kierownika jako korekta tej zmiany",
+          !!korektaZapis && korektaZapis[1].type === "correction" &&
+            korektaZapis[1].proposed_start_time === hhmm(godzinaTemu) &&
+            !korektaZapis[1].proposed_end_time &&
+            String(korektaZapis[1].shift_id).startsWith("fake-"),
+          JSON.stringify(korektaZapis && korektaZapis[1]));
+
+        // Koniec w przyszłości to nie spóźnienie — tylko wyjaśnienie, nic nie
+        // idzie do kierownika.
+        const zaGodzine = new Date(Date.now() + 60 * 60000);
+        const poleKonca = [...document.querySelectorAll('input[type="time"]')].pop();
+        const przedKoncem = window.__zapisy.length;
+        ustawCzas(poleKonca, hhmm(zaGodzine));
+        await czekaj(300);
+        sprawdz("koniec za godzinę: „tej godziny jeszcze nie było”, bez zapisu",
+          widac("Tej godziny jeszcze nie było") &&
+            window.__zapisy.length === przedKoncem,
+          JSON.stringify(window.__zapisy.slice(przedKoncem).map((z) => z[0])));
+        klik("Rozumiem"); await czekaj(200);
 
         // --- nowa osoba na próbę ---
         //

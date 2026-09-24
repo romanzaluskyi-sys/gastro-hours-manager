@@ -42,6 +42,7 @@ import {
 } from "./designTokens";
 import { BLOKI_PRACOWNIKA, blokiLokalu } from "../../utils/grafik";
 import { TOLERANCJA_PO_GRAFIKU_H, MAX_DLUGOSC_ZMIANY_H } from "../../utils/porzucone";
+import { TRYBY_WPISU, regulyWpisu, opisOkna } from "../../utils/wpisy";
 import { PRODUKT, TENANT } from "../../config";
 
 const labelCls = "text-xs font-bold text-[#6E6E66]";
@@ -419,21 +420,89 @@ export default function Ustawienia({
             </p>
           </Sekcja>
 
-          {/* Od kiedy zmiana bez odbitego końca przestaje uchodzić za trwającą.
-              Dwa progi, bo to dwie różne sytuacje: ktoś miał zmianę w grafiku i
-              ją przeciągnął, albo pracował poza grafikiem i nie ma się do czego
-              odnieść. */}
+          {/* Jak w tym lokalu wpisuje się godziny (utils/wpisy.ts, migracja
+              0037) i kiedy niezakończona zmiana przestaje uchodzić za trwającą
+              (utils/porzucone.ts, 0023). Jedna sekcja, bo to jedno pytanie:
+              co pracownik może zapisać sam, a co trafia do kierownika.
+              Wszystko puste = zachowanie sprzed tych ustawień. */}
           <Sekcja
-            tytul="Zmiany bez odbitego końca"
-            podsumowanie={`${d.tolerancja_po_grafiku_h || TOLERANCJA_PO_GRAFIKU_H} godz. po grafiku · ${
-              d.max_dlugosc_zmiany_h || MAX_DLUGOSC_ZMIANY_H
-            } godz. bez grafiku`}
-            otwarta={!!otwarte.porzucone}
-            onToggle={() => toggle("porzucone")}
+            tytul="Rejestracja godzin"
+            podsumowanie={(() => {
+              const rw = regulyWpisu([d], d.name);
+              const tryb = TRYBY_WPISU.find((x) => x.key === rw.tryb)?.label;
+              return `${tryb} · start ${opisOkna(rw.startWstecz)} · koniec ${opisOkna(
+                rw.koniecWstecz
+              )}`;
+            })()}
+            otwarta={!!otwarte.wpisy}
+            onToggle={() => toggle("wpisy")}
           >
+            <div>
+              <label className={labelCls}>Sposób wpisu</label>
+              <div className="grid sm:grid-cols-3 gap-1.5 mt-1">
+                {TRYBY_WPISU.map((tr) => {
+                  const wybrany = (d.tryb_wpisu || null) === tr.key;
+                  return (
+                    <button
+                      key={tr.label}
+                      type="button"
+                      onClick={() => set("tryb_wpisu", tr.key)}
+                      className={`p-2 rounded border-[2px] text-left ${
+                        wybrany
+                          ? "bg-[#171714] text-white border-[#171714]"
+                          : "bg-white text-[#171714] border-[#B7B6AE]"
+                      }`}
+                    >
+                      <span className="block text-[13px] font-bold">{tr.label}</span>
+                      <span
+                        className={`block text-[11px] leading-snug mt-0.5 ${
+                          wybrany ? "text-white/75" : "text-[#6E6E66]"
+                        }`}
+                      >
+                        {tr.opis}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className={labelCls}>Tolerancja po grafiku (godz.)</label>
+                <label className={labelCls}>Spóźniony start (min)</label>
+                <input
+                  type="number"
+                  step="1"
+                  min="0"
+                  value={d.start_wstecz_min ?? ""}
+                  onChange={(e) => set("start_wstecz_min", e.target.value)}
+                  placeholder="bez limitu"
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className={labelCls}>Spóźniony koniec (min)</label>
+                <input
+                  type="number"
+                  step="1"
+                  min="0"
+                  value={d.koniec_wstecz_min ?? ""}
+                  onChange={(e) => set("koniec_wstecz_min", e.target.value)}
+                  placeholder="bez limitu"
+                  className={inputCls}
+                />
+              </div>
+            </div>
+            <p className={helpCls}>
+              O ile minut po fakcie pracownik może sam wpisać godzinę rozpoczęcia i
+              zakończenia (przy „całej zmianie” liczy się koniec). Puste = bez limitu,
+              0 = tylko „teraz”. Godzina spoza okna nie przepada — pracownik wysyła ją
+              do Ciebie i zatwierdzasz ją w Zatwierdzaniu zmian.
+            </p>
+
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <div>
+                <label className={labelCls}>Zamknięcie: po grafiku (godz.)</label>
                 <input
                   type="number"
                   step="0.5"
@@ -445,7 +514,7 @@ export default function Ustawienia({
                 />
               </div>
               <div>
-                <label className={labelCls}>Maks. zmiana poza grafikiem (godz.)</label>
+                <label className={labelCls}>Zamknięcie: bez grafiku (godz.)</label>
                 <input
                   type="number"
                   step="0.5"
@@ -458,9 +527,11 @@ export default function Ustawienia({
               </div>
             </div>
             <p className={helpCls}>
-              Po tym czasie zmiana przestaje być pokazywana jako trwająca i trafia do
-              Zatwierdzania zmian. Godziny nie są nikomu dopisywane — do Twojej decyzji
-              liczą się jako zero.
+              Do kiedy niezakończoną zmianę można jeszcze zamknąć samemu: tyle godzin po
+              końcu z grafiku albo — bez grafiku — od startu. Potem zmiana przestaje być
+              trwającą i trafia do Zatwierdzania zmian; godziny do Twojej decyzji liczą
+              się jako zero. Puste = {TOLERANCJA_PO_GRAFIKU_H} godz. po grafiku i{" "}
+              {MAX_DLUGOSC_ZMIANY_H} godz. bez grafiku.
             </p>
           </Sekcja>
         </div>

@@ -23,6 +23,15 @@ import { createManagerNotification } from "../api/notifications";
 import { APP_VERSION } from "../config";
 import { findOverlappingShift, opisKolidujacej, znajdzKolizjeWBazie, getTodaysShiftsForUser } from "../utils/shifts";
 import { zmianaTrwa } from "../utils/porzucone";
+import {
+  regulyWpisu,
+  wymuszonaCalaZmiana,
+  dopasujStart,
+  dopasujCalaZmiane,
+  sprawdzGodzine,
+  podpisOkna,
+  czekaNaKoniecOdKierownika,
+} from "../utils/wpisy";
 import WeatherBadge from "./WeatherBadge";
 import PulsZmiany, { mozeZamykacPuls } from "./manager/PulsZmiany";
 import PulsPrzypomnienie from "./manager/PulsPrzypomnienie";
@@ -397,6 +406,18 @@ export const EmployeeSessionScreens = ({
   const [formStartTime, setFormStartTime] = useState(fmtHHMM(new Date()));
   const [formEndTime, setFormEndTime] = useState("");
   const [saving, setSaving] = useState(false);
+  // Reguły wpisu lokalu, w którym zaczyna się zmiana (utils/wpisy.ts) — dla
+  // osoby wypożyczonej to lokal, w którym stoi dziś, a nie macierzysty.
+  const regulyFormularza = regulyWpisu(lokaleWszystkie, formLokal);
+  // Lokal może wymusić sposób wpisu. Wtedy przełącznik "Znam godzinę
+  // zakończenia" znika, a stan knowsEnd przestaje cokolwiek znaczyć — dlatego
+  // wszędzie niżej czytamy znamKoniec, nie knowsEnd.
+  const wymuszonaCala = wymuszonaCalaZmiana(regulyFormularza);
+  const znamKoniec = wymuszonaCala ?? knowsEnd;
+  // Wpis poza oknem tolerancji lokalu, czekający na decyzję: wysłać do
+  // kierownika albo zrezygnować. Kształt: { rodzaj: "start"|"cala"|"koniec",
+  // powod: "za_pozno"|"przyszlosc", okno, najwczesniej?, startD?, endD?, shift? }.
+  const [pozaOknem, setPozaOknem] = useState(null);
 
   const [raportMonth, setRaportMonth] = useState(new Date().getMonth());
   const [raportYear, setRaportYear] = useState(new Date().getFullYear());
@@ -464,9 +485,13 @@ export const EmployeeSessionScreens = ({
   // czeka na decyzję kierownika. Bez tego osoba, która raz zapomniała odbić
   // koniec, nie mogła w ogóle rozpocząć kolejnej zmiany: ekran stał wtedy w
   // trybie "zakończ trwającą zmianę" i innej drogi nie było.
+  //
+  // Tak samo nie trwa zmiana, o której koniec pracownik poprosił już
+  // kierownika (wpis poza oknem tolerancji) — patrz czekaNaKoniecOdKierownika.
   const openShift = shifts.find(
     (s) =>
       s.user_id === employee.id &&
+      !czekaNaKoniecOdKierownika(s, issues) &&
       zmianaTrwa({
         shift: s,
         planShifts,
@@ -871,6 +896,14 @@ export const EmployeeSessionScreens = ({
       endD = new Date(openShift.start_time);
       endD.setHours(h, m, 0, 0);
       if (endD < openShift.start_time) endD.setDate(endD.getDate() + 1);
+      // Okno tolerancji lokalu tej ZMIANY (nie lokalu z formularza). "Teraz"
+      // przechodzi zawsze, więc sprawdzamy tylko godzinę wybraną ręcznie.
+      const okno = regulyWpisu(lokaleWszystkie, openShift.lokal).koniecWstecz;
+      const problem = sprawdzGodzine(endD, new Date(), okno);
+      if (problem) {
+        setSaving(false);
+        return setPozaOknem({ rodzaj: "koniec", ...problem, okno, shift: openShift, endD });
+      }
     } else {
       endD = new Date();
     }
@@ -899,60 +932,18 @@ export const EmployeeSessionScreens = ({
     setSaving(false);
   };
 
-  // ---- utworzenie zmiany: sam start albo pełna zmiana (jak TimeEntryForm.handleCreateShift) ----
-  const handleCreateShift = async () => {
-    if (
-      !formLokal ||
-      !formStanowisko ||
-      !formStartTime ||
-      (knowsEnd && !formEndTime)
-    ) {
-      return showMsg("Wypełnij wymagane pola!", "error");
-    }
-    setSaving(true);
-    const today = new Date();
-    const [sh, sm] = formStartTime.split(":").map(Number);
-    const startD = new Date(
-      today.getFullYear(),
-      today.getMonth(),
-      today.getDate(),
-      sh,
-      sm
-    );
-    let endD = null,
-      hrs = null;
-    if (knowsEnd) {
-      const [eh, em] = formEndTime.split(":").map(Number);
-      endD = new Date(
-        today.getFullYear(),
-        today.getMonth(),
-        today.getDate(),
-        eh,
-        em
-      );
-      if (endD < startD) endD.setDate(endD.getDate() + 1);
-      hrs = parseFloat(((endD - startD) / 3600000).toFixed(2));
-    }
-
-    const overlapping = findOverlappingShift(
-      shifts,
-      employee.id,
-      startD,
-      endD,
-      null
-    );
+  // Kolizja z już zapisaną zmianą — treść komunikatu albo null. Najpierw
+  // lokalnie, potem w BAZIE: lokalna lista bywa nieaktualna — tablet stoi
+  // zalogowany tygodniami, a kierownik może wpisywać to samo z panelu. Patrz
+  // komentarz przy znajdzKolizjeWBazie.
+  const kolizjaZmiany = async (startD, endD) => {
+    const overlapping = findOverlappingShift(shifts, employee.id, startD, endD, null);
     if (overlapping) {
-      setSaving(false);
-      return showMsg(
+      return (
         `Ta zmiana nakłada się na już zapisaną (${opisKolidujacej(overlapping)}). ` +
-          'Jeśli to pomyłka, zgłoś się przez zakładkę "Zgłoś".',
-        "error"
+        'Jeśli to pomyłka, zgłoś się przez zakładkę "Zgłoś".'
       );
     }
-
-    // Druga kontrola, tym razem W BAZIE. Lokalna lista bywa nieaktualna —
-    // tablet stoi zalogowany tygodniami, a kierownik może wpisywać to samo
-    // z panelu. Patrz komentarz przy znajdzKolizjeWBazie.
     const wBazie = await znajdzKolizjeWBazie({
       userId: employee.id,
       start: startD,
@@ -960,14 +951,23 @@ export const EmployeeSessionScreens = ({
       excludeId: null,
     });
     if (wBazie) {
-      setSaving(false);
-      return showMsg(
+      return (
         `Ta zmiana jest już zapisana (${opisKolidujacej(wBazie)}). ` +
-          'Jeśli to pomyłka, zgłoś się przez zakładkę "Zgłoś".',
-        "error"
+        'Jeśli to pomyłka, zgłoś się przez zakładkę "Zgłoś".'
       );
     }
+    return null;
+  };
 
+  // Zapis nowej zmiany (sam start albo cała). Zwraca zapisany wiersz albo
+  // null — komunikat o przyczynie pokazuje sama. `saving` ustawia wołający.
+  const zapiszNowaZmiane = async (startD, endD) => {
+    const kolizja = await kolizjaZmiany(startD, endD);
+    if (kolizja) {
+      showMsg(kolizja, "error");
+      return null;
+    }
+    const hrs = endD ? parseFloat(((endD - startD) / 3600000).toFixed(2)) : null;
     const newShiftData = {
       user_id: employee.id,
       user_name: employee.name,
@@ -977,7 +977,6 @@ export const EmployeeSessionScreens = ({
       end_time: endD ? endD.toISOString() : null,
       godzin: hrs,
     };
-
     try {
       const created = await api.post("shifts", newShiftData);
       const parsed = {
@@ -987,15 +986,167 @@ export const EmployeeSessionScreens = ({
       };
       setShifts([...shifts, parsed]);
       sendToGoogleSheets(parsed, "ADD_SHIFT");
-      showMsg(knowsEnd ? "Zmiana zapisana!" : "Rozpoczęto zmianę!");
-      if (knowsEnd) {
+      return parsed;
+    } catch (err) {
+      showMsg("Błąd zapisu do bazy!", "error");
+      return null;
+    }
+  };
+
+  // ---- utworzenie zmiany: sam start albo pełna zmiana (jak TimeEntryForm.handleCreateShift) ----
+  const handleCreateShift = async () => {
+    if (
+      !formLokal ||
+      !formStanowisko ||
+      !formStartTime ||
+      (znamKoniec && !formEndTime)
+    ) {
+      return showMsg("Wypełnij wymagane pola!", "error");
+    }
+    const today = new Date();
+    const [sh, sm] = formStartTime.split(":").map(Number);
+    let startD = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate(),
+      sh,
+      sm
+    );
+    let endD = null;
+    if (znamKoniec) {
+      const [eh, em] = formEndTime.split(":").map(Number);
+      endD = new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate(),
+        eh,
+        em
+      );
+      if (endD < startD) endD.setDate(endD.getDate() + 1);
+    }
+
+    // Okno tolerancji lokalu (utils/wpisy.ts). Bez ustawień (null) nic się tu
+    // nie dzieje i godziny idą dokładnie tak jak przed 0.45.0 — także
+    // przesunięcie przez północ działa tylko wtedy, gdy okno jest ustawione.
+    //
+    // Cała zmiana wpisywana jest PO fakcie, więc liczy się okno KOŃCA; sam
+    // start — okno STARTU.
+    const teraz = new Date();
+    const r = regulyFormularza;
+    if (znamKoniec && r.koniecWstecz != null) {
+      const d = dopasujCalaZmiane(startD, endD, teraz);
+      startD = d.startD;
+      endD = d.endD;
+      const problem = sprawdzGodzine(endD, teraz, r.koniecWstecz);
+      if (problem) {
+        return setPozaOknem({ rodzaj: "cala", ...problem, okno: r.koniecWstecz, startD, endD });
+      }
+    } else if (!znamKoniec && r.startWstecz != null) {
+      startD = dopasujStart(startD, teraz);
+      const problem = sprawdzGodzine(startD, teraz, r.startWstecz);
+      if (problem) {
+        return setPozaOknem({ rodzaj: "start", ...problem, okno: r.startWstecz, startD });
+      }
+    }
+
+    setSaving(true);
+    const zapisana = await zapiszNowaZmiane(startD, endD);
+    if (zapisana) {
+      showMsg(endD ? "Zmiana zapisana!" : "Rozpoczęto zmianę!");
+      if (endD) {
         setJustClosed(true);
         setScreen("ZMIANA");
       }
-    } catch (err) {
-      showMsg("Błąd zapisu do bazy!", "error");
     }
     setSaving(false);
+  };
+
+  // Prośba do kierownika o godzinę, której pracownik nie może już wpisać sam
+  // (poza oknem tolerancji lokalu). To ZWYKŁA korekta — ten sam wiersz, który
+  // powstaje z "Zgłoś → Popraw zmianę" — więc kierownik rozstrzyga ją w
+  // Zatwierdzaniu zmian tym samym kodem (resolveCorrection).
+  const wyslijProsbeOGodzine = async ({ shiftId, startD, endD, lokal, stanowisko, opis }) => {
+    const issue = await api.post("issues", {
+      user_id: employee.id,
+      user_name: employee.name,
+      issue_text: opis,
+      status: "nowe",
+      type: "correction",
+      is_anonymous: false,
+      shift_id: shiftId || null,
+      proposed_date: toLocalYMD(startD),
+      proposed_lokal: lokal,
+      proposed_stanowisko: stanowisko,
+      proposed_start_time: fmtHHMM(startD),
+      proposed_end_time: endD ? fmtHHMM(endD) : null,
+    });
+    setIssues([...(issues || []), issue]);
+    return issue;
+  };
+
+  const potwierdzPozaOknem = async () => {
+    const p = pozaOknem;
+    if (!p || p.powod !== "za_pozno") return setPozaOknem(null);
+    setSaving(true);
+    try {
+      if (p.rodzaj === "start") {
+        // Zmiana zaczyna się TERAZ — człowiek stoi przy tablecie i ma zostać
+        // odbity, a wcześniejszą godzinę rozstrzyga kierownik. Zatwierdzenie
+        // przestawia start i zostawia koniec (resolveCorrection).
+        const teraz = new Date();
+        teraz.setSeconds(0, 0);
+        const zmiana = await zapiszNowaZmiane(teraz, null);
+        if (!zmiana) return;
+        try {
+          await wyslijProsbeOGodzine({
+            shiftId: zmiana.id,
+            startD: p.startD,
+            endD: null,
+            lokal: zmiana.lokal,
+            stanowisko: zmiana.stanowisko,
+            opis: `Start o ${fmtHHMM(p.startD)} wpisany po czasie (okno lokalu: ${p.okno} min). Zmianę rozpoczęto o ${fmtHHMM(teraz)}.`,
+          });
+          showMsg(
+            `Rozpoczęto zmianę o ${fmtHHMM(teraz)}. Start o ${fmtHHMM(p.startD)} czeka na kierownika.`
+          );
+        } catch (err) {
+          // Zmiana już stoi — nie udawajmy, że nic się nie stało, ale też nie
+          // zgłaszajmy, że nie powstała.
+          showMsg(
+            `Rozpoczęto zmianę o ${fmtHHMM(teraz)}, ale prośby o start ${fmtHHMM(p.startD)} nie udało się wysłać (${err.message || "błąd połączenia"}). Wyślij ją przez Zgłoś → Popraw zmianę.`,
+            "error"
+          );
+        }
+      } else if (p.rodzaj === "cala") {
+        const kolizja = await kolizjaZmiany(p.startD, p.endD);
+        if (kolizja) return showMsg(kolizja, "error");
+        await wyslijProsbeOGodzine({
+          shiftId: null,
+          startD: p.startD,
+          endD: p.endD,
+          lokal: formLokal,
+          stanowisko: formStanowisko,
+          opis: `Cała zmiana wpisana po czasie (okno lokalu: ${p.okno} min od zakończenia).`,
+        });
+        showMsg("Wysłano do kierownika — godziny pojawią się po zatwierdzeniu.");
+        resetShiftForm();
+      } else if (p.rodzaj === "koniec") {
+        await wyslijProsbeOGodzine({
+          shiftId: p.shift.id,
+          startD: p.shift.start_time,
+          endD: p.endD,
+          lokal: p.shift.lokal,
+          stanowisko: p.shift.stanowisko,
+          opis: `Koniec o ${fmtHHMM(p.endD)} wpisany po czasie (okno lokalu: ${p.okno} min).`,
+        });
+        showMsg("Wysłano do kierownika — zmiana czeka na jego decyzję.");
+      }
+      setPozaOknem(null);
+    } catch (err) {
+      showMsg(`Błąd połączenia: ${err.message || "nieznany błąd"}`, "error");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleSendZgloszenie = async () => {
@@ -1506,6 +1657,11 @@ export const EmployeeSessionScreens = ({
                 className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
               />
             </button>
+            {podpisOkna("koniec", regulyWpisu(lokaleWszystkie, openShift.lokal).koniecWstecz) && (
+              <p className={`${helperTextCls} mt-2.5`}>
+                {podpisOkna("koniec", regulyWpisu(lokaleWszystkie, openShift.lokal).koniecWstecz)}
+              </p>
+            )}
           </>
         ) : (
           <p className={helperTextCls}>
@@ -1517,7 +1673,7 @@ export const EmployeeSessionScreens = ({
   };
 
   const razem = (() => {
-    if (!knowsEnd || !formStartTime || !formEndTime) return null;
+    if (!znamKoniec || !formStartTime || !formEndTime) return null;
     const [sh, sm] = formStartTime.split(":").map(Number);
     const [eh, em] = formEndTime.split(":").map(Number);
     let mins = eh * 60 + em - (sh * 60 + sm);
@@ -1592,20 +1748,31 @@ export const EmployeeSessionScreens = ({
           </span>
         </div>
       </div>
-      <button
-        type="button"
-        onClick={() => setKnowsEnd((v) => !v)}
-        className={`${checkboxRowCls(knowsEnd)} mt-5`}
-      >
-        <span className="w-5 h-5 border-2 border-[#B7B6AE] rounded-[3px] flex-shrink-0 flex items-center justify-center">
-          {knowsEnd && (
-            <span className="w-[9px] h-[9px] bg-[#DE3A22] rounded-[1px]" />
-          )}
-        </span>
-        <span className="text-[15.5px] font-semibold text-[#171714]">
-          Znam godzinę zakończenia
-        </span>
-      </button>
+      {/* Lokal może wymusić jeden sposób wpisu (Ustawienia → Lokale →
+          Rejestracja godzin). Wtedy przełącznika nie ma — jest zdanie, które
+          mówi, jak się tu wpisuje godziny. */}
+      {wymuszonaCala === null ? (
+        <button
+          type="button"
+          onClick={() => setKnowsEnd((v) => !v)}
+          className={`${checkboxRowCls(knowsEnd)} mt-5`}
+        >
+          <span className="w-5 h-5 border-2 border-[#B7B6AE] rounded-[3px] flex-shrink-0 flex items-center justify-center">
+            {knowsEnd && (
+              <span className="w-[9px] h-[9px] bg-[#DE3A22] rounded-[1px]" />
+            )}
+          </span>
+          <span className="text-[15.5px] font-semibold text-[#171714]">
+            Znam godzinę zakończenia
+          </span>
+        </button>
+      ) : (
+        <p className={`${helperTextCls} mt-5`}>
+          {wymuszonaCala
+            ? "W tym lokalu wpisujesz całą zmianę naraz — po jej zakończeniu."
+            : "W tym lokalu odbijasz osobno: start teraz, koniec po pracy."}
+        </p>
+      )}
       <div className="mt-5">
         <span className={fieldLabelCls}>Rozpoczęcie</span>
         <div className={timeHeroCls}>
@@ -1615,7 +1782,7 @@ export const EmployeeSessionScreens = ({
               {formStartTime}
             </span>
           </div>
-          {!knowsEnd && (
+          {!znamKoniec && (
             <span className="text-[13px] text-[#8F8E86]">teraz · zmień</span>
           )}
           <input
@@ -1626,7 +1793,7 @@ export const EmployeeSessionScreens = ({
           />
         </div>
       </div>
-      {knowsEnd && (
+      {znamKoniec && (
         <div className="mt-5">
           <span className={fieldLabelCls}>Zakończenie</span>
           <div className={timePlainCls}>
@@ -1642,7 +1809,7 @@ export const EmployeeSessionScreens = ({
           </div>
         </div>
       )}
-      {knowsEnd && razem && (
+      {znamKoniec && razem && (
         <div className={`${razemRowCls} mt-5`}>
           <span className="text-sm text-[#6E6E66]">Razem</span>
           <span className="font-['Archivo'] font-extrabold text-[17px] text-[#171714] tabular-nums">
@@ -1650,9 +1817,20 @@ export const EmployeeSessionScreens = ({
           </span>
         </div>
       )}
-      {!knowsEnd && (
+      {!znamKoniec && (
         <p className={`${helperTextCls} mt-5`}>
           Zapiszemy tylko start. Zmianę zakończysz przy następnym wejściu.
+        </p>
+      )}
+      {podpisOkna(
+        znamKoniec ? "cala" : "start",
+        znamKoniec ? regulyFormularza.koniecWstecz : regulyFormularza.startWstecz
+      ) && (
+        <p className={`${helperTextCls} mt-2`}>
+          {podpisOkna(
+            znamKoniec ? "cala" : "start",
+            znamKoniec ? regulyFormularza.koniecWstecz : regulyFormularza.startWstecz
+          )}
         </p>
       )}
       <div className="flex-1" />
@@ -1661,10 +1839,56 @@ export const EmployeeSessionScreens = ({
         disabled={saving}
         className={ctaPrimaryCls}
       >
-        {knowsEnd ? "Zapisz całą zmianę" : "Rozpocznij zmianę"}
+        {znamKoniec ? "Zapisz całą zmianę" : "Rozpocznij zmianę"}
       </button>
     </>
   );
+
+  // Wpis poza oknem tolerancji lokalu — wyjaśnienie i jedyna droga dalej:
+  // wysłać godzinę kierownikowi. Nic nie przepada, zmienia się tylko to, kto
+  // tę godzinę zatwierdza.
+  const renderPozaOknem = () => {
+    const p = pozaOknem;
+    if (!p) return null;
+    let tytul;
+    let tresc;
+    if (p.powod === "przyszlosc") {
+      tytul = "Tej godziny jeszcze nie było";
+      tresc =
+        p.rodzaj === "start"
+          ? "Zmianę rozpoczniesz, gdy zaczniesz pracę — nie z wyprzedzeniem."
+          : "Koniec zapiszesz, gdy zmiana się skończy.";
+    } else {
+      tytul = "Za późno na samodzielny wpis";
+      const godzina = fmtHHMM(p.rodzaj === "start" ? p.startD : p.endD);
+      tresc =
+        p.rodzaj === "start"
+          ? `W tym lokalu start możesz sam cofnąć najwyżej o ${p.okno} min (najwcześniej ${fmtHHMM(p.najwczesniej)}). Rozpoczniemy zmianę teraz, a start o ${godzina} wyślemy kierownikowi do zatwierdzenia.`
+          : p.rodzaj === "koniec"
+          ? `W tym lokalu koniec możesz sam cofnąć najwyżej o ${p.okno} min (najwcześniej ${fmtHHMM(p.najwczesniej)}). Koniec o ${godzina} wyślemy kierownikowi do zatwierdzenia.`
+          : `W tym lokalu całą zmianę zapisujesz sam najpóźniej ${p.okno} min po jej zakończeniu. Zmianę ${fmtHHMM(p.startD)}–${godzina} wyślemy kierownikowi do zatwierdzenia.`;
+    }
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-lg border-[2.5px] border-[#171714] w-full max-w-md p-5 max-h-[90vh] overflow-y-auto">
+          <p className="font-['Archivo'] font-extrabold text-xl text-[#171714]">{tytul}</p>
+          <p className={`${helperTextCls} mt-2`}>{tresc}</p>
+          {p.powod === "za_pozno" && (
+            <button
+              onClick={potwierdzPozaOknem}
+              disabled={saving}
+              className={`${ctaPrimaryCls} mt-5`}
+            >
+              {p.rodzaj === "start" ? "Rozpocznij i wyślij do kierownika" : "Wyślij do kierownika"}
+            </button>
+          )}
+          <button onClick={() => setPozaOknem(null)} className={ctaSecondaryCls}>
+            {p.powod === "za_pozno" ? "Anuluj" : "Rozumiem"}
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   const renderJustClosedSummary = () => {
     const total = sumHours(todaysClosedShifts);
@@ -1874,6 +2098,7 @@ export const EmployeeSessionScreens = ({
           : justClosed
           ? renderJustClosedSummary()
           : renderStartForm()}
+        {renderPozaOknem()}
       </Shell>
     );
   }

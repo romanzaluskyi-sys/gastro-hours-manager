@@ -44,16 +44,29 @@ export const resolveCorrection = async ({
 }) => {
   const startD = buildLocalDate(finalValues.date, finalValues.start);
   if (!startD) throw new Error("Brak daty lub godziny rozpoczęcia.");
-  let endD = finalValues.end
-    ? buildLocalDate(finalValues.date, finalValues.end)
-    : null;
-  if (endD && endD < startD) endD.setDate(endD.getDate() + 1);
-  const godzin = endD
-    ? parseFloat(((endD - startD) / 3600000).toFixed(2))
-    : null;
 
   const existingShift = issue.shift_id
     ? shifts.find((s) => s.id === issue.shift_id)
+    : null;
+
+  // ⚠️ Puste "end" przy ISTNIEJĄCEJ zmianie znaczy "koniec bez zmian", nie
+  // "skasuj koniec". Prośba o wcześniejszy start (wpis poza oknem tolerancji
+  // lokalu, utils/wpisy.ts) powstaje, gdy zmiana dopiero się zaczyna — zanim
+  // kierownik ją zatwierdzi, pracownik zwykle zdąży ją zakończyć. Patch z
+  // `end_time: null` otworzyłby ją z powrotem i wyzerował godziny.
+  const zachowanyKoniec =
+    !finalValues.end && existingShift && existingShift.end_time
+      ? new Date(existingShift.end_time)
+      : null;
+  let endD = finalValues.end
+    ? buildLocalDate(finalValues.date, finalValues.end)
+    : zachowanyKoniec;
+  if (endD && !zachowanyKoniec && endD < startD) endD.setDate(endD.getDate() + 1);
+  if (zachowanyKoniec && zachowanyKoniec <= startD) {
+    throw new Error("Nowa godzina rozpoczęcia wypada po zakończeniu zmiany.");
+  }
+  const godzin = endD
+    ? parseFloat(((endD - startD) / 3600000).toFixed(2))
     : null;
 
   let savedShift;
@@ -120,13 +133,13 @@ export const resolveCorrection = async ({
     new_lokal: finalValues.lokal,
     new_stanowisko: finalValues.stanowisko,
     new_start_time: finalValues.start,
-    new_end_time: finalValues.end || null,
+    new_end_time: finalValues.end || (zachowanyKoniec ? fmtHHMM(zachowanyKoniec) : null),
     source: reason ? "correction_adjusted" : "correction_approved",
   });
 
-  const zakres = `${finalValues.start}${
-    finalValues.end ? "–" + finalValues.end : ""
-  }`;
+  const koniecOpis =
+    finalValues.end || (zachowanyKoniec ? fmtHHMM(zachowanyKoniec) : "");
+  const zakres = `${finalValues.start}${koniecOpis ? "–" + koniecOpis : ""}`;
   const msg = reason
     ? `${editorName} poprawił(a) zgłoszoną przez Ciebie zmianę z dnia ${fmtPL(
         finalValues.date

@@ -411,7 +411,10 @@ const poprzedniMiesiac = (h) => {
         lokale: [
           { id: "l1", name: "Bułka i Jacek", miasto: "Koszalin", archived: false },
           { id: "l2", name: "Ceglana", miasto: "Koszalin", archived: false,
-            okres_rozliczeniowy: 3, narzut_umowa: 20.5, narzut_zlecenie: 0, dzien_wyplaty: 10 },
+            okres_rozliczeniowy: 3, narzut_umowa: 20.5, narzut_zlecenie: 0, dzien_wyplaty: 10,
+            // Rejestracja godzin (0.45.0) — zwinięta sekcja musi mówić, co
+            // ustawiono, a zapis karty nie może tego zgubić.
+            tryb_wpisu: "odbicie", start_wstecz_min: 15 },
         ],
         stanowiska: [
           { id: "s1", name: "Kucharz", lokal_name: "Bułka i Jacek", archived: false },
@@ -460,6 +463,15 @@ const poprzedniMiesiac = (h) => {
           { id: "i3", type: "problem", status: "nowe", is_anonymous: false,
             user_id: "u5", user_name: "Ewa", issue_text: "Zepsuty ekspres na Ceglanej.",
             created_at: "2026-09-11T08:00:00Z" },
+          // Prośba o wcześniejszy start (wpis poza oknem tolerancji lokalu):
+          // BEZ końca, przypięta do zmiany, która już się zakończyła.
+          // Zatwierdzenie ma przestawić start i ZOSTAWIĆ koniec 16:00.
+          { id: "i4", type: "correction", status: "nowe", is_anonymous: false,
+            user_id: "u1", user_name: "Ala", shift_id: "sh1",
+            proposed_date: wczoraj, proposed_lokal: "Bułka i Jacek",
+            proposed_stanowisko: "Kucharz", proposed_start_time: "07:30",
+            proposed_end_time: null, issue_text: "Start o 07:30 wpisany po czasie.",
+            created_at: "2026-09-11T07:00:00Z" },
         ], notifications: [], shiftEdits: [],
         tasks, setTasks, taskBlocks, setTaskBlocks, taskCompletions, setTaskCompletions,
         // Plan na bieżący tydzień — bez niego siatka Grafiku jest pusta i nie
@@ -619,6 +631,12 @@ const poprzedniMiesiac = (h) => {
         sprawdz("zapis karty lokalu niesie pola zwiniętych sekcji",
           !!dane && dane.okres_rozliczeniowy === 3 && dane.narzut_umowa === 20.5,
           JSON.stringify(dane));
+        sprawdz("zwinięta sekcja rejestracji mówi, jak się tu wpisuje godziny",
+          /Tylko odbicie · start do 15 min po fakcie · koniec bez ograniczeń/.test(karta.textContent));
+        sprawdz("zapis karty niesie sposób wpisu i okna (puste okno = null, nie 0)",
+          !!dane && dane.tryb_wpisu === "odbicie" && dane.start_wstecz_min === 15 &&
+            dane.koniec_wstecz_min === null,
+          JSON.stringify(dane && { t: dane.tryb_wpisu, s: dane.start_wstecz_min, k: dane.koniec_wstecz_min }));
 
         const przedDodaniem = window.__zapisy.length;
         klik("Dodaj lokal"); await czekaj(300);
@@ -638,6 +656,45 @@ const poprzedniMiesiac = (h) => {
           [...document.querySelectorAll("form h3")].some((h) => h.textContent === "Sunset"));
       } catch (e) {
         if (e !== null) sprawdz("Ustawienia: przebieg bez wyjątku", false, e.message);
+      }
+
+      // ----------------------------------------------------------------
+      // Prośba o sam start (0.45.0). Do tej wersji korekta bez końca miała
+      // tylko "Zapytaj", a zatwierdzona inną drogą wpisywała end_time = null,
+      // czyli otwierała zakończoną zmianę i zerowała jej godziny.
+      // ----------------------------------------------------------------
+      try {
+        if (new URLSearchParams(location.search).get("rola") !== "manager") {
+          klik("Zatwierdzanie zmian"); await czekaj(400);
+          const kartaAli = [...document.querySelectorAll("#app div.rounded-xl")]
+            .find((d) => d.textContent.includes("07:30") && d.textContent.includes("Ala")
+              && d.querySelector("button"));
+          sprawdz("prośba o start stoi w kolejce korekt", !!kartaAli);
+          sprawdz("pokazuje obecny koniec zmiany, nie „brak”",
+            !!kartaAli && /07:30\s*–\s*16:00/.test(kartaAli.textContent),
+            kartaAli ? kartaAli.textContent.slice(0, 160) : "");
+          const zatwierdz = kartaAli && [...kartaAli.querySelectorAll("button")]
+            .find((b) => b.textContent.includes("Zatwierdź"));
+          sprawdz("da się ją zatwierdzić jednym kliknięciem", !!zatwierdz);
+          if (zatwierdz) {
+            const przed = window.__zapisy.length;
+            zatwierdz.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            await czekaj(500);
+            const patch = window.__zapisy.slice(przed)
+              .find((z) => z[0] === "shifts" && z[1] === "sh1");
+            const nowe = patch && patch[2];
+            sprawdz("zatwierdzenie przestawia start na 07:30",
+              !!nowe && new Date(nowe.start_time).getHours() === 7 &&
+                new Date(nowe.start_time).getMinutes() === 30,
+              JSON.stringify(nowe));
+            sprawdz("…i ZOSTAWIA koniec 16:00 (zmiana się nie otwiera)",
+              !!nowe && !!nowe.end_time && new Date(nowe.end_time).getHours() === 16 &&
+                nowe.godzin === 8.5,
+              JSON.stringify(nowe));
+          }
+        }
+      } catch (e) {
+        sprawdz("Korekta startu: przebieg bez wyjątku", false, e.message);
       }
 
       if (status.className !== "zle") {
