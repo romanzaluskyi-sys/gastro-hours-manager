@@ -92,8 +92,9 @@ klientozależnego wprost do kodu — to jest ten moment.
 
 Front: `REACT_APP_SUPABASE_URL`, `REACT_APP_SUPABASE_KEY`,
 `REACT_APP_GOOGLE_SCRIPT_URL`, `REACT_APP_TENANT`, `REACT_APP_PRODUKT`.
-Crony (`api/cron/*.js`, runtime): `SUPABASE_URL`, `SUPABASE_KEY`,
-`CRON_SECRET`. Te same wartości trzeba wpisać dwa razy — to dwa różne
+Crony (`api/cron/*.js`, runtime): `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`,
+`CRON_SECRET` (od 3c-1 — patrz niżej; `SUPABASE_KEY` czyta już tylko
+`api/admin/ustaw-haslo.js`). Te same wartości trzeba wpisać dwa razy — to dwa różne
 mechanizmy (build-time DefinePlugin kontra runtime `process.env`).
 
 ⚠️ **`src/config.ts` musi mieć `// @ts-nocheck`.** Do 0.32.0 był jedynym

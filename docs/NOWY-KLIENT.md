@@ -36,15 +36,20 @@ Environment Variables:
 | `REACT_APP_GOOGLE_SCRIPT_URL` | front, synchronizacja z arkuszem | URL Web App |
 | `REACT_APP_TENANT` | nazwa klienta na ekranie logowania i w panelu | `Gastro Emka` |
 | `REACT_APP_PRODUKT` | nazwa produktu | `Shiftro` |
-| `SUPABASE_URL` | crony (`api/cron/*.js`) | jak wyżej |
-| `SUPABASE_KEY` | crony | jak wyżej |
+| `SUPABASE_URL` | crony (`api/cron/*.js`) i `api/admin/ustaw-haslo.js` | jak wyżej |
+| `SUPABASE_SERVICE_KEY` | crony (każdy zapis) i `ustaw-haslo.js` (hasło w Auth) | `sb_secret_...` |
+| `SUPABASE_KEY` | tylko `ustaw-haslo.js` — sprawdza token wołającego | `sb_publishable_...` |
 | `CRON_SECRET` | autoryzacja crona | losowy ciąg |
-| `SUPABASE_SERVICE_KEY` | `api/admin/ustaw-haslo.js` — zmiana PIN-u pracownika razem z hasłem konta | `sb_secret_...` |
+
+⚠️ **Crony czytają `SUPABASE_SERVICE_KEY`, NIE `SUPABASE_KEY`.** Do 0.41.x
+chodziły kluczem publishable, czyli jako anonim; migracja `0026` zabrała
+anonimowi wszystko, więc przeszły na klucz serwisowy. Ustawiony sam
+`SUPABASE_KEY` daje pięć kronów zwracających 500 z nazwą brakującej zmiennej.
 
 ⚠️ **`SUPABASE_SERVICE_KEY` omija RLS i może wszystko.** Nigdy z przedrostkiem
 `REACT_APP_` (trafiłby do paczki w przeglądarce), nigdy w repozytorium. Bez
-niego aplikacja działa, ale zmiana PIN-u w karcie pracownika nie zmieni hasła
-do logowania — kierownik zobaczy o tym wyraźną wiadomość.
+niego nie działa żaden cron, a zmiana PIN-u w karcie pracownika nie zmieni
+hasła do logowania (kierownik zobaczy o tym wyraźną wiadomość).
 
 ⚠️ **Ustaw każdą z nich dla WSZYSTKICH trzech środowisk** (Production,
 Preview, Development). Ustawione tylko dla produkcji dają podgląd każdego PR-a
@@ -55,7 +60,8 @@ ustawienia projektu.
 zmiennej nic nie zmienia w już zbudowanej paczce — po każdej zmianie zrób
 redeploy.
 
-⚠️ **Zmienne bez `REACT_APP_` (`SUPABASE_URL`, `SUPABASE_KEY`, `CRON_SECRET`)
+⚠️ **Zmienne bez `REACT_APP_` (`SUPABASE_URL`, `SUPABASE_SERVICE_KEY`,
+`SUPABASE_KEY`, `CRON_SECRET`)
 są dla funkcji w `api/`** i czytają się w runtime. To dwa różne mechanizmy i
 dlatego te same wartości trzeba wpisać dwa razy.
 
@@ -95,23 +101,47 @@ Synchronizacja z arkuszem Google jest per klient: własna kopia
 do `REACT_APP_GOOGLE_SCRIPT_URL`. Klient, który nie miał wcześniej systemu na
 arkuszach, tego w ogóle nie potrzebuje — zostaw zmienną pustą.
 
-## 4. Dane startowe
+## 4. Konto właściciela
 
-W tej kolejności, bo każdy krok korzysta z poprzedniego:
+Na pustej bazie nie ma kim się zalogować: logowanie idzie przez Supabase Auth,
+a anonim nie może nic zapisać do `users` (migracja `0026`). Pierwsze konto
+zakłada więc skrypt, a nie aplikacja:
+
+```bash
+export SUPABASE_SERVICE_KEY=sb_secret_...
+python3 scripts/pierwszy-admin.py --url https://<REF>.supabase.co --imie "Imię Nazwisko" --email adres@klienta.pl
+python3 scripts/pierwszy-admin.py --url https://<REF>.supabase.co --imie "Imię Nazwisko" --email adres@klienta.pl --wykonaj
+```
+
+Skrypt losuje 6-cyfrowy PIN i wypisuje go **raz** — przekaż go właścicielowi
+bezpiecznym kanałem; zmieni go sam w swojej karcie. Jeśli w bazie jest już
+aktywny admin, skrypt przerywa: to narzędzie do pustej bazy, nie do
+dokładania kont. Kolejne konta (kierownicy, tablety, pracownicy) zakłada
+właściciel w aplikacji — karta pracownika tworzy konto w Auth sama.
+
+⚠️ `scripts/utworz-konta-auth.py` to NIE to samo: tamten dowiązuje konta do
+wierszy, które już są w `users` (jednorazowa migracja pierwszego klienta na
+Auth). Na pustej bazie nie zrobi nic.
+
+## 5. Dane startowe
+
+Zalogowany jako właściciel, w tej kolejności, bo każdy krok korzysta z
+poprzedniego:
 
 1. **Lokale** (Pracownicy → Lokale) — nazwa, miasto (do pogody), dzień
    wypłaty, okres rozliczeniowy, narzuty.
 2. **Stanowiska** (Pracownicy → Stanowiska) — nazwa, skrót (do siatki
    grafiku), kolor.
-3. **Konto właściciela** — rola `admin`, e-mail + PIN.
-4. **Pracownicy** — reszta załogi.
-5. **Wymagania obsady** (Grafik → Konfiguracja) — bez nich kontrola obsady
+3. **Pracownicy** — reszta załogi. Kierownicy i tablety dostają e-mail + PIN
+   i od razu konto do logowania; pracownicy obsługiwani z tabletu nie
+   potrzebują ani jednego, ani drugiego.
+4. **Wymagania obsady** (Grafik → Konfiguracja) — bez nich kontrola obsady
    nie ma czego pilnować i każdy dzień wygląda na poprawny.
-6. **Szablony wpisów Pulsu** (Puls → Konfiguracja, sekcja "Szybki start") —
+5. **Szablony wpisów Pulsu** (Puls → Konfiguracja, sekcja "Szybki start") —
    sześć typowych wpisów HACCP, każdy dodawany jednym kliknięciem. Sekcja
    znika, gdy wszystkie są już dodane.
 
-## 5. Zanim wejdą prawdziwe dane
+## 6. Zanim wejdą prawdziwe dane
 
 ⚠️ **Umowa powierzenia przetwarzania danych (DPA) musi być podpisana ZANIM
 dane osobowe pracowników klienta trafią do bazy**, nie po. Imiona, e-maile,
