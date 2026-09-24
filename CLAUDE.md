@@ -704,6 +704,9 @@ src/
       Przewodnik.tsx, MojaPraca.tsx
                                     — po jednej zakładce Panelu Kierownika
                                     każdy, patrz "Panel kierownika" niżej
+      Ustawienia.tsx                zakładka TYLKO dla właściciela (`admin`):
+                                    Lokale, Stanowiska, Firma, Subskrypcja —
+                                    patrz "Ustawienia właściciela" niżej
 ```
 
 `tsconfig.json` ma `"skipLibCheck": true` (potrzebne, inaczej crash na
@@ -746,7 +749,7 @@ konkretna osoba). Dwie rzeczy decydują o tym, co pracownik widzi:
    `email` (oba w karcie pracownika). Brak któregokolwiek = brak dostępu i
    nic się dla tej osoby nie zmienia.
 2. **Które bloki widzi** — `lokale.dostepne_bloki`, ustawiane RAZ NA LOKAL
-   (Pracownicy → Lokale), nie per pracownik (świadoma decyzja właściciela).
+   (Ustawienia → Lokale), nie per pracownik (świadoma decyzja właściciela).
    Klucze: `WPISY`, `RAPORT`, `GRAFIK`, `ZADANIA`, `WIADOMOSCI`,
    `ZGLOS_PROBLEM`, `WOLNE`. "Popraw zmianę" NIE ma własnego klucza — chodzi
    z `RAPORT`, bo bez listy swoich zmian nie ma czego poprawiać.
@@ -915,10 +918,28 @@ terminu ...". To świadomie zamknięty zestaw dwóch terminów — nie dodawaj
 trzeciego bez wyraźnej prośby. Trwałe usunięcie (`handlePermanentDelete`,
 już generyczne dla dowolnej tabeli) dostępne TYLKO z widoku Archiwum —
 najpierw archiwizacja, potem usunięcie, nigdy bezpośrednio z listy
-aktywnych. Lokale/Stanowiska (słownik nazw, admin-only) to dwa dodatkowe
-`view` w tym samym komponencie, przeniesione z dawnego `Przewodnik`
-(`przewodnikTab` w `ManagerDashboard.tsx`) — logika bez zmian, tylko nowy
-wygląd.
+aktywnych. Lokale/Stanowiska stały tu do 0.44.0 jako dwa dodatkowe `view` —
+dziś są w zakładce **Ustawienia** (patrz niżej).
+
+### Ustawienia właściciela (`manager/Ustawienia.tsx`) — od 0.44.0
+
+Zakładka na końcu `NAV_ITEMS` z flagą `tylkoWlasciciel`: widzi ją WYŁĄCZNIE
+rola `admin` (decyzja właściciela, 2026-09-24 — `manager` i `manager_lokalu`
+nie). Filtr stoi w DWÓCH miejscach: menu w `ManagerShell` (`jestWlascicielem`)
+i render w `ManagerDashboard` — samo ukrycie pozycji w menu nie wystarcza, bo
+`setTab("ustawienia")` da się zawołać skądkolwiek.
+
+- **Karta lokalu to NIE modal.** Modal bez limitu wysokości po kolejnych
+  dopiskach wypychał "Zapisz" pod krawędź ekranu. Dziś: lista + karta obok,
+  zwijane sekcje z podsumowaniem w nagłówku, przyciski `sticky` na dole.
+  Dokładając ustawienie lokalu, dołóż je do istniejącej sekcji albo nowej
+  `Sekcja` — nie z powrotem do modala.
+- **Dodanie lokalu = nazwa + miasto** (`MalyModal`), po zapisie od razu karta
+  — dlatego `handleSaveDict` ZWRACA zapisany wiersz.
+- ⚠️ `editingDict` jest wspólny dla lokali i stanowisk, więc zmiana sekcji go
+  czyści — inaczej otwarty lokal zapisałby się jako stanowisko.
+- **Subskrypcja to zaślepka** (liczniki lokali/pracowników/tabletów). Jej stan
+  NIE może żyć w bazie klienta — w modelu silo klient sam by go sobie zmienił.
 
 **Blokada PIN-em na kiosku** — zaimplementowana 2026-08-31 (konsument:
 `KioskDashboard.tsx`, patrz "Tablet Służbowy" wyżej). Trzeci, niezależny
@@ -1040,7 +1061,7 @@ miasto, 20 min TTL dla pogody) — nie odpytujemy API przy każdym
 re-renderze.
 
 Miasto NIE jest wpisane na sztywno w kodzie — kierownik wpisuje je ręcznie
-per lokal w Pracownicy → Lokale (`lokale.miasto`, patrz Schemat Supabase
+per lokal w Ustawienia → Lokale (`lokale.miasto`, patrz Schemat Supabase
 niżej), bo lokale sieci są w różnych miastach (stan na 2026-09-03: Bułka i
 Jacek/Marynata i Chińczyk/Ceglana → Koszalin, Sunset → Sarbinowo,
 woj. zachodniopomorskie). W pasku kierownika pogoda dotyczy wybranego w
@@ -1550,7 +1571,7 @@ zakresem — wymaga Grafiku, którego nie ma.
   z migracji `0018` — ustawienia płacowe siedzą na LOKALU, nie na pracowniku:
   to decyzje organizacyjne, jednakowe dla całej załogi, a skopiowane do
   kilkudziesięciu kart rozjadą się przy pierwszej pomyłce. `miasto` (text, nullable,
-  ustawiane ręcznie w Pracownicy → Lokale) — miasto używane do pogody w
+  ustawiane ręcznie w Ustawienia → Lokale) — miasto używane do pogody w
   pasku górnym Panelu Kierownika i na Pulpicie pracownika, patrz sekcja
   "Pogoda" niżej. Dodane 2026-09-03, wymaga ręcznej migracji w Supabase
   SQL Editor (zweryfikuj przez `information_schema.columns` po zapisaniu):
@@ -1562,7 +1583,7 @@ zakresem — wymaga Grafiku, którego nie ma.
   telefonie, patrz "Prywatny telefon pracownika" wyżej. Dodane 0.26.0,
   migracja: [`docs/sql/migrations/0009_grafik_dostep_pracownika.sql`](docs/sql/migrations/0009_grafik_dostep_pracownika.sql).
 - **stanowiska** — `id, name, lokal_name, archived, skrot, kolor`. `skrot`
-  (text, nullable, ustawiany ręcznie w Pracownicy → Stanowiska) — zastępuje
+  (text, nullable, ustawiany ręcznie w Ustawienia → Stanowiska) — zastępuje
   auto-generowany `getShort(name)` tam, gdzie jest ustawiony
   (`utils/stanowiska.ts` → `stanowiskoShort`); brak wartości = spada z
   powrotem na `getShort`. `kolor` (text, nullable, hex np. `#DE3A22`,
