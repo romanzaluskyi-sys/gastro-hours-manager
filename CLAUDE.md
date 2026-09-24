@@ -352,7 +352,14 @@ rzeczy, które trzeba znać:
   właściciela). Wiersz, którego nie widzi nikt, znika z administracji po cichu.
 
 ⚠️ **W polityce RLS każde wywołanie funkcji owijaj w PODZAPYTANIE SKALARNE:**
-`kolumna = any ((select public.funkcja()))`, nigdy `any (public.funkcja())`.
+`kolumna = any ((select public.funkcja())::text[])`, nigdy `any (public.funkcja())`.
+⚠️ **Rzutowanie `::text[]` / `::uuid[]` jest OBOWIĄZKOWE.** Bez niego
+`any ((select f()))` Postgres czyta jako `ANY (podzapytanie)` i porównuje
+kolumnę z CAŁĄ tablicą: `operator does not exist: text = text[]`. Tak padła
+pierwsza wersja `0036` przy pierwszym uruchomieniu (24.09.2026) — nigdy
+wcześniej nie była zastosowana, więc poprawiono ją w miejscu. Rzutowanie
+zamienia podzapytanie w zwykłe wyrażenie, a podzapytanie w środku dalej
+liczy się RAZ (InitPlan). Sprawdzone parserem Postgresa (`pglast`).
 Podzapytanie bez odwołań do wiersza planer robi InitPlanem i liczy RAZ; gołe
 wywołanie — zwykle raz na wiersz, nawet gdy funkcja jest `stable` i bez
 argumentów. To ten sam powód, dla którego w Supabase pisze się

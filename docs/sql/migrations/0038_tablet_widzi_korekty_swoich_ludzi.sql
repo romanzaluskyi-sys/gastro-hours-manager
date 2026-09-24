@@ -38,10 +38,10 @@ create policy "moje_zgloszenia" on public.issues
     user_id = (select public.moje_id())
     or ((select public.jest_kierownikiem())
         and (coalesce(is_anonymous, false) or user_id is null
-             or user_id = any ((select public.moi_ludzie()))))
+             or user_id = any ((select public.moi_ludzie())::uuid[])))
     or ((select public.moja_rola()) = 'kiosk'
         and type = 'correction'
-        and user_id = any ((select public.moi_ludzie())))
+        and user_id = any ((select public.moi_ludzie())::uuid[]))
   )
   with check (true);
 

@@ -9,7 +9,7 @@
 -- dla każdego wiersza. Żeby wymusić jedno wywołanie, trzeba owinąć ją w
 -- PODZAPYTANIE SKALARNE:
 --
---     kolumna = any ((select public.funkcja()))     -- liczone RAZ (InitPlan)
+--     kolumna = any ((select public.funkcja())::text[])     -- liczone RAZ (InitPlan)
 --     kolumna = any (public.funkcja())              -- bywa liczone co wiersz
 --
 -- To jest znany wzorzec dla RLS w Supabase — ten sam powód, dla którego pisze
@@ -34,11 +34,11 @@ returns uuid[] language sql stable security definer set search_path = public, pg
 as $fn$
   select coalesce(array_agg(distinct u.id), '{}'::uuid[])
   from users u
-  where coalesce(u.default_lokal, '') = any ((select public.moje_lokale()))
+  where coalesce(u.default_lokal, '') = any ((select public.moje_lokale())::text[])
      or exists (
           select 1
           from unnest(string_to_array(coalesce(u.allowed_lokale, ''), ',')) as l
-          where trim(l) <> '' and trim(l) = any ((select public.moje_lokale()))
+          where trim(l) <> '' and trim(l) = any ((select public.moje_lokale())::text[])
         )
      or ((select public.jest_kierownikiem())
          and coalesce(u.default_lokal, '') = ''
@@ -50,7 +50,7 @@ returns text[] language sql stable security definer set search_path = public, pg
 as $fn$
   select coalesce(array_agg(distinct u.name), '{}'::text[])
   from users u
-  where u.id = any ((select public.moi_ludzie()));
+  where u.id = any ((select public.moi_ludzie())::uuid[]);
 $fn$;
 
 create or replace function public.lokale_do_pracy()
@@ -97,10 +97,10 @@ create policy "moje_wiadomosci" on public.notifications
   for all to authenticated
   using (
     (coalesce(audience, 'employee') <> 'manager'
-     and coalesce(user_name, '') = any ((select public.imiona_moich_ludzi())))
+     and coalesce(user_name, '') = any ((select public.imiona_moich_ludzi())::text[]))
     or (coalesce(audience, '') = 'manager'
         and (select public.jest_kierownikiem())
-        and (coalesce(lokal, '') = any ((select public.moje_lokale()))
+        and (coalesce(lokal, '') = any ((select public.moje_lokale())::text[])
              or coalesce(lokal, '') = ''
              or (select public.widzi_wszystko())))
   )
@@ -121,9 +121,9 @@ begin
     execute format(
       'create policy "swoj_lokal" on public.%I for all to authenticated '
       'using ((select public.widzi_wszystko()) '
-      '       or coalesce(lokal, '''') = any ((select public.moje_lokale()))) '
+      '       or coalesce(lokal, '''') = any ((select public.moje_lokale())::text[])) '
       'with check ((select public.widzi_wszystko()) '
-      '       or coalesce(lokal, '''') = any ((select public.moje_lokale())))',
+      '       or coalesce(lokal, '''') = any ((select public.moje_lokale())::text[]))',
       t
     );
   end loop;
@@ -134,9 +134,9 @@ begin
     execute format(
       'create policy "lokal_pracy" on public.%I for all to authenticated '
       'using ((select public.widzi_wszystko()) '
-      '       or coalesce(lokal, '''') = any ((select public.lokale_do_pracy()))) '
+      '       or coalesce(lokal, '''') = any ((select public.lokale_do_pracy())::text[])) '
       'with check ((select public.widzi_wszystko()) '
-      '       or coalesce(lokal, '''') = any ((select public.lokale_do_pracy())))',
+      '       or coalesce(lokal, '''') = any ((select public.lokale_do_pracy())::text[]))',
       t
     );
   end loop;
@@ -147,9 +147,9 @@ begin
     execute format(
       'create policy "budzet_kierownika" on public.%I for all to authenticated '
       'using ((select public.jest_kierownikiem()) and ((select public.widzi_wszystko()) '
-      '       or coalesce(lokal, '''') = any ((select public.moje_lokale())))) '
+      '       or coalesce(lokal, '''') = any ((select public.moje_lokale())::text[]))) '
       'with check ((select public.jest_kierownikiem()) and ((select public.widzi_wszystko()) '
-      '       or coalesce(lokal, '''') = any ((select public.moje_lokale()))))',
+      '       or coalesce(lokal, '''') = any ((select public.moje_lokale())::text[])))',
       t
     );
   end loop;
@@ -160,9 +160,9 @@ create policy "moje_wolne" on public.absences
   for all to authenticated
   using (
     (select public.widzi_wszystko())
-    or coalesce(lokal, '') = any ((select public.moje_lokale()))
+    or coalesce(lokal, '') = any ((select public.moje_lokale())::text[])
     or user_id = (select public.moje_id())
-    or ((select public.jest_kierownikiem()) and user_id = any ((select public.moi_ludzie())))
+    or ((select public.jest_kierownikiem()) and user_id = any ((select public.moi_ludzie())::uuid[]))
   )
   with check (true);
 
@@ -171,7 +171,7 @@ create policy "gielda_lokalu" on public.shift_swaps
   for all to authenticated
   using (
     (select public.widzi_wszystko())
-    or coalesce(lokal, '') = any ((select public.moje_lokale()))
+    or coalesce(lokal, '') = any ((select public.moje_lokale())::text[])
     or author_user_id = (select public.moje_id())::text
     or taker_user_id  = (select public.moje_id())::text
     or target_user_id = (select public.moje_id())::text
@@ -185,7 +185,7 @@ create policy "moje_zgloszenia" on public.issues
     user_id = (select public.moje_id())
     or ((select public.jest_kierownikiem())
         and (coalesce(is_anonymous, false) or user_id is null
-             or user_id = any ((select public.moi_ludzie()))))
+             or user_id = any ((select public.moi_ludzie())::uuid[])))
   )
   with check (true);
 
@@ -196,10 +196,10 @@ create policy "swoj_lokal" on public.staffing_rules
     (select public.widzi_wszystko())
     or exists (select 1 from staffing_rule_sets s
                where s.id::text = staffing_rules.set_id
-                 and coalesce(s.lokal, '') = any ((select public.moje_lokale())))
+                 and coalesce(s.lokal, '') = any ((select public.moje_lokale())::text[]))
     or exists (select 1 from grafik_wyjatki w
                where w.id::text = staffing_rules.wyjatek_id
-                 and coalesce(w.lokal, '') = any ((select public.moje_lokale())))
+                 and coalesce(w.lokal, '') = any ((select public.moje_lokale())::text[]))
   )
   with check (true);
 
@@ -210,7 +210,7 @@ create policy "wykonania_lokalu" on public.task_completions
     (select public.widzi_wszystko())
     or exists (select 1 from tasks t
                where t.id::text = task_completions.task_id
-                 and coalesce(t.lokal, '') = any ((select public.lokale_do_pracy())))
+                 and coalesce(t.lokal, '') = any ((select public.lokale_do_pracy())::text[]))
     or user_id = (select public.moje_id())::text
   )
   with check (true);
