@@ -1,0 +1,182 @@
+<meta charset="utf-8">
+<title>Sprawdzian okien wpisu godzin</title>
+<style>
+  body { font: 14px/1.6 ui-monospace, Menlo, monospace; padding: 24px; background: #FBFAF9; color: #17120F; }
+  h1 { font: 700 18px/1.2 system-ui, sans-serif; }
+  .ok { color: #2C6A4F; } .zle { color: #DE3A22; font-weight: 700; }
+  pre { background: #F1EEEB; padding: 10px; overflow-x: auto; }
+</style>
+<h1>Sprawdzian utils/wpisy.ts — sposób wpisu i okna tolerancji lokalu</h1>
+<div id="out">ładowanie…</div>
+
+<!-- Każda liczba tu jest policzona ręcznie. Najważniejsza zasada, której ten
+     plik pilnuje: lokal BEZ ustawień (NULL) zachowuje się dokładnie tak jak
+     przed 0.45.0 — żadna godzina nie jest odrzucana i nic nie przesuwa się
+     przez północ. Pomyłka w tę stronę zatrzymałaby odbicia w lokalach,
+     których nikt nie konfigurował. -->
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js"></script>
+<script>
+const out = document.getElementById("out");
+const log = (txt, cls = "") => {
+  const d = document.createElement("div");
+  d.className = cls; d.textContent = txt; out.appendChild(d);
+};
+
+async function zaladuj(sciezka) {
+  let kod = null;
+  for (const ext of [".ts", ".tsx", ""]) {
+    const r = await fetch(sciezka + ext + "?cb=" + Date.now(), { cache: "reload" });
+    if (r.ok) { kod = await r.text(); break; }
+  }
+  if (kod === null) throw new Error("nie znaleziono " + sciezka);
+  // utils/wpisy.ts nie ma importów — gdyby je dostał, ten harness musi przejść
+  // na loader z harness-porzucone.html.
+  if (/from\s+"\./.test(kod)) throw new Error("wpisy.ts ma teraz importy — przenieś loader");
+  const js = Babel.transform(kod, { presets: [["typescript", { allExtensions: true, isTSX: true }]] }).code;
+  return URL.createObjectURL(new Blob([js], { type: "text/javascript" }));
+}
+
+let zdanych = 0, oblanych = 0;
+const sprawdz = (nazwa, warunek, szczegol = "") => {
+  if (warunek) { zdanych++; log("  OK   " + nazwa, "ok"); }
+  else { oblanych++; log("  ŹLE  " + nazwa + (szczegol ? " — " + szczegol : ""), "zle"); }
+};
+
+(async () => {
+  try {
+    out.textContent = "";
+    const W = await import(await zaladuj("/src/utils/wpisy"));
+    log("moduł załadowany", "ok");
+    log("");
+
+    const d = (dzien, g = 0, m = 0) => new Date(2026, 8, dzien, g, m, 0, 0); // wrzesień 2026
+    const hm = (x) => x ? `${x.getDate()}. ${String(x.getHours()).padStart(2, "0")}:${String(x.getMinutes()).padStart(2, "0")}` : String(x);
+    const lokale = [
+      { name: "Pusty" },
+      { name: "Odbicie", tryb_wpisu: "odbicie", start_wstecz_min: 15, koniec_wstecz_min: "30" },
+      { name: "Cala", tryb_wpisu: "cala", start_wstecz_min: 0, koniec_wstecz_min: 0 },
+      { name: "Smieci", tryb_wpisu: "xyz", start_wstecz_min: "", koniec_wstecz_min: -3 },
+    ];
+
+    log("— reguły lokalu —");
+    const pusty = W.regulyWpisu(lokale, "Pusty");
+    sprawdz("lokal bez ustawień: oba sposoby, bez limitów",
+      pusty.tryb === null && pusty.startWstecz === null && pusty.koniecWstecz === null,
+      JSON.stringify(pusty));
+    const brak = W.regulyWpisu(lokale, "Nie ma takiego");
+    sprawdz("nieznany lokal zachowuje się jak pusty",
+      brak.tryb === null && brak.startWstecz === null && brak.koniecWstecz === null);
+    sprawdz("brak listy lokali nie wywraca",
+      W.regulyWpisu(undefined, "X").startWstecz === null);
+    const odb = W.regulyWpisu(lokale, "Odbicie");
+    sprawdz("tryb i okna czytane z wiersza (także liczba jako tekst)",
+      odb.tryb === "odbicie" && odb.startWstecz === 15 && odb.koniecWstecz === 30,
+      JSON.stringify(odb));
+    const cala = W.regulyWpisu(lokale, "Cala");
+    sprawdz("zero to ZERO (tylko „teraz”), nie „bez limitu”",
+      cala.startWstecz === 0 && cala.koniecWstecz === 0);
+    const smieci = W.regulyWpisu(lokale, "Smieci");
+    sprawdz("nieznany tryb, pusty tekst i ujemna liczba = brak ustawienia",
+      smieci.tryb === null && smieci.startWstecz === null && smieci.koniecWstecz === null,
+      JSON.stringify(smieci));
+
+    sprawdz("oba sposoby → przełącznik do wyboru (null)", W.wymuszonaCalaZmiana(pusty) === null);
+    sprawdz("tylko odbicie → nigdy cała zmiana", W.wymuszonaCalaZmiana(odb) === false);
+    sprawdz("tylko cała zmiana → zawsze cała", W.wymuszonaCalaZmiana(cala) === true);
+
+    log("");
+    log("— okno: czy pracownik może zapisać tę godzinę sam —");
+    const teraz = d(15, 9, 40);
+    sprawdz("bez limitu przechodzi godzina sprzed doby",
+      W.sprawdzGodzine(d(14, 8, 0), teraz, null) === null);
+    sprawdz("bez limitu przechodzi nawet godzina w przyszłości",
+      W.sprawdzGodzine(d(15, 18, 0), teraz, null) === null);
+    sprawdz("okno 15 min: 09:30 przechodzi", W.sprawdzGodzine(d(15, 9, 30), teraz, 15) === null);
+    sprawdz("okno 15 min: 09:25 (dokładnie na granicy) przechodzi",
+      W.sprawdzGodzine(d(15, 9, 25), teraz, 15) === null);
+    const zaPozno = W.sprawdzGodzine(d(15, 9, 24), teraz, 15);
+    sprawdz("okno 15 min: 09:24 jest za późno",
+      !!zaPozno && zaPozno.powod === "za_pozno", JSON.stringify(zaPozno));
+    sprawdz("…i mówi, od której wolno sam (09:25)",
+      !!zaPozno && hm(zaPozno.najwczesniej) === "15. 09:25", zaPozno && hm(zaPozno.najwczesniej));
+    sprawdz("zapas na zegar: 09:45 (5 min w przód) przechodzi",
+      W.sprawdzGodzine(d(15, 9, 45), teraz, 15) === null);
+    const przyszlosc = W.sprawdzGodzine(d(15, 9, 46), teraz, 15);
+    sprawdz("09:46 to już wpis z wyprzedzeniem",
+      !!przyszlosc && przyszlosc.powod === "przyszlosc", JSON.stringify(przyszlosc));
+    sprawdz("okno 0: „teraz” przechodzi", W.sprawdzGodzine(d(15, 9, 40), teraz, 0) === null);
+    sprawdz("okno 0: minuta wstecz już nie",
+      (W.sprawdzGodzine(d(15, 9, 39), teraz, 0) || {}).powod === "za_pozno");
+
+    log("");
+    log("— godzina wpisana samym HH:MM, a doba się zmieniła —");
+    const poPolnocy = d(16, 0, 10);
+    const start2355 = W.dopasujStart(d(16, 23, 55), poPolnocy);
+    sprawdz("o 00:10 start „23:55” to wczoraj",
+      hm(start2355) === "15. 23:55", hm(start2355));
+    sprawdz("…i mieści się w oknie 15 min",
+      W.sprawdzGodzine(start2355, poPolnocy, 15) === null);
+    const start0900 = W.dopasujStart(d(15, 9, 0), d(15, 8, 0));
+    sprawdz("o 08:00 start „09:00” zostaje dziś (to wpis z wyprzedzeniem, nie wczoraj)",
+      hm(start0900) === "15. 09:00", hm(start0900));
+    sprawdz("…i dostaje komunikat o przyszłości",
+      (W.sprawdzGodzine(start0900, d(15, 8, 0), 15) || {}).powod === "przyszlosc");
+
+    // Cała zmiana 16:00–00:05 wpisana o 00:10 szesnastego. Formularz buduje
+    // obie godziny na DZIŚ (16.), koniec wypada przed startem, więc idzie na
+    // jutro (17. 00:05). Dopasowanie ma cofnąć OBA końce.
+    const nocna = W.dopasujCalaZmiane(d(16, 16, 0), d(17, 0, 5), poPolnocy);
+    sprawdz("zmiana przez północ wpisana po północy wraca na wczoraj w całości",
+      hm(nocna.startD) === "15. 16:00" && hm(nocna.endD) === "16. 00:05",
+      hm(nocna.startD) + " – " + hm(nocna.endD));
+    sprawdz("…a jej koniec mieści się w oknie 30 min",
+      W.sprawdzGodzine(nocna.endD, poPolnocy, 30) === null);
+    const dzienna = W.dopasujCalaZmiane(d(15, 14, 0), d(15, 22, 0), d(15, 22, 10));
+    sprawdz("zwykła zmiana wpisana po końcu zostaje bez zmian",
+      hm(dzienna.startD) === "15. 14:00" && hm(dzienna.endD) === "15. 22:00");
+    const zaWczesnie = W.dopasujCalaZmiane(d(15, 14, 0), d(15, 22, 0), d(15, 21, 0));
+    sprawdz("cała zmiana wpisana przed jej końcem nie cofa się na wczoraj",
+      hm(zaWczesnie.endD) === "15. 22:00", hm(zaWczesnie.endD));
+    sprawdz("…i dostaje komunikat o przyszłości",
+      (W.sprawdzGodzine(zaWczesnie.endD, d(15, 21, 0), 30) || {}).powod === "przyszlosc");
+
+    log("");
+    log("— zmiana, o której koniec pracownik poprosił kierownika —");
+    const zmiana = { id: 101 };
+    const korekta = (nadpis) => ({
+      type: "correction", status: "nowe", shift_id: "101", proposed_end_time: "22:00", ...nadpis,
+    });
+    sprawdz("czekająca prośba o koniec: zmiana nie trwa (id liczbą i tekstem)",
+      W.czekaNaKoniecOdKierownika(zmiana, [korekta()]) === true);
+    sprawdz("rozstrzygnięta prośba już nie wstrzymuje",
+      W.czekaNaKoniecOdKierownika(zmiana, [korekta({ status: "rozwiazane" })]) === false);
+    sprawdz("prośba o sam START nie wstrzymuje zmiany (dalej trwa)",
+      W.czekaNaKoniecOdKierownika(zmiana, [korekta({ proposed_end_time: null })]) === false);
+    sprawdz("zgłoszenie problemu to nie korekta",
+      W.czekaNaKoniecOdKierownika(zmiana, [korekta({ type: "problem" })]) === false);
+    sprawdz("prośba o inną zmianę nie dotyczy tej",
+      W.czekaNaKoniecOdKierownika(zmiana, [korekta({ shift_id: "102" })]) === false);
+    sprawdz("brak listy zgłoszeń nie wywraca",
+      W.czekaNaKoniecOdKierownika(zmiana, undefined) === false);
+
+    log("");
+    log("— podpisy —");
+    sprawdz("bez okna nie ma podpisu", W.podpisOkna("start", null) === null);
+    sprawdz("okno 0 mówi o „teraz”", /teraz/.test(W.podpisOkna("koniec", 0) || ""));
+    sprawdz("okno 15 podaje liczbę minut", /15 min/.test(W.podpisOkna("start", 15) || ""));
+    sprawdz("cała zmiana mówi o zakończeniu",
+      /po jej zakończeniu/.test(W.podpisOkna("cala", 30) || ""));
+    sprawdz("opis okna w karcie lokalu", W.opisOkna(null) === "bez ograniczeń" &&
+      W.opisOkna(0) === "tylko „teraz”" && W.opisOkna(20) === "do 20 min po fakcie");
+
+    log("");
+    log(`ZDANYCH ${zdanych}, OBLANYCH ${oblanych}`, oblanych ? "zle" : "ok");
+  } catch (e) {
+    log("WYJĄTEK: " + (e && e.message ? e.message : e), "zle");
+    const pre = document.createElement("pre");
+    pre.textContent = (e && e.stack) || String(e);
+    out.appendChild(pre);
+  }
+})();
+</script>

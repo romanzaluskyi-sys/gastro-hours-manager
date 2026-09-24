@@ -40,6 +40,7 @@ import Pracownicy from "./manager/Pracownicy";
 import RaportyIKoszty from "./manager/RaportyIKoszty";
 import Przewodnik from "./manager/Przewodnik";
 import Ustawienia from "./manager/Ustawienia";
+import { czekaNaKoniecOdKierownika } from "../utils/wpisy";
 import Grafik from "./manager/Grafik";
 import {
   resolveSwap,
@@ -218,9 +219,12 @@ const ManagerDashboard = ({
 
   const isLocalManager = currentUser.role === "manager_lokalu";
   // Ustawienia sieci (lokale, stanowiska, subskrypcja) widzi tylko właściciel
-  // — decyzja właściciela z 2026-09-24. Rola `manager` (kierownik sieci) też
-  // ich nie dostaje.
-  const jestWlascicielem = currentUser.role === "admin";
+  // — decyzja właściciela z 2026-09-24. "Właściciel" to `admin` ALBO stara
+  // rola `manager`: nie da się jej już nadać z karty pracownika, ale konta
+  // sprzed zmian ją mają, a baza traktuje obie tak samo (widzi_wszystko() w
+  // 0025). Pierwsza wersja wpuszczała sam `admin` i właściciel z rolą
+  // `manager` nie widział zakładki w ogóle. Kierownik lokalu — nie.
+  const jestWlascicielem = ["admin", "manager"].includes(currentUser.role);
   const managerLokaleList = currentUser.allowed_lokale
     ? currentUser.allowed_lokale.split(",").map((l) => l.trim())
     : [];
@@ -277,13 +281,15 @@ const ManagerDashboard = ({
   // Zmiany, które ktoś zaczął i nie zakończył, oraz osoby dodane na próbę z
   // Tabletu. Liczone tu tylko po to, żeby dało się je policzyć w znaczku przy
   // zakładce — całą logikę trzyma utils/porzucone.ts i utils/probni.ts.
+  // Ten sam filtr co w ZatwierdzanieZmian: zmiana z prośbą o koniec liczy się
+  // raz — jako korekta — inaczej znaczek pokazuje o jedną decyzję za dużo.
   const porzuconeZmiany = zmianyPorzucone({
     shifts,
     planShifts,
     lokale,
     users,
     lokalOk: hasAccessToLokal,
-  });
+  }).filter((poz) => !czekaNaKoniecOdKierownika(poz.shift, issues));
   const probniOczekujacy = probniDoDecyzji({ users, lokalOk: hasAccessToLokal });
 
   // Decyzja o zamianie z giełdy. Cała logika (przepisanie zmiany na nowego
@@ -908,6 +914,8 @@ const ManagerDashboard = ({
   // string dla kolumny numeric, a zero znaczyłoby "zero procent narzutu"
   // zamiast "nie ustawiono".
   const num = (v) => (v === "" || v == null || Number.isNaN(Number(v)) ? null : Number(v));
+  // Kolumny `integer` — "1,5 min" wpisane w pole odrzuciłoby cały zapis lokalu.
+  const minutyCale = (v) => (num(v) == null ? null : Math.max(0, Math.round(num(v))));
 
   // Zwraca zapisany wiersz (albo nic przy błędzie) — Ustawienia po dodaniu
   // lokalu otwierają od razu jego kartę i potrzebują do tego nowego id.
@@ -936,6 +944,13 @@ const ManagerDashboard = ({
           // wpisana wartość przepada bez błędu (patrz dzien_wyplaty wyżej).
           tolerancja_po_grafiku_h: num(editingDict.tolerancja_po_grafiku_h),
           max_dlugosc_zmiany_h: num(editingDict.max_dlugosc_zmiany_h),
+          // Rejestracja godzin (0036). ⚠️ Wymaga migracji PRZED deployem —
+          // PostgREST odrzuca cały zapis z nieznaną kolumną. NULL w trybie =
+          // oba sposoby; w oknach NULL = bez limitu, a 0 = tylko "teraz",
+          // więc num() (które zero zostawia zerem) jest tu właściwe.
+          tryb_wpisu: editingDict.tryb_wpisu || null,
+          start_wstecz_min: minutyCale(editingDict.start_wstecz_min),
+          koniec_wstecz_min: minutyCale(editingDict.koniec_wstecz_min),
         };
         if (editingDict.id) {
           const l = await api.patch("lokale", editingDict.id, payload);

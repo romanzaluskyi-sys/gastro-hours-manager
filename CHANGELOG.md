@@ -5,6 +5,29 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.45.0 — 2026-09-24
+
+- **Każdy lokal sam decyduje, jak wpisuje się godziny** (Ustawienia → Lokale
+  → Rejestracja godzin):
+  - sposób wpisu — tylko odbicie (start, potem koniec), tylko cała zmiana
+    naraz albo oba, jak dotąd;
+  - o ile minut po fakcie pracownik może sam wpisać start i koniec. Puste =
+    bez limitu (tak jak było), 0 = tylko „teraz".
+- **Godzina spoza okna nie przepada.** Pracownik dostaje wyjaśnienie i jeden
+  przycisk: „Wyślij do kierownika". Spóźniony start rozpoczyna zmianę od
+  teraz, a wcześniejszą godzinę kierownik zatwierdza w Zatwierdzaniu zmian.
+  Zmiana, której koniec czeka na kierownika, nie blokuje kolejnego odbicia.
+- Formularz na tablecie mówi z góry, gdzie jest granica („Start możesz sam
+  cofnąć najwyżej o 15 min").
+- Prośbę o sam start kierownik zatwierdza jednym kliknięciem, a koniec zmiany
+  zostaje taki, jaki był. Wcześniej takie zatwierdzenie otwierało zakończoną
+  zmianę i zerowało jej godziny.
+- **Poprawka: „Popraw zmianę" wysłane z Tabletu Służbowego.** Od zmian
+  uprawnień z 23.09 baza mogła odrzucać korektę wysłaną z tabletu w imieniu
+  pracownika. Tablet widzi teraz korekty godzin osób ze swojego lokalu (ale
+  nie ich zgłoszenia problemów).
+- Progi „zmian bez odbitego końca" są w tej samej sekcji karty lokalu.
+
 ## 0.44.0 — 2026-09-24
 
 - **Nowa zakładka „Ustawienia" dla właściciela.** Lokale i stanowiska

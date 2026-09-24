@@ -352,7 +352,15 @@ rzeczy, które trzeba znać:
   właściciela). Wiersz, którego nie widzi nikt, znika z administracji po cichu.
 
 ⚠️ **W polityce RLS każde wywołanie funkcji owijaj w PODZAPYTANIE SKALARNE:**
-`kolumna = any ((select public.funkcja()))`, nigdy `any (public.funkcja())`.
+`kolumna = any ((select public.funkcja())::text[])`, nigdy `any (public.funkcja())`.
+⚠️ **Rzutowanie `::text[]` / `::uuid[]` jest OBOWIĄZKOWE.** Bez niego
+`any ((select f()))` Postgres czyta jako `ANY (podzapytanie)` i porównuje
+kolumnę z CAŁĄ tablicą: `operator does not exist: text = text[]`. Tak padła
+migracja "InitPlan" (dawna `0036`) przy pierwszym uruchomieniu (24.09.2026);
+właściciel kazał ją usunąć, więc na produkcji polityki są w kształcie z
+`0035`, a `notifications` zostaje ręcznie otwarte. Rzutowanie
+zamienia podzapytanie w zwykłe wyrażenie, a podzapytanie w środku dalej
+liczy się RAZ (InitPlan). Sprawdzone parserem Postgresa (`pglast`).
 Podzapytanie bez odwołań do wiersza planer robi InitPlanem i liczy RAZ; gołe
 wywołanie — zwykle raz na wiersz, nawet gdy funkcja jest `stable` i bez
 argumentów. To ten sam powód, dla którego w Supabase pisze się
@@ -579,6 +587,10 @@ src/
     swaps.ts                    giełda zmian — jedyne miejsce piszące do
                                   shift_swaps i przepisujące zmianę na
                                   innego pracownika (resolveSwap)
+    wpisy.ts                    jak w lokalu wolno wpisywać godziny: sposób
+                                  wpisu i okna tolerancji (regulyWpisu,
+                                  sprawdzGodzine, czekaNaKoniecOdKierownika) —
+                                  patrz "Rejestracja godzin" niżej
     porzucone.ts                zmiany zaczęte i niezakończone: progi lokalu,
                                   rozpoznanie (czyPorzucona/zmianaTrwa) i
                                   decyzja kierownika. NIE licz nigdzie indziej,
@@ -924,8 +936,11 @@ dziś są w zakładce **Ustawienia** (patrz niżej).
 ### Ustawienia właściciela (`manager/Ustawienia.tsx`) — od 0.44.0
 
 Zakładka na końcu `NAV_ITEMS` z flagą `tylkoWlasciciel`: widzi ją WYŁĄCZNIE
-rola `admin` (decyzja właściciela, 2026-09-24 — `manager` i `manager_lokalu`
-nie). Filtr stoi w DWÓCH miejscach: menu w `ManagerShell` (`jestWlascicielem`)
+właściciel (decyzja właściciela, 2026-09-24), czyli rola `admin` ALBO stara
+rola `manager` — `manager_lokalu` nie. ⚠️ `manager` nie da się już nadać z
+karty pracownika, ale konta sprzed zmian ją mają, a baza traktuje obie role
+tak samo (`widzi_wszystko()`). Pierwsza wersja wpuszczała sam `admin` i
+właściciel nie widział zakładki na podglądzie 0.45.0. Filtr stoi w DWÓCH miejscach: menu w `ManagerShell` (`jestWlascicielem`)
 i render w `ManagerDashboard` — samo ukrycie pozycji w menu nie wystarcza, bo
 `setTab("ustawienia")` da się zawołać skądkolwiek.
 
@@ -1258,6 +1273,9 @@ odpadają. Zamiast tego dwa pliki w katalogu głównym, uruchamiane przez
 - `harness-auth.html` — logowanie: rotacja refresh tokenów przy równoległych
   żądaniach, zachowanie przy braku sieci i przy odmowie serwera. `fetch` jest
   podmieniony, więc nie trzeba znać niczyjego hasła;
+- `harness-wpisy.html` — okna tolerancji wpisu godzin: lokal bez ustawień
+  niczego nie odrzuca, granice okna co do minuty, godzina wpisana po północy,
+  i to, kiedy zmiana czekająca na kierownika przestaje być trwającą;
 - `harness-bledy.html` — dziennik błędów: limit zapisów na sesję, odsiewanie
   powtórzeń, komplet pól wiersza i to, czy `ErrorBoundary` pokazuje ekran
   zamiast białej strony. `fetch` jest podmieniony, nic nie leci do sieci.
@@ -1567,7 +1585,10 @@ zakresem — wymaga Grafiku, którego nie ma.
   okres_rozliczeniowy (int, nullable, puste = 1), narzut_umowa/narzut_zlecenie
   (numeric, nullable, procent ponad wynagrodzenie, puste = 0),
   tolerancja_po_grafiku_h/max_dlugosc_zmiany_h (numeric, nullable, puste = 4 i
-  17 — progi zmian bez odbitego końca, migracja 0023)`. Trzy z nich
+  17 — progi zmian bez odbitego końca, migracja 0023), tryb_wpisu (text:
+  'odbicie'|'cala', NULL = oba), start_wstecz_min/koniec_wstecz_min (int,
+  NULL = bez limitu, 0 = tylko "teraz" — migracja 0036, patrz "Rejestracja
+  godzin")`. Trzy z nich
   z migracji `0018` — ustawienia płacowe siedzą na LOKALU, nie na pracowniku:
   to decyzje organizacyjne, jednakowe dla całej załogi, a skopiowane do
   kilkudziesięciu kart rozjadą się przy pierwszej pomyłce. `miasto` (text, nullable,
@@ -2117,6 +2138,57 @@ Szczegóły, które łatwo zepsuć:
   co innego.
 - `harness-porzucone.html` sprawdza całą arytmetykę progów na ręcznie
   policzonych przykładach (39 przypadków, razem z pracownikiem na próbę).
+
+## Rejestracja godzin — sposób wpisu i okna tolerancji (0.45.0)
+
+[`utils/wpisy.ts`](src/utils/wpisy.ts) + sekcja "Rejestracja godzin" w karcie
+lokalu (Ustawienia) + `renderPozaOknem` w `employeeSessionShared.tsx`.
+Migracja `0036` (kolumny na `lokale`), `0037` (tablet widzi korekty).
+
+Lokal ustawia: `tryb_wpisu` (`odbicie` | `cala` | NULL = oba), oraz
+`start_wstecz_min` / `koniec_wstecz_min` — o ile minut PO FAKCIE pracownik
+może SAM wpisać godzinę. Przy „całej zmianie” liczy się okno KOŃCA. Trzeci
+próg — do kiedy zmianę w ogóle da się zamknąć samemu — to istniejące
+`tolerancja_po_grafiku_h`/`max_dlugosc_zmiany_h` (patrz "Zmiany bez
+zakończenia"); stoją w tej samej sekcji karty.
+
+⚠️ **NULL = zachowanie sprzed 0.45.0, a 0 to NIE to samo co NULL.** NULL: bez
+limitu, nic się nie przesuwa przez północ. 0: tylko „teraz”. Ustawienie
+domyślne dla nowych lokali to NULL (decyzja właściciela, 2026-09-24).
+
+⚠️ **Wpis spoza okna nie przepada — idzie do kierownika jako zwykła korekta**
+(`issues.type = 'correction'`, decyzja właściciela). Trzy przypadki:
+- **spóźniony start** — zmiana startuje TERAZ (człowiek stoi przy tablecie i
+  ma być odbity), a korekta z samym `proposed_start_time` jest przypięta do
+  tej zmiany;
+- **spóźniona cała zmiana** — korekta bez `shift_id`, ta sama droga co
+  „Zapomniałem odbić”;
+- **spóźniony koniec** — korekta z `proposed_end_time` przypięta do trwającej
+  zmiany. `czekaNaKoniecOdKierownika` wyłącza wtedy tę zmianę z „trwających”
+  u pracownika i z kolejki porzuconych u kierownika — inaczej blokowałaby
+  kolejne odbicie, a jedynym wyjściem byłoby „Zakończ teraz”, czyli dopisanie
+  sobie godzin.
+
+⚠️ **`resolveCorrection` przy pustym końcu i ISTNIEJĄCEJ zmianie ZACHOWUJE
+koniec.** Do 0.45.0 patchował `end_time: null` — prośba o wcześniejszy start
+zatwierdzona po zakończeniu zmiany otwierałaby ją i zerowała godziny. Tę
+regresję łapie `harness-panel.html`.
+
+⚠️ **Godzina w przyszłości** (ponad `W_PRZOD_MIN` = 5 min zapasu na zegar)
+przy ustawionym oknie dostaje tylko wyjaśnienie, bez wysyłki — to nie jest
+spóźnienie, tylko wpis z wyprzedzeniem.
+
+⚠️ **Tablet a `issues` (migracja `0037`).** `api.post` to INSERT … RETURNING, a
+Postgres sprawdza zwracany wiersz polityką SELECT. Polityka z `0033` nie
+pokazywała tabletowi zgłoszeń jego ludzi, więc korekta wysłana z tabletu była
+odrzucana w CAŁOŚCI — `with check (true)` tego nie ratuje. `0037` wpuszcza
+rolę `kiosk` do KOREKT osób z jej lokalu; zgłoszenia problemów zostają poza
+zasięgiem tabletu, a ich nieanonimowa wersja z tabletu ma ten sam problem —
+to osobna decyzja. **Każda nowa tabela, do której tablet pisze w imieniu
+pracownika, potrzebuje SELECT dla tabletu na tych wierszach.**
+
+⚠️ Kontrola jest w przeglądarce. Twardy zamek (trigger na `shifts`) — razem z
+zawężeniem `shifts` w Etapie 3c-2.
 
 ## Pracownik na próbę — dodane 2026-09-19 (0.40.0)
 

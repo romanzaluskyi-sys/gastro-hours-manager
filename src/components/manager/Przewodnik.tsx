@@ -23,6 +23,17 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.45.0",
+    date: "2026-09-24",
+    items: [
+      "Karta lokalu → Rejestracja godzin: tylko odbicie, tylko cała zmiana albo oba sposoby.",
+      "Okno na spóźniony wpis startu i końca (w minutach). Puste = bez limitu, 0 = tylko „teraz”.",
+      "Godzina spoza okna trafia do kierownika jako korekta, a spóźniony start zaczyna zmianę od teraz.",
+      "Zatwierdzenie prośby o sam start nie otwiera już zakończonej zmiany.",
+      "Tablet Służbowy widzi korekty godzin swoich ludzi — „Popraw zmianę” wysłane z tabletu nie odbija się od uprawnień bazy.",
+    ],
+  },
+  {
     version: "0.44.0",
     date: "2026-09-24",
     items: [
