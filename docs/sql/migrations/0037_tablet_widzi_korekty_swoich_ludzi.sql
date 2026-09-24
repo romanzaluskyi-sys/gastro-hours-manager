@@ -1,6 +1,6 @@
 -- Tablet Służbowy widzi KOREKTY godzin osób ze swojego lokalu.
 --
--- Polityka `moje_zgloszenia` z 0033/0036 wpuszcza do `issues` autora
+-- Polityka `moje_zgloszenia` z 0033 wpuszcza do `issues` autora
 -- (`user_id = moje_id()`) i kierowników. Tablet nie jest ani jednym, ani
 -- drugim: pracownik wysyła z niego zgłoszenie z SWOIM user_id, a zalogowane
 -- jest konto tabletu.
@@ -27,8 +27,10 @@
 --     sali. Ten sam błąd RETURNING dotyczy ich nieanonimowej wersji; to
 --     osobna decyzja właściciela, nie ta migracja.
 --
--- ⚠️ Każde wywołanie funkcji w PODZAPYTANIU SKALARNYM — patrz 0035/0036.
--- ⚠️ Nazwę polityki bierzemy z 0036; inwentarz na końcu pokazuje, czy na
+-- ⚠️ Każde wywołanie funkcji w PODZAPYTANIU SKALARNYM, z rzutowaniem na typ
+--    tablicy — bez `::uuid[]` Postgres czyta `any ((select f()))` jako
+--    ANY (podzapytanie) i pada na "uuid = uuid[]" (patrz CLAUDE.md).
+-- ⚠️ Nazwę polityki bierzemy z 0033; inwentarz na końcu pokazuje, czy na
 -- `issues` nie została druga, zapomniana polityka.
 
 drop policy if exists "moje_zgloszenia" on public.issues;

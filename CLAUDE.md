@@ -356,8 +356,9 @@ rzeczy, które trzeba znać:
 ⚠️ **Rzutowanie `::text[]` / `::uuid[]` jest OBOWIĄZKOWE.** Bez niego
 `any ((select f()))` Postgres czyta jako `ANY (podzapytanie)` i porównuje
 kolumnę z CAŁĄ tablicą: `operator does not exist: text = text[]`. Tak padła
-pierwsza wersja `0036` przy pierwszym uruchomieniu (24.09.2026) — nigdy
-wcześniej nie była zastosowana, więc poprawiono ją w miejscu. Rzutowanie
+migracja "InitPlan" (dawna `0036`) przy pierwszym uruchomieniu (24.09.2026);
+właściciel kazał ją usunąć, więc na produkcji polityki są w kształcie z
+`0035`, a `notifications` zostaje ręcznie otwarte. Rzutowanie
 zamienia podzapytanie w zwykłe wyrażenie, a podzapytanie w środku dalej
 liczy się RAZ (InitPlan). Sprawdzone parserem Postgresa (`pglast`).
 Podzapytanie bez odwołań do wiersza planer robi InitPlanem i liczy RAZ; gołe
@@ -935,8 +936,11 @@ dziś są w zakładce **Ustawienia** (patrz niżej).
 ### Ustawienia właściciela (`manager/Ustawienia.tsx`) — od 0.44.0
 
 Zakładka na końcu `NAV_ITEMS` z flagą `tylkoWlasciciel`: widzi ją WYŁĄCZNIE
-rola `admin` (decyzja właściciela, 2026-09-24 — `manager` i `manager_lokalu`
-nie). Filtr stoi w DWÓCH miejscach: menu w `ManagerShell` (`jestWlascicielem`)
+właściciel (decyzja właściciela, 2026-09-24), czyli rola `admin` ALBO stara
+rola `manager` — `manager_lokalu` nie. ⚠️ `manager` nie da się już nadać z
+karty pracownika, ale konta sprzed zmian ją mają, a baza traktuje obie role
+tak samo (`widzi_wszystko()`). Pierwsza wersja wpuszczała sam `admin` i
+właściciel nie widział zakładki na podglądzie 0.45.0. Filtr stoi w DWÓCH miejscach: menu w `ManagerShell` (`jestWlascicielem`)
 i render w `ManagerDashboard` — samo ukrycie pozycji w menu nie wystarcza, bo
 `setTab("ustawienia")` da się zawołać skądkolwiek.
 
@@ -1583,7 +1587,7 @@ zakresem — wymaga Grafiku, którego nie ma.
   tolerancja_po_grafiku_h/max_dlugosc_zmiany_h (numeric, nullable, puste = 4 i
   17 — progi zmian bez odbitego końca, migracja 0023), tryb_wpisu (text:
   'odbicie'|'cala', NULL = oba), start_wstecz_min/koniec_wstecz_min (int,
-  NULL = bez limitu, 0 = tylko "teraz" — migracja 0037, patrz "Rejestracja
+  NULL = bez limitu, 0 = tylko "teraz" — migracja 0036, patrz "Rejestracja
   godzin")`. Trzy z nich
   z migracji `0018` — ustawienia płacowe siedzą na LOKALU, nie na pracowniku:
   to decyzje organizacyjne, jednakowe dla całej załogi, a skopiowane do
@@ -2139,7 +2143,7 @@ Szczegóły, które łatwo zepsuć:
 
 [`utils/wpisy.ts`](src/utils/wpisy.ts) + sekcja "Rejestracja godzin" w karcie
 lokalu (Ustawienia) + `renderPozaOknem` w `employeeSessionShared.tsx`.
-Migracja `0037` (kolumny na `lokale`), `0038` (tablet widzi korekty).
+Migracja `0036` (kolumny na `lokale`), `0037` (tablet widzi korekty).
 
 Lokal ustawia: `tryb_wpisu` (`odbicie` | `cala` | NULL = oba), oraz
 `start_wstecz_min` / `koniec_wstecz_min` — o ile minut PO FAKCIE pracownik
@@ -2174,10 +2178,10 @@ regresję łapie `harness-panel.html`.
 przy ustawionym oknie dostaje tylko wyjaśnienie, bez wysyłki — to nie jest
 spóźnienie, tylko wpis z wyprzedzeniem.
 
-⚠️ **Tablet a `issues` (migracja `0038`).** `api.post` to INSERT … RETURNING, a
+⚠️ **Tablet a `issues` (migracja `0037`).** `api.post` to INSERT … RETURNING, a
 Postgres sprawdza zwracany wiersz polityką SELECT. Polityka z `0033` nie
 pokazywała tabletowi zgłoszeń jego ludzi, więc korekta wysłana z tabletu była
-odrzucana w CAŁOŚCI — `with check (true)` tego nie ratuje. `0038` wpuszcza
+odrzucana w CAŁOŚCI — `with check (true)` tego nie ratuje. `0037` wpuszcza
 rolę `kiosk` do KOREKT osób z jej lokalu; zgłoszenia problemów zostają poza
 zasięgiem tabletu, a ich nieanonimowa wersja z tabletu ma ten sam problem —
 to osobna decyzja. **Każda nowa tabela, do której tablet pisze w imieniu

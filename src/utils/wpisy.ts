@@ -1,6 +1,6 @@
 // @ts-nocheck
 // Jak w danym lokalu wolno wpisywać godziny: sposób wpisu i okna tolerancji.
-// Ustawienia stoją na lokalu (migracja 0037, karta lokalu w Ustawieniach).
+// Ustawienia stoją na lokalu (migracja 0036, karta lokalu w Ustawieniach).
 //
 // Pytanie, na które odpowiada ten plik: czy pracownik może SAM zapisać tę
 // godzinę. Nie: czy da się ją zapisać w ogóle — wpis spoza okna idzie do

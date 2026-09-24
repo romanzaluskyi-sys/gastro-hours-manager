@@ -19,8 +19,9 @@
 // payload powstaje z JAWNEJ listy pól. Pole dopisane tylko tutaj przepadnie
 // przy zapisie bez żadnego błędu (patrz błąd #18 w CLAUDE.md).
 //
-// Widzi to wyłącznie właściciel (rola `admin`) — decyzja właściciela z
-// 2026-09-24. Filtr stoi w ManagerShell (menu) i w ManagerDashboard (render).
+// Widzi to wyłącznie właściciel (rola `admin` albo stara `manager`, patrz
+// jestWlascicielem w ManagerDashboard) — decyzja właściciela z 2026-09-24.
+// Filtr stoi w ManagerShell (menu) i w ManagerDashboard (render).
 import React, { useState } from "react";
 import {
   Plus,
@@ -421,7 +422,7 @@ export default function Ustawienia({
           </Sekcja>
 
           {/* Jak w tym lokalu wpisuje się godziny (utils/wpisy.ts, migracja
-              0037) i kiedy niezakończona zmiana przestaje uchodzić za trwającą
+              0036) i kiedy niezakończona zmiana przestaje uchodzić za trwającą
               (utils/porzucone.ts, 0023). Jedna sekcja, bo to jedno pytanie:
               co pracownik może zapisać sam, a co trafia do kierownika.
               Wszystko puste = zachowanie sprzed tych ustawień. */}

@@ -357,6 +357,12 @@ const poprzedniMiesiac = (h) => {
             ? { id: "u0", name: "Roman", role: "manager_lokalu", allowed_lokale: "Bułka i Jacek",
                 typ_umowy: "zlecenie", stawka: 40, default_lokal: "Bułka i Jacek",
                 default_stanowisko: "Kucharz" }
+            // ?rola=siec — stara rola `manager`: właściciel sprzed zmian ról.
+            // Baza traktuje ją jak admina, więc i Ustawienia ma widzieć.
+            : new URLSearchParams(location.search).get("rola") === "siec"
+            ? { id: "u0", name: "Roman", role: "manager", allowed_lokale: "",
+                typ_umowy: "zlecenie", stawka: 40, default_lokal: "Bułka i Jacek",
+                default_stanowisko: "Kucharz" }
             : { id: "u0", name: "Roman", role: "admin", allowed_lokale: "",
                 typ_umowy: "zlecenie", stawka: 40, default_lokal: "Bułka i Jacek",
                 default_stanowisko: "Kucharz" },

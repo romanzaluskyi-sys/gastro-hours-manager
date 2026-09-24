@@ -219,9 +219,12 @@ const ManagerDashboard = ({
 
   const isLocalManager = currentUser.role === "manager_lokalu";
   // Ustawienia sieci (lokale, stanowiska, subskrypcja) widzi tylko właściciel
-  // — decyzja właściciela z 2026-09-24. Rola `manager` (kierownik sieci) też
-  // ich nie dostaje.
-  const jestWlascicielem = currentUser.role === "admin";
+  // — decyzja właściciela z 2026-09-24. "Właściciel" to `admin` ALBO stara
+  // rola `manager`: nie da się jej już nadać z karty pracownika, ale konta
+  // sprzed zmian ją mają, a baza traktuje obie tak samo (widzi_wszystko() w
+  // 0025). Pierwsza wersja wpuszczała sam `admin` i właściciel z rolą
+  // `manager` nie widział zakładki w ogóle. Kierownik lokalu — nie.
+  const jestWlascicielem = ["admin", "manager"].includes(currentUser.role);
   const managerLokaleList = currentUser.allowed_lokale
     ? currentUser.allowed_lokale.split(",").map((l) => l.trim())
     : [];
@@ -941,7 +944,7 @@ const ManagerDashboard = ({
           // wpisana wartość przepada bez błędu (patrz dzien_wyplaty wyżej).
           tolerancja_po_grafiku_h: num(editingDict.tolerancja_po_grafiku_h),
           max_dlugosc_zmiany_h: num(editingDict.max_dlugosc_zmiany_h),
-          // Rejestracja godzin (0037). ⚠️ Wymaga migracji PRZED deployem —
+          // Rejestracja godzin (0036). ⚠️ Wymaga migracji PRZED deployem —
           // PostgREST odrzuca cały zapis z nieznaną kolumną. NULL w trybie =
           // oba sposoby; w oknach NULL = bez limitu, a 0 = tylko "teraz",
           // więc num() (które zero zostawia zerem) jest tu właściwe.
