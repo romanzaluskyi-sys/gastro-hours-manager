@@ -19,8 +19,9 @@
 // payload powstaje z JAWNEJ listy pól. Pole dopisane tylko tutaj przepadnie
 // przy zapisie bez żadnego błędu (patrz błąd #18 w CLAUDE.md).
 //
-// Widzi to wyłącznie właściciel (rola `admin`) — decyzja właściciela z
-// 2026-09-24. Filtr stoi w ManagerShell (menu) i w ManagerDashboard (render).
+// Widzi to wyłącznie właściciel (rola `admin` albo stara `manager`, patrz
+// jestWlascicielem w ManagerDashboard) — decyzja właściciela z 2026-09-24.
+// Filtr stoi w ManagerShell (menu) i w ManagerDashboard (render).
 import React, { useState } from "react";
 import {
   Plus,

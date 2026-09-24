@@ -924,8 +924,11 @@ dziś są w zakładce **Ustawienia** (patrz niżej).
 ### Ustawienia właściciela (`manager/Ustawienia.tsx`) — od 0.44.0
 
 Zakładka na końcu `NAV_ITEMS` z flagą `tylkoWlasciciel`: widzi ją WYŁĄCZNIE
-rola `admin` (decyzja właściciela, 2026-09-24 — `manager` i `manager_lokalu`
-nie). Filtr stoi w DWÓCH miejscach: menu w `ManagerShell` (`jestWlascicielem`)
+właściciel (decyzja właściciela, 2026-09-24), czyli rola `admin` ALBO stara
+rola `manager` — `manager_lokalu` nie. ⚠️ `manager` nie da się już nadać z
+karty pracownika, ale konta sprzed zmian ją mają, a baza traktuje obie role
+tak samo (`widzi_wszystko()`). Pierwsza wersja wpuszczała sam `admin` i
+właściciel nie widział zakładki na podglądzie 0.45.0. Filtr stoi w DWÓCH miejscach: menu w `ManagerShell` (`jestWlascicielem`)
 i render w `ManagerDashboard` — samo ukrycie pozycji w menu nie wystarcza, bo
 `setTab("ustawienia")` da się zawołać skądkolwiek.
 

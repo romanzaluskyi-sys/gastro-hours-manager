@@ -64,7 +64,8 @@ export const NAV_ITEMS = [
   { key: "raporty", label: "Raporty i koszty", Icon: BarChart3 },
   { key: "przewodnik", label: "Przewodnik", Icon: HelpCircle },
   // Na samym końcu, żeby nie ruszać kolejności ustalonej przez właściciela.
-  // `tylkoWlasciciel` — pozycja znika z menu każdemu poza rolą `admin`.
+  // `tylkoWlasciciel` — pozycja znika z menu każdemu, kto nie jest
+  // właścicielem (jestWlascicielem w ManagerDashboard).
   { key: "ustawienia", label: "Ustawienia", Icon: Settings, tylkoWlasciciel: true },
 ];
 

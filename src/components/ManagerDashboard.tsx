@@ -218,9 +218,12 @@ const ManagerDashboard = ({
 
   const isLocalManager = currentUser.role === "manager_lokalu";
   // Ustawienia sieci (lokale, stanowiska, subskrypcja) widzi tylko właściciel
-  // — decyzja właściciela z 2026-09-24. Rola `manager` (kierownik sieci) też
-  // ich nie dostaje.
-  const jestWlascicielem = currentUser.role === "admin";
+  // — decyzja właściciela z 2026-09-24. "Właściciel" to `admin` ALBO stara
+  // rola `manager`: nie da się jej już nadać z karty pracownika, ale konta
+  // sprzed zmian ją mają, a baza traktuje obie tak samo (widzi_wszystko() w
+  // 0025). Pierwsza wersja wpuszczała sam `admin` i właściciel z rolą
+  // `manager` nie widział zakładki w ogóle. Kierownik lokalu — nie.
+  const jestWlascicielem = ["admin", "manager"].includes(currentUser.role);
   const managerLokaleList = currentUser.allowed_lokale
     ? currentUser.allowed_lokale.split(",").map((l) => l.trim())
     : [];
