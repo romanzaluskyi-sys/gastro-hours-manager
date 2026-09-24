@@ -919,8 +919,8 @@ function LokalSection({
                     colSpan={weekDays.length + 1}
                     className="px-4 py-6 text-center text-[#6E6E66] text-sm"
                   >
-                    Ten lokal nie ma zdefiniowanych stanowisk. Dodaj je w
-                    Pracownicy → Stanowiska.
+                    Ten lokal nie ma zdefiniowanych stanowisk. Dodaje je właściciel w
+                    Ustawienia → Stanowiska.
                   </td>
                 </tr>
               ) : (

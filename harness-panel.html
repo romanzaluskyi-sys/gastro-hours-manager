@@ -33,7 +33,7 @@ const pokazBlad = (e) => {
 window.addEventListener("error", (ev) => pokazBlad(ev.error || ev.message));
 window.addEventListener("unhandledrejection", (ev) => pokazBlad(ev.reason));
 
-const IKONY = ["AlertCircle", "AlertTriangle", "Archive", "ArchiveRestore", "ArrowLeft", "ArrowLeftRight", "ArrowRight", "BarChart3", "Bell", "BookOpen", "Briefcase", "Calendar", "CalendarCheck", "CalendarDays", "CalendarRange", "Check", "CheckCircle", "CheckCircle2", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "ClipboardCheck", "ClipboardList", "ClipboardPlus", "Clock", "Cloud", "Construction", "Copy", "CopyPlus", "Delete", "Download", "Edit2", "Eye", "FileText", "Flag", "HelpCircle", "History", "Home", "Hourglass", "Info", "ListChecks", "Lock", "LogIn", "LogOut", "Mail", "MapPin", "MoreHorizontal", "Palmtree", "Pencil", "Plus", "Printer", "RefreshCw", "RotateCcw", "Save", "Send", "SlidersHorizontal", "Thermometer", "Trash2", "User", "UserPlus", "Users", "Wallet", "WifiOff", "X"];
+const IKONY = ["AlertCircle", "AlertTriangle", "Archive", "ArchiveRestore", "ArrowLeft", "ArrowLeftRight", "ArrowRight", "BarChart3", "Bell", "BookOpen", "Briefcase", "Calendar", "CalendarCheck", "CalendarDays", "CalendarRange", "Check", "CheckCircle", "CheckCircle2", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "ClipboardCheck", "ClipboardList", "ClipboardPlus", "Clock", "Cloud", "Construction", "Copy", "CopyPlus", "Delete", "Download", "Edit2", "Eye", "FileText", "Flag", "HelpCircle", "History", "Home", "Hourglass", "Info", "ListChecks", "Lock", "LogIn", "LogOut", "Mail", "MapPin", "MoreHorizontal", "Palmtree", "Pencil", "Plus", "Printer", "RefreshCw", "RotateCcw", "Save", "Send", "Settings", "SlidersHorizontal", "Thermometer", "Trash2", "User", "UserPlus", "Users", "Wallet", "WifiOff", "X"];
 const stub = (kod) => URL.createObjectURL(new Blob([kod], { type: "text/javascript" }));
 
 // Atrapa Supabase — nic nie leci do sieci, każdy zapis wraca z wymyślonym id.
@@ -571,9 +571,78 @@ const poprzedniMiesiac = (h) => {
       } catch (e) {
         sprawdz("przebieg bez wyjątku", false, e.message);
       }
+
+      // ----------------------------------------------------------------
+      // Ustawienia (0.44.0) — lokale i stanowiska wyszły z Pracowników.
+      //
+      // Karta lokalu była modalem, który przestał mieścić się na ekranie.
+      // Tu sprawdzamy to, czego nie widać okiem przy jednym kliknięciu:
+      // że zapis karty dalej niesie pola, których nikt nie ruszał (payload
+      // jest budowany z jawnej listy — błąd #18), i że dodanie lokalu
+      // otwiera od razu jego kartę, a nie pusty ekran.
+      // ----------------------------------------------------------------
+      const przyciskiOTekscie = (tekst) =>
+        [...document.querySelectorAll("#app button")].filter(
+          (b) => b.textContent.replace("▪", "").trim() === tekst);
+      const wpisz = (input, wartosc) => {
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+        setter.call(input, wartosc);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      };
+      try {
+        sprawdz("Pracownicy nie mają już pigułek Lokale/Stanowiska",
+          przyciskiOTekscie("Stanowiska").length === 0);
+
+        // ?rola=manager — kierownik lokalu. Ustawienia są tylko dla
+        // właściciela, więc tu sprawdzamy wyłącznie, że ich nie widać.
+        if (new URLSearchParams(location.search).get("rola") === "manager") {
+          sprawdz("kierownik lokalu nie widzi zakładki Ustawienia",
+            przyciskiOTekscie("Ustawienia").length === 0);
+          throw null;
+        }
+        klik("Ustawienia"); await czekaj(400);
+        sprawdz("właściciel widzi zakładkę Ustawienia",
+          [...document.querySelectorAll("#app h2")].some((h) => h.textContent === "Ustawienia"));
+
+        klik("Ceglana"); await czekaj(300);
+        const karta = [...document.querySelectorAll("form")]
+          .find((f) => /Płace i koszty/.test(f.textContent));
+        sprawdz("karta lokalu otwiera się w sekcjach", !!karta);
+        sprawdz("zwinięta sekcja płac mówi, co jest ustawione",
+          !!karta && /okres 3 mies\. · narzut 20\.5% \/ 0%/.test(karta.textContent),
+          karta ? karta.textContent.slice(0, 200) : "");
+        const przedZapisem = window.__zapisy.length;
+        karta.requestSubmit();
+        await czekaj(300);
+        const zapisLokalu = window.__zapisy.slice(przedZapisem).find((z) => z[0] === "lokale");
+        const dane = zapisLokalu && (zapisLokalu[2] || zapisLokalu[1]);
+        sprawdz("zapis karty lokalu niesie pola zwiniętych sekcji",
+          !!dane && dane.okres_rozliczeniowy === 3 && dane.narzut_umowa === 20.5,
+          JSON.stringify(dane));
+
+        const przedDodaniem = window.__zapisy.length;
+        klik("Dodaj lokal"); await czekaj(300);
+        const modal = [...document.querySelectorAll("form")]
+          .find((f) => /Dodaj lokal/.test(f.textContent));
+        sprawdz("„Dodaj lokal” to mała modalka (dwa pola)",
+          !!modal && modal.querySelectorAll("input").length === 2,
+          modal ? String(modal.querySelectorAll("input").length) : "brak modala");
+        wpisz(modal.querySelector('input[type="text"]'), "Sunset");
+        await czekaj(100);
+        modal.requestSubmit();
+        await czekaj(400);
+        const nowy = window.__zapisy.slice(przedDodaniem).find((z) => z[0] === "lokale");
+        sprawdz("nowy lokal zapisuje się z nazwą", !!nowy && nowy[1].name === "Sunset",
+          JSON.stringify(nowy));
+        sprawdz("po dodaniu od razu otwiera się karta nowego lokalu",
+          [...document.querySelectorAll("form h3")].some((h) => h.textContent === "Sunset"));
+      } catch (e) {
+        if (e !== null) sprawdz("Ustawienia: przebieg bez wyjątku", false, e.message);
+      }
+
       if (status.className !== "zle") {
         status.textContent =
-          `panel zamontowany — karta pracownika ${zdanych}/${zdanych + oblanych}`;
+          `panel zamontowany — sprawdziany ${zdanych}/${zdanych + oblanych}`;
       }
     })();
   } catch (e) { pokazBlad(e); }

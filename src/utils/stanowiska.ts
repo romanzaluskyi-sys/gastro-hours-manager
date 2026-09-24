@@ -1,6 +1,6 @@
 // @ts-nocheck
 // Skrót i kolor stanowiska — ustawiane ręcznie przez kierownika w
-// Pracownicy → Stanowiska (kolumny stanowiska.skrot/stanowiska.kolor).
+// Ustawienia → Stanowiska (kolumny stanowiska.skrot/stanowiska.kolor).
 // Skrót zastępuje auto-generowany getShort() tam, gdzie jest ustawiony;
 // kolor renderujemy dziś jako jasny odcień (plakietki), pełny nasycony
 // kolor jest zarezerwowany na przyszły Grafik — patrz CLAUDE.md.

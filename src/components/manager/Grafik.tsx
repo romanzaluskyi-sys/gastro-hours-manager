@@ -180,8 +180,8 @@ export default function Grafik({
       <div className="max-w-3xl mx-auto">
         <div className={cardCls}>
           <p className="text-[#6E6E66]">
-            Brak lokalu, do którego masz dostęp — dodaj lokal w zakładce
-            Pracownicy → Lokale.
+            Brak lokalu, do którego masz dostęp — lokale dodaje właściciel w zakładce
+            Ustawienia → Lokale.
           </p>
         </div>
       </div>

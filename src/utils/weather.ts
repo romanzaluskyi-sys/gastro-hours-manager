@@ -1,7 +1,7 @@
 // @ts-nocheck
 // Pogoda dla lokalu — Open-Meteo (bez klucza API, darmowy, wystarczający na
 // prosty "temperatura + ikona" w pasku). Miasto ustawiane ręcznie przez
-// kierownika w Pracownicy → Lokale (lokale.miasto) — patrz CLAUDE.md.
+// kierownika w Ustawienia → Lokale (lokale.miasto) — patrz CLAUDE.md.
 // Geokodowanie i pogoda cache'owane w pamięci modułu (per miasto, TTL),
 // żeby nie odpytywać API przy każdym re-renderze/przełączeniu zakładki.
 const geoCache = new Map(); // miasto (lowercase) -> {lat, lon} | null

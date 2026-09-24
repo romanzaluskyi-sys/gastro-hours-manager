@@ -5,6 +5,21 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.44.0 — 2026-09-24
+
+- **Nowa zakładka „Ustawienia" dla właściciela.** Lokale i stanowiska
+  przeniosły się tu z zakładki Pracownicy, obok danych firmy i miejsca na
+  subskrypcję (na razie tylko liczniki lokali, pracowników i tabletów).
+  Kierownicy lokali tej zakładki nie widzą.
+- **Karta lokalu mieści się na ekranie.** Zamiast modala na całą wysokość —
+  karta obok listy, podzielona na zwijane sekcje (podstawowe, telefon
+  pracownika, płace, zmiany bez odbitego końca), z przyciskiem „Zapisz"
+  zawsze widocznym na dole.
+- **Dodanie lokalu to dwa pola:** nazwa i miasto. Po zapisie od razu otwiera
+  się karta nowego lokalu z resztą ustawień.
+- Zarchiwizowane lokale i stanowiska da się przywrócić z archiwum.
+- Stanowiska są pogrupowane po lokalach.
+
 ## 0.43.0 — 2026-09-22
 
 - **Stawki, wynagrodzenia, daty urodzenia, telefony i PIN-y widzi już tylko

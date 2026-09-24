@@ -23,6 +23,16 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.44.0",
+    date: "2026-09-24",
+    items: [
+      "Nowa zakładka Ustawienia (tylko właściciel): lokale, stanowiska, firma i miejsce na subskrypcję.",
+      "Karta lokalu w zwijanych sekcjach, z przyciskiem Zapisz zawsze na ekranie.",
+      "Nowy lokal zakłada się z samej nazwy i miasta — resztę ustawia się w jego karcie.",
+      "Lokale i stanowiska da się przywrócić z archiwum.",
+    ],
+  },
+  {
     version: "0.43.0",
     date: "2026-09-22",
     items: [

@@ -2,10 +2,9 @@
 // Nowy wygląd dawnego "Przewodnik" → zakładka Pracownicy: lista + karta
 // szczegółów obok siebie (zamiast modala), z nowymi polami (stawka, etat,
 // notatki + kto/kiedy, kiosk_pin) i usuwaniem na zawsze tylko z Archiwum.
-// Lokale/Stanowiska (dawne podzakładki Przewodnika, admin-only) żyją tu
-// dalej jako dodatkowe widoki `view` — nie były w kolejce makiet, więc
-// zostały tylko lekko przemalowane pod nowe tokeny, bez zmiany logiki
-// (ta sama handleSaveDict/editingDict z ManagerDashboard.tsx).
+// Lokale/Stanowiska stały tu do 0.44.0 jako dodatkowe widoki `view` —
+// przeniesione do zakładki Ustawienia (manager/Ustawienia.tsx), widocznej
+// tylko dla właściciela.
 //
 // Wymagane pola (ustalone w sesji): imię, lokal, stanowisko (obie poza
 // rolą "kiosk", która ich nie ma), typ konta; przy roli innej niż "open"
@@ -19,12 +18,10 @@ import {
   Trash2,
   ChevronLeft,
   AlertTriangle,
-  Edit2,
   Palmtree,
 } from "lucide-react";
 import { pageTitleCls, cardCls, btnPrimaryCls, btnSecondaryCls, statLabelCls } from "./designTokens";
 import { czekaNaDecyzje } from "../../utils/probni";
-import { BLOKI_PRACOWNIKA, blokiLokalu } from "../../utils/grafik";
 import { getMonthName } from "../../utils/format";
 import {
   TYPY_UMOWY,
@@ -87,15 +84,12 @@ export default function Pracownicy({
   activeLokale,
   activeStanowiska,
   shifts,
-  editingDict,
-  setEditingDict,
-  onSaveDict,
   absences = [],
   onAddUrlop,
   onDeleteAbsence,
   showMsg,
 }) {
-  const [view, setView] = useState("aktywni"); // "aktywni" | "archiwum" | "lokale" | "stanowiska"
+  const [view, setView] = useState("aktywni"); // "aktywni" | "archiwum"
 
   const [urlopFrom, setUrlopFrom] = useState("");
   const [urlopTo, setUrlopTo] = useState("");
@@ -216,10 +210,6 @@ export default function Pracownicy({
     ...new Set(activeStanowiska.map((s) => s.name)),
   ].sort((a, b) => a.localeCompare(b, "pl"));
 
-  // Brak wartości = wszystko dostępne, więc w formularzu startujemy z pełnym
-  // zestawem i kierownik odejmuje, zamiast zaznaczać od zera.
-  const blokiEdytowane = editingDict ? blokiLokalu(editingDict) : [];
-
   const list = view === "aktywni" ? visibleUsers : archivedUsers;
 
   return (
@@ -247,402 +237,13 @@ export default function Pracownicy({
           >
             Archiwum · {archivedUsers.length}
           </button>
-          {!isLocalManager && (
-            <>
-              <button
-                onClick={() => setView("lokale")}
-                className={`px-3 py-2 rounded text-sm font-bold border-[2px] ${
-                  view === "lokale"
-                    ? "bg-[#171714] text-white border-[#171714]"
-                    : "bg-white text-[#6E6E66] border-[#B7B6AE]"
-                }`}
-              >
-                Lokale
-              </button>
-              <button
-                onClick={() => setView("stanowiska")}
-                className={`px-3 py-2 rounded text-sm font-bold border-[2px] ${
-                  view === "stanowiska"
-                    ? "bg-[#171714] text-white border-[#171714]"
-                    : "bg-white text-[#6E6E66] border-[#B7B6AE]"
-                }`}
-              >
-                Stanowiska
-              </button>
-            </>
-          )}
           {view === "aktywni" && (
             <button onClick={onNewUser} className={`${btnPrimaryCls} flex items-center gap-1.5`}>
               <Plus size={15} /> Dodaj pracownika
             </button>
           )}
-          {(view === "lokale" || view === "stanowiska") && (
-            <button
-              onClick={() =>
-                setEditingDict({
-                  id: null,
-                  name: "",
-                  lokal_name: activeLokale.length > 0 ? activeLokale[0].name : "",
-                })
-              }
-              className={`${btnPrimaryCls} flex items-center gap-1.5`}
-            >
-              <Plus size={15} /> Dodaj {view === "lokale" ? "lokal" : "stanowisko"}
-            </button>
-          )}
         </div>
       </div>
-
-      {(view === "lokale" || view === "stanowiska") && (
-        <div>
-          {editingDict && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-              <form
-                onSubmit={(e) => onSaveDict(e, view)}
-                className="bg-white p-6 rounded-xl border-[2px] border-[#171714] w-full max-w-sm"
-              >
-                <h3 className="font-['Archivo'] font-extrabold text-lg mb-4">
-                  {editingDict.id ? "Edytuj" : "Dodaj"} {view === "lokale" ? "lokal" : "stanowisko"}
-                </h3>
-                <div className="mb-4 space-y-3">
-                  <div>
-                    <label className="text-xs font-bold text-[#6E6E66]">Nazwa</label>
-                    <input
-                      type="text"
-                      value={editingDict.name}
-                      onChange={(e) => setEditingDict({ ...editingDict, name: e.target.value })}
-                      className="w-full p-2 border-[2px] border-[#171714] rounded"
-                      required
-                      autoFocus
-                    />
-                  </div>
-                  {view === "stanowiska" && (
-                    <div>
-                      <label className="text-xs font-bold text-[#6E6E66]">Lokal</label>
-                      <select
-                        value={editingDict.lokal_name}
-                        onChange={(e) =>
-                          setEditingDict({ ...editingDict, lokal_name: e.target.value })
-                        }
-                        className="w-full p-2 border-[2px] border-[#171714] rounded"
-                        required
-                      >
-                        {activeLokale.map((l) => (
-                          <option key={l.id} value={l.name}>
-                            {l.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                  {view === "lokale" && (
-                    <div className="p-3 bg-[#F1F1EE] border-[2px] border-[#171714] rounded">
-                      <label className="text-xs font-bold text-[#171714] block">
-                        Co pracownik widzi na swoim telefonie
-                      </label>
-                      <p className="text-[11px] text-[#6E6E66] mt-0.5 mb-2">
-                        Dotyczy prywatnych telefonów pracowników tego lokalu.
-                        Tablet Służbowy zawsze ma wszystko. Dostęp na telefonie
-                        ma tylko osoba z ustawionym PIN-em blokady i e-mailem.
-                      </p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {BLOKI_PRACOWNIKA.map((b) => {
-                          const wybrane = blokiEdytowane.includes(b.key);
-                          return (
-                            <button
-                              key={b.key}
-                              type="button"
-                              onClick={() => {
-                                const next = wybrane
-                                  ? blokiEdytowane.filter((x) => x !== b.key)
-                                  : [...blokiEdytowane, b.key];
-                                setEditingDict({ ...editingDict, dostepne_bloki: next });
-                              }}
-                              className={`px-2.5 py-1 rounded border-[2px] text-[13px] font-bold text-left ${
-                                wybrane
-                                  ? "bg-[#171714] text-white border-[#171714]"
-                                  : "bg-white text-[#171714] border-[#B7B6AE]"
-                              }`}
-                            >
-                              {b.label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                  {view === "lokale" && (
-                    <div>
-                      <label className="text-xs font-bold text-[#6E6E66]">
-                        Miasto (do pogody)
-                      </label>
-                      <input
-                        type="text"
-                        value={editingDict.miasto || ""}
-                        onChange={(e) =>
-                          setEditingDict({ ...editingDict, miasto: e.target.value })
-                        }
-                        placeholder="np. Koszalin"
-                        className="w-full p-2 border-[2px] border-[#171714] rounded"
-                      />
-                      {/* Dzień wypłaty zmienia ruch w gastronomii na tyle, że
-                          Puls pokazuje go przy dniu — inaczej nietypowy utarg
-                          wygląda na zagadkę. Puste = 10. */}
-                      <label className="text-xs font-bold text-[#6E6E66] mt-3 block">
-                        Dzień wypłaty (dzień miesiąca)
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        max="31"
-                        value={editingDict.dzien_wyplaty ?? ""}
-                        onChange={(e) =>
-                          setEditingDict({
-                            ...editingDict,
-                            dzien_wyplaty:
-                              e.target.value === "" ? null : Number(e.target.value),
-                          })
-                        }
-                        placeholder="10"
-                        className="w-full p-2 border-[2px] border-[#171714] rounded"
-                      />
-
-                      {/* Ustawienia płacowe lokalu. Świadomie tutaj, a nie w
-                          karcie pracownika: to decyzje organizacyjne, jednakowe
-                          dla całej załogi. Skopiowane do 24 kart rozjechałyby
-                          się przy pierwszej pomyłce. */}
-                      <div className="mt-4 pt-3 border-t-[2px] border-[#E7E7E2]">
-                        <label className="text-xs font-bold text-[#6E6E66]">
-                          Okres rozliczeniowy (miesiące)
-                        </label>
-                        <select
-                          value={editingDict.okres_rozliczeniowy ?? ""}
-                          onChange={(e) =>
-                            setEditingDict({
-                              ...editingDict,
-                              okres_rozliczeniowy:
-                                e.target.value === "" ? null : Number(e.target.value),
-                            })
-                          }
-                          className="w-full p-2 border-[2px] border-[#171714] rounded"
-                        >
-                          <option value="">1 miesiąc (domyślnie)</option>
-                          <option value="1">1 miesiąc</option>
-                          <option value="3">3 miesiące</option>
-                          <option value="4">4 miesiące</option>
-                        </select>
-                        <p className="text-[11px] text-[#6E6E66] mt-1">
-                          W tym oknie pracownik na umowie o pracę może odrobić
-                          niewykorzystane godziny. Z końcem okresu bilans zeruje się.
-                        </p>
-
-                        <div className="grid grid-cols-2 gap-3 mt-3">
-                          <div>
-                            <label className="text-xs font-bold text-[#6E6E66]">
-                              Narzut — umowa o pracę (%)
-                            </label>
-                            <input
-                              type="number"
-                              step="0.1"
-                              min="0"
-                              value={editingDict.narzut_umowa ?? ""}
-                              onChange={(e) =>
-                                setEditingDict({ ...editingDict, narzut_umowa: e.target.value })
-                              }
-                              placeholder="0"
-                              className="w-full p-2 border-[2px] border-[#171714] rounded"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-xs font-bold text-[#6E6E66]">
-                              Narzut — zlecenie (%)
-                            </label>
-                            <input
-                              type="number"
-                              step="0.1"
-                              min="0"
-                              value={editingDict.narzut_zlecenie ?? ""}
-                              onChange={(e) =>
-                                setEditingDict({ ...editingDict, narzut_zlecenie: e.target.value })
-                              }
-                              placeholder="0"
-                              className="w-full p-2 border-[2px] border-[#171714] rounded"
-                            />
-                          </div>
-                        </div>
-                        <p className="text-[11px] text-[#6E6E66] mt-1">
-                          Koszty pracodawcy ponad wynagrodzenie (ZUS itd.). Puste = 0,
-                          czyli koszt liczy się z samej wypłaty. Po wpisaniu udział
-                          kosztu pracy w utargu pokaże wydatek lokalu, a nie samą wypłatę.
-                        </p>
-                      </div>
-
-                      {/* Od kiedy zmiana bez odbitego końca przestaje uchodzić
-                          za trwającą. Dwa progi, bo to dwie różne sytuacje:
-                          ktoś miał zmianę w grafiku i ją przeciągnął, albo
-                          pracował poza grafikiem i nie ma się do czego odnieść. */}
-                      <div className="mt-4 pt-3 border-t-[2px] border-[#E7E7E2]">
-                        <p className={`${statLabelCls} mb-2`}>
-                          Zmiany bez odbitego końca
-                        </p>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="text-xs font-bold text-[#6E6E66]">
-                              Tolerancja po grafiku (godz.)
-                            </label>
-                            <input
-                              type="number"
-                              step="0.5"
-                              min="0"
-                              value={editingDict.tolerancja_po_grafiku_h ?? ""}
-                              onChange={(e) =>
-                                setEditingDict({
-                                  ...editingDict,
-                                  tolerancja_po_grafiku_h: e.target.value,
-                                })
-                              }
-                              placeholder="4"
-                              className="w-full p-2 border-[2px] border-[#171714] rounded"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-xs font-bold text-[#6E6E66]">
-                              Maksymalna zmiana poza grafikiem (godz.)
-                            </label>
-                            <input
-                              type="number"
-                              step="0.5"
-                              min="0"
-                              value={editingDict.max_dlugosc_zmiany_h ?? ""}
-                              onChange={(e) =>
-                                setEditingDict({
-                                  ...editingDict,
-                                  max_dlugosc_zmiany_h: e.target.value,
-                                })
-                              }
-                              placeholder="17"
-                              className="w-full p-2 border-[2px] border-[#171714] rounded"
-                            />
-                          </div>
-                        </div>
-                        <p className="text-[11px] text-[#6E6E66] mt-1">
-                          Po tym czasie zmiana przestaje być pokazywana jako trwająca i
-                          trafia do Zatwierdzania zmian. Godziny nie są nikomu
-                          dopisywane — do Twojej decyzji liczą się jako zero. Puste =
-                          4 godz. po grafiku i 17 godz. bez grafiku.
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                  {view === "stanowiska" && (
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-xs font-bold text-[#6E6E66]">
-                          Skrót (np. "KUCH")
-                        </label>
-                        <input
-                          type="text"
-                          value={editingDict.skrot || ""}
-                          onChange={(e) =>
-                            setEditingDict({
-                              ...editingDict,
-                              skrot: e.target.value.toUpperCase(),
-                            })
-                          }
-                          maxLength={4}
-                          placeholder="opcjonalnie"
-                          className="w-full p-2 border-[2px] border-[#171714] rounded uppercase"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-bold text-[#6E6E66]">Kolor</label>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="color"
-                            value={editingDict.kolor || "#DE3A22"}
-                            onChange={(e) =>
-                              setEditingDict({ ...editingDict, kolor: e.target.value })
-                            }
-                            className="w-11 h-[38px] border-[2px] border-[#171714] rounded cursor-pointer"
-                          />
-                          {editingDict.kolor && (
-                            <button
-                              type="button"
-                              onClick={() => setEditingDict({ ...editingDict, kolor: "" })}
-                              className="text-xs font-bold text-[#8F8E86] underline"
-                            >
-                              Wyczyść
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setEditingDict(null)}
-                    className={btnSecondaryCls}
-                  >
-                    Anuluj
-                  </button>
-                  <button type="submit" className={btnPrimaryCls}>
-                    Zapisz
-                  </button>
-                </div>
-              </form>
-            </div>
-          )}
-          <div className="grid md:grid-cols-2 gap-3">
-            {(view === "lokale" ? activeLokale : activeStanowiska).map((item) => (
-              <div
-                key={item.id}
-                className="bg-white p-3.5 rounded-xl border-[2px] border-[#171714] flex justify-between items-center"
-              >
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    {view === "stanowiska" && item.kolor && (
-                      <span
-                        className="w-3 h-3 rounded-full border border-black/10 flex-shrink-0"
-                        style={{ backgroundColor: item.kolor }}
-                      />
-                    )}
-                    <p className="font-['Archivo'] font-bold">
-                      {item.name}
-                      {view === "stanowiska" && item.skrot ? ` (${item.skrot})` : ""}
-                    </p>
-                  </div>
-                  {view === "stanowiska" && (
-                    <p className="text-xs text-[#6E6E66]">Lokal: {item.lokal_name}</p>
-                  )}
-                  {view === "lokale" && (
-                    <p className="text-xs text-[#6E6E66]">
-                      Miasto: {item.miasto || "— nie ustawiono"} · wypłata{" "}
-                      {item.dzien_wyplaty || 10}.
-                    </p>
-                  )}
-                </div>
-                <div className="flex gap-1.5">
-                  <button
-                    onClick={() => setEditingDict({ ...item })}
-                    className="w-8 h-8 border-[2px] border-[#171714] rounded flex items-center justify-center"
-                  >
-                    <Edit2 size={14} />
-                  </button>
-                  <button
-                    onClick={() => onArchive(view, item.id, true)}
-                    className="w-8 h-8 border-[2px] border-[#B7B6AE] rounded flex items-center justify-center text-[#6E6E66] hover:border-[#171714] hover:text-[#171714]"
-                    title="Do archiwum"
-                  >
-                    <Archive size={14} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {(view === "aktywni" || view === "archiwum") && (
 
@@ -834,7 +435,7 @@ export default function Pracownicy({
                         nie daje nic i wyglądałoby na awarię. */}
                     <p className="text-[11px] text-[#6E6E66] mt-2">
                       {editingUser.kiosk_pin && editingUser.email
-                        ? "Ta osoba może zalogować się na swoim telefonie: tym e-mailem i PIN-em blokady. Zakres widocznych bloków ustawiasz w Pracownicy → Lokale."
+                        ? "Ta osoba może zalogować się na swoim telefonie: tym e-mailem i PIN-em blokady. Zakres widocznych bloków ustawia właściciel w Ustawienia → Lokale."
                         : editingUser.kiosk_pin || editingUser.email
                         ? "Do logowania na własnym telefonie potrzebne są OBA pola — PIN blokady i e-mail. Na razie działa tylko Tablet Służbowy."
                         : "Bez PIN-u i e-maila pracownik korzysta wyłącznie z Tabletu Służbowego."}

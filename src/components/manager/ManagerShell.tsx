@@ -26,6 +26,7 @@ import {
   MoreHorizontal,
   User,
   BookOpen,
+  Settings,
 } from "lucide-react";
 import { shellSidebarCls, shellNavBtnCls, shellBadgeCls, lokalTabCls } from "./designTokens";
 import { APP_VERSION, PRODUKT, TENANT } from "../../config";
@@ -62,6 +63,9 @@ export const NAV_ITEMS = [
   { key: "pracownicy", label: "Pracownicy", Icon: Users, badgeKey: "pracownicy" },
   { key: "raporty", label: "Raporty i koszty", Icon: BarChart3 },
   { key: "przewodnik", label: "Przewodnik", Icon: HelpCircle },
+  // Na samym końcu, żeby nie ruszać kolejności ustalonej przez właściciela.
+  // `tylkoWlasciciel` — pozycja znika z menu każdemu poza rolą `admin`.
+  { key: "ustawienia", label: "Ustawienia", Icon: Settings, tylkoWlasciciel: true },
 ];
 
 // Pierwsza piątka z NAV_ITEMS zostaje w dolnym pasku na mobile, reszta chowa
@@ -72,6 +76,7 @@ const MOBILE_PRIMARY_KEYS = ["pulpit", "zatwierdzanie", "grafik", "zadania", "pu
 export default function ManagerShell({
   currentUser,
   isLocalManager,
+  jestWlascicielem = false,
   lokaleForTabs,
   selectedLokal,
   setSelectedLokal,
@@ -94,8 +99,9 @@ export default function ManagerShell({
     minute: "2-digit",
   });
 
-  const primaryItems = NAV_ITEMS.filter((n) => MOBILE_PRIMARY_KEYS.includes(n.key));
-  const overflowItems = NAV_ITEMS.filter((n) => !MOBILE_PRIMARY_KEYS.includes(n.key));
+  const navItems = NAV_ITEMS.filter((n) => !n.tylkoWlasciciel || jestWlascicielem);
+  const primaryItems = navItems.filter((n) => MOBILE_PRIMARY_KEYS.includes(n.key));
+  const overflowItems = navItems.filter((n) => !MOBILE_PRIMARY_KEYS.includes(n.key));
   const overflowBadgeSum = overflowItems.reduce(
     (sum, n) => sum + (n.badgeKey ? badges[n.badgeKey] || 0 : 0),
     0
@@ -128,7 +134,7 @@ export default function ManagerShell({
           </p>
         </div>
         <nav className="flex-grow flex flex-col overflow-y-auto">
-          {NAV_ITEMS.map(({ key, label, Icon, badgeKey }) => (
+          {navItems.map(({ key, label, Icon, badgeKey }) => (
             <button
               key={key}
               onClick={() => setActiveTab(key)}

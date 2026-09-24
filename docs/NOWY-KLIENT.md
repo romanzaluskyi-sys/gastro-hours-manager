@@ -128,9 +128,9 @@ Auth). Na pustej bazie nie zrobi nic.
 Zalogowany jako właściciel, w tej kolejności, bo każdy krok korzysta z
 poprzedniego:
 
-1. **Lokale** (Pracownicy → Lokale) — nazwa, miasto (do pogody), dzień
+1. **Lokale** (Ustawienia → Lokale) — nazwa, miasto (do pogody), dzień
    wypłaty, okres rozliczeniowy, narzuty.
-2. **Stanowiska** (Pracownicy → Stanowiska) — nazwa, skrót (do siatki
+2. **Stanowiska** (Ustawienia → Stanowiska) — nazwa, skrót (do siatki
    grafiku), kolor.
 3. **Pracownicy** — reszta załogi. Kierownicy i tablety dostają e-mail + PIN
    i od razu konto do logowania; pracownicy obsługiwani z tabletu nie

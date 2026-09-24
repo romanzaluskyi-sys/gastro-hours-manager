@@ -39,6 +39,7 @@ import Zgloszenia from "./manager/Zgloszenia";
 import Pracownicy from "./manager/Pracownicy";
 import RaportyIKoszty from "./manager/RaportyIKoszty";
 import Przewodnik from "./manager/Przewodnik";
+import Ustawienia from "./manager/Ustawienia";
 import Grafik from "./manager/Grafik";
 import {
   resolveSwap,
@@ -216,6 +217,10 @@ const ManagerDashboard = ({
   };
 
   const isLocalManager = currentUser.role === "manager_lokalu";
+  // Ustawienia sieci (lokale, stanowiska, subskrypcja) widzi tylko właściciel
+  // — decyzja właściciela z 2026-09-24. Rola `manager` (kierownik sieci) też
+  // ich nie dostaje.
+  const jestWlascicielem = currentUser.role === "admin";
   const managerLokaleList = currentUser.allowed_lokale
     ? currentUser.allowed_lokale.split(",").map((l) => l.trim())
     : [];
@@ -807,7 +812,7 @@ const ManagerDashboard = ({
         isArchiving ? "Zarchiwizować ten element?" : "Przywrócić z archiwum?"
       )
     )
-      return;
+      return false;
     try {
       const res = await api.patch(table, id, { archived: isArchiving });
       if (table === "users")
@@ -817,8 +822,12 @@ const ManagerDashboard = ({
       if (table === "stanowiska")
         setStanowiska(stanowiska.map((s) => (s.id === id ? res : s)));
       showMsg(isArchiving ? "Przeniesiono do archiwum" : "Przywrócono z archiwum");
+      // Wynik mówi wołającemu, czy element faktycznie zmienił stan — karta
+      // lokalu w Ustawieniach zamyka się tylko wtedy, nie po "Anuluj".
+      return true;
     } catch (err) {
       showMsg("Błąd archiwizacji", "error");
+      return false;
     }
   };
 
@@ -900,8 +909,11 @@ const ManagerDashboard = ({
   // zamiast "nie ustawiono".
   const num = (v) => (v === "" || v == null || Number.isNaN(Number(v)) ? null : Number(v));
 
+  // Zwraca zapisany wiersz (albo nic przy błędzie) — Ustawienia po dodaniu
+  // lokalu otwierają od razu jego kartę i potrzebują do tego nowego id.
   const handleSaveDict = async (e, type) => {
     e.preventDefault();
+    let zapisany = null;
     try {
       if (type === "lokale") {
         const payload = {
@@ -928,9 +940,11 @@ const ManagerDashboard = ({
         if (editingDict.id) {
           const l = await api.patch("lokale", editingDict.id, payload);
           setLokale(lokale.map((lok) => (lok.id === l.id ? l : lok)));
+          zapisany = l;
         } else {
           const l = await api.post("lokale", payload);
           setLokale([...lokale, l]);
+          zapisany = l;
         }
       } else {
         const payload = {
@@ -942,16 +956,21 @@ const ManagerDashboard = ({
         if (editingDict.id) {
           const s = await api.patch("stanowiska", editingDict.id, payload);
           setStanowiska(stanowiska.map((st) => (st.id === s.id ? s : st)));
+          zapisany = s;
         } else {
           const s = await api.post("stanowiska", payload);
           setStanowiska([...stanowiska, s]);
+          zapisany = s;
         }
       }
       setEditingDict(null);
       showMsg("Zapisano w bazie!");
     } catch (err) {
-      showMsg("Błąd zapisu słownika!", "error");
+      // Przyczyna w komunikacie — "Błąd zapisu" bez niej nie odróżnia braku
+      // kolumny w bazie od braku uprawnień (patrz błąd #17 w CLAUDE.md).
+      showMsg(`Błąd zapisu: ${err.message || "nieznany błąd"}`, "error");
     }
+    return zapisany;
   };
 
   const resolveIssue = async (id) => {
@@ -1221,6 +1240,7 @@ const ManagerDashboard = ({
       selectedLokal={selectedLokal}
       setSelectedLokal={setSelectedLokal}
       weatherCity={weatherCity}
+      jestWlascicielem={jestWlascicielem}
       activeTab={tab}
       setActiveTab={setTab}
       badges={shellBadges}
@@ -1418,6 +1438,19 @@ const ManagerDashboard = ({
         )}
 
         {tab === "przewodnik" && <Przewodnik />}
+
+        {tab === "ustawienia" && jestWlascicielem && (
+          <Ustawienia
+            currentUser={currentUser}
+            lokale={lokale}
+            stanowiska={stanowiska}
+            users={users}
+            editingDict={editingDict}
+            setEditingDict={setEditingDict}
+            onSaveDict={handleSaveDict}
+            onArchive={handleArchiveEntity}
+          />
+        )}
 
         {tab === "zadania" && (
           <ZadaniaISprzatanie
@@ -2151,9 +2184,6 @@ const ManagerDashboard = ({
             activeLokale={activeLokale}
             activeStanowiska={activeStanowiska}
             shifts={shifts}
-            editingDict={editingDict}
-            setEditingDict={setEditingDict}
-            onSaveDict={handleSaveDict}
             absences={absences}
             onAddUrlop={handleAddUrlop}
             onDeleteAbsence={handleDeleteAbsence}

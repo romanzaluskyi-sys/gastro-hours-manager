@@ -1,6 +1,6 @@
 // @ts-nocheck
 // Mały wskaźnik pogody dla wybranego lokalu — miasto ustawiane ręcznie w
-// Pracownicy → Lokale (lokale.miasto), patrz utils/weather.ts. Cichy
+// Ustawienia → Lokale (lokale.miasto), patrz utils/weather.ts. Cichy
 // fallback na "--°C" przy braku miasta/błędzie sieci — to dekoracja paska,
 // nie coś krytycznego, więc nigdy nie pokazujemy błędu użytkownikowi.
 import React, { useEffect, useState } from "react";
