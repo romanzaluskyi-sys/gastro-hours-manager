@@ -5,6 +5,33 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.51.0 — 2026-09-25
+
+- **Nowa strona Aktywni** według makiety:
+  - u góry pasek: ilu na zmianie, ilu po czasie, ilu bez wejścia, ilu w
+    każdym lokalu;
+  - **„Wymaga uwagi"** na samej górze: kto jest w grafiku, a nie odbił
+    wejścia (**Zadzwoń**, gdy w karcie jest telefon, i **Dopisz wejście** z
+    godziną z grafiku), oraz kto pracuje dłużej, niż stało w grafiku;
+  - dalej lokale: każda osoba z **paskiem postępu zmiany**, „w pracy …" i
+    „zostało …" albo „po czasie +…";
+  - **„Zakończ" pyta o godzinę**: teraz albo koniec z grafiku, ±5 minut, a
+    na przycisku od razu wynik w godzinach; 6 sekund na „Cofnij";
+  - zmiany bez zakończenia zostają w osobnej liście na dole.
+- **Skrzynka zamiast Zgłoszeń i Powiadomień** — jedna pozycja w menu (po
+  Aktywnych) i jeden licznik:
+  - **Do zrobienia**: wnioski o wolne (Zatwierdź / Odrzuć), zgłoszenia
+    pracowników (Rozwiązane / Utwórz zadanie), niezamknięty Puls (Zamknij
+    Puls), zmiany bez odbitego końca i bez odbicia (Rozstrzygnij);
+  - **Informacje**: powiadomienia; te same przypomnienia łączą się w jedną
+    pozycję z „×N";
+  - **Archiwum**: rozwiązane zgłoszenia, rozstrzygnięte wnioski i starsze
+    powiadomienia;
+  - sprawy rozwiązane gdzie indziej znikają same; zgłoszenie anonimowe ma
+    treść ukrytą do „Pokaż"; daty po ludzku („1–6 lis 2026", „3 h temu");
+  - decyzje w Skrzynce też można cofnąć przez 6 sekund.
+- Dzwonek w górnym pasku otwiera Skrzynkę na Informacjach.
+
 ## 0.50.0 — 2026-09-25
 
 - **Nowy Rejestr godzin** według makiety:

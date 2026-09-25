@@ -35,7 +35,7 @@ const pokazBlad = (e) => {
 window.addEventListener("error", (ev) => pokazBlad(ev.error || ev.message));
 window.addEventListener("unhandledrejection", (ev) => pokazBlad(ev.reason));
 
-const IKONY = ["Search", "AlertCircle", "AlertTriangle", "Archive", "ArchiveRestore", "ArrowLeft", "ArrowLeftRight", "ArrowRight", "BarChart3", "Bell", "BookOpen", "Briefcase", "Calendar", "CalendarCheck", "CalendarDays", "CalendarRange", "Check", "CheckCircle", "CheckCircle2", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "ClipboardCheck", "ClipboardList", "ClipboardPlus", "Clock", "Cloud", "Construction", "Copy", "CopyPlus", "Delete", "Download", "Edit2", "Eye", "FileText", "Flag", "HelpCircle", "History", "Home", "Hourglass", "Info", "ListChecks", "Lock", "LogIn", "LogOut", "Mail", "MapPin", "MoreHorizontal", "Palmtree", "Pencil", "Plus", "Printer", "RefreshCw", "RotateCcw", "Save", "Send", "Settings", "SlidersHorizontal", "Thermometer", "Trash2", "User", "UserPlus", "Users", "Wallet", "WifiOff", "X"];
+const IKONY = ["Search", "Inbox", "Square", "Phone", "AlertCircle", "AlertTriangle", "Archive", "ArchiveRestore", "ArrowLeft", "ArrowLeftRight", "ArrowRight", "BarChart3", "Bell", "BookOpen", "Briefcase", "Calendar", "CalendarCheck", "CalendarDays", "CalendarRange", "Check", "CheckCircle", "CheckCircle2", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "ClipboardCheck", "ClipboardList", "ClipboardPlus", "Clock", "Cloud", "Construction", "Copy", "CopyPlus", "Delete", "Download", "Edit2", "Eye", "FileText", "Flag", "HelpCircle", "History", "Home", "Hourglass", "Info", "ListChecks", "Lock", "LogIn", "LogOut", "Mail", "MapPin", "MoreHorizontal", "Palmtree", "Pencil", "Plus", "Printer", "RefreshCw", "RotateCcw", "Save", "Send", "Settings", "SlidersHorizontal", "Thermometer", "Trash2", "User", "UserPlus", "Users", "Wallet", "WifiOff", "X"];
 const stub = (kod) => URL.createObjectURL(new Blob([kod], { type: "text/javascript" }));
 
 // Atrapa Supabase — nic nie leci do sieci, każdy zapis wraca z wymyślonym id.
@@ -301,6 +301,15 @@ planTygodnia.push(
     stanowisko: "Kucharz", date: dniTygodnia[5], start_time: "12:00", end_time: "20:00", ...opub }
 );
 
+// Aktywni (0.51.0): dziś Cezary jest w grafiku i ma otwartą zmianę (na
+// zmianie), a Filip jest w grafiku od północy i nie odbił (Wymaga uwagi).
+planTygodnia.push(
+  { id: "gT1", user_id: "u3", user_name: "Cezary", lokal: "Ceglana",
+    stanowisko: "Kucharz", date: dzisYMD, start_time: "00:00", end_time: "23:59", ...opub },
+  { id: "gT2", user_id: "u7", user_name: "Filip", lokal: "Ceglana",
+    stanowisko: "Kucharz", date: dzisYMD, start_time: "00:01", end_time: "23:59", ...opub }
+);
+
 // Cel finansowy: sobota droższa w utargu i z niższym docelowym procentem,
 // niedziela bez celu w ogóle — dzień bez celu ma pokazać "—", a nie zero.
 const pierwszyBiezacego = (() => {
@@ -458,6 +467,10 @@ const poprzedniMiesiac = (h) => {
             start_time: godz(9), end_time: null },
           { id: "sh5", user_id: "u6", user_name: "Nowa Osoba", lokal: "Bułka i Jacek",
             stanowisko: "Kucharz", start_time: godz(7), end_time: null },
+          // Trwająca zmiana Cezarego (Aktywni, "Zakończ" z godziną).
+          { id: "shT", user_id: "u3", user_name: "Cezary", lokal: "Ceglana", stanowisko: "Kucharz",
+            start_time: (() => { const d = new Date(); d.setHours(0, 5, 0, 0); return d; })(),
+            end_time: null },
           // Gosia: sześć ośmiogodzinnych zmian = 48 h przy normie 44 h.
           ...[1, 2, 3, 4, 5, 6].map((d) => {
             const od = new Date(); od.setDate(d); od.setHours(10, 0, 0, 0);
@@ -746,6 +759,86 @@ const poprzedniMiesiac = (h) => {
         klikEl(document.querySelector('#app [data-grupa="dzien"]')); await czekaj(100);
       } catch (e) {
         if (e) sprawdz("Rejestr: przebieg bez wyjątku", false, e.message);
+      }
+
+      // ----------------------------------------------------------------
+      // Aktywni (0.51.0): najpierw "Wymaga uwagi", "Zakończ" pyta o godzinę,
+      // obie decyzje z 6 s "Cofnij".
+      // ----------------------------------------------------------------
+      const menuX = (nazwa) => {
+        const b = [...document.querySelectorAll("#app aside button")]
+          .find((x) => x.textContent.replace(/▪/g, "").replace(/\d+$/, "").trim() === nazwa);
+        if (!b) throw new Error("nie ma pozycji menu: " + nazwa);
+        b.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      };
+      const klikX = (el) => el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      try {
+        if (new URLSearchParams(location.search).get("rola") === "manager") throw null;
+        menuX("Aktywni"); await czekaj(400);
+        const uwaga = document.querySelector("#app [data-wymaga-uwagi]");
+        sprawdz("Aktywni: „Wymaga uwagi” z osobą z grafiku bez wejścia",
+          !!uwaga && !!uwaga.querySelector('[data-bez-wejscia="Filip"]') &&
+            /brak wejścia/.test(uwaga.textContent) && !!uwaga.querySelector("[data-dopisz-wejscie]"));
+        const wiersz = () => document.querySelector('#app [data-aktywny="shT"]');
+        sprawdz("trwająca zmiana stoi w swoim lokalu z „zostało” i paskiem",
+          !!wiersz() && !!wiersz().closest('[data-lokal-aktywnych="Ceglana"]') && /zostało/.test(wiersz().textContent));
+        klikX(wiersz().querySelector("[data-zakoncz]")); await czekaj(200);
+        const box = document.querySelector("#app [data-zakonczenie]");
+        sprawdz("„Zakończ” pyta o godzinę (Teraz / Wg grafiku) zamiast kończyć od razu",
+          !!box && /Teraz ·/.test(box.textContent) && /Wg grafiku · 23:59/.test(box.textContent) &&
+            /Zakończ · /.test(box.querySelector("[data-zakoncz-ok]").textContent));
+        const przed = window.__zapisy.length;
+        klikX(box.querySelector("[data-zakoncz-ok]")); await czekaj(300);
+        sprawdz("potwierdzenie chowa wiersz i daje „Cofnij”", !wiersz() && !!document.querySelector("#app [data-pasek-cofnij]"));
+        klikX([...document.querySelectorAll("#app [data-pasek-cofnij] button")].pop()); await czekaj(300);
+        sprawdz("„Cofnij” wraca bez zapisu", !!wiersz() && window.__zapisy.length === przed);
+        klikX(wiersz().querySelector("[data-zakoncz]")); await czekaj(200);
+        klikX(document.querySelector("#app [data-zakoncz-ok]")); await czekaj(200);
+        klikX(document.querySelector('#app [data-bez-wejscia="Filip"] [data-dopisz-wejscie]')); await czekaj(6800);
+        const nowe = window.__zapisy.slice(przed);
+        const koniec = nowe.find((z) => z[0] === "shifts" && z[1] === "shT");
+        const wejscie = nowe.find((z) => z[0] === "shifts" && typeof z[1] === "object" && z[1].user_id === "u7");
+        sprawdz("po 6 s zapisuje koniec zmiany", !!koniec && !!koniec[2].end_time, JSON.stringify(koniec && koniec[2]));
+        sprawdz("„Dopisz wejście” zakłada zmianę od godziny z grafiku, bez końca",
+          !!wejscie && wejscie[1].end_time === null && new Date(wejscie[1].start_time).getMinutes() === 1 &&
+            nowe.some((z) => z[0] === "shift_edits" && z[1].source === "manual_add"),
+          JSON.stringify(wejscie && wejscie[1]));
+      } catch (e) {
+        if (e) sprawdz("Aktywni: przebieg bez wyjątku", false, e.message);
+      }
+
+      // ----------------------------------------------------------------
+      // Skrzynka (0.51.0) — Zgłoszenia i Powiadomienia w jednym, w menu
+      // zaraz po Aktywnych, jeden licznik = "Do zrobienia".
+      // ----------------------------------------------------------------
+      try {
+        const pozycje = [...document.querySelectorAll("#app aside button")]
+          .map((x) => x.textContent.replace(/▪/g, "").replace(/\d+$/, "").trim());
+        sprawdz("menu: Skrzynka zaraz po Aktywnych, bez Zgłoszeń i Powiadomień",
+          pozycje.indexOf("Skrzynka") === pozycje.indexOf("Aktywni") + 1 &&
+            !pozycje.includes("Zgłoszenia") && !pozycje.includes("Powiadomienia"), pozycje.join(" | "));
+        if (new URLSearchParams(location.search).get("rola") === "manager") throw null;
+        menuX("Skrzynka"); await czekaj(400);
+        const zakladka = document.querySelector('#app [data-zakladka-skrzynki="todo"]');
+        const naLiscie = (/(\d+)\s*$/.exec(zakladka ? zakladka.textContent : "") || [])[1];
+        const znaczek = (/(\d+)$/.exec([...document.querySelectorAll("#app aside button")]
+          .map((x) => x.textContent).find((x) => x.includes("Skrzynka")) || "") || [])[1];
+        sprawdz("znaczek Skrzynki = „Do zrobienia”", !!naLiscie && naLiscie === znaczek, `lista ${naLiscie}, znaczek ${znaczek}`);
+        const lista = document.querySelector("#app [data-lista-skrzynki]");
+        const anonim = lista && lista.querySelector('[data-sprawa-skrzynki="zgl:i1"]');
+        sprawdz("zgłoszenie anonimowe: treść ukryta do „Pokaż”",
+          !!anonim && !/lodówka/.test(anonim.textContent) && /Pokaż/.test(anonim.textContent));
+        const kubki = () => document.querySelector('#app [data-sprawa-skrzynki="zgl:i2"]');
+        sprawdz("zgłoszenie z akcją „Rozwiązane” przy pozycji",
+          !!kubki() && !!kubki().querySelector('[data-akcja="rozwiaz"]'));
+        const przed = window.__zapisy.length;
+        klikX(kubki().querySelector('[data-akcja="rozwiaz"]')); await czekaj(300);
+        sprawdz("„Rozwiązane” chowa pozycję i daje „Cofnij”", !kubki() && !!document.querySelector("#app [data-pasek-cofnij]"));
+        await czekaj(6600);
+        const patch = window.__zapisy.slice(przed).find((z) => z[0] === "issues" && z[1] === "i2");
+        sprawdz("po 6 s zgłoszenie jest rozwiązane", !!patch && patch[2].status === "rozwiazane", JSON.stringify(patch));
+      } catch (e) {
+        if (e) sprawdz("Skrzynka: przebieg bez wyjątku", false, e.message);
       }
       try {
         klik("Pracownicy"); await czekaj(400);

@@ -23,6 +23,16 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.51.0",
+    date: "2026-09-25",
+    items: [
+      "Aktywni: najpierw „Wymaga uwagi” (bez wejścia, po czasie), potem lokale z paskiem postępu zmiany.",
+      "„Zakończ” pyta o godzinę (teraz albo wg grafiku) i można go cofnąć przez 6 sekund; „Dopisz wejście” z grafiku.",
+      "Skrzynka zamiast Zgłoszeń i Powiadomień: Do zrobienia / Informacje / Archiwum, akcja przy każdej pozycji.",
+      "Powtarzające się przypomnienia łączą się w jedną pozycję (×N); treść zgłoszeń anonimowych ukryta do „Pokaż”.",
+    ],
+  },
+  {
     version: "0.50.0",
     date: "2026-09-25",
     items: [

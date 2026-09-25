@@ -30,7 +30,6 @@ import { resolveAbsenceRequest, addUrlopDirectly, deleteAbsence } from "../utils
 import { zmianyPorzucone } from "../utils/porzucone";
 import { zmianyBezOdbicia } from "../utils/odbicia";
 import { probniDoDecyzji, czekaNaDecyzje } from "../utils/probni";
-import NotificationsPanel from "./NotificationsPanel";
 import ZatwierdzanieZmian from "./manager/ZatwierdzanieZmian";
 import ZadaniaISprzatanie from "./manager/ZadaniaISprzatanie";
 import Puls from "./manager/Puls";
@@ -43,7 +42,7 @@ import WpisGodzinModal from "./manager/WpisGodzinModal";
 import { useOdlozoneDecyzje, PasekCofnij } from "./manager/odlozoneDecyzje";
 import { zapiszSladRecznejZmiany } from "../utils/corrections";
 import Aktywni from "./manager/Aktywni";
-import Zgloszenia from "./manager/Zgloszenia";
+import Skrzynka, { zbierzSprawy } from "./manager/Skrzynka";
 import Pracownicy from "./manager/Pracownicy";
 import RaportyIKoszty from "./manager/RaportyIKoszty";
 import Przewodnik from "./manager/Przewodnik";
@@ -79,11 +78,10 @@ const TABY_Z_WLASNYM_WIDOKIEM = [
   "godziny",
   "zatwierdzanie",
   "aktywni",
-  "zgloszenia",
+  "skrzynka",
   "pracownicy",
   "raporty",
   "przewodnik",
-  "powiadomienia",
   "zadania",
 ];
 
@@ -137,7 +135,19 @@ const ManagerDashboard = ({
   setBudzetDni,
   showMsg,
 }) => {
-  const [tab, setTab] = useState("pulpit");
+  const [tab, setTabSurowy] = useState("pulpit");
+  // Zgłoszenia i Powiadomienia to od 0.51.0 jedna Skrzynka. Stare klucze
+  // przekierowujemy — dzwonek w górnym pasku otwiera ją na "Informacjach".
+  const [skrzynkaStart, setSkrzynkaStart] = useState("todo");
+  const setTab = (t) => {
+    if (t === "powiadomienia" || t === "zgloszenia") {
+      setSkrzynkaStart(t === "powiadomienia" ? "info" : "todo");
+      setTabSurowy("skrzynka");
+      return;
+    }
+    if (t === "skrzynka") setSkrzynkaStart("todo");
+    setTabSurowy(t);
+  };
   const [przewodnikTab, setPrzewodnikTab] = useState("pracownicy");
   const [selectedLokal, setSelectedLokal] = useState("ALL");
   const [reportUserId, setReportUserId] = useState(null);
@@ -394,25 +404,6 @@ const ManagerDashboard = ({
     }
   };
 
-  useEffect(() => {
-    if (tab !== "powiadomienia") return;
-    const unreadIds = managerNotifications
-      .filter((n) => !n.is_read)
-      .map((n) => n.id);
-    if (unreadIds.length === 0) return;
-    api
-      .patchByFilter("notifications", `id=in.(${unreadIds.join(",")})`, {
-        is_read: true,
-      })
-      .then(() => {
-        setNotifications((prev) =>
-          prev.map((n) =>
-            unreadIds.includes(n.id) ? { ...n, is_read: true } : n
-          )
-        );
-      })
-      .catch(() => {});
-  }, [tab]);
 
   const [fMonth, setFMonth] = useState(new Date().getMonth());
   const [fYear, setFYear] = useState(new Date().getFullYear());
@@ -534,6 +525,27 @@ const ManagerDashboard = ({
       terminPozycji(i) < nowTimeStr
   ).length;
 
+  // Skrzynka (0.51.0) zastąpiła Zgłoszenia i Powiadomienia. Znaczek liczy
+  // "Do zrobienia" tą samą funkcją co lista — przy "Cała sieć" liczby muszą
+  // się zgadzać (sprawdza harness-panel.html).
+  const zakresNazwa =
+    selectedLokal !== "ALL" ? selectedLokal : isLocalManager ? "Wszystkie moje" : "Cała sieć";
+  const daneSkrzynki = {
+    issues: widoczneZgloszenia,
+    users,
+    tasks,
+    absences,
+    notifications: managerNotifications,
+    shifts,
+    planShifts,
+    lokale,
+    dayLogs,
+    lokaleNames: availableLokaleForManager.map((l) => l.name),
+  };
+  const skrzynkaDoZrobienia = zbierzSprawy({ ...daneSkrzynki, lokalOk: hasAccessToLokal }).filter(
+    (s) => s.box === "todo"
+  ).length;
+
   const shellBadges = {
     zatwierdzanie:
       pendingCorrections.length +
@@ -542,7 +554,9 @@ const ManagerDashboard = ({
       porzuconeZmiany.length +
       probniOczekujacy.length +
       brakiOdbiciaDoDecyzji.length,
-    zgloszenia: widoczneZgloszenia.filter((i) => i.status === "nowe").length,
+    skrzynka: skrzynkaDoZrobienia,
+    // Dzwonek w górnym pasku — nieprzeczytane powiadomienia; prowadzi do
+    // zakładki "Informacje" w Skrzynce.
     powiadomienia: unreadManagerCount,
     pracownicy: pracownicyTerminyCount,
     zadania: zadaniaOverdueCount,
@@ -1013,14 +1027,11 @@ const ManagerDashboard = ({
     return zapisany;
   };
 
+  // Wołane ze Skrzynki po 6 s "Cofnij" — o decyzji mówi już pasek, więc bez
+  // komunikatu sukcesu. Błąd rzuca dalej, Skrzynka pokazuje go z imieniem.
   const resolveIssue = async (id) => {
-    try {
-      const i = await api.patch("issues", id, { status: "rozwiazane" });
-      setIssues(issues.map((iss) => (iss.id === i.id ? i : iss)));
-      showMsg("Zgłoszenie rozwiązane!");
-    } catch (err) {
-      showMsg("Błąd!", "error");
-    }
+    const i = await api.patch("issues", id, { status: "rozwiazane" });
+    setIssues((prev) => prev.map((iss) => (iss.id === i.id ? i : iss)));
   };
 
   // "Utwórz zadanie" w Zgłoszeniach — tworzy zadanie kierownika (for_manager)
@@ -1055,8 +1066,10 @@ const ManagerDashboard = ({
 
   // --- OTO MAGIA GOOGLE SHEETS DLA EDYCJI (i tworzenia — "+ Dodaj wpis") ---
   // Zwraca true, gdy zapisano — okno zamyka się dopiero wtedy.
-  const zapiszWpisGodzin = async (form) => {
-    const nowy = !editingShift?.id;
+  // `baza` — wiersz, który poprawiamy (id === null → nowy wpis). `cicho` —
+  // bez komunikatu sukcesu, gdy o decyzji mówi już pasek "Cofnij" (Aktywni).
+  const zapiszWpis = async (form, baza, { cicho = false } = {}) => {
+    const nowy = !baza?.id;
     try {
       const [year, month, day] = form.date.split("-").map(Number);
       const [startH, startM] = form.start.split(":").map(Number);
@@ -1069,18 +1082,18 @@ const ManagerDashboard = ({
         if (endD <= startD) endD.setDate(endD.getDate() + 1);
         hrs = parseFloat(((endD - startD) / (1000 * 60 * 60)).toFixed(2));
       }
-      const userId = form.userId || editingShift.user_id;
+      const userId = form.userId || baza.user_id;
 
       // Kierownik naprawia też niespójne dane, więc tu zostaje ostrzeżenie, nie
       // blokada — ale pytamy również BAZY, bo jego lista bywa równie
       // nieaktualna jak lista na tablecie.
       const kolizja =
-        findOverlappingShift(shifts, userId, startD, endD, editingShift.id) ||
+        findOverlappingShift(shifts, userId, startD, endD, baza.id) ||
         (await znajdzKolizjeWBazie({
           userId,
           start: startD,
           end: endD,
-          excludeId: editingShift.id,
+          excludeId: baza.id,
         }));
       if (kolizja) {
         const confirmed = window.confirm(
@@ -1103,7 +1116,7 @@ const ManagerDashboard = ({
           godzin: hrs,
         });
       } else {
-        updated = await api.patch("shifts", editingShift.id, {
+        updated = await api.patch("shifts", baza.id, {
           start_time: startD.toISOString(),
           end_time: endD ? endD.toISOString() : null,
           lokal: form.lokal,
@@ -1123,7 +1136,7 @@ const ManagerDashboard = ({
       // Ślad: kto, kiedy, było → jest i dlaczego. Rejestr pokazuje go w
       // historii wpisu i jako "Korekta · Imię".
       const slad = await zapiszSladRecznejZmiany({
-        stara: nowy ? null : editingShift,
+        stara: nowy ? null : baza,
         nowa: parsed,
         editorName: currentUser.name,
         reason: form.reason,
@@ -1133,8 +1146,8 @@ const ManagerDashboard = ({
 
       // Powiadomienie dla pracownika o edycji zmiany (nie dotyczy nowego wpisu)
       if (!nowy) {
-        const oldStart = editingShift.start_time;
-        const oldEnd = editingShift.end_time;
+        const oldStart = baza.start_time;
+        const oldEnd = baza.end_time;
         const changed =
           oldStart.getTime() !== startD.getTime() ||
           (oldEnd ? oldEnd.getTime() : null) !== (endD ? endD.getTime() : null);
@@ -1147,11 +1160,57 @@ const ManagerDashboard = ({
       // to źródło prawdy, Apps Script bywa wolny).
       sendToGoogleSheets(parsed, nowy ? "ADD_SHIFT" : "EDIT_SHIFT");
 
-      showMsg(nowy ? "Wpis dodany!" : "Zmiana zaktualizowana!");
+      if (!cicho) showMsg(nowy ? "Wpis dodany!" : "Zmiana zaktualizowana!");
       return true;
     } catch (err) {
       showMsg(`Błąd zapisu: ${err.message || "nieznany błąd"}`, "error");
       return false;
+    }
+  };
+
+  const zapiszWpisGodzin = (form) => zapiszWpis(form, editingShift);
+
+  // Aktywni: "Zakończ" z godziną i "Dopisz wejście" z grafiku — ta sama droga
+  // zapisu co okno wpisu (kolizje w bazie, ślad, powiadomienie, arkusz).
+  const hhmmLok = (d) =>
+    `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  const zakonczZmiane = (shift, godzina) =>
+    zapiszWpis(
+      {
+        userId: shift.user_id,
+        date: toLocalYMD(shift.start_time),
+        start: hhmmLok(shift.start_time),
+        end: godzina,
+        lokal: shift.lokal,
+        stanowisko: shift.stanowisko,
+        reason: "",
+      },
+      shift,
+      { cicho: true }
+    );
+  const dopiszWejscie = (plan, user) =>
+    zapiszWpis(
+      {
+        userId: user.id,
+        date: plan.date,
+        start: String(plan.start_time).slice(0, 5),
+        end: "",
+        lokal: plan.lokal,
+        stanowisko: plan.stanowisko,
+        reason: "Dopisane wejście z grafiku",
+      },
+      { id: null, user_id: user.id, user_name: user.name },
+      { cicho: true }
+    );
+
+  // Skrzynka: przeczytane powiadomienia.
+  const oznaczPrzeczytane = async (ids) => {
+    if (!ids.length) return;
+    try {
+      await api.patchByFilter("notifications", `id=in.(${ids.join(",")})`, { is_read: true });
+      setNotifications((prev) => prev.map((n) => (ids.includes(n.id) ? { ...n, is_read: true } : n)));
+    } catch (e) {
+      showMsg("Nie udało się oznaczyć jako przeczytane.", "error");
     }
   };
 
@@ -1294,13 +1353,7 @@ const ManagerDashboard = ({
             setShiftEdits={setShiftEdits}
             lokale={lokale}
             hasAccessToLokal={hasAccessToLokal}
-            zakres={
-              selectedLokal !== "ALL"
-                ? selectedLokal
-                : isLocalManager
-                ? "Wszystkie moje"
-                : "Cała sieć"
-            }
+            zakres={zakresNazwa}
             setDayLogs={setDayLogs}
             dayLogEntries={dayLogEntries}
             dayLogTemplates={dayLogTemplates}
@@ -1908,8 +1961,13 @@ const ManagerDashboard = ({
             planShifts={planShifts}
             lokale={lokale}
             users={users}
+            absences={absences}
+            issues={issues}
             matchesFilter={matchesLokalFilter}
+            zakres={zakresNazwa}
             onEndShift={openEditShift}
+            onZakoncz={zakonczZmiane}
+            onDopiszWejscie={dopiszWejscie}
             onNameClick={goToEmployeeReport}
           />
         )}
@@ -1994,14 +2052,19 @@ const ManagerDashboard = ({
           />
         )}
 
-        {tab === "zgloszenia" && (
-          <Zgloszenia
-            issues={widoczneZgloszenia}
-            users={users}
-            onResolve={resolveIssue}
-            tasks={tasks}
+        {tab === "skrzynka" && (
+          <Skrzynka
+            dane={{ ...daneSkrzynki, lokalOk: matchesLokalFilter }}
+            key={skrzynkaStart}
+            startowaZakladka={skrzynkaStart}
+            onResolveAbsence={handleResolveAbsence}
+            onResolveIssue={resolveIssue}
             onCreateTaskFromIssue={handleCreateTaskFromIssue}
+            onMarkRead={oznaczPrzeczytane}
+            onOpenPuls={goToPuls}
+            onGoToApprovals={() => setTab("zatwierdzanie")}
             fallbackLokal={availableLokaleForManager[0]?.name}
+            showMsg={showMsg}
           />
         )}
 
@@ -2054,18 +2117,6 @@ const ManagerDashboard = ({
                   </div>
                 ))}
             </div>
-          </div>
-        )}
-
-        {tab === "powiadomienia" && (
-          <div className="max-w-4xl mx-auto">
-            <h2 className="font-['Archivo'] font-extrabold text-2xl text-[#171714] mb-6">
-              Powiadomienia
-            </h2>
-            <NotificationsPanel
-              items={managerNotifications}
-              showEmployeeName={false}
-            />
           </div>
         )}
 

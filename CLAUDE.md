@@ -717,7 +717,7 @@ src/
                                     roboczej — NIE publikuje, publikacja
                                     zostaje przy "Wyślij grafik"
       PulpitHome.tsx, RejestrGodzin.tsx, ZatwierdzanieZmian.tsx,
-      Aktywni.tsx, Zgloszenia.tsx, Pracownicy.tsx, RaportyIKoszty.tsx,
+      Aktywni.tsx, Skrzynka.tsx, Pracownicy.tsx, RaportyIKoszty.tsx,
       Przewodnik.tsx, MojaPraca.tsx
                                     — po jednej zakładce Panelu Kierownika
                                     każdy, patrz "Panel kierownika" niżej
@@ -894,18 +894,20 @@ przestaje się scrollować w ogóle zamiast scrollować tylko `<main>`.
 dolnym pasku mobile (`MOBILE_PRIMARY_KEYS`) są ustaleniem właściciela z
 0.32.0, ułożonym wg tego, jak często się tam wchodzi: Pulpit, Zatwierdzanie
 zmian, Grafik, Zadania, Puls, a dalej reszta. Nie przestawiaj ich "logicznie"
-przy okazji innych zmian. Sidebar jest od 0.32.0 JASNY (`#E4E4DE`,
+przy okazji innych zmian. ⚠️ Skrzynka (0.51.0) stoi TAM, gdzie stały
+Zgłoszenia — zaraz po Aktywnych; makieta stawiała ją przed Grafikiem, a
+właściciel kazał zostawić ją na miejscu. Sidebar jest od 0.32.0 JASNY (`#E4E4DE`,
 `shellSidebarCls`) — o ton ciemniejszy od tła strony, nie czarny.
 
 **Zakładki** (kolejność z `NAV_ITEMS`): **Pulpit** (`PulpitHome.tsx`, patrz
 "Pulpit" niżej), **Zatwierdzanie zmian**
 (`ZatwierdzanieZmian.tsx`, patrz niżej), **Rejestr Godzin**
-(`RejestrGodzin.tsx`, patrz "Rejestr godzin" niżej), **Aktywni** (`Aktywni.tsx` —
-żywy licznik czasu trwania zmiany, "Zakończ zmianę"), **Zadania**
+(`RejestrGodzin.tsx`, patrz "Rejestr godzin" niżej), **Aktywni** (`Aktywni.tsx`, patrz
+"Aktywni" niżej), **Zadania**
 (`ZadaniaISprzatanie.tsx` + `ZadaniaKonfiguracja.tsx` — checklisty w blokach,
-patrz niżej), **Grafik**, **Zgłoszenia**
-(`Zgloszenia.tsx`, tylko `type !== "correction"`), **Powiadomienia** (patrz
-niżej, bez zmian w logice), **Pracownicy** (`Pracownicy.tsx`, patrz niżej),
+patrz niżej), **Grafik**, **Skrzynka**
+(`Skrzynka.tsx` — Zgłoszenia i Powiadomienia w jednym od 0.51.0, patrz
+"Skrzynka" niżej), **Pracownicy** (`Pracownicy.tsx`, patrz niżej),
 **Raporty i koszty** (`RaportyIKoszty.tsx`, patrz niżej), **Przewodnik**
 (`Przewodnik.tsx` — statyczna mini-instrukcja + "Historia wersji"),
 **Moja Praca** (`MojaPraca.tsx` — kierownik jest też pracownikiem;
@@ -1007,6 +1009,45 @@ RegisterMobile / RegisterEntryPanel).** Rzeczy, których nie widać:
   `toISOString()` — zmiana zaczęta przed 2:00 w nocy pokazywała się z datą
   poprzedniego dnia.
 
+⚠️ **Aktywni — układ z makiety właściciela (0.51.0, ActiveDesktop /
+ActiveMobile).** Pasek podsumowania, „Wymaga uwagi" (bez wejścia: w
+OPUBLIKOWANYM grafiku, 10 min po planowanym starcie, bez nieobecności i bez
+odbicia tego dnia; po czasie: po planowanym końcu), potem lokale z paskiem
+postępu zmiany. Rzeczy, których nie widać:
+- **Zmiana ↔ grafik: ten sam lokal, potem start NAJBLIŻEJ odbicia.** Przy
+  zmianie dzielonej pierwsza z brzegu dawała zły koniec (złapał to harness).
+- **„Zakończ" i „Dopisz wejście" idą przez `zapiszWpis`** w ManagerDashboard
+  — tę samą drogę co okno wpisu (kolizje w bazie, ślad w `shift_edits`,
+  powiadomienie, arkusz) — i przez 6 s „Cofnij". Dopisanie końca do trwającej
+  zmiany nie wymaga powodu; dopisane wejście dostaje powód „Dopisane wejście
+  z grafiku".
+- **„Zadzwoń" tylko, gdy w karcie jest telefon** (`users_widok.telefon`,
+  widoczny kierownikowi). Przycisk bez numeru nie miałby dokąd dzwonić.
+- Liczniki mówią „bez wejścia", nie „nie odbiła się" — bez zgadywania rodzaju.
+- Zmiany bez zakończenia zostają OSOBNĄ listą na dole (patrz "Zmiany bez
+  zakończenia").
+
+⚠️ **Skrzynka — Zgłoszenia + Powiadomienia (0.51.0, InboxDesktop /
+InboxMobile).** `manager/Skrzynka.tsx`, trzy zakładki: Do zrobienia /
+Informacje / Archiwum, filtr typu Wnioski / Zgłoszenia / System.
+- ⚠️ **„Do zrobienia" jest LICZONE z danych** (`zbierzSprawy`), nie z
+  powiadomień: wnioski o wolne `pending`, zgłoszenia `nowe`, niezamknięty
+  Puls (ostatnie 7 dni, tylko dni z odbiciami w tym lokalu), zmiany bez
+  końca, zmiany bez odbicia (jedną pozycją). Dlatego sprawa rozstrzygnięta
+  gdzie indziej znika sama. Ta sama funkcja daje znaczek w menu — nowy rodzaj
+  sprawy dopisz TYLKO w `zbierzSprawy`.
+- **Wnioski o wolne są w DWÓCH miejscach** — tu i w Zatwierdzaniu (makieta).
+  Oba liczą je z tych samych `absences`, więc decyzja w jednym znika z
+  drugiego; znaczki obu zakładek je liczą.
+- **Informacje = powiadomienia z 14 dni**, te same (typ, lokal, treść)
+  sklejone w jedną pozycję z „×N"; starsze idą do Archiwum. Archiwum ma też
+  rozwiązane zgłoszenia i wnioski rozstrzygnięte w ostatnich 60 dniach.
+- **Zgłoszenie anonimowe ma treść ukrytą do „Pokaż"** — bywa o innej osobie.
+- Stare klucze `zgloszenia`/`powiadomienia` przekierowuje `setTab` w
+  ManagerDashboard (dzwonek → Skrzynka na Informacjach). `Zgloszenia.tsx`
+  i powiązany blok zostały w repo nieużywane — do usunięcia po okresie
+  próbnym, jak inne stare wersje.
+
 ⚠️ **Pracownicy idą za `selectedLokal` z górnego paska** (`wybranyLokal` w
 `Pracownicy.tsx`). Do lokalu należy osoba z `default_lokal` ALBO z
 `allowed_lokale` — tablety mają pusty `default_lokal`.
@@ -1084,15 +1125,14 @@ PIN-u już istnieje** (od 2026-09-02, `Pracownicy.tsx` — pole widoczne
 tylko dla `role === "open"`) — wcześniejsza notatka o ręcznym wpisywaniu w
 Supabase Table Editor jest nieaktualna.
 
-Zakładka **Powiadomienia** (`ManagerDashboard`, tab `"powiadomienia"`,
-NIE ma jeszcze własnego komponentu w `manager/` — nadal renderowana wprost
-w `ManagerDashboard.tsx`, reużywa `NotificationsPanel`) — analogiczna do
-`NotificationsPanel` u pracownika. Pokazuje wiersze z tabeli `notifications`
-gdzie `audience === "manager"`, przefiltrowane przez `hasAccessToLokal(n.lokal)`
+**Powiadomienia kierownika** (od 0.51.0 zakładka "Informacje" w
+**Skrzynce**, patrz niżej; wcześniej osobna zakładka "Powiadomienia" z
+`NotificationsPanel`) — wiersze z tabeli `notifications` gdzie
+`audience === "manager"`, przefiltrowane przez `hasAccessToLokal(n.lokal)`
 — `manager_lokalu` widzi tylko swoje `allowed_lokale`, `admin` widzi
-wszystko. Znaczek z liczbą nieprzeczytanych jak w wersji dla pracowników;
-oznaczanie jako przeczytane też działa tak samo (patch przy wejściu na
-zakładkę). Tworzenie takich powiadomień idzie przez ogólną funkcję
+wszystko. ⚠️ Od 0.51.0 NIE oznaczamy ich jako przeczytane przy wejściu —
+jest przycisk "Oznacz wszystko jako przeczytane"; znaczek przy dzwonku dalej
+liczy nieprzeczytane. Tworzenie takich powiadomień idzie przez ogólną funkcję
 `createManagerNotification(lokal, message, type)` w
 [`api/notifications.ts`](src/api/notifications.ts) — analogiczna
 `createEmployeeNotification(userName, message, type)` robi to samo dla
@@ -1618,7 +1658,7 @@ Supabase" niżej.
 | 2 | Zbliża się/minął termin sanepid albo umowy | cron `check-document-terms.js` → kierownik LOKALU i sam pracownik | `notifications`, `audience='manager'` i `audience='employee'` (`message`/`type`) | ZROBIONE |
 | 3 | Ogólne info dla kierowników lokalu (przyszłe moduły) | dowolna funkcja przez `createManagerNotification` → kierownik | `notifications`, `audience='manager'` | infrastruktura gotowa, czeka na kolejnych konsumentów (Zadania itd.) |
 | 4 | **Zgłoś → "Popraw zmianę"**: pracownik proponuje inne dane konkretnej zmiany (data/lokal/stanowisko/godziny) albo zgłasza całkiem brakującą zmianę | pracownik → kierownik | `issues`, `type='correction'` + `proposed_date`/`proposed_lokal`/`proposed_stanowisko`/`proposed_start_time`/`proposed_end_time` (patrz niżej) | **ZROBIONE** (2026-09-02) |
-| 5 | **Zgłoś → "Zgłoś problem"**: dowolna uwaga, opcjonalnie anonimowo | pracownik → kierownik | `issues`, `type='problem'` (to jest dotychczasowe "Zgłoś", tylko nazwane) | ZROBIONE |
+| 5 | **Zgłoś → "Zgłoś problem"**: dowolna uwaga, opcjonalnie anonimowo | pracownik → kierownik | `issues`, `type='problem'` (to jest dotychczasowe "Zgłoś", tylko nazwane) | ZROBIONE — od 0.51.0 w Skrzynce |
 | 6 | Odpowiedź kierownika na zgłoszenie typu "Popraw zmianę" (Zatwierdź/Popraw/Zapytaj) | kierownik → pracownik | `createEmployeeNotification` z `utils/corrections.ts` (`resolveCorrection`/`askAboutCorrection`), imię konkretnego kierownika w treści | **ZROBIONE** (2026-09-02) |
 | 7 | Kolejka korekt w panelu kierownika, zakładka **Zatwierdzanie zmian** (`manager/ZatwierdzanieZmian.tsx`) | — | `issues` (`type='correction'`) | **ZROBIONE** — osobna zakładka, nie miesza się z p. 5 (Zgłoszenia pokazuje tylko `type !== "correction"`) |
 | 8 | Zmiana zaczęta i niezakończona (bez odbitego końca) | cron `check-porzucone.js` → pracownik i kierownik LOKALU; decyzja kierownika → pracownik | `notifications`, `type='porzucona'` | **ZROBIONE** (0.40.0) — patrz "Zmiany bez zakończenia" |
