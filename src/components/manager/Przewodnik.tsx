@@ -31,6 +31,7 @@ const CHANGELOG = [
       "Na telefonie bez zmian — zakładki dalej na dole.",
       "Widoczny przycisk „Wybierz inną godzinę” przy starcie i przy końcu zmiany.",
       "Zatwierdzanie zmian: przyciski w rzędzie, na dole każdej karty.",
+      "Tablet kilku lokali: przy osobie widać jej lokal, a reguły wpisu mówią, którego lokalu dotyczą.",
     ],
   },
   {

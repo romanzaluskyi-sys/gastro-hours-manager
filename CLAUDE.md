@@ -2213,6 +2213,15 @@ pracownika, potrzebuje SELECT dla tabletu na tych wierszach.**
 ⚠️ Kontrola jest w przeglądarce. Twardy zamek (trigger na `shifts`) — razem z
 zawężeniem `shifts` w Etapie 3c-2.
 
+⚠️ **Reguły wpisu idą za lokalem ZMIANY, nie tabletu** — za `formLokal`
+(domyślnie: lokal z dzisiejszego grafiku → `default_lokal` → pierwszy z
+urządzenia), a przy zakończeniu za `openShift.lokal`. Na wspólnym tablecie
+kilku lokali (szatnia dwóch lokali) dwie osoby dostają więc różne sposoby
+wpisu i to jest poprawne — dlatego na takim urządzeniu (`lokaleOptions.length
+> 1`) każde zdanie o regule mówi „W lokalu X…" (`opisGdzie`), a kafelek osoby
+na liście pokazuje jej lokal. Właściciel wziął to 25.09.2026 za pomieszanie
+ustawień.
+
 ⚠️ **„Inna godzina" to WIDOCZNY przycisk i WIDOCZNE pole** (`innyStart`/
 `innyKoniec` w `employeeSessionShared.tsx`, 0.47.0). Nie wracaj do pola
 `type="time"` z `opacity-0` położonego na czymś innym — a już na pewno nie W

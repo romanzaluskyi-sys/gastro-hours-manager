@@ -167,6 +167,18 @@ const sprawdz = (nazwa, warunek, szczegol = "") => {
     sprawdz("okno 15 podaje liczbę minut", /15 min/.test(W.podpisOkna("start", 15) || ""));
     sprawdz("cała zmiana mówi o zakończeniu",
       /po jej zakończeniu/.test(W.podpisOkna("cala", 30) || ""));
+    // Wspólny tablet kilku lokali (0.47.0): reguła mówi, którego lokalu dotyczy.
+    sprawdz("jeden lokal: „W tym lokalu”", W.opisGdzie(null) === "W tym lokalu");
+    sprawdz("kilka lokali: nazwa lokalu w podpisie",
+      W.podpisOkna("start", 15, "Bułka i Jacek") ===
+        "W lokalu Bułka i Jacek start możesz sam cofnąć najwyżej o 15 min. Wcześniejszą godzinę zatwierdza kierownik.",
+      W.podpisOkna("start", 15, "Bułka i Jacek"));
+    sprawdz("jeden lokal: podpis bez nazwy, jak dotąd",
+      W.podpisOkna("start", 15) ===
+        "Start możesz sam cofnąć najwyżej o 15 min. Wcześniejszą godzinę zatwierdza kierownik.");
+    sprawdz("okno 0 z nazwą lokalu",
+      /^W lokalu Marynata i Chińczyk koniec zapisujesz sam tylko z godziną/.test(
+        W.podpisOkna("koniec", 0, "Marynata i Chińczyk") || ""));
     sprawdz("opis okna w karcie lokalu", W.opisOkna(null) === "bez ograniczeń" &&
       W.opisOkna(0) === "tylko „teraz”" && W.opisOkna(20) === "do 20 min po fakcie");
 

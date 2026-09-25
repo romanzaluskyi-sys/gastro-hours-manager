@@ -22,6 +22,12 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
   zakończy zmianę, a „teraz" liczy się w chwili naciśnięcia.
 - **Zatwierdzanie zmian: przyciski w rzędzie**, w pasku na dole każdej karty,
   wszystkie tej samej wysokości.
+- **Wspólny tablet kilku lokali mówi, którego lokalu dotyczy reguła.** Sposób
+  wpisu i okna tolerancji idą za lokalem wybranym w formularzu zmiany (domyślnie
+  lokal z dzisiejszego grafiku, potem lokal z karty pracownika). Na tablecie
+  obsługującym dwa lokale dwie osoby mogły więc dostać dwa różne sposoby wpisu
+  i wyglądało to na pomieszanie ustawień. Teraz przy każdej osobie na liście
+  stoi jej lokal, a zdania brzmią „W lokalu Bułka i Jacek odbijasz osobno…".
 
 ## 0.46.0 — 2026-09-25
 

@@ -31,6 +31,7 @@ import {
   dopasujCalaZmiane,
   sprawdzGodzine,
   podpisOkna,
+  opisGdzie,
   czekaNaKoniecOdKierownika,
 } from "../utils/wpisy";
 import WeatherBadge from "./WeatherBadge";
@@ -444,6 +445,11 @@ export const EmployeeSessionScreens = ({
   // Reguły wpisu lokalu, w którym zaczyna się zmiana (utils/wpisy.ts) — dla
   // osoby wypożyczonej to lokal, w którym stoi dziś, a nie macierzysty.
   const regulyFormularza = regulyWpisu(lokaleWszystkie, formLokal);
+  // Urządzenie z kilkoma lokalami (wspólny tablet w szatni): każda reguła na
+  // ekranie mówi, KTÓREGO lokalu dotyczy. Inaczej dwie osoby przy tym samym
+  // tablecie widzą dwa różne sposoby wpisu i nie wiadomo, skąd różnica.
+  const kilkaLokali = (lokaleOptions || []).length > 1;
+  const lokalDoOpisu = (nazwa) => (kilkaLokali ? nazwa : null);
   // Lokal może wymusić sposób wpisu. Wtedy przełącznik "Znam godzinę
   // zakończenia" znika, a stan knowsEnd przestaje cokolwiek znaczyć — dlatego
   // wszędzie niżej czytamy znamKoniec, nie knowsEnd.
@@ -1728,9 +1734,17 @@ export const EmployeeSessionScreens = ({
                 </button>
               </>
             )}
-            {podpisOkna("koniec", regulyWpisu(lokaleWszystkie, openShift.lokal).koniecWstecz) && (
+            {podpisOkna(
+              "koniec",
+              regulyWpisu(lokaleWszystkie, openShift.lokal).koniecWstecz,
+              lokalDoOpisu(openShift.lokal)
+            ) && (
               <p className={`${helperTextCls} mt-2.5`}>
-                {podpisOkna("koniec", regulyWpisu(lokaleWszystkie, openShift.lokal).koniecWstecz)}
+                {podpisOkna(
+                  "koniec",
+                  regulyWpisu(lokaleWszystkie, openShift.lokal).koniecWstecz,
+                  lokalDoOpisu(openShift.lokal)
+                )}
               </p>
             )}
           </>
@@ -1839,9 +1853,10 @@ export const EmployeeSessionScreens = ({
         </button>
       ) : (
         <p className={`${helperTextCls} mt-5`}>
+          {opisGdzie(lokalDoOpisu(formLokal))}{" "}
           {wymuszonaCala
-            ? "W tym lokalu wpisujesz całą zmianę naraz — po jej zakończeniu."
-            : "W tym lokalu odbijasz osobno: start teraz, koniec po pracy."}
+            ? "wpisujesz całą zmianę naraz — po jej zakończeniu."
+            : "odbijasz osobno: start teraz, koniec po pracy."}
         </p>
       )}
       <div className="mt-5">
@@ -1911,12 +1926,14 @@ export const EmployeeSessionScreens = ({
       )}
       {podpisOkna(
         znamKoniec ? "cala" : "start",
-        znamKoniec ? regulyFormularza.koniecWstecz : regulyFormularza.startWstecz
+        znamKoniec ? regulyFormularza.koniecWstecz : regulyFormularza.startWstecz,
+        lokalDoOpisu(formLokal)
       ) && (
         <p className={`${helperTextCls} mt-2`}>
           {podpisOkna(
             znamKoniec ? "cala" : "start",
-            znamKoniec ? regulyFormularza.koniecWstecz : regulyFormularza.startWstecz
+            znamKoniec ? regulyFormularza.koniecWstecz : regulyFormularza.startWstecz,
+            lokalDoOpisu(formLokal)
           )}
         </p>
       )}
@@ -1963,10 +1980,10 @@ export const EmployeeSessionScreens = ({
       const godzina = fmtHHMM(p.rodzaj === "start" ? p.startD : p.endD);
       tresc =
         p.rodzaj === "start"
-          ? `W tym lokalu start możesz sam cofnąć najwyżej o ${p.okno} min (najwcześniej ${fmtHHMM(p.najwczesniej)}). Rozpoczniemy zmianę teraz, a start o ${godzina} wyślemy kierownikowi do zatwierdzenia.`
+          ? `${opisGdzie(lokalDoOpisu(formLokal))} start możesz sam cofnąć najwyżej o ${p.okno} min (najwcześniej ${fmtHHMM(p.najwczesniej)}). Rozpoczniemy zmianę teraz, a start o ${godzina} wyślemy kierownikowi do zatwierdzenia.`
           : p.rodzaj === "koniec"
-          ? `W tym lokalu koniec możesz sam cofnąć najwyżej o ${p.okno} min (najwcześniej ${fmtHHMM(p.najwczesniej)}). Koniec o ${godzina} wyślemy kierownikowi do zatwierdzenia.`
-          : `W tym lokalu całą zmianę zapisujesz sam najpóźniej ${p.okno} min po jej zakończeniu. Zmianę ${fmtHHMM(p.startD)}–${godzina} wyślemy kierownikowi do zatwierdzenia.`;
+          ? `${opisGdzie(lokalDoOpisu(p.shift.lokal))} koniec możesz sam cofnąć najwyżej o ${p.okno} min (najwcześniej ${fmtHHMM(p.najwczesniej)}). Koniec o ${godzina} wyślemy kierownikowi do zatwierdzenia.`
+          : `${opisGdzie(lokalDoOpisu(formLokal))} całą zmianę zapisujesz sam najpóźniej ${p.okno} min po jej zakończeniu. Zmianę ${fmtHHMM(p.startD)}–${godzina} wyślemy kierownikowi do zatwierdzenia.`;
     }
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">

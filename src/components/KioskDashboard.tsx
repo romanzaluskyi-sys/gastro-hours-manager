@@ -470,6 +470,12 @@ const KioskDashboard = ({
                     </div>
                     <div className="text-[13px] text-[#6E6E66] mt-0.5 flex items-center gap-1.5 flex-wrap">
                       {u.default_stanowisko || ""}
+                      {/* Wspólny tablet kilku lokali: widać od razu, z którego
+                          lokalu ta osoba jest — od tego zależy, na jaki lokal
+                          zapisze się jej zmiana i jakie reguły wpisu dostanie. */}
+                      {allowed.length > 1 && u.default_lokal
+                        ? `${u.default_stanowisko ? " · " : ""}${u.default_lokal}`
+                        : ""}
                       {czekaNaDecyzje(u) && (
                         <span className="text-[11px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#FFF4D6] text-[#8A6B1E]">
                           na próbę
