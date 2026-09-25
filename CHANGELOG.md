@@ -20,8 +20,8 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
   iPadzie; przy trybie „tylko odbicie" wyglądało to tak, jakby innej godziny
   nie dało się wpisać wcale. Przycisk mówi teraz, o której zacznie albo
   zakończy zmianę, a „teraz" liczy się w chwili naciśnięcia.
-- **Zatwierdzanie zmian: przyciski w rzędzie**, w pasku na dole każdej karty,
-  wszystkie tej samej wysokości.
+- **Zatwierdzanie zmian: przyciski w rzędzie po prawej stronie karty**, obok
+  treści, wszystkie tej samej wysokości. Na telefonie schodzą pod treść.
 - **Wspólny tablet kilku lokali mówi, którego lokalu dotyczy reguła.** Sposób
   wpisu i okna tolerancji idą za lokalem wybranym w formularzu zmiany (domyślnie
   lokal z dzisiejszego grafiku, potem lokal z karty pracownika). Na tablecie

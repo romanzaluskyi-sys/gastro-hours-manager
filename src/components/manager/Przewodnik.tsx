@@ -30,7 +30,7 @@ const CHANGELOG = [
       "Zakładki na tablecie w pasku po lewej, jak w panelu kierownika.",
       "Na telefonie bez zmian — zakładki dalej na dole.",
       "Widoczny przycisk „Wybierz inną godzinę” przy starcie i przy końcu zmiany.",
-      "Zatwierdzanie zmian: przyciski w rzędzie, na dole każdej karty.",
+      "Zatwierdzanie zmian: przyciski w rzędzie po prawej stronie karty.",
       "Tablet kilku lokali: przy osobie widać jej lokal, a reguły wpisu mówią, którego lokalu dotyczą.",
     ],
   },

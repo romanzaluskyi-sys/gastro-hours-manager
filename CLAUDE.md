@@ -910,8 +910,8 @@ od razu pokazuje kartę tej osoby.
 
 ⚠️ **Zatwierdzanie zmian ma JEDEN układ karty** (0.46.0, rząd od 0.47.0):
 `Sekcja` + `KartaDecyzji` na poziomie modułu w `ZatwierdzanieZmian.tsx` —
-treść na górze, przyciski W RZĘDZIE w pasku na dole karty (`data-przyciski`),
-równej wysokości, pierwszy zawsze „na tak". Dokładając nowy typ
+treść po lewej, przyciski W RZĘDZIE po prawej (`data-przyciski`; na telefonie
+pod treścią), równej wysokości, pierwszy zawsze „na tak". Dokładając nowy typ
 decyzji, użyj tych dwóch komponentów zamiast własnej karty. Nagłówek strony
 „Do decyzji · N" i znaczek `zatwierdzanie` w `shellBadges` muszą liczyć te
 same kolejki (sprawdza to `harness-panel.html`).

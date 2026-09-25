@@ -82,10 +82,12 @@ import {
 // sekcjami ("Odrzuć" raz stał przed "Zatwierdź", raz po). Kierownik, który
 // przechodzi przez kolejkę szybko, klika tam, gdzie przycisk stał w
 // poprzedniej karcie — więc układ ma być ten sam wszędzie (prośba właściciela
-// z 2026-09-25): treść na górze, przyciski W RZĘDZIE w osobnym pasku na dole
-// karty, wszystkie tej samej wysokości (pierwsza wersja 0.46.0 miała je w
-// kolumnie po prawej — właściciel wolał rząd), zawsze w tej samej kolejności
-// — decyzja "na tak", potem "na nie" albo "popraw", na końcu rzeczy poboczne.
+// z 2026-09-25): treść po lewej, przyciski W RZĘDZIE po prawej stronie karty
+// (tam jest wolne miejsce), wszystkie tej samej wysokości; na telefonie rząd
+// schodzi pod treść. Zawsze w tej samej kolejności — decyzja "na tak", potem
+// "na nie" albo "popraw", na końcu rzeczy poboczne. (Historia: 0.46.0 miała
+// kolumnę po prawej, potem pasek na dole karty — właściciel chciał rząd, ale
+// w wolnym miejscu po prawej.)
 //
 // ⚠️ Oba komponenty stoją na poziomie modułu, nie w środku ZatwierdzanieZmian
 // — patrz błąd #10 w CLAUDE.md (komponent zdefiniowany w komponencie
@@ -94,8 +96,10 @@ import {
 // ---------------------------------------------------------------------------
 // Szerokość: na telefonie przyciski dzielą pasek po równo (flex-1), od `md`
 // mają jedną, stałą szerokość — kilka kart pod sobą ma wtedy przyciski w tych
-// samych miejscach. Wysokość wyrównuje sam pasek (flex, items-stretch).
-const przyciskRzadCls = "flex-1 md:flex-none md:w-[180px] flex items-center justify-center gap-1.5 text-center";
+// samych miejscach. 150 px, bo stoją OBOK treści: trzy przyciski po 180 px
+// zjadały na tablecie połowę karty. Dłuższy napis ("Nie było zmiany") łamie
+// się w dwie linie, a wysokość wyrównuje sam pasek (flex, items-stretch).
+const przyciskRzadCls = "flex-1 md:flex-none md:w-[150px] flex items-center justify-center gap-1.5 text-center";
 const przyciskTakCls = `${btnPrimaryCls} ${przyciskRzadCls}`;
 const przyciskNieCls = `${btnSecondaryCls} ${przyciskRzadCls}`;
 const przyciskBocznyCls =
@@ -120,30 +124,32 @@ function Sekcja({ Icon, tytul, liczba, opis, akcja, children }) {
 function KartaDecyzji({ naglowek, znacznik, podtytul, meta, zaznaczenie, children, przyciski, stopka }) {
   return (
     <div className="bg-white rounded-xl border-[2px] border-[#171714] p-4">
-      <div className="min-w-0">
-        <div className="flex items-start gap-3">
-          {zaznaczenie}
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <p className="font-['Archivo'] font-extrabold text-[16px] text-[#171714]">
-                {naglowek}
-              </p>
-              {znacznik}
+      <div className="flex flex-col md:flex-row md:items-start gap-4">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start gap-3">
+            {zaznaczenie}
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="font-['Archivo'] font-extrabold text-[16px] text-[#171714]">
+                  {naglowek}
+                </p>
+                {znacznik}
+              </div>
+              {podtytul && <p className="text-[13px] text-[#6E6E66]">{podtytul}</p>}
+              {meta && <p className="text-[12px] text-[#8F8E86] mt-0.5">{meta}</p>}
             </div>
-            {podtytul && <p className="text-[13px] text-[#6E6E66]">{podtytul}</p>}
-            {meta && <p className="text-[12px] text-[#8F8E86] mt-0.5">{meta}</p>}
           </div>
+          {children && <div className="mt-3">{children}</div>}
         </div>
-        {children && <div className="mt-3">{children}</div>}
+        {przyciski && (
+          <div
+            data-przyciski
+            className="flex items-stretch gap-2 flex-shrink-0 pt-3 border-t-[2px] border-[#E7E7E2] md:pt-0 md:border-t-0"
+          >
+            {przyciski}
+          </div>
+        )}
       </div>
-      {przyciski && (
-        <div
-          data-przyciski
-          className="mt-4 pt-3 border-t-[2px] border-[#E7E7E2] flex items-stretch gap-2"
-        >
-          {przyciski}
-        </div>
-      )}
       {stopka}
     </div>
   );
