@@ -5,6 +5,21 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.46.0 — 2026-09-25
+
+- **Zatwierdzanie zmian w jednym układzie.** Każda decyzja — osoba na próbę,
+  brak odbicia, zmiana bez zakończenia, giełda, wniosek o wolne, korekta
+  godzin — ma teraz taką samą kartę: treść po lewej, przyciski jeden pod
+  drugim po prawej, zawsze w tej samej kolejności (najpierw „Zatwierdź" /
+  „Dopisz godziny", pod spodem „Odrzuć" / „Nie było zmiany" / „Popraw").
+  Podział na sekcje zostaje, każda z krótkim opisem.
+- Nagłówek strony mówi, ile decyzji czeka łącznie, a znaczek w menu liczy
+  teraz to samo — wcześniej pomijał osoby, które były w grafiku i nie odbiły.
+- **Pracownicy idą za lokalem z górnego paska.** Wybierasz lokal — lista
+  pokazuje jego ludzi (razem z tabletem i osobami, które mają ten lokal w
+  dozwolonych). Przy „Cała sieć" lista jest pogrupowana po lokalach.
+- Nowy pracownik dodany przy wybranym lokalu od razu ma go ustawionego.
+
 ## 0.45.0 — 2026-09-24
 
 - **Każdy lokal sam decyduje, jak wpisuje się godziny** (Ustawienia → Lokale

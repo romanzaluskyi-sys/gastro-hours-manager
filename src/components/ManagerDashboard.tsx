@@ -24,6 +24,7 @@ import { findOverlappingShift, opisKolidujacej, znajdzKolizjeWBazie } from "../u
 import { zadaniaNaDzien, toLocalYMD } from "../utils/tasks";
 import { resolveAbsenceRequest, addUrlopDirectly, deleteAbsence } from "../utils/absences";
 import { zmianyPorzucone } from "../utils/porzucone";
+import { zmianyBezOdbicia } from "../utils/odbicia";
 import { probniDoDecyzji, czekaNaDecyzje } from "../utils/probni";
 import NotificationsPanel from "./NotificationsPanel";
 import ZatwierdzanieZmian from "./manager/ZatwierdzanieZmian";
@@ -291,6 +292,17 @@ const ManagerDashboard = ({
     lokalOk: hasAccessToLokal,
   }).filter((poz) => !czekaNaKoniecOdKierownika(poz.shift, issues));
   const probniOczekujacy = probniDoDecyzji({ users, lokalOk: hasAccessToLokal });
+  // Kolejka "Był w grafiku, nie odbił" — do 0.46.0 znaczek jej nie liczył,
+  // choć Pulpit i sama zakładka tak. Od kiedy zakładka ma nagłówek
+  // "Do decyzji · N", znaczek musi dać tę samą liczbę, inaczej jedno z nich
+  // wygląda na zepsute. Te same argumenty co w ZatwierdzanieZmian.
+  const brakiOdbiciaDoDecyzji = zmianyBezOdbicia({
+    planShifts,
+    shifts,
+    users,
+    absences,
+    lokalOk: hasAccessToLokal,
+  });
 
   // Decyzja o zamianie z giełdy. Cała logika (przepisanie zmiany na nowego
   // pracownika, powiadomienia obu stron) siedzi w resolveSwap w
@@ -412,7 +424,9 @@ const ManagerDashboard = ({
       pin: "",
       role: "closed",
       active: true,
-      default_lokal: "",
+      // Nowa osoba startuje w lokalu wybranym w górnym pasku — kierownik,
+      // który patrzy na listę jednego lokalu, zakłada kogoś właśnie tam.
+      default_lokal: selectedLokal !== "ALL" ? selectedLokal : "",
       default_stanowisko: "",
       allowed_lokale: [],
       sanepid_expiry: "",
@@ -516,7 +530,8 @@ const ManagerDashboard = ({
       pendingAbsences.length +
       pendingSwaps.length +
       porzuconeZmiany.length +
-      probniOczekujacy.length,
+      probniOczekujacy.length +
+      brakiOdbiciaDoDecyzji.length,
     zgloszenia: widoczneZgloszenia.filter((i) => i.status === "nowe").length,
     powiadomienia: unreadManagerCount,
     pracownicy: pracownicyTerminyCount,
@@ -2200,6 +2215,7 @@ const ManagerDashboard = ({
             activeStanowiska={activeStanowiska}
             shifts={shifts}
             absences={absences}
+            wybranyLokal={selectedLokal}
             onAddUrlop={handleAddUrlop}
             onDeleteAbsence={handleDeleteAbsence}
             showMsg={showMsg}

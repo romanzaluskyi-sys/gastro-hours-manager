@@ -410,6 +410,11 @@ const poprzedniMiesiac = (h) => {
           // Dodana z Tabletu na dzień próbny: bez umowy, bez stawki, bez
           // e-maila. Musi stać w kolejce decyzji i NIE może pojawić się w
           // Grafiku ani w kandydatach do przepisania zmian.
+          // Tablet: PUSTY default_lokal, lokal tylko w allowed_lokale. Lista
+          // pracowników zawężona do Ceglanej musi go pokazać — inaczej
+          // kierownik traci z oczu konto, którym administruje.
+          { id: "k1", name: "Tablet Ceglana", active: true, archived: false, role: "kiosk",
+            default_lokal: "", allowed_lokale: "Ceglana" },
           { id: "u6", name: "Nowa Osoba", active: true, archived: false, role: "open",
             default_lokal: "Bułka i Jacek", default_stanowisko: "Kucharz", email: "",
             probny_status: "oczekuje", probny_od: dzisYMD, probny_przez: "Tablet Bułka" },
@@ -676,6 +681,20 @@ const poprzedniMiesiac = (h) => {
             .find((d) => d.textContent.includes("07:30") && d.textContent.includes("Ala")
               && d.querySelector("button"));
           sprawdz("prośba o start stoi w kolejce korekt", !!kartaAli);
+
+          // Jeden układ karty dla każdego typu decyzji (0.46.0): przyciski
+          // jeden pod drugim, a pierwszy zawsze "na tak".
+          const karty = [...document.querySelectorAll("#app div.rounded-xl")]
+            .filter((d) => d.querySelector(":scope > div.grid"));
+          const kolumny = karty.map((k) => k.querySelector(":scope > div.grid > div.flex-col"));
+          sprawdz("każda karta decyzji ma przyciski w kolumnie",
+            karty.length >= 3 && kolumny.every(Boolean),
+            `kart ${karty.length}, bez kolumny ${kolumny.filter((k) => !k).length}`);
+          const pierwsze = kolumny.filter(Boolean)
+            .map((k) => (k.querySelector("button") || {}).textContent || "");
+          sprawdz("pierwszy przycisk w każdej karcie to decyzja „na tak”",
+            pierwsze.length > 0 && pierwsze.every((x) => !/Odrzuć|Nie było/.test(x)),
+            pierwsze.join(" | "));
           sprawdz("pokazuje obecny koniec zmiany, nie „brak”",
             !!kartaAli && /07:30\s*–\s*16:00/.test(kartaAli.textContent),
             kartaAli ? kartaAli.textContent.slice(0, 160) : "");
@@ -701,6 +720,60 @@ const poprzedniMiesiac = (h) => {
         }
       } catch (e) {
         sprawdz("Korekta startu: przebieg bez wyjątku", false, e.message);
+      }
+
+      // ----------------------------------------------------------------
+      // Pracownicy idą za lokalem z górnego paska (0.46.0).
+      // ----------------------------------------------------------------
+      try {
+        if (new URLSearchParams(location.search).get("rola") !== "manager") {
+          const zakladkaLokalu = (nazwa) => {
+            const b = [...document.querySelectorAll("#app header button")]
+              .find((x) => x.textContent.trim() === nazwa);
+            if (!b) throw new Error("nie ma zakładki lokalu: " + nazwa);
+            b.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          };
+          const nazwiska = () =>
+            [...document.querySelectorAll("#app button > p:first-child")]
+              .filter((p) => p.className.includes("text-[15px]"))
+              .map((p) => p.textContent.trim());
+          // Menu ma w nazwie licznik ("Pracownicy8"), a strona Zatwierdzania
+          // ma nagłówek "Pracownicy na próbę" — klik(tekst) trafiłby w niego.
+          const menu = (nazwa) => {
+            const b = [...document.querySelectorAll("#app aside button")]
+              .find((x) => x.textContent.replace(/▪/g, "").replace(/\d+$/, "").trim() === nazwa);
+            if (!b) throw new Error("nie ma pozycji menu: " + nazwa);
+            b.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          };
+          // Znaczek przy "Zatwierdzanie zmian" = nagłówek strony "Do decyzji · N".
+          menu("Zatwierdzanie zmian"); await czekaj(300);
+          const naglowekStrony = (/Do decyzji · (\d+)/.exec(
+            [...document.querySelectorAll("#app h2")].map((h) => h.textContent).join(" ")) || [])[1];
+          const znaczek = (/(\d+)$/.exec([...document.querySelectorAll("#app aside button")]
+            .map((x) => x.textContent).find((x) => x.includes("Zatwierdzanie zmian")) || "") || [])[1];
+          sprawdz("znaczek w menu = liczba decyzji na stronie",
+            !!naglowekStrony && naglowekStrony === znaczek,
+            `strona ${naglowekStrony}, znaczek ${znaczek}`);
+          menu("Pracownicy"); await czekaj(400);
+          zakladkaLokalu("Ceglana"); await czekaj(300);
+          const ceglana = nazwiska();
+          sprawdz("lokal z paska zawęża listę pracowników",
+            ceglana.includes("Bo") && !ceglana.includes("Ala"), ceglana.join(", "));
+          sprawdz("tablet z lokalem tylko w allowed_lokale zostaje na liście",
+            ceglana.includes("Tablet Ceglana"), ceglana.join(", "));
+          zakladkaLokalu("Cała sieć"); await czekaj(300);
+          const wszyscy = nazwiska();
+          const naglowki = [...document.querySelectorAll("#app p")]
+            .filter((p) => p.className.includes("uppercase") &&
+              ["Bułka i Jacek", "Ceglana"].includes(p.textContent.trim()))
+            .map((p) => p.textContent.trim());
+          sprawdz("„Cała sieć” pokazuje wszystkich, pogrupowanych po lokalu",
+            wszyscy.includes("Ala") && wszyscy.includes("Bo") &&
+              naglowki.join("|") === "Bułka i Jacek|Ceglana",
+            `${wszyscy.join(", ")} / nagłówki: ${naglowki.join("|")}`);
+        }
+      } catch (e) {
+        sprawdz("Pracownicy wg lokalu: przebieg bez wyjątku", false, e.message);
       }
 
       if (status.className !== "zle") {

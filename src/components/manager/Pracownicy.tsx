@@ -85,6 +85,8 @@ export default function Pracownicy({
   activeStanowiska,
   shifts,
   absences = [],
+  // Lokal z górnego paska panelu ("ALL" = cała sieć / wszystkie moje).
+  wybranyLokal = "ALL",
   onAddUrlop,
   onDeleteAbsence,
   showMsg,
@@ -210,7 +212,30 @@ export default function Pracownicy({
     ...new Set(activeStanowiska.map((s) => s.name)),
   ].sort((a, b) => a.localeCompare(b, "pl"));
 
-  const list = view === "aktywni" ? visibleUsers : archivedUsers;
+  // Lista idzie za lokalem z górnego paska, jak reszta panelu (prośba
+  // właściciela z 2026-09-25). Do lokalu należy osoba, która ma go jako
+  // default_lokal ALBO w allowed_lokale — tablety i kierownicy mają pusty
+  // default_lokal i bez drugiego warunku znikałyby z listy własnego lokalu
+  // (ta sama pułapka, którą naprawiała migracja 0034, patrz CLAUDE.md).
+  const lokaleOsoby = (u) => [u.default_lokal, ...allowedArr(u)].filter(Boolean);
+  const wLokalu = (u) => wybranyLokal === "ALL" || lokaleOsoby(u).includes(wybranyLokal);
+  // Sortowanie po lokalu, potem po nazwisku: przy "Cała sieć" lista układa
+  // się w grupy z nagłówkami, zamiast mieszać ludzi ze wszystkich lokali.
+  // Osoby bez żadnego lokalu (np. konto właściciela) idą na koniec.
+  const lokalDoSortu = (u) =>
+    wybranyLokal !== "ALL" ? wybranyLokal : lokaleOsoby(u)[0] || "";
+  const posortuj = (lista) =>
+    lista
+      .filter(wLokalu)
+      .sort(
+        (a, b) =>
+          (lokalDoSortu(a) === "") - (lokalDoSortu(b) === "") ||
+          lokalDoSortu(a).localeCompare(lokalDoSortu(b), "pl") ||
+          (a.name || "").localeCompare(b.name || "", "pl")
+      );
+  const aktywniWLokalu = posortuj(visibleUsers);
+  const archiwumWLokalu = posortuj(archivedUsers);
+  const list = view === "aktywni" ? aktywniWLokalu : archiwumWLokalu;
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -225,7 +250,7 @@ export default function Pracownicy({
                 : "bg-white text-[#171714] border-[#B7B6AE]"
             }`}
           >
-            Aktywni · {visibleUsers.length}
+            Aktywni · {aktywniWLokalu.length}
           </button>
           <button
             onClick={() => setView("archiwum")}
@@ -235,7 +260,7 @@ export default function Pracownicy({
                 : "bg-white text-[#171714] border-[#B7B6AE]"
             }`}
           >
-            Archiwum · {archivedUsers.length}
+            Archiwum · {archiwumWLokalu.length}
           </button>
           {view === "aktywni" && (
             <button onClick={onNewUser} className={`${btnPrimaryCls} flex items-center gap-1.5`}>
@@ -253,15 +278,26 @@ export default function Pracownicy({
           <div className="space-y-2">
             {list.length === 0 && (
               <div className="bg-white p-6 rounded-xl border-[2px] border-[#171714] text-center text-[#8F8E86] text-sm">
-                {view === "aktywni" ? "Brak pracowników." : "Archiwum puste."}
+                {view === "aktywni" ? "Brak pracowników" : "Archiwum puste"}
+                {wybranyLokal !== "ALL" ? ` w lokalu ${wybranyLokal}.` : "."}
               </div>
             )}
-            {list.map((u) => {
+            {list.map((u, i) => {
               const missing = missingTerms(u);
               const selected = editingUser && editingUser.id === u.id;
+              // Nagłówek grupy tylko przy "Cała sieć" — przy jednym lokalu
+              // powtarzałby to, co i tak stoi w górnym pasku.
+              const grupa = lokalDoSortu(u);
+              const nowaGrupa =
+                wybranyLokal === "ALL" && (i === 0 || lokalDoSortu(list[i - 1]) !== grupa);
               return (
+                <React.Fragment key={u.id}>
+                {nowaGrupa && (
+                  <p className={`${statLabelCls} ${i === 0 ? "" : "pt-3"}`}>
+                    {grupa || "Bez lokalu"}
+                  </p>
+                )}
                 <button
-                  key={u.id}
                   onClick={() => setEditingUser({ ...u })}
                   className={`w-full text-left bg-white p-3.5 rounded-xl border-[2px] ${
                     selected ? "border-[#DE3A22]" : "border-[#171714]"
@@ -286,6 +322,7 @@ export default function Pracownicy({
                     </span>
                   )}
                 </button>
+                </React.Fragment>
               );
             })}
           </div>

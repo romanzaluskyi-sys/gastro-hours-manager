@@ -897,6 +897,17 @@ Klik na imię pracownika w Rejestr Godzin i Aktywni woła
 `reportUserId` i przełącza `tab` na `"raporty"`, gdzie `RaportyIKoszty.tsx`
 od razu pokazuje kartę tej osoby.
 
+⚠️ **Zatwierdzanie zmian ma JEDEN układ karty** (0.46.0): `Sekcja` +
+`KartaDecyzji` na poziomie modułu w `ZatwierdzanieZmian.tsx` — treść po lewej,
+przyciski w kolumnie po prawej, pierwszy zawsze „na tak". Dokładając nowy typ
+decyzji, użyj tych dwóch komponentów zamiast własnej karty. Nagłówek strony
+„Do decyzji · N" i znaczek `zatwierdzanie` w `shellBadges` muszą liczyć te
+same kolejki (sprawdza to `harness-panel.html`).
+
+⚠️ **Pracownicy idą za `selectedLokal` z górnego paska** (`wybranyLokal` w
+`Pracownicy.tsx`). Do lokalu należy osoba z `default_lokal` ALBO z
+`allowed_lokale` — tablety mają pusty `default_lokal`.
+
 **Zatwierdzanie zmian** (`ZatwierdzanieZmian.tsx` + `utils/corrections.ts`)
 — kolejka decyzji dla `issues.type === "correction"` (patrz "Zgłoszenia i
 powiadomienia" niżej — ta funkcja jest już w pełni zaimplementowana i
