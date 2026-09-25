@@ -5,6 +5,18 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.51.1 — 2026-09-25
+
+- **Puls bez natarczywej czerwieni**: licznik przy „Zamknij wczoraj" na
+  Pulpicie jest szary, a niezamknięty Puls w Skrzynce stoi w „Informacjach"
+  ze zwykłym przyciskiem — nie podbija czerwonego znaczka w menu. Widać go
+  dalej, „Zamknij Puls" dalej działa.
+- **Aktywni — „Dopisz wejście" pyta o godzinę**: wg grafiku albo teraz,
+  ±5 minut, dopiero potem zapis (z 6 sekundami na „Cofnij").
+- **Aktywni — pasek u góry filtruje listę**: „na zmianie", „po czasie",
+  „bez wejścia" i każdy lokal; drugie kliknięcie albo „Wszyscy" wraca do
+  całości.
+
 ## 0.51.0 — 2026-09-25
 
 - **Nowa strona Aktywni** według makiety:

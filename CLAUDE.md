@@ -1016,6 +1016,10 @@ odbicia tego dnia; po czasie: po planowanym końcu), potem lokale z paskiem
 postępu zmiany. Rzeczy, których nie widać:
 - **Zmiana ↔ grafik: ten sam lokal, potem start NAJBLIŻEJ odbicia.** Przy
   zmianie dzielonej pierwsza z brzegu dawała zły koniec (złapał to harness).
+- **„Zakończ" i „Dopisz wejście" najpierw pytają o godzinę** (`WyborGodziny`:
+  teraz albo z grafiku, ±5 min) — nic nie zapisuje się jednym kliknięciem.
+- **Pasek podsumowania to filtr** (na zmianie / po czasie / bez wejścia /
+  lokal); drugie kliknięcie albo „Wszyscy" zdejmuje filtr.
 - **„Zakończ" i „Dopisz wejście" idą przez `zapiszWpis`** w ManagerDashboard
   — tę samą drogę co okno wpisu (kolizje w bazie, ślad w `shift_edits`,
   powiadomienie, arkusz) — i przez 6 s „Cofnij". Dopisanie końca do trwającej
@@ -1032,8 +1036,12 @@ InboxMobile).** `manager/Skrzynka.tsx`, trzy zakładki: Do zrobienia /
 Informacje / Archiwum, filtr typu Wnioski / Zgłoszenia / System.
 - ⚠️ **„Do zrobienia" jest LICZONE z danych** (`zbierzSprawy`), nie z
   powiadomień: wnioski o wolne `pending`, zgłoszenia `nowe`, niezamknięty
-  Puls (ostatnie 7 dni, tylko dni z odbiciami w tym lokalu), zmiany bez
-  końca, zmiany bez odbicia (jedną pozycją). Dlatego sprawa rozstrzygnięta
+  zmiany bez końca, zmiany bez odbicia (jedną pozycją).
+- ⚠️ **Niezamknięty Puls stoi w INFORMACJACH, nie w Do zrobienia** (0.51.1,
+  prośba właściciela: czerwony znaczek przy każdym wejściu był natarczywy).
+  Liczony z kart dni (7 dni wstecz, tylko dni z odbiciami), zwykły przycisk
+  „Zamknij Puls", przypomnienia crona dają mu „×N" zamiast osobnych pozycji.
+  Licznik „Zamknij wczoraj" na Pulpicie jest z tego samego powodu SZARY. Dlatego sprawa rozstrzygnięta
   gdzie indziej znika sama. Ta sama funkcja daje znaczek w menu — nowy rodzaj
   sprawy dopisz TYLKO w `zbierzSprawy`.
 - **Wnioski o wolne są w DWÓCH miejscach** — tu i w Zatwierdzaniu (makieta).

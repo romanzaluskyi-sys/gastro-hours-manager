@@ -144,13 +144,25 @@ function Pigulka({ ton = "warn", Icon, children }) {
   );
 }
 
-function KartaZadania({ Icon, tytul, licznik, opis, children, stopka, ...reszta }) {
+// `licznikSzary` — liczba do wiadomości, nie do alarmu (Puls: prośba
+// właściciela z 2026-09-25, czerwone "4" przy każdym wejściu było natarczywe).
+function KartaZadania({ Icon, tytul, licznik, licznikSzary = false, opis, children, stopka, ...reszta }) {
   return (
     <div className={`${kartaCls} p-4 md:px-5 md:py-[18px] flex flex-col gap-3`} {...reszta}>
       <h3 className="font-['Archivo'] font-extrabold text-[19px] leading-6 flex items-center gap-2.5 text-[#171714]">
         <Icon size={20} className="flex-shrink-0" />
         <span>{tytul}</span>
-        {licznik > 0 && <span className={licznikCls}>{licznik}</span>}
+        {licznik > 0 && (
+          <span
+            className={
+              licznikSzary
+                ? "inline-flex items-center justify-center min-w-[24px] h-6 px-1.5 rounded-full bg-[#ECEBE6] text-[#6E6E66] text-[13px] font-extrabold"
+                : licznikCls
+            }
+          >
+            {licznik}
+          </span>
+        )}
       </h3>
       {opis && <p className="-mt-1.5 text-sm text-[#6E6E66]">{opis}</p>}
       <div>{children}</div>
@@ -758,6 +770,7 @@ export default function PulpitHome({
               Icon={Lock}
               tytul={`Zamknij wczoraj · ${wczorajPodpis}`}
               licznik={otwarte.length}
+              licznikSzary
               opis={
                 otwarte.length > 0
                   ? "Utarg i wpisy dziennika czekają na potwierdzenie — bez tego raport dnia jest otwarty."

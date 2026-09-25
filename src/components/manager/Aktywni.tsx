@@ -83,23 +83,25 @@ function Pasek({ pct, po }) {
   );
 }
 
-// Potwierdzenie zakończenia — godzina, szybkie wybory i wynik na przycisku.
-function Zakonczenie({ start, godzina, setGodzina, teraz, planKoniec, onAnuluj, onOk }) {
-  const minuty = (() => {
-    const m = naMin(godzina);
-    if (m == null) return null;
-    const koniec = new Date(start);
-    koniec.setHours(Math.floor(m / 60), m % 60, 0, 0);
-    if (koniec <= start) koniec.setDate(koniec.getDate() + 1);
-    return Math.round((koniec - start) / 60000);
-  })();
+// Wybór godziny przed zapisem — wspólny dla "Zakończ" i "Dopisz wejście".
+// Nic nie zapisuje się jednym kliknięciem: najpierw godzina (teraz albo z
+// grafiku, ±5 min), a wynik stoi na głównym przycisku.
+function WyborGodziny({ pytanie, godzina, setGodzina, teraz, planGodzina, najpierwGrafik, etykietaOk, onAnuluj, onOk, ...reszta }) {
+  const poprawna = naMin(godzina) != null;
   const krok = (d) => setGodzina(zMin((naMin(godzina) ?? naMin(hhmm(teraz))) + d));
+  const chipTeraz = (
+    <button key="t" type="button" className={chipCls(godzina === hhmm(teraz))} onClick={() => setGodzina(hhmm(teraz))}>
+      Teraz · {hhmm(teraz)}
+    </button>
+  );
+  const chipGrafik = planGodzina && (
+    <button key="g" type="button" className={chipCls(godzina === planGodzina)} onClick={() => setGodzina(planGodzina)}>
+      Wg grafiku · {planGodzina}
+    </button>
+  );
   return (
-    <div
-      className="col-span-full flex flex-wrap items-center gap-2.5 bg-[#F6F5F1] rounded-lg p-3 mt-1"
-      data-zakonczenie
-    >
-      <span className="font-bold text-[#171714]">Zakończ zmianę o</span>
+    <div className="col-span-full flex flex-wrap items-center gap-2.5 bg-[#F6F5F1] rounded-lg p-3 mt-1" {...reszta}>
+      <span className="font-bold text-[#171714]">{pytanie}</span>
       <span className="inline-flex items-stretch h-10 border-[2px] border-[#171714] rounded-md bg-white overflow-hidden">
         <button type="button" onClick={() => krok(-5)} aria-label="−5 min" className="w-9 text-lg font-bold text-[#6E6E66] hover:bg-[#F6F5F1]">
           −
@@ -108,25 +110,14 @@ function Zakonczenie({ start, godzina, setGodzina, teraz, planKoniec, onAnuluj, 
           value={godzina}
           onChange={(e) => setGodzina(e.target.value)}
           inputMode="numeric"
-          aria-label="Godzina zakończenia"
+          aria-label={pytanie}
           className="w-16 text-center text-[17px] font-bold tabular-nums outline-none"
         />
         <button type="button" onClick={() => krok(5)} aria-label="+5 min" className="w-9 text-lg font-bold text-[#6E6E66] hover:bg-[#F6F5F1]">
           +
         </button>
       </span>
-      <button type="button" className={chipCls(godzina === hhmm(teraz))} onClick={() => setGodzina(hhmm(teraz))}>
-        Teraz · {hhmm(teraz)}
-      </button>
-      {planKoniec && (
-        <button
-          type="button"
-          className={chipCls(godzina === hhmm(planKoniec))}
-          onClick={() => setGodzina(hhmm(planKoniec))}
-        >
-          Wg grafiku · {hhmm(planKoniec)}
-        </button>
-      )}
+      {najpierwGrafik ? [chipGrafik, chipTeraz] : [chipTeraz, chipGrafik]}
       <span className="hidden md:block flex-1" />
       <div className="flex gap-2 w-full md:w-auto">
         <button type="button" className={`${btnObrysCls} flex-1 md:flex-none`} onClick={onAnuluj}>
@@ -135,16 +126,26 @@ function Zakonczenie({ start, godzina, setGodzina, teraz, planKoniec, onAnuluj, 
         <button
           type="button"
           className={`${btnGlownyCls} flex-[2] md:flex-none`}
-          disabled={minuty == null}
-          onClick={() => onOk(zMin(naMin(godzina)), minuty)}
-          data-zakoncz-ok
+          disabled={!poprawna}
+          onClick={() => onOk(zMin(naMin(godzina)))}
+          data-godzina-ok
         >
-          <Check size={17} /> Zakończ{minuty != null ? ` · ${ileMin(minuty)}` : ""}
+          <Check size={17} /> {etykietaOk(poprawna ? zMin(naMin(godzina)) : null)}
         </button>
       </div>
     </div>
   );
 }
+
+// Ile godzin wyjdzie, gdy zmiana zaczęta o `start` skończy się o "HH:MM".
+const minutyDo = (start, godzina) => {
+  const m = naMin(godzina);
+  if (m == null) return null;
+  const koniec = new Date(start);
+  koniec.setHours(Math.floor(m / 60), m % 60, 0, 0);
+  if (koniec <= start) koniec.setDate(koniec.getDate() + 1);
+  return Math.round((koniec - start) / 60000);
+};
 
 // ---------------------------------------------------------------------------
 export default function Aktywni({
@@ -158,11 +159,13 @@ export default function Aktywni({
   zakres = "Cała sieć",
   onEndShift, // otwiera okno wpisu (zmiany bez zakończenia)
   onZakoncz, // async (shift, "HH:MM") => true, gdy zapisano
-  onDopiszWejscie, // async (plan, user) => true
+  onDopiszWejscie, // async (plan, user, "HH:MM") => true
   onNameClick,
 }) {
   const [teraz, setTeraz] = useState(new Date());
   const [potwierdzenie, setPotwierdzenie] = useState(null); // { id, godzina }
+  // Filtr z paska podsumowania: null | "zmiana" | "po" | "brak" | "lokal:<nazwa>".
+  const [filtr, setFiltr] = useState(null);
   useEffect(() => {
     const t = setInterval(() => setTeraz(new Date()), 30000);
     return () => clearInterval(t);
@@ -170,7 +173,7 @@ export default function Aktywni({
 
   const { odlozone, toast, decyduj, cofnij } = useOdlozoneDecyzje({
     zakoncz: (shift, godzina) => onZakoncz(shift, godzina),
-    wejscie: (plan, user) => onDopiszWejscie(plan, user),
+    wejscie: (plan, user, godzina) => onDopiszWejscie(plan, user, godzina),
   });
 
   const dzis = toLocalYMD(teraz);
@@ -222,17 +225,32 @@ export default function Aktywni({
     });
 
   const poCzasie = aktywni.filter((a) => a.po);
-  const lokaleZOsobami = [...new Set(aktywni.map((a) => a.s.lokal))]
+  // Lokale w pasku: te, w których ktoś jest na zmianie ALBO ktoś nie odbił
+  // wejścia — inaczej nie dałoby się zawęzić do lokalu, gdzie brakuje ludzi.
+  const lokaleZOsobami = [...new Set([...aktywni.map((a) => a.s.lokal), ...bezWejscia.map((b) => b.p.lokal)])]
     .map((lokal) => ({ lokal, lista: aktywni.filter((a) => a.s.lokal === lokal) }))
     .sort((a, b) => b.lista.length - a.lista.length || a.lokal.localeCompare(b.lokal));
 
-  const zakoncz = (a, godzina, minuty) => {
+  const zakoncz = (a, godzina) => {
     setPotwierdzenie(null);
     decyduj(
       [{ klucz: `koniec:${a.s.id}`, zadanie: ["zakoncz", [a.s, godzina]] }],
-      `Zakończono: ${a.s.user_name} o ${godzina} · ${ileMin(minuty)}`
+      `Zakończono: ${a.s.user_name} o ${godzina} · ${ileMin(minutyDo(a.s.start_time, godzina))}`
     );
   };
+  const dopisz = (p, user, godzina) => {
+    setPotwierdzenie(null);
+    decyduj(
+      [{ klucz: `wejscie:${p.id}`, zadanie: ["wejscie", [p, user, godzina]] }],
+      `Dopisano wejście: ${user.name} od ${godzina}`
+    );
+  };
+
+  // --- filtr z paska podsumowania ---
+  const lokalFiltra = filtr && filtr.startsWith("lokal:") ? filtr.slice(6) : null;
+  const pokazBrak = (lokal) => !filtr || filtr === "brak" || lokalFiltra === lokal;
+  const pokazPo = (lokal) => !filtr || filtr === "po" || filtr === "zmiana" || lokalFiltra === lokal;
+  const pokazWToku = (lokal) => !filtr || filtr === "zmiana" || lokalFiltra === lokal;
 
   const wiersz = (a, zLokalem) => {
     const { s, plan, koniec, po } = a;
@@ -282,14 +300,17 @@ export default function Aktywni({
           </div>
         )}
         {otwarty && (
-          <Zakonczenie
-            start={s.start_time}
+          <WyborGodziny
+            data-zakonczenie
+            pytanie="Zakończ zmianę o"
             godzina={potwierdzenie.godzina}
             setGodzina={(g) => setPotwierdzenie({ id: s.id, godzina: g })}
             teraz={teraz}
-            planKoniec={plan ? koniec : null}
+            planGodzina={plan ? hhmm(koniec) : null}
+            najpierwGrafik={po}
+            etykietaOk={(g) => (g ? `Zakończ · ${ileMin(minutyDo(s.start_time, g))}` : "Zakończ")}
             onAnuluj={() => setPotwierdzenie(null)}
-            onOk={(g, m) => zakoncz(a, g, m)}
+            onOk={(g) => zakoncz(a, g)}
           />
         )}
       </div>
@@ -298,7 +319,33 @@ export default function Aktywni({
 
   const panelCls = "bg-white border-[2px] border-[#171714] rounded-xl overflow-hidden";
   const naglowekCls = "flex items-center gap-2.5 px-4 md:px-5 py-3.5 border-b-[2px]";
-  const uwaga = bezWejscia.length + poCzasie.length;
+  const bezWejsciaWidoczne = bezWejscia.filter((b) => pokazBrak(b.p.lokal));
+  const poCzasieWidoczne = poCzasie.filter((a) => pokazPo(a.s.lokal));
+  const porzuconeWidoczne = porzucone.filter((s) => !filtr || lokalFiltra === s.lokal);
+  const uwaga = bezWejsciaWidoczne.length + poCzasieWidoczne.length;
+
+  // Pozycja paska podsumowania = filtr. Drugie kliknięcie zdejmuje filtr.
+  const chip = (klucz, liczba, tekst, ton) => {
+    const wlaczony = filtr === klucz;
+    return (
+      <button
+        key={klucz || "wszyscy"}
+        type="button"
+        aria-pressed={wlaczony}
+        onClick={() => setFiltr(wlaczony ? null : klucz)}
+        className={`inline-flex items-center gap-2 h-10 px-3.5 rounded-full text-[15px] font-semibold whitespace-nowrap border-[2px] ${
+          wlaczony
+            ? "bg-[#171714] border-[#171714] text-white"
+            : ton === "warn"
+            ? "bg-[#FDF0D8] border-[#FDF0D8] text-[#8A5300] hover:border-[#8A5300]"
+            : "bg-white border-[#DEDCD4] text-[#171714] hover:border-[#171714]"
+        }`}
+        data-filtr-aktywnych={klucz || "wszyscy"}
+      >
+        {liczba != null && <b className="font-['Archivo'] text-[17px] tabular-nums">{liczba}</b>} {tekst}
+      </button>
+    );
+  };
 
   return (
     <div className="max-w-[1120px] mx-auto flex flex-col gap-5" data-aktywni>
@@ -311,33 +358,19 @@ export default function Aktywni({
         </p>
       </div>
 
-      {/* Podsumowanie — na telefonie przewija się w bok */}
+      {/* Podsumowanie — każda pozycja zawęża listę (klik jeszcze raz = wszyscy).
+          Na telefonie przewija się w bok. */}
       <div className="flex gap-2 overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0 md:flex-wrap [scrollbar-width:none]" data-podsumowanie>
-        {[
-          [aktywni.length, "na zmianie", false],
-          ...(poCzasie.length ? [[poCzasie.length, "po czasie", true]] : []),
-          ...(bezWejscia.length
-            ? // "bez wejścia", nie "nie odbiła się" — nie zgadujemy rodzaju z imienia.
-              [[bezWejscia.length, "bez wejścia", true]]
-            : []),
-        ].map(([n, t, warn]) => (
-          <span
-            key={t}
-            className={`inline-flex items-center gap-2 h-10 px-3.5 rounded-full text-[15px] font-semibold whitespace-nowrap ${
-              warn ? "bg-[#FDF0D8] text-[#8A5300]" : "bg-white border-[2px] border-[#DEDCD4] text-[#171714]"
-            }`}
-          >
-            <b className="font-['Archivo'] text-[17px] tabular-nums">{n}</b> {t}
-          </span>
-        ))}
-        {lokaleZOsobami.map(({ lokal, lista }) => (
-          <span
-            key={lokal}
-            className="inline-flex items-center gap-2 h-10 px-3.5 rounded-full bg-white border-[2px] border-[#DEDCD4] text-[15px] font-bold text-[#171714] whitespace-nowrap"
-          >
+        {filtr && chip(null, null, "Wszyscy")}
+        {chip("zmiana", aktywni.length, "na zmianie")}
+        {poCzasie.length > 0 && chip("po", poCzasie.length, "po czasie", "warn")}
+        {/* "bez wejścia", nie "nie odbiła się" — nie zgadujemy rodzaju z imienia. */}
+        {bezWejscia.length > 0 && chip("brak", bezWejscia.length, "bez wejścia", "warn")}
+        {lokaleZOsobami.map(({ lokal, lista }) => chip(`lokal:${lokal}`, null, (
+          <>
             {lokal} <b className="font-['Archivo'] text-[17px] tabular-nums">{lista.length}</b>
-          </span>
-        ))}
+          </>
+        )))}
       </div>
 
       {uwaga > 0 && (
@@ -347,8 +380,9 @@ export default function Aktywni({
             <h3 className="font-['Archivo'] font-extrabold text-[17px] text-[#171714]">Wymaga uwagi</h3>
             <span className="ml-auto text-sm font-bold text-[#6E6E66]">{uwaga}</span>
           </div>
-          {bezWejscia.map(({ p, user, start }) => {
+          {bezWejsciaWidoczne.map(({ p, user, start }) => {
             const tel = users.find((u) => String(u.id) === String(user.id))?.telefon;
+            const otwarty = potwierdzenie?.id === `w:${p.id}`;
             return (
               <div
                 key={`b-${p.id}`}
@@ -370,6 +404,7 @@ export default function Aktywni({
                   </div>
                   <Pasek pct={0} />
                 </div>
+                {!otwarty && (
                 <div className="col-start-2 md:col-start-auto flex gap-2 md:self-center">
                   {/* Telefon jest w kartotece tylko u kierownika (users_widok) —
                       bez numeru przycisk nie ma dokąd zadzwonić, więc go nie ma. */}
@@ -382,20 +417,31 @@ export default function Aktywni({
                     type="button"
                     className={`${btnObrysCls} flex-1 md:flex-none`}
                     data-dopisz-wejscie
-                    onClick={() =>
-                      decyduj(
-                        [{ klucz: `wejscie:${p.id}`, zadanie: ["wejscie", [p, user]] }],
-                        `Dopisano wejście: ${user.name} od ${trimTime(p.start_time)}`
-                      )
-                    }
+                    onClick={() => setPotwierdzenie({ id: `w:${p.id}`, godzina: trimTime(p.start_time) })}
                   >
                     <Plus size={16} /> Dopisz wejście
                   </button>
                 </div>
+                )}
+                {/* Najpierw godzina (wg grafiku albo teraz), dopiero potem zapis. */}
+                {otwarty && (
+                  <WyborGodziny
+                    data-dopisz-wejscie-godzina
+                    pytanie="Wejście o"
+                    godzina={potwierdzenie.godzina}
+                    setGodzina={(g) => setPotwierdzenie({ id: `w:${p.id}`, godzina: g })}
+                    teraz={teraz}
+                    planGodzina={trimTime(p.start_time)}
+                    najpierwGrafik
+                    etykietaOk={(g) => (g ? `Dopisz wejście · ${g}` : "Dopisz wejście")}
+                    onAnuluj={() => setPotwierdzenie(null)}
+                    onOk={(g) => dopisz(p, user, g)}
+                  />
+                )}
               </div>
             );
           })}
-          {poCzasie.map((a) => wiersz(a, true))}
+          {poCzasieWidoczne.map((a) => wiersz(a, true))}
         </div>
       )}
 
@@ -406,9 +452,15 @@ export default function Aktywni({
         </div>
       )}
 
+      {filtr && uwaga === 0 && !lokaleZOsobami.some(({ lokal, lista }) => pokazWToku(lokal) && lista.some((a) => !a.po)) && (
+        <div className="text-center py-8 px-5 border-[2px] border-dashed border-[#DEDCD4] rounded-xl text-[#6E6E66]">
+          Nikogo w tym widoku.
+        </div>
+      )}
+
       {lokaleZOsobami.map(({ lokal, lista }) => {
         const wToku = lista.filter((a) => !a.po);
-        if (!wToku.length) return null;
+        if (!wToku.length || !pokazWToku(lokal)) return null;
         return (
           <div key={lokal} className={panelCls} data-lokal-aktywnych={lokal}>
             <div className={`${naglowekCls} border-[#171714]`}>
@@ -426,18 +478,18 @@ export default function Aktywni({
           Godzin nikomu nie dopisujemy, więc dopóki kierownik nie zdecyduje,
           liczą się jako zero. Decyzja żyje w Zatwierdzaniu zmian; tutaj jest
           tylko po to, żeby ekran "kto jest w lokalu" nie kłamał. */}
-      {porzucone.length > 0 && (
+      {porzuconeWidoczne.length > 0 && (
         <div className={panelCls} data-bez-zakonczenia>
           <div className={`${naglowekCls} border-[#171714]`}>
             <Hourglass size={18} />
             <h3 className="font-['Archivo'] font-extrabold text-[17px] text-[#171714]">Bez zakończenia</h3>
-            <span className="ml-auto text-sm font-bold text-[#6E6E66]">{porzucone.length}</span>
+            <span className="ml-auto text-sm font-bold text-[#6E6E66]">{porzuconeWidoczne.length}</span>
           </div>
           <p className="px-4 md:px-5 pt-3 text-[13px] text-[#6E6E66] max-w-[70ch]">
             Zmiana zaczęta i nieodbita do końca. Te godziny nie liczą się nikomu, dopóki nie rozstrzygniesz ich w
             Zatwierdzaniu zmian — albo nie uzupełnisz tutaj.
           </p>
-          {porzucone.map((s) => (
+          {porzuconeWidoczne.map((s) => (
             <div
               key={s.id}
               className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 items-center px-4 md:px-5 py-3 border-t-[1.5px] border-[#DEDCD4]"

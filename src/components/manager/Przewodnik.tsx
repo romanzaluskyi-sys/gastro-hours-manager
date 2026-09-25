@@ -23,6 +23,15 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.51.1",
+    date: "2026-09-25",
+    items: [
+      "Puls bez czerwonego licznika — w Skrzynce stoi w Informacjach, na Pulpicie licznik jest szary.",
+      "Aktywni: „Dopisz wejście” najpierw pyta o godzinę (wg grafiku albo teraz).",
+      "Aktywni: pasek u góry (na zmianie, po czasie, bez wejścia, lokale) filtruje listę.",
+    ],
+  },
+  {
     version: "0.51.0",
     date: "2026-09-25",
     items: [

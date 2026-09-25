@@ -185,6 +185,10 @@ export const zbierzSprawy = ({
     });
 
   // --- System: Puls niezamknięty (liczony z kart dni, nie z przypomnień) ---
+  // ⚠️ Stoi w INFORMACJACH, nie w Do zrobienia, i ma zwykły przycisk (prośba
+  // właściciela z 2026-09-25): niezamknięty Puls nie może podbijać czerwonego
+  // znaczka w menu przy każdym wejściu. Widać go dalej, akcja dalej działa.
+  const lokaleZPulsem = new Set();
   const dni = Array.from({ length: DNI_PULSU }, (_, k) =>
     toLocalYMD(new Date(teraz.getFullYear(), teraz.getMonth(), teraz.getDate() - DNI_PULSU + k))
   );
@@ -197,12 +201,13 @@ export const zbierzSprawy = ({
         !stanKartDnia({ dayLogs, lokaleNames: [lokal], dateStr: ymd })[0].zamkniety
     );
     if (!otwarteDni.length) return;
+    lokaleZPulsem.add(lokal);
     const przypomnienia = notifications.filter(
       (n) => n.type === "puls" && n.lokal === lokal && !/zamknięty/.test(n.message || "")
     );
     sprawy.push({
       klucz: `puls:${lokal}`,
-      box: "todo",
+      box: "info",
       rodzaj: "sys",
       typ: "System",
       kiedy: przypomnienia.length
@@ -214,7 +219,7 @@ export const zbierzSprawy = ({
       tytul: `Puls niezamknięty · ${listaDat(otwarteDni.map(dm))}`,
       tekst: { reszta: "Brak karty dnia — utarg i wpisy nie są potwierdzone." },
       pulsDzien: otwarteDni[0],
-      akcje: [{ id: "puls", etykieta: "Zamknij Puls", glowna: true }],
+      akcje: [{ id: "puls", etykieta: "Zamknij Puls" }],
     });
   });
 
@@ -272,7 +277,12 @@ export const zbierzSprawy = ({
   notifications
     .filter((n) => !n.lokal || lokalOk(n.lokal))
     .forEach((n) => {
-      const stare = new Date(n.created_at) < granica;
+      // Przypomnienia crona o Pulsie mówią to samo co pozycja "Puls
+      // niezamknięty" wyżej (i dają jej "×N"). Gdy dzień już zamknięto,
+      // pozycji nie ma, a przypomnienie idzie do Archiwum.
+      const przypomnieniePulsu = n.type === "puls" && !/zamknięty/.test(n.message || "");
+      if (przypomnieniePulsu && lokaleZPulsem.has(n.lokal)) return;
+      const stare = przypomnieniePulsu || new Date(n.created_at) < granica;
       const k = `${stare ? "a" : "i"}|${n.type}|${n.lokal}|${n.message}`;
       if (!grupy.has(k)) grupy.set(k, { stare, lista: [] });
       grupy.get(k).lista.push(n);

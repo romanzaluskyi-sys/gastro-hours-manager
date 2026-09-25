@@ -1188,16 +1188,17 @@ const ManagerDashboard = ({
       shift,
       { cicho: true }
     );
-  const dopiszWejscie = (plan, user) =>
+  // `godzina` wybiera kierownik (wg grafiku albo teraz) — bez niej start z grafiku.
+  const dopiszWejscie = (plan, user, godzina) =>
     zapiszWpis(
       {
         userId: user.id,
         date: plan.date,
-        start: String(plan.start_time).slice(0, 5),
+        start: godzina || String(plan.start_time).slice(0, 5),
         end: "",
         lokal: plan.lokal,
         stanowisko: plan.stanowisko,
-        reason: "Dopisane wejście z grafiku",
+        reason: "Wejście dopisane przez kierownika",
       },
       { id: null, user_id: user.id, user_name: user.name },
       { cicho: true }
