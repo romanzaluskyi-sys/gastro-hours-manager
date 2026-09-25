@@ -23,6 +23,16 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.52.0",
+    date: "2026-09-25",
+    items: [
+      "Pracownicy: nowy układ — braki w danych widać na liście (filtr „Braki w danych”), tablety osobno.",
+      "Karta: „Uzupełnij” przenosi do brakującego pola, skróty do sekcji przyklejone u góry.",
+      "PIN ukryty do „Pokaż”, ostrzeżenie o łatwym PIN-ie; stawka w tym miesiącu przy umowie o pracę.",
+      "Pasek „Zapisz zmiany” pojawia się tylko po zmianie; urlop można usunąć z „Cofnij”.",
+    ],
+  },
+  {
     version: "0.51.1",
     date: "2026-09-25",
     items: [

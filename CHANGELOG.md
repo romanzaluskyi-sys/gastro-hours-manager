@@ -5,6 +5,31 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.52.0 — 2026-09-25
+
+- **Nowy wygląd Pracowników** według makiety — wszystkie pola zostały, zmienił
+  się układ:
+  - **lista**: inicjały, stanowisko · lokal i krótkie znaczniki braków
+    („brak: sanepid", „brak: umowa", „brak: stawka"); filtr **„Braki w
+    danych"**, wyszukiwanie; Tablety Służbowe w osobnej grupie
+    **„Urządzenia"**;
+  - **nagłówek karty**: „Konto aktywne" jako przełącznik i jedno zdanie o tym,
+    czego brakuje, z przyciskiem **„Uzupełnij"**, który przenosi do pola;
+  - **skróty do sekcji** (Dane, Logowanie, Miejsce pracy, Umowa, Dokumenty,
+    Urlopy, Koniec i notatki) przyklejone u góry;
+  - **PIN ukryty** do „Pokaż" i ostrzeżenie o łatwym PIN-ie (123456, 111111…);
+  - dodatkowe stanowiska: główne na czerwono z gwiazdką, zaznaczone na
+    czarno;
+  - przy umowie o pracę widać **stawkę w tym miesiącu** i normę; „Ten
+    miesiąc" z paskiem wykorzystania normy;
+  - brakujące terminy są bursztynowe z dopiskiem „przypomnienia wyłączone";
+  - urlopy: podgląd „= 5 dni roboczych · 40 h" przed dodaniem, daty po
+    ludzku, **usunięcie z 6 s na „Cofnij"**;
+  - archiwizacja w osobnej sekcji, z potwierdzeniem na miejscu.
+- **Pasek „Niezapisane zmiany · Anuluj · Zapisz zmiany"** pojawia się tylko
+  po zmianie i trzyma się dołu ekranu; przejście do innej osoby z
+  niezapisanymi zmianami najpierw pyta. Po zapisie karta zostaje otwarta.
+
 ## 0.51.1 — 2026-09-25
 
 - **Puls bez natarczywej czerwieni**: licznik przy „Zamknij wczoraj" na

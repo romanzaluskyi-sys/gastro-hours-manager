@@ -1056,6 +1056,27 @@ Informacje / Archiwum, filtr typu Wnioski / Zgłoszenia / System.
   i powiązany blok zostały w repo nieużywane — do usunięcia po okresie
   próbnym, jak inne stare wersje.
 
+⚠️ **Pracownicy — układ z makiety właściciela (0.52.0, PeopleDesktop /
+PeopleMobile).** Wszystkie pola karty zostały — zmieniła się kolejność,
+grupowanie i stany. Rzeczy, których nie widać:
+- **Braki liczy JEDNA funkcja `brakiOsoby`** (sanepid, termin umowy bez
+  „bezterminowa", stawka / wynagrodzenie) — znacznik na liście, filtr „Braki w
+  danych" i pasek w nagłówku karty. Tablet i osoba na próbę braków nie mają.
+- **Pasek „Zapisz zmiany" pokazuje się tylko przy różnicy** (`rozniSie`,
+  normalizacja: tablica = tekst po przecinku, null = "" = false; pomija
+  `ma_kiosk_pin` i ślad notatek). Zmiana osoby, zakładki Aktywni/Archiwum albo
+  „Dodaj pracownika" przy różnicy pyta o porzucenie zmian.
+- ⚠️ **Po zapisie karta zostaje otwarta** (`handleSaveUser` ustawia
+  `editingUser` na zapisany wiersz, nie na null).
+- **PIN: `type="password"` + `autoComplete="new-password"`** — ukryty do
+  „Pokaż" i bez propozycji zapisania go jako hasła kierownika. `maxLength` 6
+  zostaje (harness szuka formularza po nim). Ostrzeżenie `slabyPin`: jedna
+  cyfra, ciąg ±1, powtarzany wzór.
+- **Archiwizacja pyta raz**: krok „Tak, archiwizuj" w karcie woła
+  `handleArchiveEntity(..., { potwierdzone: true })`, które wtedy pomija
+  `window.confirm`. Zmiany w grafiku dalej idą przez PrzepiszZmianyModal.
+- **Usunięcie urlopu = 6 s „Cofnij"**, bez `window.confirm`.
+
 ⚠️ **Pracownicy idą za `selectedLokal` z górnego paska** (`wybranyLokal` w
 `Pracownicy.tsx`). Do lokalu należy osoba z `default_lokal` ALBO z
 `allowed_lokale` — tablety mają pusty `default_lokal`.

@@ -35,7 +35,7 @@ const pokazBlad = (e) => {
 window.addEventListener("error", (ev) => pokazBlad(ev.error || ev.message));
 window.addEventListener("unhandledrejection", (ev) => pokazBlad(ev.reason));
 
-const IKONY = ["Search", "Inbox", "Square", "Phone", "AlertCircle", "AlertTriangle", "Archive", "ArchiveRestore", "ArrowLeft", "ArrowLeftRight", "ArrowRight", "BarChart3", "Bell", "BookOpen", "Briefcase", "Calendar", "CalendarCheck", "CalendarDays", "CalendarRange", "Check", "CheckCircle", "CheckCircle2", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "ClipboardCheck", "ClipboardList", "ClipboardPlus", "Clock", "Cloud", "Construction", "Copy", "CopyPlus", "Delete", "Download", "Edit2", "Eye", "FileText", "Flag", "HelpCircle", "History", "Home", "Hourglass", "Info", "ListChecks", "Lock", "LogIn", "LogOut", "Mail", "MapPin", "MoreHorizontal", "Palmtree", "Pencil", "Plus", "Printer", "RefreshCw", "RotateCcw", "Save", "Send", "Settings", "SlidersHorizontal", "Thermometer", "Trash2", "User", "UserPlus", "Users", "Wallet", "WifiOff", "X"];
+const IKONY = ["Search", "EyeOff", "Star", "Tablet", "Inbox", "Square", "Phone", "AlertCircle", "AlertTriangle", "Archive", "ArchiveRestore", "ArrowLeft", "ArrowLeftRight", "ArrowRight", "BarChart3", "Bell", "BookOpen", "Briefcase", "Calendar", "CalendarCheck", "CalendarDays", "CalendarRange", "Check", "CheckCircle", "CheckCircle2", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "ClipboardCheck", "ClipboardList", "ClipboardPlus", "Clock", "Cloud", "Construction", "Copy", "CopyPlus", "Delete", "Download", "Edit2", "Eye", "FileText", "Flag", "HelpCircle", "History", "Home", "Hourglass", "Info", "ListChecks", "Lock", "LogIn", "LogOut", "Mail", "MapPin", "MoreHorizontal", "Palmtree", "Pencil", "Plus", "Printer", "RefreshCw", "RotateCcw", "Save", "Send", "Settings", "SlidersHorizontal", "Thermometer", "Trash2", "User", "UserPlus", "Users", "Wallet", "WifiOff", "X"];
 const stub = (kod) => URL.createObjectURL(new Blob([kod], { type: "text/javascript" }));
 
 // Atrapa Supabase — nic nie leci do sieci, każdy zapis wraca z wymyślonym id.
@@ -1094,9 +1094,8 @@ const poprzedniMiesiac = (h) => {
             b.dispatchEvent(new MouseEvent("click", { bubbles: true }));
           };
           const nazwiska = () =>
-            [...document.querySelectorAll("#app button > p:first-child")]
-              .filter((p) => p.className.includes("text-[15px]"))
-              .map((p) => p.textContent.trim());
+            [...document.querySelectorAll("#app [data-osoba-listy]")]
+              .map((p) => p.getAttribute("data-osoba-listy"));
           // Menu ma w nazwie licznik ("Pracownicy8"), a strona Zatwierdzania
           // ma nagłówek "Pracownicy na próbę" — klik(tekst) trafiłby w niego.
           const menu = (nazwa) => {
@@ -1123,14 +1122,55 @@ const poprzedniMiesiac = (h) => {
             ceglana.includes("Tablet Ceglana"), ceglana.join(", "));
           zakladkaLokalu("Cała sieć"); await czekaj(300);
           const wszyscy = nazwiska();
-          const naglowki = [...document.querySelectorAll("#app p")]
-            .filter((p) => p.className.includes("uppercase") &&
-              ["Bułka i Jacek", "Ceglana"].includes(p.textContent.trim()))
-            .map((p) => p.textContent.trim());
+          const naglowki = [...document.querySelectorAll("#app [data-grupa-listy]")]
+            .map((p) => p.getAttribute("data-grupa-listy"))
+            .filter((n) => ["Bułka i Jacek", "Ceglana"].includes(n));
           sprawdz("„Cała sieć” pokazuje wszystkich, pogrupowanych po lokalu",
             wszyscy.includes("Ala") && wszyscy.includes("Bo") &&
               naglowki.join("|") === "Bułka i Jacek|Ceglana",
             `${wszyscy.join(", ")} / nagłówki: ${naglowki.join("|")}`);
+          // ----------------------------------------------------------------
+          // Karta pracownika według makiety (0.52.0).
+          // ----------------------------------------------------------------
+          const klikP = (el) => el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          const wpiszP = (el, v) => {
+            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, v);
+            el.dispatchEvent(new Event("input", { bubbles: true }));
+          };
+          const grupaUrz = document.querySelector('#app [data-grupa-listy="Urządzenia"]');
+          sprawdz("Tablety w osobnej grupie „Urządzenia”",
+            !!grupaUrz && grupaUrz.parentElement.textContent.includes("Tablet Ceglana"));
+          const wierszBo = document.querySelector('#app [data-osoba-listy="Bo"]');
+          sprawdz("lista pokazuje braki jako znaczniki („brak: sanepid”)",
+            !!wierszBo && /brak: sanepid/.test(wierszBo.textContent));
+          const przedFiltrem = nazwiska().length;
+          klikP(document.querySelector("#app [data-filtr-braki]")); await czekaj(200);
+          const poFiltrze = nazwiska();
+          sprawdz("„Braki w danych” zawęża listę do osób z brakami",
+            poFiltrze.length > 0 && poFiltrze.length < przedFiltrem && !poFiltrze.includes("Tablet Ceglana"),
+            `${przedFiltrem} → ${poFiltrze.join(", ")}`);
+          klikP(document.querySelector("#app [data-filtr-braki]")); await czekaj(200);
+
+          klikP(document.querySelector('#app [data-osoba-listy="Ala"]')); await czekaj(300);
+          sprawdz("karta bez zmian nie pokazuje paska „Zapisz”", !document.querySelector("#app [data-pasek-zapisu]"));
+          const pinPole = document.querySelector('#app [data-karta-pracownika] input[maxlength="6"]');
+          sprawdz("PIN ukryty do „Pokaż”, łatwy PIN ostrzega",
+            !!pinPole && pinPole.type === "password" && !!document.querySelector("#app [data-slaby-pin]"));
+          const imie = () => document.querySelector('#app [data-sekcja="sekcja-dane"] input[type=text]');
+          wpiszP(imie(), "Ala Nowak"); await czekaj(200);
+          sprawdz("zmiana pola pokazuje pasek „Niezapisane zmiany”",
+            !!document.querySelector("#app [data-pasek-zapisu]") &&
+              /Niezapisane zmiany/.test(document.querySelector("#app [data-pasek-zapisu]").textContent));
+          const oryginalnyConfirm = window.confirm;
+          window.confirm = () => false;
+          klikP(document.querySelector('#app [data-osoba-listy="Bo"]')); await czekaj(200);
+          window.confirm = oryginalnyConfirm;
+          sprawdz("przejście do innej osoby z niezapisanymi zmianami jest wstrzymane",
+            imie().value === "Ala Nowak", imie().value);
+          klikP([...document.querySelectorAll("#app [data-pasek-zapisu] button")].find((b) => b.textContent.trim() === "Anuluj"));
+          await czekaj(200);
+          sprawdz("„Anuluj” wraca do zapisanego i chowa pasek",
+            !document.querySelector("#app [data-pasek-zapisu]") && imie().value === "Ala", imie().value);
         }
       } catch (e) {
         sprawdz("Pracownicy wg lokalu: przebieg bez wyjątku", false, e.message);

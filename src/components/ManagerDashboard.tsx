@@ -795,7 +795,10 @@ const ManagerDashboard = ({
         }
       }
 
-      setEditingUser(null);
+      // Karta zostaje otwarta z tym, co zapisano (0.52.0) — pasek "Zapisz"
+      // znika, bo nie ma już różnic, a kierownik widzi wynik zamiast pustego
+      // miejsca po karcie.
+      setEditingUser({ ...zapisany });
       if (ostrzezenie) showMsg(`Zapisano pracownika.${ostrzezenie}`, "error");
       else showMsg("Zapisano pracownika!");
     } catch (err) {
@@ -839,7 +842,9 @@ const ManagerDashboard = ({
     );
   };
 
-  const handleArchiveEntity = async (table, id, isArchiving) => {
+  // `potwierdzone` — ekran sam zapytał (karta pracownika ma krok "Tak,
+  // archiwizuj"), więc drugiego okna przeglądarki już nie pokazujemy.
+  const handleArchiveEntity = async (table, id, isArchiving, { potwierdzone = false } = {}) => {
     // Archiwizacja pracownika nie może po cichu zostawić jego zmian w
     // grafiku: liczyłyby się jako obsada, a nikt by na nie nie przyszedł.
     // Przy odejściu prawie zawsze ktoś wchodzi na to miejsce, więc zamiast
@@ -853,6 +858,7 @@ const ManagerDashboard = ({
       }
     }
     if (
+      !potwierdzone &&
       !window.confirm(
         isArchiving ? "Zarchiwizować ten element?" : "Przywrócić z archiwum?"
       )
