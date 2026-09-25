@@ -20,7 +20,7 @@
 // ⚠️ Zapis dalej idzie przez te same funkcje co wcześniej (resolveCorrection,
 // rozliczBrakOdbicia, rozliczPorzucona, …) i przez ten sam zamek na refie —
 // nowy wygląd niczego nie zmienia w tym, CO trafia do bazy.
-import React, { useEffect, useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   Check,
   X,
@@ -61,7 +61,6 @@ import { pageTitleCls } from "./designTokens";
 import {
   pad,
   naMin,
-  zMin,
   dlugosc,
   godzTekst,
   roznicaTekst,
@@ -70,6 +69,7 @@ import {
   PROG_CZEKANIA_DNI,
 } from "../../utils/czas";
 import { useOdlozoneDecyzje, PasekCofnij } from "./odlozoneDecyzje";
+import PoleCzasu from "./PoleCzasu";
 
 // ---------------------------------------------------------------------------
 // Czas i daty
@@ -138,48 +138,6 @@ const ostrzezenieCls = "text-[13px] font-bold text-[#8A5300] mt-0.5";
 // w CLAUDE.md: komponent zdefiniowany w komponencie remontuje się przy każdym
 // renderze rodzica, a z nim pola godzin, w których kierownik akurat pisze).
 // ---------------------------------------------------------------------------
-
-// Pole godziny: wpisz "18:30" albo przesuń o ±15 min. Zmienione względem
-// zapisu robi się bursztynowe — widać, który koniec zmiany ruszono.
-function PoleCzasu({ value, onChange, zmienione = false, bazowa = "", aria }) {
-  const [tekst, setTekst] = useState(value || "");
-  useEffect(() => setTekst(value || ""), [value]);
-  const zatwierdz = () => {
-    const m = naMin(tekst);
-    if (m != null) onChange(zMin(m));
-    else setTekst(value || "");
-  };
-  const krok = (d) => {
-    const m = naMin(value) ?? naMin(bazowa) ?? 0;
-    onChange(zMin(m + d));
-  };
-  const przyciskCls =
-    "w-[34px] flex-shrink-0 text-[#6E6E66] text-lg font-bold hover:bg-[#F6F5F1] hover:text-[#171714]";
-  return (
-    <span
-      className={`inline-flex items-stretch h-11 border-[2px] rounded-md overflow-hidden focus-within:ring-[3px] focus-within:ring-[#DE3A22] focus-within:ring-offset-2 ${
-        zmienione ? "border-[#8A5300] bg-[#FDF0D8]" : "border-[#171714] bg-white"
-      }`}
-    >
-      <button type="button" onClick={() => krok(-15)} aria-label="−15 min" className={przyciskCls}>
-        −
-      </button>
-      <input
-        value={tekst}
-        onChange={(e) => setTekst(e.target.value)}
-        onBlur={zatwierdz}
-        onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
-        inputMode="numeric"
-        placeholder="--:--"
-        aria-label={aria}
-        className="w-16 min-w-0 bg-transparent text-center text-[17px] font-bold tabular-nums outline-none text-[#171714]"
-      />
-      <button type="button" onClick={() => krok(15)} aria-label="+15 min" className={przyciskCls}>
-        +
-      </button>
-    </span>
-  );
-}
 
 function Kv({ etykieta, children }) {
   return (

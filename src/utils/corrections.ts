@@ -230,3 +230,39 @@ export const duplikatyKorekt = (issues) => {
   }
   return duplikaty;
 };
+
+// Ślad RĘCZNEJ zmiany wpisu z Rejestru godzin (od 0.50.0): dodanie, edycja,
+// usunięcie. Do 0.49.0 w `shift_edits` lądowały tylko korekty zatwierdzone w
+// "Do decyzji", a kierownik poprawiający godziny wprost w Rejestrze nie
+// zostawiał żadnego śladu — "kto i dlaczego zmienił mi godziny" nie miało
+// odpowiedzi. `stara`/`nowa` to wiersze `shifts` (start_time/end_time jako
+// Date) albo null.
+//
+// ⚠️ NIE rzuca: godziny są już zapisane, a wyjątek pokazałby "Błąd zapisu"
+// po operacji, która się udała. Zwraca wiersz albo null.
+export const zapiszSladRecznejZmiany = async ({ stara, nowa, editorName, reason, source }) => {
+  const opis = (s, przedrostek) =>
+    s
+      ? {
+          [`${przedrostek}_date`]: toLocalYMD(s.start_time),
+          [`${przedrostek}_lokal`]: s.lokal,
+          [`${przedrostek}_stanowisko`]: s.stanowisko,
+          [`${przedrostek}_start_time`]: fmtHHMM(s.start_time),
+          [`${przedrostek}_end_time`]: s.end_time ? fmtHHMM(s.end_time) : null,
+        }
+      : {};
+  try {
+    return await api.post("shift_edits", {
+      shift_id: String((nowa || stara).id),
+      issue_id: null,
+      editor_name: editorName,
+      reason: reason || null,
+      ...opis(stara, "old"),
+      ...opis(nowa, "new"),
+      source,
+    });
+  } catch (e) {
+    console.error("Nie zapisano śladu zmiany:", e);
+    return null;
+  }
+};

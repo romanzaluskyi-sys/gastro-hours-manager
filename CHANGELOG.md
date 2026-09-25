@@ -5,6 +5,35 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.50.0 — 2026-09-25
+
+- **Nowy Rejestr godzin** według makiety:
+  - przełącznik miesiąca ‹ Wrzesień 2026 › i przycisk **„Bieżący miesiąc"**,
+    gdy oglądasz inny;
+  - cztery liczby: **przepracowane** (urlop osobno), **vs grafik** — osobno
+    godziny ponad plan i poniżej planu, żeby się nie znosiły, **poza
+    grafikiem** i **korekty ręczne**;
+  - każdy wiersz pokazuje **Grafik obok Faktu**; różnica pojawia się od
+    15 minut, poniżej stoi „≈"; wpis bez zmiany w grafiku to „Poza grafikiem";
+  - grupowanie **po dniu** (suma dnia) albo **po pracowniku** (dni, różnica i
+    suma do wypłaty);
+  - filtry: Różnice > 15 min, Poza grafikiem, Korekty ręczne, Do decyzji;
+  - status pokazuje tylko wyjątki: trwa teraz, bez końca, do decyzji, poza
+    grafikiem, korekta · kto;
+  - pasek „N wpisów czeka na decyzję" z przejściem do Zatwierdzania;
+  - na telefonie liczby przewija się w bok, a „Dodaj wpis" jest pod kciukiem.
+- **Nowe okno wpisu godzin** — na komputerze na środku ekranu i ograniczone
+  rozmiarem, na telefonie od dołu:
+  - przy nowym wpisie wybór osoby podstawia jej lokal, stanowisko i godziny z
+    grafiku; godziny zmienione względem grafiku są bursztynowe;
+  - godziny przyciskami −/+ o 15 minut, „Razem" liczy się na żywo;
+  - **powód jest wymagany**, gdy zmieniasz zapisane godziny — pracownik widzi
+    go w powiadomieniu;
+  - **historia wpisu**: kto, kiedy, było → jest i dlaczego;
+  - „Usuń wpis" z **6 sekundami na „Cofnij"** zamiast okna potwierdzenia.
+- Ręczne dodanie, poprawka i usunięcie wpisu zostawiają teraz ślad (wcześniej
+  tylko zatwierdzone prośby pracowników).
+
 ## 0.49.0 — 2026-09-25
 
 - **Nowy Pulpit** według makiety — najpierw to, co trzeba zrobić, potem liczby:

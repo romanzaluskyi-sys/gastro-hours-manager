@@ -35,7 +35,7 @@ const pokazBlad = (e) => {
 window.addEventListener("error", (ev) => pokazBlad(ev.error || ev.message));
 window.addEventListener("unhandledrejection", (ev) => pokazBlad(ev.reason));
 
-const IKONY = ["AlertCircle", "AlertTriangle", "Archive", "ArchiveRestore", "ArrowLeft", "ArrowLeftRight", "ArrowRight", "BarChart3", "Bell", "BookOpen", "Briefcase", "Calendar", "CalendarCheck", "CalendarDays", "CalendarRange", "Check", "CheckCircle", "CheckCircle2", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "ClipboardCheck", "ClipboardList", "ClipboardPlus", "Clock", "Cloud", "Construction", "Copy", "CopyPlus", "Delete", "Download", "Edit2", "Eye", "FileText", "Flag", "HelpCircle", "History", "Home", "Hourglass", "Info", "ListChecks", "Lock", "LogIn", "LogOut", "Mail", "MapPin", "MoreHorizontal", "Palmtree", "Pencil", "Plus", "Printer", "RefreshCw", "RotateCcw", "Save", "Send", "Settings", "SlidersHorizontal", "Thermometer", "Trash2", "User", "UserPlus", "Users", "Wallet", "WifiOff", "X"];
+const IKONY = ["Search", "AlertCircle", "AlertTriangle", "Archive", "ArchiveRestore", "ArrowLeft", "ArrowLeftRight", "ArrowRight", "BarChart3", "Bell", "BookOpen", "Briefcase", "Calendar", "CalendarCheck", "CalendarDays", "CalendarRange", "Check", "CheckCircle", "CheckCircle2", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "ClipboardCheck", "ClipboardList", "ClipboardPlus", "Clock", "Cloud", "Construction", "Copy", "CopyPlus", "Delete", "Download", "Edit2", "Eye", "FileText", "Flag", "HelpCircle", "History", "Home", "Hourglass", "Info", "ListChecks", "Lock", "LogIn", "LogOut", "Mail", "MapPin", "MoreHorizontal", "Palmtree", "Pencil", "Plus", "Printer", "RefreshCw", "RotateCcw", "Save", "Send", "Settings", "SlidersHorizontal", "Thermometer", "Trash2", "User", "UserPlus", "Users", "Wallet", "WifiOff", "X"];
 const stub = (kod) => URL.createObjectURL(new Blob([kod], { type: "text/javascript" }));
 
 // Atrapa Supabase — nic nie leci do sieci, każdy zapis wraca z wymyślonym id.
@@ -84,7 +84,10 @@ const API_STUB = stub(`
       if (i >= 0) lista[i] = wiersz;
       return wiersz;
     },
-    delete: async () => true,
+    delete: async (tabela, id) => {
+      window.__zapisy.push([tabela, id, "DELETE"]);
+      return true;
+    },
     patchByFilter: async () => true,
   };
 `);
@@ -659,6 +662,90 @@ const poprzedniMiesiac = (h) => {
         }
       } catch (e) {
         if (e) sprawdz("Pulpit: przebieg bez wyjątku", false, e.message);
+      }
+
+      // ----------------------------------------------------------------
+      // Rejestr godzin według makiety (0.50.0): powrót do bieżącego
+      // miesiąca, okno wpisu NA ŚRODKU (nie panel na całą wysokość), powód
+      // wymagany przy zmianie, ślad w shift_edits i usuwanie z "Cofnij".
+      // ----------------------------------------------------------------
+      try {
+        const menuR = (nazwa) => {
+          const b = [...document.querySelectorAll("#app aside button")]
+            .find((x) => x.textContent.replace(/▪/g, "").replace(/\d+$/, "").trim() === nazwa);
+          if (!b) throw new Error("nie ma pozycji menu: " + nazwa);
+          b.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        };
+        const klikEl = (el) => el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        // Wpisy Gosi są z Ceglanej — kierownik Bułki ich nie widzi.
+        if (new URLSearchParams(location.search).get("rola") === "manager") throw null;
+        menuR("Rejestr Godzin"); await czekaj(400);
+        const miesiac = () => (document.querySelector("#app [data-miesiac-rejestru]") || {}).textContent;
+        const biezacy = miesiac();
+        sprawdz("Rejestr: tabela z kolumnami Grafik i Fakt obok siebie",
+          !!document.querySelector("#app [data-tabela-rejestru]") &&
+            /Grafik\s*Fakt/.test(document.querySelector("#app [data-tabela-rejestru]").textContent));
+        sprawdz("w bieżącym miesiącu nie ma przycisku „Bieżący miesiąc”",
+          !document.querySelector("#app [data-biezacy-miesiac]"));
+        klikEl(document.querySelector('#app [aria-label="Poprzedni miesiąc"]')); await czekaj(200);
+        const powrot = document.querySelector("#app [data-biezacy-miesiac]");
+        sprawdz("po cofnięciu miesiąca pojawia się „Bieżący miesiąc”", !!powrot && miesiac() !== biezacy);
+        if (powrot) { klikEl(powrot); await czekaj(200); }
+        sprawdz("„Bieżący miesiąc” wraca na bieżący", miesiac() === biezacy, miesiac());
+
+        // Edycja: wiersz otwiera okno; bez powodu zapis nie wychodzi.
+        const wiersz = document.querySelector('#app [data-wiersz-rejestru="shG1"]');
+        klikEl(wiersz); await czekaj(300);
+        const okno = document.querySelector("#app [data-wpis-godzin] form");
+        const r = okno && okno.getBoundingClientRect();
+        sprawdz("okno wpisu ma ograniczony rozmiar",
+          !!r && (innerWidth < 768 ? r.width <= innerWidth : r.width <= 600 && r.height < innerHeight),
+          r ? `${Math.round(r.width)}×${Math.round(r.height)}` : "brak okna");
+        if (innerWidth >= 768 && r) {
+          sprawdz("…i stoi na środku ekranu, nie przy prawej krawędzi",
+            Math.abs(r.left + r.width / 2 - document.documentElement.clientWidth / 2) < 4 && r.top > 8,
+            `left ${Math.round(r.left)}, top ${Math.round(r.top)}`);
+        }
+        const przed = window.__zapisy.length;
+        klikEl([...okno.querySelectorAll('button[aria-label="+15 min"]')][0]); await czekaj(100);
+        klikEl(okno.querySelector("[data-zapisz-wpis]")); await czekaj(300);
+        sprawdz("zmiana godziny bez powodu: komunikat i nic nie zapisuje",
+          !!document.querySelector("#app [data-blad-wpisu]") && window.__zapisy.length === przed);
+        klikEl([...okno.querySelectorAll("button")].find((b) => b.textContent === "Błąd odbicia")); await czekaj(100);
+        klikEl(okno.querySelector("[data-zapisz-wpis]")); await czekaj(500);
+        const nowe = window.__zapisy.slice(przed);
+        const patch = nowe.find((z) => z[0] === "shifts" && z[1] === "shG1");
+        const slad = nowe.find((z) => z[0] === "shift_edits");
+        sprawdz("z powodem zapisuje nowy start 10:15",
+          !!patch && new Date(patch[2].start_time).getHours() === 10 &&
+            new Date(patch[2].start_time).getMinutes() === 15, JSON.stringify(patch && patch[2]));
+        sprawdz("…i zostawia ślad: kto, było → jest, powód",
+          !!slad && slad[1].source === "manual_edit" && slad[1].reason === "Błąd odbicia" &&
+            slad[1].old_start_time === "10:00" && slad[1].new_start_time === "10:15" &&
+            slad[1].editor_name === "Roman", JSON.stringify(slad && slad[1]));
+        sprawdz("okno zamyka się po zapisie", !document.querySelector("#app [data-wpis-godzin]"));
+
+        // Usunięcie: wiersz znika od razu, "Cofnij" go przywraca bez DELETE.
+        klikEl(document.querySelector('#app [data-wiersz-rejestru="shG2"]')); await czekaj(300);
+        const przedUsun = window.__zapisy.length;
+        klikEl(document.querySelector("#app [data-usun-wpis]")); await czekaj(300);
+        sprawdz("„Usuń wpis” chowa wiersz i pokazuje „Cofnij”",
+          !document.querySelector('#app [data-wiersz-rejestru="shG2"]') &&
+            !!document.querySelector("#app [data-pasek-cofnij]"));
+        klikEl([...document.querySelectorAll("#app [data-pasek-cofnij] button")].pop()); await czekaj(300);
+        sprawdz("„Cofnij” przywraca wpis i nic nie kasuje",
+          !!document.querySelector('#app [data-wiersz-rejestru="shG2"]') &&
+            !window.__zapisy.slice(przedUsun).some((z) => z[2] === "DELETE"));
+
+        // Grupowanie po pracowniku: nagłówek z sumą do wypłaty.
+        klikEl(document.querySelector('#app [data-grupa="pracownik"]')); await czekaj(200);
+        const gosia = document.querySelector('#app [data-osoba-rejestru="Gosia"]');
+        sprawdz("„Pracownik”: nagłówek osoby z dniami i sumą",
+          !!gosia && /Dni\s*6/.test(gosia.textContent) && /Suma\s*48,0/.test(gosia.textContent),
+          gosia ? gosia.textContent : "");
+        klikEl(document.querySelector('#app [data-grupa="dzien"]')); await czekaj(100);
+      } catch (e) {
+        if (e) sprawdz("Rejestr: przebieg bez wyjątku", false, e.message);
       }
       try {
         klik("Pracownicy"); await czekaj(400);

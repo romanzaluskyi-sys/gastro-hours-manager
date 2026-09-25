@@ -23,6 +23,17 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.50.0",
+    date: "2026-09-25",
+    items: [
+      "Rejestr godzin: Grafik obok Faktu w każdym wierszu, różnica od 15 minut, „Poza grafikiem” zamiast różnicy równej całej zmianie.",
+      "Liczby: godziny ponad plan i poniżej planu osobno; grupowanie po dniu albo po pracowniku.",
+      "Przycisk „Bieżący miesiąc”, gdy oglądasz inny.",
+      "Okno wpisu na środku ekranu: godziny z grafiku, −/+ 15 minut, historia wpisu.",
+      "Powód wymagany przy poprawce godzin (widzi go pracownik); usunięcie można cofnąć przez 6 sekund.",
+    ],
+  },
+  {
     version: "0.49.0",
     date: "2026-09-25",
     items: [

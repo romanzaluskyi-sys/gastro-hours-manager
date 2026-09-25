@@ -721,6 +721,9 @@ src/
       Przewodnik.tsx, MojaPraca.tsx
                                     — po jednej zakładce Panelu Kierownika
                                     każdy, patrz "Panel kierownika" niżej
+      WpisGodzinModal.tsx           okno dodania/edycji wpisu godzin (Rejestr,
+                                    Aktywni, Raporty) — patrz "Rejestr godzin"
+      PoleCzasu.tsx                 pole godziny ±15 min (TimeField z makiety)
       odlozoneDecyzje.tsx           decyzje odłożone o 6 s z "Cofnij"
                                     (`useOdlozoneDecyzje`, `PasekCofnij`) —
                                     jeden mechanizm dla "Do decyzji" i Pulpitu
@@ -897,8 +900,7 @@ przy okazji innych zmian. Sidebar jest od 0.32.0 JASNY (`#E4E4DE`,
 **Zakładki** (kolejność z `NAV_ITEMS`): **Pulpit** (`PulpitHome.tsx`, patrz
 "Pulpit" niżej), **Zatwierdzanie zmian**
 (`ZatwierdzanieZmian.tsx`, patrz niżej), **Rejestr Godzin**
-(`RejestrGodzin.tsx` — grupowanie po stanowisku, jeden pasek wyszukiwania,
-"+ Dodaj wpis", CSV, "Historia" per wiersz), **Aktywni** (`Aktywni.tsx` —
+(`RejestrGodzin.tsx`, patrz "Rejestr godzin" niżej), **Aktywni** (`Aktywni.tsx` —
 żywy licznik czasu trwania zmiany, "Zakończ zmianę"), **Zadania**
 (`ZadaniaISprzatanie.tsx` + `ZadaniaKonfiguracja.tsx` — checklisty w blokach,
 patrz niżej), **Grafik**, **Zgłoszenia**
@@ -972,6 +974,38 @@ dziś). Rzeczy, których nie widać:
   czekających na koniec od kierownika) — porzucone nie są „na zmianie".
   Ostrzeżenie „w grafiku, jeszcze bez odbicia" dopiero 10 min po planowanym
   starcie, najwyżej trzy na raz.
+
+⚠️ **Rejestr godzin — układ z makiety właściciela (0.50.0, RegisterDesktop /
+RegisterMobile / RegisterEntryPanel).** Rzeczy, których nie widać:
+- **Grafik obok Faktu, parowany per (osoba, dzień) kolejnością godzin** —
+  i-ta zmiana dnia z i-tym wpisem grafiku, z KAŻDEGO lokalu. Różnica od
+  15 min (`PROG_MIN`), poniżej „≈". Fakt bez pary to „Poza grafikiem".
+  ⚠️ To świadoma zmiana względem "5b. Plan vs fakt" ("nie wykrywamy pracy
+  poza grafikiem") — decyzja właściciela z makiety. Znacznik jest neutralny,
+  nie ostrzegawczy.
+- **„vs grafik" to DWIE liczby** (ponad plan / poniżej planu) — suma netto
+  ukrywała rozjazdy, które się znoszą.
+- **Okno wpisu (`WpisGodzinModal.tsx`) jest NA ŚRODKU i ma ograniczony
+  rozmiar** (max 560 px, max 90vh, przewijana treść, stała stopka) — makieta
+  miała panel z prawej na całą wysokość, właściciel poprosił o okno. Na
+  telefonie arkusz od dołu. Formularz trzyma okno; zapis zostaje w
+  `zapiszWpisGodzin` w ManagerDashboard (kolizje w bazie, powiadomienie,
+  arkusz Google).
+- **Powód wymagany, gdy zmienia się coś, co było zapisane** (dzień, lokal,
+  stanowisko, start, istniejący koniec). Dopisanie brakującego wyjścia
+  („Zakończ zmianę" w Aktywnych) powodu nie wymaga. Powód idzie do
+  pracownika w `notifications.message` (bez nowej kolumny).
+- ⚠️ **`shift_edits` dostaje od 0.50.0 także ręczne zmiany**: `source`
+  `manual_add` / `manual_edit` / `manual_delete`, przez
+  `zapiszSladRecznejZmiany` w `utils/corrections.ts`. To dalej JEDYNY plik,
+  który pisze do tej tabeli. Do 0.49.0 ręczna poprawka w Rejestrze nie
+  zostawiała śladu.
+- **Usunięcie wpisu = 6 s „Cofnij"** (`useOdlozoneDecyzje` w
+  ManagerDashboard, pasek na dole ekranu), bez `window.confirm`. Rejestr
+  chowa wiersz od razu przez prop `ukryte`.
+- Data w oknie liczy się LOKALNIE (`toLocalYMD`). Stary modal brał
+  `toISOString()` — zmiana zaczęta przed 2:00 w nocy pokazywała się z datą
+  poprzedniego dnia.
 
 ⚠️ **Pracownicy idą za `selectedLokal` z górnego paska** (`wybranyLokal` w
 `Pracownicy.tsx`). Do lokalu należy osoba z `default_lokal` ALBO z
@@ -1734,7 +1768,9 @@ zakresem — wymaga Grafiku, którego nie ma.
   `buildLocalDate()` w `utils/corrections.ts`). Gdy `is_anonymous`,
   `user_id`/`user_name` są `null` (tylko dla `type='problem'` — korekty
   są zawsze z imieniem).
-- **shift_edits** — NOWA tabela (2026-09-02), audit trail korekt zmian:
+- **shift_edits** — NOWA tabela (2026-09-02), audit trail korekt zmian
+  (od 0.50.0 także ręcznych: `source` `manual_add`/`manual_edit`/
+  `manual_delete`, `issue_id` wtedy pusty):
   `id (bigint identity), shift_id (text), issue_id (text), editor_name,
   reason, old_date/old_lokal/old_stanowisko/old_start_time/old_end_time,
   new_date/new_lokal/new_stanowisko/new_start_time/new_end_time, source
@@ -1747,8 +1783,8 @@ zakresem — wymaga Grafiku, którego nie ma.
   `issues.shift_id` MA prawdziwy FK do `shifts(id)` (patrz `issues` wyżej i
   błąd #17 niżej) — to jedyny w całym projekcie. RLS: otwarta polityka jak reszta. Czytane przez "Historia" w Rejestr
   Godzin i licznik "Korekty" w Raporty i koszty; zapisywane WYŁĄCZNIE przez
-  `resolveCorrection()` w `utils/corrections.ts` — nie pisz do tej tabeli
-  z innego miejsca.
+  `utils/corrections.ts` (`resolveCorrection()` i od 0.50.0
+  `zapiszSladRecznejZmiany()`) — nie pisz do tej tabeli z innego miejsca.
 - **notifications** — dwa "typy" wierszy we wspólnej tabeli, odróżnione
   polem `audience`:
   - `audience = 'employee'` (domyślne, dla starych wierszy sprzed tej
