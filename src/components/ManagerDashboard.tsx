@@ -83,6 +83,8 @@ const TABY_Z_WLASNYM_WIDOKIEM = [
   "raporty",
   "przewodnik",
   "zadania",
+  // Do 0.53.0 brakowało tu Ustawień i pod nimi wisiał placeholder "W budowie".
+  "ustawienia",
 ];
 
 const ManagerDashboard = ({
@@ -958,7 +960,14 @@ const ManagerDashboard = ({
   // Puste pole liczbowe to null, nie 0 i nie "" — Postgres odrzuca pusty
   // string dla kolumny numeric, a zero znaczyłoby "zero procent narzutu"
   // zamiast "nie ustawiono".
-  const num = (v) => (v === "" || v == null || Number.isNaN(Number(v)) ? null : Number(v));
+  // Przecinek jak kropka: pola z jednostką w Ustawieniach (%, godz.) są
+  // tekstowe, a "20,5" przez samo Number() dawało NaN — czyli null w bazie,
+  // po cichu, zamiast wpisanego narzutu.
+  const num = (v) => {
+    if (v === "" || v == null) return null;
+    const n = Number(String(v).trim().replace(",", "."));
+    return Number.isNaN(n) ? null : n;
+  };
   // Kolumny `integer` — "1,5 min" wpisane w pole odrzuciłoby cały zapis lokalu.
   const minutyCale = (v) => (num(v) == null ? null : Math.max(0, Math.round(num(v))));
 
@@ -1417,6 +1426,7 @@ const ManagerDashboard = ({
             setEditingDict={setEditingDict}
             onSaveDict={handleSaveDict}
             onArchive={handleArchiveEntity}
+            onOpenEmployee={goToEmployeeCard}
           />
         )}
 

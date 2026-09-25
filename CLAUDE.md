@@ -1119,6 +1119,26 @@ dziś są w zakładce **Ustawienia** (patrz niżej).
 
 ### Ustawienia właściciela (`manager/Ustawienia.tsx`) — od 0.44.0
 
+⚠️ **Układ z makiety właściciela (0.54.0, SettingsDesktop / SettingsMobile /
+SettingsPositions).** Rzeczy, których nie widać:
+- **Podsumowanie sekcji karty lokalu stoi w nagłówku ZAWSZE** (też
+  rozwiniętej) — harness sprawdza je na zwiniętych sekcjach.
+- **Pasek „Niezapisane zmiany" porównuje z WŁASNĄ kopią** (`oryginal`,
+  ustawianą przy otwarciu i po zapisie), nie z wierszem z `lokale` — świeżo
+  dodany lokal trafia do listy dopiero z opóźnieniem. `rozniSieLokal` bierze
+  `POLA_LOKALU` (ta sama lista co payload w `handleSaveDict`) i porównuje
+  bloki przez `blokiLokalu`, bo NULL i pełna lista znaczą to samo.
+- **Pola z jednostką (%, min, godz.) są tekstowe**, więc `num()` w
+  ManagerDashboard przyjmuje przecinek. Do 0.53.0 `Number("20,5")` dawało
+  NaN, czyli po cichu `null`.
+- **Archiwizacja lokalu i stanowiska idzie z `{ potwierdzone: true }`** —
+  potwierdzenie jest w samym ekranie (krok „Tak, do archiwum" / 6 s
+  „Cofnij" przez `useOdlozoneDecyzje`), bez `window.confirm`.
+- **Kolor stanowiska z palety 12 kolorów** (`PALETA`); kolor spoza palety,
+  ustawiony wcześniej pipetą, zostaje jako dodatkowa próbka.
+- ⚠️ Do 0.53.0 `ustawienia` nie było w `TABY_Z_WLASNYM_WIDOKIEM` i pod
+  zakładką wisiał placeholder „W budowie". Dokładając zakładkę, dopisz ją tam.
+
 Zakładka na końcu `NAV_ITEMS` z flagą `tylkoWlasciciel`: widzi ją WYŁĄCZNIE
 właściciel (decyzja właściciela, 2026-09-24), czyli rola `admin` ALBO stara
 rola `manager` — `manager_lokalu` nie. ⚠️ `manager` nie da się już nadać z

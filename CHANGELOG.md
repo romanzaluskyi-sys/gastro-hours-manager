@@ -5,6 +5,30 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.54.0 — 2026-09-25
+
+- **Nowy wygląd Ustawień** według makiety, z oznaczeniem „Widzi tylko
+  właściciel":
+  - **lista lokali** z miastem, liczbą stanowisk i „telefon 5/7";
+  - **karta lokalu** w czterech rozwijanych sekcjach, które zawsze mówią w
+    nagłówku, co jest ustawione: Podstawowe (dzień wypłaty z listy i datą
+    najbliższej wypłaty), Telefon pracownika (bloki jako przełączniki z
+    opisem, ostrzeżenie bez „Wpisów"), Płace i koszty (narzuty z „%",
+    ostrzeżenie przy 0% i przykład kosztu), Rejestracja godzin (sposób wpisu
+    jako karty wyboru, szybkie wartości „bez limitu / tylko teraz / 15 / 30 /
+    60" i **oś czasu z przykładem**, do kiedy zmianę da się zamknąć samemu);
+  - pasek **„Niezapisane zmiany"** tylko po zmianie, karta po zapisie zostaje
+    otwarta;
+  - **archiwizacja lokalu** w osobnej sekcji, z potwierdzeniem na miejscu —
+    bez drugiego okna przeglądarki;
+  - **stanowiska** edytowane w miejscu (nazwa, skrót, lokal, kolor z palety
+    dwunastu), archiwizacja z 6 s „Cofnij"; stanowiska lokalu z archiwum są
+    oznaczone;
+  - **Firma**: przycisk „Otwórz moją kartę"; **Subskrypcja**: plan „Wkrótce" i
+    wykorzystanie (lokale, pracownicy, tablety).
+- Narzut wpisany z przecinkiem („20,5") zapisuje się poprawnie.
+- Pod Ustawieniami nie wisi już pusty placeholder „W budowie".
+
 ## 0.53.0 — 2026-09-25
 
 - **Nowy wygląd Raportów i kosztów** według makiety — najpierw wnioski,

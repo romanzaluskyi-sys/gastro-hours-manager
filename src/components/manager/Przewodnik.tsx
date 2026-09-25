@@ -23,6 +23,15 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.54.0",
+    date: "2026-09-25",
+    items: [
+      "Ustawienia: karta lokalu w sekcjach z podsumowaniem, bloki telefonu jako przełączniki, oś czasu przy regułach wpisu.",
+      "Pasek „Zapisz” tylko po zmianie; archiwizacja lokalu z potwierdzeniem na miejscu.",
+      "Stanowiska edytowane w miejscu, kolor z palety, archiwizacja z „Cofnij”.",
+    ],
+  },
+  {
     version: "0.53.0",
     date: "2026-09-25",
     items: [

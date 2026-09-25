@@ -35,7 +35,7 @@ const pokazBlad = (e) => {
 window.addEventListener("error", (ev) => pokazBlad(ev.error || ev.message));
 window.addEventListener("unhandledrejection", (ev) => pokazBlad(ev.reason));
 
-const IKONY = ["PieChart", "Search", "EyeOff", "Star", "Tablet", "Inbox", "Square", "Phone", "AlertCircle", "AlertTriangle", "Archive", "ArchiveRestore", "ArrowLeft", "ArrowLeftRight", "ArrowRight", "BarChart3", "Bell", "BookOpen", "Briefcase", "Calendar", "CalendarCheck", "CalendarDays", "CalendarRange", "Check", "CheckCircle", "CheckCircle2", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "ClipboardCheck", "ClipboardList", "ClipboardPlus", "Clock", "Cloud", "Construction", "Copy", "CopyPlus", "Delete", "Download", "Edit2", "Eye", "FileText", "Flag", "HelpCircle", "History", "Home", "Hourglass", "Info", "ListChecks", "Lock", "LogIn", "LogOut", "Mail", "MapPin", "MoreHorizontal", "Palmtree", "Pencil", "Plus", "Printer", "RefreshCw", "RotateCcw", "Save", "Send", "Settings", "SlidersHorizontal", "Thermometer", "Trash2", "User", "UserPlus", "Users", "Wallet", "WifiOff", "X"];
+const IKONY = ["Coins", "Smartphone", "PieChart", "Search", "EyeOff", "Star", "Tablet", "Inbox", "Square", "Phone", "AlertCircle", "AlertTriangle", "Archive", "ArchiveRestore", "ArrowLeft", "ArrowLeftRight", "ArrowRight", "BarChart3", "Bell", "BookOpen", "Briefcase", "Calendar", "CalendarCheck", "CalendarDays", "CalendarRange", "Check", "CheckCircle", "CheckCircle2", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "ClipboardCheck", "ClipboardList", "ClipboardPlus", "Clock", "Cloud", "Construction", "Copy", "CopyPlus", "Delete", "Download", "Edit2", "Eye", "FileText", "Flag", "HelpCircle", "History", "Home", "Hourglass", "Info", "ListChecks", "Lock", "LogIn", "LogOut", "Mail", "MapPin", "MoreHorizontal", "Palmtree", "Pencil", "Plus", "Printer", "RefreshCw", "RotateCcw", "Save", "Send", "Settings", "SlidersHorizontal", "Thermometer", "Trash2", "User", "UserPlus", "Users", "Wallet", "WifiOff", "X"];
 const stub = (kod) => URL.createObjectURL(new Blob([kod], { type: "text/javascript" }));
 
 // Atrapa Supabase — nic nie leci do sieci, każdy zapis wraca z wymyślonym id.
@@ -932,7 +932,7 @@ const poprzedniMiesiac = (h) => {
           .find((f) => /Płace i koszty/.test(f.textContent));
         sprawdz("karta lokalu otwiera się w sekcjach", !!karta);
         sprawdz("zwinięta sekcja płac mówi, co jest ustawione",
-          !!karta && /okres 3 mies\. · narzut 20\.5% \/ 0%/.test(karta.textContent),
+          !!karta && /okres 3 mies\. · narzut 20,5% \/ 0%/.test(karta.textContent),
           karta ? karta.textContent.slice(0, 200) : "");
         const przedZapisem = window.__zapisy.length;
         karta.requestSubmit();
@@ -964,7 +964,76 @@ const poprzedniMiesiac = (h) => {
         sprawdz("nowy lokal zapisuje się z nazwą", !!nowy && nowy[1].name === "Sunset",
           JSON.stringify(nowy));
         sprawdz("po dodaniu od razu otwiera się karta nowego lokalu",
-          [...document.querySelectorAll("form h3")].some((h) => h.textContent === "Sunset"));
+          [...document.querySelectorAll("form h2, form h3")].some((h) => h.textContent === "Sunset"));
+
+        // Układ z makiety (0.54.0): podsumowanie sekcji widać także po
+        // zwinięciu, pasek zapisu tylko po zmianie, archiwum bez okna
+        // przeglądarki, stanowiska edytowane w miejscu.
+        const U = () => document.querySelector("#app [data-ustawienia]");
+        sprawdz("pod Ustawieniami nie ma placeholdera „W budowie”",
+          !document.querySelector('#app [data-ikona="Construction"]'));
+        const kartaL = () => U().querySelector("[data-karta-lokalu]");
+        sprawdz("karta lokalu bez zmian nie pokazuje paska zapisu",
+          !!kartaL() && !U().querySelector("[data-pasek-zapisu-lokalu]"));
+        sprawdz("zwinięta sekcja telefonu mówi, ile bloków jest włączonych",
+          /7 z 7 bloków włączonych/.test(kartaL().querySelector('[data-sekcja-lokalu="telefon"]').textContent));
+        kartaL().querySelector('[data-sekcja-lokalu="telefon"] button').dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(150);
+        kartaL().querySelector('[data-blok="WPISY"]').dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(150);
+        sprawdz("wyłączenie „Wpisów” pokazuje pasek zapisu i ostrzeżenie",
+          !!U().querySelector("[data-pasek-zapisu-lokalu]") && /Bez „Wpisów”/.test(kartaL().textContent) &&
+            /6 z 7/.test(kartaL().textContent));
+        [...U().querySelectorAll("[data-pasek-zapisu-lokalu] button")].find((x) => x.textContent.trim() === "Anuluj")
+          .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(150);
+        sprawdz("„Anuluj” w pasku wraca do zapisanego", !U().querySelector("[data-pasek-zapisu-lokalu]"));
+
+        const oknaPrzegladarki = [];
+        const staryConfirm = window.confirm;
+        window.confirm = (t) => { oknaPrzegladarki.push(t); return true; };
+        kartaL().querySelector("[data-archiwizuj-lokal]").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(100);
+        const przedArch = window.__zapisy.length;
+        kartaL().querySelector("[data-archiwizuj-lokal-tak]").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(300);
+        const arch = window.__zapisy.slice(przedArch).find((z) => z[0] === "lokale");
+        sprawdz("archiwizacja lokalu pyta raz, na miejscu (bez okna przeglądarki)",
+          !!arch && JSON.stringify(arch).includes('"archived":true') && oknaPrzegladarki.length === 0,
+          JSON.stringify(arch) + " / okna: " + oknaPrzegladarki.length);
+
+        U().querySelector('[data-zakladka-ustawien="stanowiska"]').dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(200);
+        const kelner = U().querySelector('[data-stanowisko="Kelner"]');
+        sprawdz("stanowiska pogrupowane po lokalu", !!U().querySelector('[data-grupa-stanowisk="Ceglana"] [data-stanowisko="Kelner"]'));
+        kelner.querySelector("[data-edytuj-stanowisko]").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(150);
+        const edycja = U().querySelector("[data-edycja-stanowiska]");
+        sprawdz("stanowisko edytuje się w miejscu, nie w modalu",
+          !!edycja && !document.querySelector("#app .fixed form"));
+        edycja.querySelector('[data-kolor="#1A4FE0"]').dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(100);
+        const przedSt = window.__zapisy.length;
+        U().querySelector("[data-edycja-stanowiska]").requestSubmit();
+        await czekaj(300);
+        const zapisSt = window.__zapisy.slice(przedSt).find((z) => z[0] === "stanowiska");
+        const daneSt = zapisSt && (zapisSt[2] || zapisSt[1]);
+        sprawdz("kolor z palety zapisuje się ze stanowiskiem", !!daneSt && daneSt.kolor === "#1A4FE0",
+          JSON.stringify(daneSt));
+
+        const przedArchSt = window.__zapisy.length;
+        U().querySelector('[data-stanowisko="Kelner"] [data-archiwizuj-stanowisko]')
+          .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(150);
+        sprawdz("archiwizacja stanowiska chowa je i pokazuje „Cofnij”, bez zapisu od razu",
+          !U().querySelector('[data-stanowisko="Kelner"]') && !!U().querySelector("[data-pasek-cofnij]") &&
+            window.__zapisy.length === przedArchSt && oknaPrzegladarki.length === 0);
+        [...U().querySelectorAll("[data-pasek-cofnij] button")][0].dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(150);
+        sprawdz("„Cofnij” przywraca stanowisko", !!U().querySelector('[data-stanowisko="Kelner"]'));
+        window.confirm = staryConfirm;
+        U().querySelector('[data-zakladka-ustawien="lokale"]').dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(100);
       } catch (e) {
         if (e !== null) sprawdz("Ustawienia: przebieg bez wyjątku", false, e.message);
       }
