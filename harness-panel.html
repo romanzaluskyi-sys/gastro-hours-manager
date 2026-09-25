@@ -485,6 +485,15 @@ const poprzedniMiesiac = (h) => {
             proposed_stanowisko: "Kucharz", proposed_start_time: "07:30",
             proposed_end_time: null, issue_text: "Start o 07:30 wpisany po czasie.",
             created_at: "2026-09-11T07:00:00Z" },
+          // PROSTA korekta (0.49.0): zamknięta zmiana, ten sam dzień, lokal i
+          // stanowisko, zmieniają się same godziny — tylko taką Pulpit
+          // pozwala zatwierdzić jednym ✓, bez wchodzenia w "Do decyzji".
+          { id: "i5", type: "correction", status: "nowe", is_anonymous: false,
+            user_id: "u2", user_name: "Bo", shift_id: "sh3",
+            proposed_date: wczoraj, proposed_lokal: "Ceglana",
+            proposed_stanowisko: "Kucharz", proposed_start_time: "08:00",
+            proposed_end_time: "16:30", issue_text: "Zostałem pół godziny dłużej.",
+            created_at: "2026-09-12T07:00:00Z" },
         ], notifications: [], shiftEdits: [],
         tasks, setTasks, taskBlocks, setTaskBlocks, taskCompletions, setTaskCompletions,
         // Plan na bieżący tydzień — bez niego siatka Grafiku jest pusta i nie
@@ -576,6 +585,81 @@ const poprzedniMiesiac = (h) => {
 
     (async () => {
       await czekaj(600);
+
+      // ----------------------------------------------------------------
+      // Pulpit według makiety (0.49.0): najpierw "Do zrobienia teraz",
+      // potem liczby, potem panele. Liczba w "Wymaga decyzji" przy
+      // "Cała sieć" MUSI równać się znaczkowi w menu, a szybkie ✓ przy
+      // prostej korekcie idzie przez te same 6 s "Cofnij" co "Do decyzji".
+      // ----------------------------------------------------------------
+      try {
+        const pulpit = document.querySelector("#app [data-pulpit]");
+        sprawdz("Pulpit startuje od „Do zrobienia teraz”",
+          !!pulpit && /Do zrobienia teraz[\s\S]*Liczby/.test(pulpit.textContent));
+        const decyzje = pulpit && pulpit.querySelector("[data-wymaga-decyzji]");
+        const naPulpicie = decyzje && decyzje.getAttribute("data-wymaga-decyzji");
+        const znaczekMenu = (/(\d+)$/.exec([...document.querySelectorAll("#app aside button")]
+          .map((x) => x.textContent).find((x) => x.includes("Zatwierdzanie zmian")) || "") || [])[1];
+        sprawdz("„Wymaga decyzji” na Pulpicie = znaczek w menu",
+          !!naPulpicie && naPulpicie === znaczekMenu, `pulpit ${naPulpicie}, znaczek ${znaczekMenu}`);
+        sprawdz("kafelka „Do decyzji” już nie ma (liczbę mówi karta i znaczek)",
+          ![...document.querySelectorAll("#app [data-kafelki] span")].some((x) => x.textContent === "Do decyzji"));
+        sprawdz("cztery kafelki liczb",
+          document.querySelectorAll("#app [data-kafelki] > div").length === 4);
+        const miesiac = document.querySelector("#app [data-kafelek-miesiac]");
+        sprawdz("koszt miesiąca liczy etat z umowy (nie „brak stawki” dla Bo)",
+          !!miesiac && /koszt\s*[\d\u00A0 ]+\u00A0?zł/.test(miesiac.textContent),
+          miesiac ? miesiac.textContent.slice(0, 120) : "");
+        const zamknij = pulpit && pulpit.querySelector("[data-zamknij-wczoraj]");
+        sprawdz("„Zamknij wczoraj” pokazuje lokale bez utargu z „Uzupełnij”, nie „Zamknij”",
+          !!zamknij && /Utarg/.test(zamknij.textContent) && /Uzupełnij/.test(zamknij.textContent) &&
+            ![...zamknij.querySelectorAll("button")].some((b) => b.textContent.trim() === "Zamknij"),
+          zamknij ? zamknij.textContent.slice(0, 160) : "");
+
+        const szybkie = [...document.querySelectorAll("#app [data-szybkie-zatwierdz]")];
+        // Kierownik Bułki widzi ✓ tylko przy korekcie ze swojego lokalu (Ala),
+        // korekty z Ceglanej (Bo) nie ma u niego ani na liście, ani z ✓.
+        if (new URLSearchParams(location.search).get("rola") === "manager") {
+          sprawdz("kierownik lokalu nie dostaje ✓ do cudzego lokalu",
+            szybkie.length === 1 &&
+              !szybkie.some((b) => b.closest("[data-sprawa]").textContent.startsWith("Bo")),
+            szybkie.map((b) => b.closest("[data-sprawa]").textContent).join(" | "));
+          throw null;
+        }
+        // Obie korekty w atrapie są proste (Ala: start 07:30, Bo: koniec 16:30);
+        // ✓ ma mieć każda z nich, a sprawdzamy na Bo.
+        const wierszBo = szybkie.map((b) => b.closest("[data-sprawa]"))
+          .find((w) => w && w.textContent.startsWith("Bo"));
+        sprawdz("prosta korekta ma ✓ i różnicę „+30 min” na Pulpicie",
+          szybkie.length === 2 && !!wierszBo && /\+30 min/.test(wierszBo.textContent),
+          szybkie.map((b) => b.closest("[data-sprawa]").textContent).join(" | "));
+        const ptaszekBo = () => [...document.querySelectorAll("#app [data-szybkie-zatwierdz]")]
+          .find((b) => b.closest("[data-sprawa]").textContent.startsWith("Bo"));
+        if (wierszBo) {
+          const przed = window.__zapisy.length;
+          ptaszekBo().dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          await czekaj(300);
+          sprawdz("✓ chowa sprawę, zmniejsza licznik i pokazuje „Cofnij”",
+            !ptaszekBo() &&
+              document.querySelector("#app [data-wymaga-decyzji]").getAttribute("data-wymaga-decyzji") ===
+                String(Number(naPulpicie) - 1) &&
+              !!document.querySelector("#app [data-pasek-cofnij]"));
+          [...document.querySelectorAll("#app [data-pasek-cofnij] button")].pop()
+            .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          await czekaj(300);
+          sprawdz("„Cofnij” na Pulpicie przywraca sprawę bez zapisu",
+            !!ptaszekBo() && window.__zapisy.length === przed);
+          ptaszekBo().dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          await czekaj(6800);
+          const patch = window.__zapisy.slice(przed).find((z) => z[0] === "shifts" && z[1] === "sh3");
+          sprawdz("po 6 s ✓ zapisuje zgłoszone godziny (koniec 16:30)",
+            !!patch && new Date(patch[2].end_time).getHours() === 16 &&
+              new Date(patch[2].end_time).getMinutes() === 30,
+            JSON.stringify(patch && patch[2]));
+        }
+      } catch (e) {
+        if (e) sprawdz("Pulpit: przebieg bez wyjątku", false, e.message);
+      }
       try {
         klik("Pracownicy"); await czekaj(400);
         klik("Ala"); await czekaj(400);

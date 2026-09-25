@@ -587,6 +587,11 @@ src/
     swaps.ts                    giełda zmian — jedyne miejsce piszące do
                                   shift_swaps i przepisujące zmianę na
                                   innego pracownika (resolveSwap)
+    czas.ts                     godziny, różnice ("+30 min"), krótkie daty
+                                  ("ndz 13.09"), "czeka N dni" i odmiana
+                                  liczebników — wspólne dla "Do decyzji" i
+                                  Pulpitu, żeby ta sama sprawa wyglądała tak
+                                  samo w obu miejscach
     wpisy.ts                    jak w lokalu wolno wpisywać godziny: sposób
                                   wpisu i okna tolerancji (regulyWpisu,
                                   sprawdzGodzine, czekaNaKoniecOdKierownika) —
@@ -716,6 +721,9 @@ src/
       Przewodnik.tsx, MojaPraca.tsx
                                     — po jednej zakładce Panelu Kierownika
                                     każdy, patrz "Panel kierownika" niżej
+      odlozoneDecyzje.tsx           decyzje odłożone o 6 s z "Cofnij"
+                                    (`useOdlozoneDecyzje`, `PasekCofnij`) —
+                                    jeden mechanizm dla "Do decyzji" i Pulpitu
       Ustawienia.tsx                zakładka TYLKO dla właściciela (`admin`):
                                     Lokale, Stanowiska, Firma, Subskrypcja —
                                     patrz "Ustawienia właściciela" niżej
@@ -886,10 +894,8 @@ zmian, Grafik, Zadania, Puls, a dalej reszta. Nie przestawiaj ich "logicznie"
 przy okazji innych zmian. Sidebar jest od 0.32.0 JASNY (`#E4E4DE`,
 `shellSidebarCls`) — o ton ciemniejszy od tła strony, nie czarny.
 
-**Zakładki** (kolejność z `NAV_ITEMS`): **Pulpit** (`PulpitHome.tsx`, "Dziś
-w liczbach" — godziny dziś/tydzień z porównaniem do poprzedniego tygodnia,
-koszt miesiąca z `users.stawka`, podgląd "Wymaga Twojej decyzji"/"Teraz na
-zmianie"/"Terminy i dokumenty"), **Zatwierdzanie zmian**
+**Zakładki** (kolejność z `NAV_ITEMS`): **Pulpit** (`PulpitHome.tsx`, patrz
+"Pulpit" niżej), **Zatwierdzanie zmian**
 (`ZatwierdzanieZmian.tsx`, patrz niżej), **Rejestr Godzin**
 (`RejestrGodzin.tsx` — grupowanie po stanowisku, jeden pasek wyszukiwania,
 "+ Dodaj wpis", CSV, "Historia" per wiersz), **Aktywni** (`Aktywni.tsx` —
@@ -917,8 +923,9 @@ przycisk NAJBARDZIEJ Z PRAWEJ). Dokładając nowy typ decyzji, dopisz grupę do
 znaczek `zatwierdzanie` w `shellBadges` muszą liczyć te same kolejki
 (sprawdza `harness-panel.html`).
 
-⚠️ **Decyzje są ODŁOŻONE o 6 s** (`decyduj` → `wykonajPartie`,
-`CZAS_NA_COFNIECIE_MS`). Karta znika od razu, zapis rusza po 6 s; „Cofnij"
+⚠️ **Decyzje są ODŁOŻONE o 6 s** (`useOdlozoneDecyzje` w
+`manager/odlozoneDecyzje.tsx`, `CZAS_NA_COFNIECIE_MS` — ten sam mechanizm
+działa na Pulpicie). Karta znika od razu, zapis rusza po 6 s; „Cofnij"
 anuluje go bez żadnego odkręcania w bazie. Trzy rzeczy, których nie widać:
 1. Zapis woła funkcję z NAJNOWSZEGO renderu (`akcjeRef`), nie z chwili
    kliknięcia — w ciągu 6 s poll podmienia `shifts`.
@@ -935,6 +942,36 @@ po lewej stoi odbicie z Rejestru godzin. Grafik tego dnia jest pod szybką
 godziną „Jak w grafiku" w panelu „Popraw". Duplikat (ta sama osoba, dzień,
 godziny i zmiana) dostaje „Odrzuć duplikat" (`odrzucKorekte` w
 `utils/corrections.ts` — bez powiadomienia i bez śladu w `shift_edits`).
+
+⚠️ **Pulpit — układ z makiety właściciela (0.49.0, DashboardDesktop /
+DashboardMobile).** Kolejność = co zrobić najpierw: „Do zrobienia teraz"
+(zamknij wczoraj per lokal + „Wymaga decyzji"), „Liczby" (cztery kafelki, na
+telefonie karuzela), panele (Teraz na zmianie, Terminy i dokumenty, Zadania
+dziś). Rzeczy, których nie widać:
+- **„Wymaga decyzji" liczy TE SAME kolejki co „Do decyzji"**, zawężone do
+  lokalu z paska. Przy „Cała sieć" liczba = znaczek w menu (sprawdza
+  `harness-panel.html`). Dokładając typ decyzji, dopisz go w trzech
+  miejscach: `sprawy` w ZatwierdzanieZmian, `shellBadges`, `sprawy` w
+  PulpitHome.
+- **✓ na Pulpicie tylko przy PROSTEJ korekcie**: zamknięta zmiana, ten sam
+  dzień, lokal i stanowisko, zmieniają się same godziny, nie duplikat.
+  Zapis przez `resolveCorrection` + `propozycjaKorekty` + `wlozKorekteDoStanu`
+  (`utils/corrections.ts`) — dokładnie to, co „Zatwierdź" w „Do decyzji".
+- ⚠️ **„Zamknij" dzień pokazuje się TYLKO przy lokalu z utargiem i kompletem
+  wymaganych wpisów.** Reszta ma „Uzupełnij" → karta dnia w Pulsie.
+  Zamkniętego dnia nie da się otworzyć, więc zamknięcie jednym dotknięciem z
+  pustym utargiem zostawiłoby fałszywy koszt pracy na zawsze. Makieta miała
+  „Zamknij" przy każdym lokalu — to jest świadome odstępstwo.
+- **Porównania tylko like-for-like**: tydzień pn–dziś z pn–ten sam dzień
+  poprzedniego tygodnia DO TEJ SAMEJ GODZINY, miesiąc 1–N z 1–N. Jedna reguła
+  `godzinyDo(zmiana, granica)` liczy obie strony. Trend bez koloru.
+- **Koszt miesiąca = `kosztZespoluMiesiaca` (utils/umowy.ts)** — ta sama
+  reguła co kafelek w Raportach i kosztach. Do 0.48.0 Pulpit liczył goły
+  `users.stawka` i etatowcy wypadali z kosztu.
+- **„Teraz na zmianie" liczy tylko zmiany, które TRWAJĄ** (`zmianaTrwa` i bez
+  czekających na koniec od kierownika) — porzucone nie są „na zmianie".
+  Ostrzeżenie „w grafiku, jeszcze bez odbicia" dopiero 10 min po planowanym
+  starcie, najwyżej trzy na raz.
 
 ⚠️ **Pracownicy idą za `selectedLokal` z górnego paska** (`wybranyLokal` w
 `Pracownicy.tsx`). Do lokalu należy osoba z `default_lokal` ALBO z
@@ -1929,7 +1966,9 @@ stała godzina — liczy się tylko różnica 8h), `is_urlop=true`,
 godzin i kosztów (Rejestr Godzin, Raporty i koszty, Pulpit kierownika,
 Moja Praca, Raport pracownika) bez dopisywania osobnej logiki agregującej
 w każdym z tych miejsc — dokładnie to, o co prosił właściciel ("dodają się
-do wszystkich list i podliczeń"). Miejsca renderujące pojedynczy wiersz
+do wszystkich list i podliczeń"). (Akapit o Pulpicie niżej opisuje stan
+sprzed 0.49.0 — dziś wnioski o wolne są jedną z kolejek karty „Wymaga
+decyzji", a kafelka „Do decyzji" nie ma.) Miejsca renderujące pojedynczy wiersz
 zmiany rozpoznają `s.is_urlop` i pokazują słowo "Urlop" zamiast zakresu
 godzin (`RejestrGodzin.tsx`, `MojaPraca.tsx`,
 `employeeSessionShared.tsx` Raport). **Pulpit kierownika** ("Wymaga

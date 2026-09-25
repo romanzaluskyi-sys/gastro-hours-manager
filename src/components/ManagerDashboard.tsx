@@ -1435,9 +1435,26 @@ const ManagerDashboard = ({
 
         {tab === "pulpit" && (
           <PulpitHome
+            currentUser={currentUser}
             users={users}
             shifts={shifts}
+            setShifts={setShifts}
             issues={issues}
+            setIssues={setIssues}
+            setShiftEdits={setShiftEdits}
+            lokale={lokale}
+            hasAccessToLokal={hasAccessToLokal}
+            zakres={
+              selectedLokal !== "ALL"
+                ? selectedLokal
+                : isLocalManager
+                ? "Wszystkie moje"
+                : "Cała sieć"
+            }
+            setDayLogs={setDayLogs}
+            dayLogEntries={dayLogEntries}
+            dayLogTemplates={dayLogTemplates}
+            showMsg={showMsg}
             tasks={tasks}
             taskBlocks={taskBlocks}
             taskCompletions={taskCompletions}

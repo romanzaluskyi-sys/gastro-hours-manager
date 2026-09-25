@@ -37,7 +37,14 @@ import {
   UserPlus,
   User,
 } from "lucide-react";
-import { resolveCorrection, askAboutCorrection, odrzucKorekte } from "../../utils/corrections";
+import {
+  resolveCorrection,
+  askAboutCorrection,
+  odrzucKorekte,
+  propozycjaKorekty,
+  wlozKorekteDoStanu,
+  duplikatyKorekt,
+} from "../../utils/corrections";
 import { countWorkdays, URLOP_HOURS_PER_DAY } from "../../utils/absences";
 import { trimTime, shiftHours, toLocalYMD, publishedShiftsFor } from "../../utils/grafik";
 import { monthPlanHours, typWymiany, wzajemnaZmiana } from "../../utils/swaps";
@@ -51,52 +58,24 @@ import {
   godzinyProbnego,
 } from "../../utils/probni";
 import { pageTitleCls } from "./designTokens";
+import {
+  pad,
+  naMin,
+  zMin,
+  dlugosc,
+  godzTekst,
+  roznicaTekst,
+  dzienKrotki,
+  dniOd,
+  PROG_CZEKANIA_DNI,
+} from "../../utils/czas";
+import { useOdlozoneDecyzje, PasekCofnij } from "./odlozoneDecyzje";
 
 // ---------------------------------------------------------------------------
 // Czas i daty
 // ---------------------------------------------------------------------------
-const pad = (n) => String(n).padStart(2, "0");
-
 const fmtHHMM = (d) => (d ? `${pad(d.getHours())}:${pad(d.getMinutes())}` : "");
 
-// "11:00", "11.00", "1100", "930" → minuty od północy; cokolwiek innego → null.
-// Kierownik wpisuje godzinę z klawiatury telefonu, na której dwukropek jest
-// trzy dotknięcia dalej.
-const naMin = (tekst) => {
-  const s = String(tekst || "").trim().replace(".", ":");
-  let m = /^(\d{1,2}):(\d{2})$/.exec(s);
-  if (!m) m = /^(\d{1,2})(\d{2})$/.exec(s);
-  if (!m) return null;
-  const h = +m[1];
-  const mm = +m[2];
-  return h < 24 && mm < 60 ? h * 60 + mm : null;
-};
-const zMin = (min) => {
-  const x = ((min % 1440) + 1440) % 1440;
-  return `${pad(Math.floor(x / 60))}:${pad(x % 60)}`;
-};
-// Długość zmiany w minutach; koniec przed startem = zmiana przez północ.
-const dlugosc = (od, doG) => {
-  const a = naMin(od);
-  const b = naMin(doG);
-  if (a == null || b == null) return null;
-  const d = b - a;
-  return d <= 0 ? d + 1440 : d;
-};
-const godzTekst = (min) => `${String(Math.round((min / 60) * 100) / 100).replace(".", ",")} h`;
-const roznicaTekst = (min) => {
-  const a = Math.abs(min);
-  return `${min > 0 ? "+" : "−"}${a < 60 ? `${a} min` : godzTekst(a)}`;
-};
-
-const DNI = ["ndz", "pon", "wt", "śr", "czw", "pt", "sob"];
-// "ndz 13.09" — dzień tygodnia mówi kierownikowi więcej niż sama data
-// ("to była niedziela, wtedy zamykamy później").
-const dzienKrotki = (ymd) => {
-  if (!ymd) return "";
-  const d = new Date(`${ymd}T00:00:00`);
-  return `${DNI[d.getDay()]} ${pad(d.getDate())}.${pad(d.getMonth() + 1)}`;
-};
 const fmtPLAbs = (ymd) =>
   ymd
     ? new Date(`${ymd}T00:00:00`).toLocaleDateString("pl-PL", {
@@ -111,17 +90,6 @@ const zakresDat = (od, doD) => {
   const a = new Date(`${od}T00:00:00`);
   return `${pad(a.getDate())}.${pad(a.getMonth() + 1)} – ${fmtPLAbs(doD)}`;
 };
-const dniOd = (kiedy) => {
-  if (!kiedy) return 0;
-  const d =
-    kiedy instanceof Date
-      ? kiedy
-      : new Date(String(kiedy).length === 10 ? `${kiedy}T00:00:00` : kiedy);
-  return Math.max(0, Math.floor((Date.now() - d.getTime()) / 86400000));
-};
-// Sprawa czekająca tydzień i dłużej dostaje podpis — przed wypłatą stare
-// pozycje giną w kolejce najłatwiej.
-const PROG_CZEKANIA_DNI = 7;
 
 // Podpowiedź godziny zakończenia dla zmiany bez odbitego końca: to, co stało
 // w grafiku. Gdy grafiku nie było, pole zostaje PUSTE — podstawiona "teraz"
@@ -386,8 +354,6 @@ const POWODY = [
 
 // Po ilu milisekundach decyzja trafia do bazy. Do tego czasu karta jest tylko
 // schowana i "Cofnij" przywraca ją bez żadnego zapisu.
-const CZAS_NA_COFNIECIE_MS = 6000;
-
 export default function ZatwierdzanieZmian({
   currentUser,
   shifts,
@@ -478,23 +444,7 @@ export default function ZatwierdzanieZmian({
   // urządzenia). Pierwsza zostaje zwykłą korektą, każda następna dostaje
   // ostrzeżenie i "Odrzuć duplikat" zamiast "Popraw" — zatwierdzone obie
   // dałyby dwa razy te same godziny.
-  const odciskKorekty = (iss) =>
-    [
-      iss.user_id,
-      iss.proposed_date,
-      iss.proposed_start_time,
-      iss.proposed_end_time || "",
-      iss.shift_id || "",
-    ].join("|");
-  const duplikaty = new Set();
-  {
-    const widziane = new Set();
-    for (const r of rows) {
-      const k = odciskKorekty(r.issue);
-      if (widziane.has(k)) duplikaty.add(r.issue.id);
-      widziane.add(k);
-    }
-  }
+  const duplikaty = duplikatyKorekt(rows.map((r) => r.issue));
 
   // -------------------------------------------------------------------------
   // Zapisy — te same funkcje co przed nowym wyglądem. Komunikat sukcesu
@@ -551,18 +501,9 @@ export default function ZatwierdzanieZmian({
     zwolnij(`odbicie:${poz.plan.id}`);
   };
 
-  const onSaved = (issueId, { shift, shiftEdit }) => {
-    setIssues((prev) =>
-      prev.map((iss) => (iss.id === issueId ? { ...iss, status: "rozwiazane" } : iss))
-    );
-    setShifts((prev) => {
-      const exists = prev.some((s) => s.id === shift.id);
-      return exists ? prev.map((s) => (s.id === shift.id ? shift : s)) : [...prev, shift];
-    });
-    // shiftEdit bywa pusty, gdy wiersz godzin już istniał i nie tworzyliśmy
-    // go drugi raz — patrz znajdzKolizjeWBazie w utils/corrections.ts.
-    if (shiftEdit) setShiftEdits((prev) => [...prev, shiftEdit]);
-  };
+  const onSaved = (issueId, saved) =>
+    wlozKorekteDoStanu(issueId, saved, { setIssues, setShifts, setShiftEdits });
+
 
   // `wartosci` i `powod` przychodzą z chwili decyzji — zapis rusza 6 s
   // później, kiedy panel "Popraw" jest już zamknięty.
@@ -573,13 +514,7 @@ export default function ZatwierdzanieZmian({
         issue: row.issue,
         shifts,
         editorName: currentUser.name,
-        finalValues: wartosci || {
-          date: row.issue.proposed_date,
-          lokal: row.issue.proposed_lokal,
-          stanowisko: row.issue.proposed_stanowisko,
-          start: row.issue.proposed_start_time,
-          end: row.issue.proposed_end_time,
-        },
+        finalValues: wartosci || propozycjaKorekty(row.issue),
         reason: powod || undefined,
       });
       onSaved(row.issue.id, saved);
@@ -624,20 +559,10 @@ export default function ZatwierdzanieZmian({
   };
 
   // -------------------------------------------------------------------------
-  // Decyzje odłożone o 6 s ("Cofnij").
-  //
-  // Karta znika od razu, ale zapis rusza dopiero po CZAS_NA_COFNIECIE_MS.
-  // "Cofnij" w tym czasie po prostu anuluje zapis — nic w bazie nie trzeba
-  // odkręcać. Najgorszy przypadek (przeglądarka zamknięta w tych 6 s mimo
-  // pytania) zostawia sprawę w kolejce, czyli tam, gdzie była — bezpieczniej
-  // niż zapis, którego nie dałoby się cofnąć.
-  //
-  // ⚠️ Zapis woła funkcję z NAJNOWSZEGO renderu (akcjeRef), a nie z chwili
-  // kliknięcia: w ciągu 6 s poll potrafi podmienić `shifts`, a funkcja ze
-  // starą listą nadpisałaby w stanie świeże wiersze starymi.
+  // Decyzje odłożone o 6 s ("Cofnij") — mechanizm i jego pułapki opisuje
+  // odlozoneDecyzje.tsx; ten sam działa na Pulpicie.
   // -------------------------------------------------------------------------
-  const akcjeRef = useRef({});
-  akcjeRef.current = {
+  const { odlozone, toast, decyduj: odloz, cofnij } = useOdlozoneDecyzje({
     rozliczZmiane,
     decyzjaOProbnym,
     rozliczOdbicie,
@@ -645,78 +570,17 @@ export default function ZatwierdzanieZmian({
     odrzucDuplikat,
     decyzjaOWolnym,
     decyzjaOGieldzie,
-  };
-  const kolejka = useRef([]);
-  const [odlozone, setOdlozone] = useState({});
-  const [toast, setToast] = useState(null);
-
-  const wykonajPartie = async (partia) => {
-    const i = kolejka.current.indexOf(partia);
-    if (i < 0) return;
-    kolejka.current.splice(i, 1);
-    clearTimeout(partia.timer);
-    setToast((t) => (t && t.partia === partia ? null : t));
-    for (const [nazwa, args] of partia.zadania) {
-      await akcjeRef.current[nazwa](...args);
-    }
-    setOdlozone((prev) => {
-      const n = { ...prev };
-      partia.klucze.forEach((k) => delete n[k]);
-      return n;
-    });
-  };
-
-  // pozycje: [{ klucz, zadanie: [nazwaFunkcji, argumenty] }]
+  });
+  // Decyzja zdejmuje też zaznaczenie — inaczej pasek "Zatwierdź N" liczyłby
+  // karty, których już nie widać.
   const decyduj = (pozycje, opis) => {
-    if (!pozycje.length) return;
-    const partia = {
-      klucze: pozycje.map((p) => p.klucz),
-      zadania: pozycje.map((p) => p.zadanie),
-    };
-    partia.timer = setTimeout(() => wykonajPartie(partia), CZAS_NA_COFNIECIE_MS);
-    kolejka.current.push(partia);
-    setOdlozone((prev) => {
-      const n = { ...prev };
-      partia.klucze.forEach((k) => (n[k] = true));
-      return n;
-    });
+    odloz(pozycje, opis);
     setZaznaczone((prev) => {
       const n = { ...prev };
-      partia.klucze.forEach((k) => delete n[k]);
+      pozycje.forEach((p) => delete n[p.klucz]);
       return n;
     });
-    setToast({ partia, opis });
   };
-
-  const cofnij = () => {
-    const partia = toast?.partia;
-    if (!partia) return;
-    clearTimeout(partia.timer);
-    kolejka.current = kolejka.current.filter((p) => p !== partia);
-    setOdlozone((prev) => {
-      const n = { ...prev };
-      partia.klucze.forEach((k) => delete n[k]);
-      return n;
-    });
-    setToast(null);
-  };
-
-  // Wyjście z zakładki nie może zgubić decyzji: wszystko, co czeka, idzie do
-  // bazy od razu. Zamknięcie karty przeglądarki w tych 6 s pyta o
-  // potwierdzenie — bez pytania zapis nie zdążyłby wyjść.
-  useEffect(() => {
-    const przyWyjsciu = (e) => {
-      if (!kolejka.current.length) return;
-      kolejka.current.slice().forEach((p) => wykonajPartie(p));
-      e.preventDefault();
-      e.returnValue = "";
-    };
-    window.addEventListener("beforeunload", przyWyjsciu);
-    return () => {
-      window.removeEventListener("beforeunload", przyWyjsciu);
-      kolejka.current.slice().forEach((p) => wykonajPartie(p));
-    };
-  }, []);
 
   // -------------------------------------------------------------------------
   // Sprawy w jednym kształcie: { klucz, typ, kto, wiek, tak, opisTak, karta }.
@@ -1613,23 +1477,7 @@ export default function ZatwierdzanieZmian({
               </button>
             </div>
           ) : (
-            <div
-              role="status"
-              data-pasek-cofnij
-              className="flex items-center gap-3 p-2.5 pl-3.5 bg-[#171714] text-white rounded-lg font-semibold shadow-[0_10px_30px_rgba(0,0,0,0.22)] max-w-[560px]"
-            >
-              <span className="w-[26px] h-[26px] rounded-full bg-[#E2F3E9] text-[#1F7A4A] flex items-center justify-center flex-shrink-0">
-                <Check size={15} strokeWidth={3} />
-              </span>
-              <span className="min-w-0">{toast.opis}</span>
-              <button
-                type="button"
-                onClick={cofnij}
-                className="ml-auto px-2.5 py-2 font-extrabold underline underline-offset-[3px]"
-              >
-                Cofnij
-              </button>
-            </div>
+            <PasekCofnij opis={toast.opis} onCofnij={cofnij} />
           )}
         </div>
       )}

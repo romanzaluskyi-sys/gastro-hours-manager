@@ -5,6 +5,32 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.49.0 — 2026-09-25
+
+- **Nowy Pulpit** według makiety — najpierw to, co trzeba zrobić, potem liczby:
+  - **„Do zrobienia teraz"**: zamknięcie wczorajszego dnia w każdym lokalu
+    (widać, czego brakuje — utarg, wpisy dziennika) i sprawy do decyzji;
+  - lokal z uzupełnionym utargiem i wpisami **zamyka się jednym przyciskiem
+    „Zamknij"** (albo „Zamknij wszystkie"), pozostałe mają „Uzupełnij", który
+    otwiera kartę dnia;
+  - **prostą korektę godzin** (ta sama zmiana, zmieniają się tylko godziny)
+    zatwierdzasz ✓ prosto z Pulpitu; wszystko inne prowadzi do „Do decyzji";
+  - zamknięcie dnia i ✓ też można **cofnąć przez 6 sekund**;
+  - **„Liczby"**: dziś, ten tydzień (słupki dni, dalsze dni z grafiku),
+    wczoraj plan vs fakt i miesiąc z kosztem — porównania uczciwe: pn–pt z
+    pn–pt poprzedniego tygodnia, 1–25 z 1–25 poprzedniego miesiąca;
+  - na telefonie liczby przewija się w bok;
+  - **„Teraz na zmianie"** zaczyna od osób, które są w grafiku, a jeszcze nie
+    odbiły, potem reszta pogrupowana po lokalach z czasem od startu;
+  - **„Terminy i dokumenty"** osobno pokazuje brakujące daty (jedno
+    „Uzupełnij daty") i prawdziwe terminy z najbliższych 30 dni;
+  - **„Zadania dziś"** jako paski postępu per lokal.
+- Kafelek „Do decyzji" zniknął — tę liczbę mówi karta „Wymaga decyzji" i
+  znaczek w menu.
+- **Koszt miesiąca na Pulpicie liczy się jak w Raportach i kosztach** — z
+  umowy, nie ze stawki godzinowej. Wcześniej etatowcy bez stawki wypadali z
+  kosztu. Umowa bezterminowa nie liczy się już jako brak terminu.
+
 ## 0.48.0 — 2026-09-25
 
 - **Nowy wygląd „Do decyzji" (Zatwierdzanie zmian)** według makiety:

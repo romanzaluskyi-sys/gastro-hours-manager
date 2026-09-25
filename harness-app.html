@@ -203,7 +203,7 @@ async function zaladuj(sciezka) {
         status.textContent = "BŁĄD: App w ogóle nie pytał o users_widok.";
         return;
       }
-      if (widac.includes("Dziś w liczbach")) {
+      if (widac.includes("Wymaga decyzji")) {
         status.textContent =
           "App zamontowany (v" + APP_VERSION + ") — kartoteka wczytana przez widok";
         return;

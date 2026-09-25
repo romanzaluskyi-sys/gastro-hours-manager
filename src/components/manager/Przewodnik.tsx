@@ -23,6 +23,17 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.49.0",
+    date: "2026-09-25",
+    items: [
+      "Nowy Pulpit: najpierw „Do zrobienia teraz” — zamknięcie wczorajszego dnia i sprawy do decyzji.",
+      "Uzupełniony dzień zamyka się jednym „Zamknij”; prostą korektę godzin zatwierdzasz ✓ z Pulpitu. Obie rzeczy można cofnąć przez 6 sekund.",
+      "Liczby z uczciwym porównaniem: pn–pt z pn–pt, 1–25 z 1–25.",
+      "Teraz na zmianie zaczyna od osób z grafiku, które jeszcze nie odbiły.",
+      "Koszt miesiąca liczy się jak w Raportach i kosztach (z umowy).",
+    ],
+  },
+  {
     version: "0.48.0",
     date: "2026-09-25",
     items: [
