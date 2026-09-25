@@ -5,6 +5,32 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.53.0 — 2026-09-25
+
+- **Nowy wygląd Raportów i kosztów** według makiety — najpierw wnioski,
+  potem tabele:
+  - **kafelki**: „Koszt pracy" jako główny (na czarno), z uczciwym dopiskiem
+    „Zaniżony", gdy komuś brakuje wynagrodzenia w karcie; **średni koszt
+    godziny** liczony zamiast „—"; godziny z podziałem praca / urlop;
+    „Plan vs fakt" z liczbą godzin bez grafiku; porównanie z poprzednim
+    miesiącem bez zieleni i czerwieni — w trwającym miesiącu z tym samym
+    kawałkiem poprzedniego (1–25 do 1–25), nie z całym;
+  - **„Na co zwrócić uwagę"**: osoba wyraźnie ponad pełny etat, godziny bez
+    grafiku, lokal, który bierze większość kosztów (i najdroższa / najtańsza
+    godzina), podejrzanie krótkie wpisy — każdy z przyciskiem, który prowadzi
+    do sprawy;
+  - **„Gotowość do rozliczenia"**: co blokuje (miesiąc jeszcze trwa, brak
+    wynagrodzenia, sprawy do decyzji z tego miesiąca), a co jest tylko
+    ostrzeżeniem (dni różne od grafiku, krótkie wpisy);
+  - **„Struktura kosztów"**: pasek udziałów po lokalach, tabela z udziałem,
+    godzinami, kosztem i zł/h; lokal i stanowisko rozwijają się do osób;
+  - **pracownicy**: sortowanie po koszcie / godzinach / zł/h, szczegóły z
+    czterema liczbami (godziny, koszt, grafik, zł/h) i listą zmian — urlop
+    sklejony w jeden wiersz, „poza grafikiem" zaznaczone, kliknięcie zmiany
+    otwiera okno wpisu.
+- Na telefonie pierwszy kafelek w karuzeli (Pulpit, Rejestr, Raporty) nie
+  przykleja się już do krawędzi ekranu.
+
 ## 0.52.0 — 2026-09-25
 
 - **Nowy wygląd Pracowników** według makiety — wszystkie pola zostały, zmienił

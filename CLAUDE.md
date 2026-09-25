@@ -2441,6 +2441,35 @@ wtedy, gdy nie ma kogo zapytać o zgodę.
 
 ## Raporty i koszty — przebudowa 2026-09-20 (0.40.0)
 
+⚠️ **Układ z makiety właściciela (0.53.0, ReportsDesktop / ReportsMobile).**
+Kolejność = wnioski przed tabelami: kafelki („Koszt pracy" na czarno jako
+główny), „Na co zwrócić uwagę", „Gotowość do rozliczenia", „Struktura
+kosztów". Rzeczy, których nie widać:
+- **Średni koszt godziny dzieli koszt przez godziny osób Z KOSZTEM**
+  (`hoursZKosztem`), nie przez wszystkie — inaczej każda godzina kogoś bez
+  wynagrodzenia zaniżałaby średnią. To samo `hoursKoszt` przy zł/h grupy.
+- **Porównanie z poprzednim miesiącem jest like-for-like**: w trwającym
+  miesiącu `agreguj(..., doDnia)` bierze z poprzedniego tylko dni 1–N. Ta sama
+  zasada co na Pulpicie. Pasek porównania zniknął — trend stoi w kafelkach.
+- **Wnioski są LICZONE, nie przechowywane**: przeciążenie (praca bez urlopu
+  > 1,25 × norma pełnego etatu z `wymiarCzasuPracy`), godziny bez grafiku
+  (≥ 5% faktu), koncentracja kosztu w lokalu (od dwóch lokali), wpisy krótsze
+  niż 30 min (`KROTKI_WPIS_H`). Każdy ma akcję — wniosek bez akcji tylko
+  straszy.
+- **„Gotowość do rozliczenia" blokuje trzema rzeczami**: miesiąc jeszcze
+  trwa, ktoś bez wynagrodzenia, sprawy do decyzji Z TEGO MIESIĄCA (te same
+  kolejki co znaczek „Zatwierdzanie zmian", podane przez `doDecyzji` z
+  ManagerDashboard). Makieta blokowała tylko brakiem wynagrodzenia —
+  rozliczenie z nierozstrzygniętą korektą albo w trakcie miesiąca rozlicza
+  liczby, które się zmienią. Różnice z grafikiem i krótkie wpisy to tylko
+  ostrzeżenia. **Wysyłki do księgowej nie ma** — przycisk stoi wyłączony z
+  powodem.
+- **Kolor lokalu w pasku udziałów bierze się z pozycji w słowniku `lokale`**,
+  nie z rankingu — inaczej ten sam lokal zmieniałby kolor co miesiąc.
+  Stanowisko bierze `stanowiska.kolor`, gdy jest.
+- **Urlop w szczegółach osoby to jeden wiersz na ciąg dni** („17–28.08 · 10
+  dni urlopu"); cały wiersz zmiany otwiera `WpisGodzinModal`.
+
 ⚠️ **Koszt liczy `kosztMiesiaca()` z `utils/umowy.ts`, NIE `godziny × users.stawka`.**
 Do 0.40.0 stała tam goła `users.stawka`, więc KAŻDY pracownik na umowie o pracę
 miał koszt `null`, wypadał z kafelka „Koszt" i cały miesiąc świecił „dane
@@ -2474,7 +2503,8 @@ stawki godzinowej, to jest ten sam błąd.
 - **Zero godzin przy istniejącej zmianie znaczy jedno**: nikt nie odbił jej
   końca (`bezKonca > 0` → „zmiana bez zakończenia", patrz sekcja wyżej).
   Człowiek był, godziny czekają na decyzję.
-- **Porównanie z poprzednim miesiącem jest BEZ zieleni i czerwieni.** Wyższy
+- **Porównanie z poprzednim miesiącem jest BEZ zieleni i czerwieni** (od
+  0.53.0 neutralny znaczek ze strzałką w kafelkach). Wyższy
   koszt przy wyższym utargu nie jest porażką, a więcej godzin nie jest ani dobre,
   ani złe samo z siebie. Koszt porównujemy tylko wtedy, gdy OBA miesiące są
   policzone do końca — inaczej spadek znaczyłby tylko tyle, że komuś nie wpisano

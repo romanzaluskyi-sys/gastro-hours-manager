@@ -573,7 +573,7 @@ export default function RejestrGodzin({
 
       {/* Kafelki — na telefonie karuzela, jak na Pulpicie */}
       <div
-        className="flex md:grid md:grid-cols-2 xl:grid-cols-4 gap-4 overflow-x-auto md:overflow-visible snap-x snap-mandatory -mx-4 px-4 md:mx-0 md:px-0 pb-1 [scrollbar-width:none]"
+        className="flex md:grid md:grid-cols-2 xl:grid-cols-4 gap-4 overflow-x-auto md:overflow-visible snap-x snap-mandatory scroll-px-4 md:scroll-px-0 -mx-4 px-4 md:mx-0 md:px-0 pb-1 [scrollbar-width:none]"
         data-kafelki-rejestru
       >
         <Kafelek etykieta="Przepracowane">

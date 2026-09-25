@@ -23,6 +23,15 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.53.0",
+    date: "2026-09-25",
+    items: [
+      "Raporty i koszty: najpierw wnioski — kto pracuje ponad miarę, ile godzin bez grafiku, podejrzanie krótkie wpisy.",
+      "„Gotowość do rozliczenia” mówi, co blokuje wysyłkę (brak wynagrodzenia, sprawy do decyzji), a co jest ostrzeżeniem.",
+      "Struktura kosztów: pasek udziałów lokali, zł/h przy lokalu, stanowisku i osobie; urlop w szczegółach jednym wierszem.",
+    ],
+  },
+  {
     version: "0.52.0",
     date: "2026-09-25",
     items: [

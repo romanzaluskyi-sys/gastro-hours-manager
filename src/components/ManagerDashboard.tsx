@@ -1391,6 +1391,17 @@ const ManagerDashboard = ({
             setSelectedUserId={setReportUserId}
             skok={reportSkok}
             planShifts={planShifts}
+            shiftEdits={shiftEdits}
+            // Te same kolejki co znaczek "Zatwierdzanie zmian" — raport liczy
+            // z nich tylko sprawy z oglądanego miesiąca (Gotowość do rozliczenia).
+            doDecyzji={{
+              korekty: pendingCorrections,
+              braki: brakiOdbiciaDoDecyzji,
+              porzucone: porzuconeZmiany,
+            }}
+            onGoToApprovals={() => setTab("zatwierdzanie")}
+            onGoToRegister={() => setTab("godziny")}
+            onOpenEmployee={goToEmployeeCard}
           />
         )}
 

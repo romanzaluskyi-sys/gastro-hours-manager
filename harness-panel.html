@@ -35,7 +35,7 @@ const pokazBlad = (e) => {
 window.addEventListener("error", (ev) => pokazBlad(ev.error || ev.message));
 window.addEventListener("unhandledrejection", (ev) => pokazBlad(ev.reason));
 
-const IKONY = ["Search", "EyeOff", "Star", "Tablet", "Inbox", "Square", "Phone", "AlertCircle", "AlertTriangle", "Archive", "ArchiveRestore", "ArrowLeft", "ArrowLeftRight", "ArrowRight", "BarChart3", "Bell", "BookOpen", "Briefcase", "Calendar", "CalendarCheck", "CalendarDays", "CalendarRange", "Check", "CheckCircle", "CheckCircle2", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "ClipboardCheck", "ClipboardList", "ClipboardPlus", "Clock", "Cloud", "Construction", "Copy", "CopyPlus", "Delete", "Download", "Edit2", "Eye", "FileText", "Flag", "HelpCircle", "History", "Home", "Hourglass", "Info", "ListChecks", "Lock", "LogIn", "LogOut", "Mail", "MapPin", "MoreHorizontal", "Palmtree", "Pencil", "Plus", "Printer", "RefreshCw", "RotateCcw", "Save", "Send", "Settings", "SlidersHorizontal", "Thermometer", "Trash2", "User", "UserPlus", "Users", "Wallet", "WifiOff", "X"];
+const IKONY = ["PieChart", "Search", "EyeOff", "Star", "Tablet", "Inbox", "Square", "Phone", "AlertCircle", "AlertTriangle", "Archive", "ArchiveRestore", "ArrowLeft", "ArrowLeftRight", "ArrowRight", "BarChart3", "Bell", "BookOpen", "Briefcase", "Calendar", "CalendarCheck", "CalendarDays", "CalendarRange", "Check", "CheckCircle", "CheckCircle2", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "ClipboardCheck", "ClipboardList", "ClipboardPlus", "Clock", "Cloud", "Construction", "Copy", "CopyPlus", "Delete", "Download", "Edit2", "Eye", "FileText", "Flag", "HelpCircle", "History", "Home", "Hourglass", "Info", "ListChecks", "Lock", "LogIn", "LogOut", "Mail", "MapPin", "MoreHorizontal", "Palmtree", "Pencil", "Plus", "Printer", "RefreshCw", "RotateCcw", "Save", "Send", "Settings", "SlidersHorizontal", "Thermometer", "Trash2", "User", "UserPlus", "Users", "Wallet", "WifiOff", "X"];
 const stub = (kod) => URL.createObjectURL(new Blob([kod], { type: "text/javascript" }));
 
 // Atrapa Supabase — nic nie leci do sieci, każdy zapis wraca z wymyślonym id.
@@ -1174,6 +1174,85 @@ const poprzedniMiesiac = (h) => {
         }
       } catch (e) {
         sprawdz("Pracownicy wg lokalu: przebieg bez wyjątku", false, e.message);
+      }
+
+      // ----------------------------------------------------------------
+      // Raporty i koszty według makiety (0.53.0): koszt jako główny kafelek,
+      // "Gotowość do rozliczenia" mówi, co BLOKUJE, rozbicie po lokalu
+      // prowadzi do osoby, a jej zmiany otwierają okno wpisu.
+      // ----------------------------------------------------------------
+      try {
+        if (new URLSearchParams(location.search).get("rola") !== "manager") {
+          const menuR = [...document.querySelectorAll("#app aside button")]
+            .find((x) => x.textContent.replace(/▪/g, "").replace(/\d+$/, "").trim() === "Raporty i koszty");
+          if (!menuR) throw new Error("nie ma pozycji menu Raporty i koszty");
+          menuR.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          await czekaj(300);
+          const R = () => document.querySelector("#app [data-raporty]");
+          const MIES = ["Styczeń","Luty","Marzec","Kwiecień","Maj","Czerwiec","Lipiec","Sierpień","Wrzesień","Październik","Listopad","Grudzień"];
+          const pop = new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1);
+          sprawdz("Raporty startują na miesiącu zamkniętym",
+            !!R() && R().querySelector("[data-miesiac-raportu]").textContent.includes(MIES[pop.getMonth()]));
+          const koszt = () => R().querySelector("[data-kafelek-koszt]");
+          // W poprzednim miesiącu atrapa ma Bo (etat 5 200 zł za 8 h) i zleceniowców
+          // z Bułki — koszt nie może spaść poniżej samej kwoty z umowy Bo.
+          const kwotaKosztu = () => Number(((/([\d\s\u00A0]+)\s*zł/.exec(koszt().textContent) || [])[1] || "0")
+            .replace(/\D/g, ""));
+          sprawdz("koszt poprzedniego miesiąca liczy etat Bo z umowy (≥ 5 200 zł)",
+            !!koszt() && kwotaKosztu() >= 5200, koszt() ? koszt().textContent : "");
+          sprawdz("pięć kafelków, koszt pracy pierwszy",
+            R().querySelectorAll("[data-kafelki-raportu] > div").length === 5 &&
+              R().querySelector("[data-kafelki-raportu] > div") === koszt());
+
+          R().querySelector("[data-biezacy-miesiac]").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          await czekaj(200);
+          const got = R().querySelector("[data-gotowosc]");
+          const punkt = (k) => got.querySelector(`[data-gotowosc-punkt="${k}"]`);
+          sprawdz("bieżący miesiąc blokuje rozliczenie („Miesiąc jeszcze trwa”)",
+            !!punkt("trwa") && punkt("trwa").getAttribute("data-stan") === "bad" &&
+              Number(got.getAttribute("data-blokuje")) >= 1);
+          sprawdz("brak wynagrodzenia blokuje i wymienia osobę (Cezary)",
+            !!punkt("wynagrodzenia") && punkt("wynagrodzenia").getAttribute("data-stan") === "bad" &&
+              /Cezary/.test(punkt("wynagrodzenia").textContent),
+            punkt("wynagrodzenia") ? punkt("wynagrodzenia").textContent : "");
+          sprawdz("kafelek kosztu mówi, że jest zaniżony",
+            /Zaniżony/.test(koszt().textContent), koszt().textContent);
+          sprawdz("„Wyślij do księgowej” jest wyłączone z powodem",
+            [...R().querySelectorAll("button")].filter((b) => /Wyślij do księgowej/.test(b.textContent))
+              .every((b) => b.disabled));
+          sprawdz("wniosek o koncentracji kosztów przy dwóch lokalach",
+            !!R().querySelector('[data-uwagi] [data-wniosek="koncentracja"]'));
+
+          const grupa = R().querySelector('[data-grupa-kosztu="Ceglana"]');
+          sprawdz("rozbicie po lokalu ma Ceglaną z udziałem i zł/h", !!grupa && /%/.test(grupa.textContent));
+          grupa.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          await czekaj(150);
+          const gosia = R().querySelector('[data-osoba-grupy="Gosia"]');
+          sprawdz("rozwinięty lokal pokazuje osoby", !!gosia);
+          gosia.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          await czekaj(200);
+          const szcz = R().querySelector("[data-szczegoly-osoby]");
+          sprawdz("klik w osobę otwiera jej szczegóły w przekroju „Pracownicy”",
+            !!szcz && /Gosia/.test(szcz.textContent) &&
+              R().querySelector('[data-przekroj="pracownicy"]').className.includes("bg-[#171714]"));
+          sprawdz("szczegóły: sześć zmian i koszt ponad normą",
+            szcz.querySelectorAll("[data-wpis-raportu]").length === 6 && /ponad normą/.test(szcz.textContent),
+            szcz.textContent.slice(0, 200));
+          const pierwszaOsoba = () => R().querySelector("[data-osoba-kosztu]").getAttribute("data-osoba-kosztu");
+          sprawdz("lista domyślnie po koszcie (Bo pierwszy)", pierwszaOsoba() === "Bo", pierwszaOsoba());
+          R().querySelector('[data-sortuj="godz"]').dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          await czekaj(100);
+          sprawdz("sortowanie po godzinach stawia Gosię na górze", pierwszaOsoba() === "Gosia", pierwszaOsoba());
+          szcz.querySelector("[data-wpis-raportu]").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          await czekaj(200);
+          sprawdz("zmiana w szczegółach otwiera okno wpisu", !!document.querySelector("#app [data-wpis-godzin]"));
+          const anuluj = [...document.querySelectorAll("#app [data-wpis-godzin] button")]
+            .find((b) => b.textContent.trim() === "Anuluj");
+          if (anuluj) anuluj.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          await czekaj(100);
+        }
+      } catch (e) {
+        if (e !== null) sprawdz("Raporty i koszty: przebieg bez wyjątku", false, e.message);
       }
 
       if (status.className !== "zle") {
