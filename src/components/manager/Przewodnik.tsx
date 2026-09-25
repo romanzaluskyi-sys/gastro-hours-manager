@@ -23,6 +23,27 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.47.0",
+    date: "2026-09-25",
+    items: [
+      "Tablet Służbowy na całą szerokość tabletu, osoby po trzy w rzędzie.",
+      "Zakładki na tablecie w pasku po lewej, jak w panelu kierownika.",
+      "Na telefonie bez zmian — zakładki dalej na dole.",
+      "Widoczny przycisk „Wybierz inną godzinę” przy starcie i przy końcu zmiany.",
+      "Zatwierdzanie zmian: przyciski w rzędzie po prawej stronie karty.",
+      "Tablet kilku lokali: przy osobie widać jej lokal, a reguły wpisu mówią, którego lokalu dotyczą.",
+    ],
+  },
+  {
+    version: "0.46.0",
+    date: "2026-09-25",
+    items: [
+      "Zatwierdzanie zmian: jedna karta dla każdego typu decyzji, przyciski jeden pod drugim w tej samej kolejności.",
+      "Znaczek w menu liczy wszystkie decyzje, także braki odbicia — tyle samo, co nagłówek strony.",
+      "Pracownicy: lista idzie za lokalem z górnego paska; „Cała sieć” grupuje po lokalach.",
+    ],
+  },
+  {
     version: "0.45.0",
     date: "2026-09-24",
     items: [

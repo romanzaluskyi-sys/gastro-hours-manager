@@ -109,17 +109,29 @@ export const opisOkna = (wsteczMin) =>
 
 // Podpis pod formularzem pracownika — mówi z góry, gdzie jest granica, zanim
 // ktoś się o nią potknie. null, gdy okna nie ustawiono (nic się nie zmienia).
-export const podpisOkna = (rodzaj, wsteczMin) => {
+//
+// `lokal` podaje się TYLKO na urządzeniu obsługującym kilka lokali (wspólny
+// tablet w szatni dwóch lokali). Reguły idą za lokalem wybranym w formularzu,
+// a "w tym lokalu" na takim tablecie nie mówi którym — właściciel widział na
+// jednym tablecie dwa różne sposoby wpisu i wyglądało to na pomieszanie
+// ustawień (2026-09-25).
+export const opisGdzie = (lokal) => (lokal ? `W lokalu ${lokal}` : "W tym lokalu");
+
+export const podpisOkna = (rodzaj, wsteczMin, lokal = null) => {
   if (wsteczMin == null) return null;
+  const gdzie = opisGdzie(lokal);
   if (rodzaj === "cala") {
     return wsteczMin === 0
-      ? "W tym lokalu całą zmianę zapisujesz sam tylko w chwili jej zakończenia. Później — przez kierownika."
-      : `W tym lokalu całą zmianę zapisujesz sam najpóźniej ${wsteczMin} min po jej zakończeniu. Później — przez kierownika.`;
+      ? `${gdzie} całą zmianę zapisujesz sam tylko w chwili jej zakończenia. Później — przez kierownika.`
+      : `${gdzie} całą zmianę zapisujesz sam najpóźniej ${wsteczMin} min po jej zakończeniu. Później — przez kierownika.`;
   }
-  const co = rodzaj === "koniec" ? "Koniec" : "Start";
-  return wsteczMin === 0
-    ? `W tym lokalu ${co.toLowerCase()} zapisujesz sam tylko z godziną „teraz”. Inną godzinę zatwierdza kierownik.`
-    : `${co} możesz sam cofnąć najwyżej o ${wsteczMin} min. Wcześniejszą godzinę zatwierdza kierownik.`;
+  const co = rodzaj === "koniec" ? "koniec" : "start";
+  if (wsteczMin === 0) {
+    return `${gdzie} ${co} zapisujesz sam tylko z godziną „teraz”. Inną godzinę zatwierdza kierownik.`;
+  }
+  return lokal
+    ? `${gdzie} ${co} możesz sam cofnąć najwyżej o ${wsteczMin} min. Wcześniejszą godzinę zatwierdza kierownik.`
+    : `${co === "koniec" ? "Koniec" : "Start"} możesz sam cofnąć najwyżej o ${wsteczMin} min. Wcześniejszą godzinę zatwierdza kierownik.`;
 };
 
 // Zmiana, dla której pracownik wysłał już prośbę o godzinę zakończenia, NIE

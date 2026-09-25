@@ -379,7 +379,7 @@ const KioskDashboard = ({
   if (screen === "LIST") {
     return (
       <div className="h-screen bg-white flex flex-col items-center overflow-hidden">
-        <div className="w-full max-w-md bg-white h-full flex flex-col shadow-lg overflow-hidden">
+        <div className="w-full max-w-md md:max-w-none bg-white h-full flex flex-col shadow-lg md:shadow-none overflow-hidden">
           <header className="px-[18px] pt-[22px] pb-[14px] bg-[#F1F1EE] border-b-[1.5px] border-[#B7B6AE] flex items-center justify-between flex-shrink-0">
             {/* Marka zamiast napisu "Tablet Służbowy": urządzenie i tak
                 przedstawia się obok nazwą lokalu i zegarem, a to jest jedyny
@@ -399,7 +399,7 @@ const KioskDashboard = ({
           <div className="bg-[#E7E7E2] border-b border-[#B7B6AE] px-5 py-2.5 flex items-center gap-2 text-sm text-[#6E6E66] flex-shrink-0">
             <WeatherBadge city={lokaleAllowed[0]?.miasto} />
           </div>
-          <main className="flex-1 overflow-y-auto px-5 pt-6 pb-5 flex flex-col">
+          <main className="flex-1 overflow-y-auto px-5 md:px-8 pt-6 pb-5 flex flex-col">
             <div className="font-['Archivo'] font-extrabold text-[30px] text-[#171714]">
               Wybierz siebie
             </div>
@@ -412,6 +412,11 @@ const KioskDashboard = ({
                   ].join(" · ")
                 : "Brak przypisanych pracowników"}
             </div>
+            {/* Na tablecie osoby stoją po trzy w rzędzie (prośba właściciela,
+                2026-09-25): przy kilkunastu osobach pojedyncza kolumna na
+                szerokim ekranie kazała przewijać, żeby znaleźć siebie. Karta
+                zostaje ta sama — zmienia się tylko siatka. */}
+            <div className="grid gap-3.5 md:grid-cols-3 mb-3.5">
             {widoczniUsers.map((u) => {
               const {
                 otwarta: empOpen,
@@ -452,7 +457,7 @@ const KioskDashboard = ({
                 <button
                   key={u.id}
                   onClick={() => selectEmployee(u)}
-                  className={`border-2 rounded p-4 flex items-center justify-between gap-3 w-full text-left mb-3.5 ${
+                  className={`border-2 rounded p-4 flex items-center justify-between gap-3 w-full h-full text-left ${
                     propozycje.length > 0
                       ? "border-[#171714] bg-[#FDF3D4]"
                       : "border-[#B7B6AE] bg-[#F1F1EE]"
@@ -465,6 +470,12 @@ const KioskDashboard = ({
                     </div>
                     <div className="text-[13px] text-[#6E6E66] mt-0.5 flex items-center gap-1.5 flex-wrap">
                       {u.default_stanowisko || ""}
+                      {/* Wspólny tablet kilku lokali: widać od razu, z którego
+                          lokalu ta osoba jest — od tego zależy, na jaki lokal
+                          zapisze się jej zmiana i jakie reguły wpisu dostanie. */}
+                      {allowed.length > 1 && u.default_lokal
+                        ? `${u.default_stanowisko ? " · " : ""}${u.default_lokal}`
+                        : ""}
                       {czekaNaDecyzje(u) && (
                         <span className="text-[11px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#FFF4D6] text-[#8A6B1E]">
                           na próbę
@@ -530,6 +541,7 @@ const KioskDashboard = ({
                 </button>
               );
             })}
+            </div>
             {activeUsers.length === 0 && (
               <div className="text-center py-10 text-[#8F8E86]">
                 <AlertCircle className="mx-auto mb-2 opacity-40" size={40} />
@@ -564,7 +576,7 @@ const KioskDashboard = ({
       nowyForm.name.trim() && nowyForm.lokal && nowyForm.stanowisko;
     return (
       <div className="h-screen bg-white flex flex-col items-center overflow-hidden">
-        <div className="w-full max-w-md bg-white h-full flex flex-col shadow-lg overflow-hidden">
+        <div className="w-full max-w-md md:max-w-none bg-white h-full flex flex-col shadow-lg md:shadow-none overflow-hidden">
           <header className="px-[18px] pt-[22px] pb-[14px] bg-[#F1F1EE] border-b-[1.5px] border-[#B7B6AE] flex items-center gap-3 flex-shrink-0">
             <button
               onClick={goList}
@@ -576,7 +588,8 @@ const KioskDashboard = ({
               Nowa osoba na próbę
             </span>
           </header>
-          <main className="flex-1 overflow-y-auto px-5 pt-6 pb-5">
+          {/* Na tablecie formularz w kolumnie, nie na całą szerokość ekranu. */}
+          <main className="flex-1 overflow-y-auto px-5 pt-6 pb-5 w-full md:max-w-xl md:mx-auto">
             <p className="text-sm text-[#6E6E66] mb-5">
               Wystarczy, żeby zacząć odbijać godziny. Kierownik dostanie
               powiadomienie i zdecyduje, czy ta osoba zostaje.
@@ -662,7 +675,7 @@ const KioskDashboard = ({
     const zlePinKropki = !!pinBlad && pinEntered.length > 0;
     return (
       <div className="h-screen bg-white flex flex-col items-center overflow-hidden">
-        <div className="w-full max-w-md bg-white h-full flex flex-col shadow-lg overflow-hidden">
+        <div className="w-full max-w-md md:max-w-none bg-white h-full flex flex-col shadow-lg md:shadow-none overflow-hidden">
           <header className="px-[18px] pt-[22px] pb-[14px] bg-[#F1F1EE] border-b-[1.5px] border-[#B7B6AE] flex items-center gap-3 flex-shrink-0">
             <button
               onClick={goList}

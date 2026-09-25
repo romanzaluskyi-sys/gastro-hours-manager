@@ -830,6 +830,17 @@ na urządzeniu, `showEmployeeNameInMessages=true`; konto osobiste: tylko
 tego filtrowania do środka komponentu współdzielonego**, to jedyna
 świadoma różnica logiki między dwoma konsumentami.
 
+⚠️ **Dwa układy z jednego drzewa (0.47.0).** Poniżej `md` (768 px) —
+telefon: wąska kolumna, zakładki na DOLE. Od `md` — tablet: pełna szerokość,
+zakładki w ciemnym pasku po LEWEJ (jak panel kierownika), lista „Wybierz
+siebie" po trzy w rzędzie. `<nav>` w `Shell` jest JEDNYM elementem
+przestawianym klasami (`order-last md:order-first`), nie dwiema kopiami —
+nowa zakładka albo znaczek ma się pojawić w obu układach sam. Dotyczy też
+`PersonalDashboard` otwartego na tablecie. ⚠️ Harness bez
+`<meta name="viewport">` renderuje „telefon" na 980 px i pokazuje układ
+tabletu — `harness-kiosk.html` ma ten znacznik i sprawdza oba układy zależnie
+od szerokości okna.
+
 **Nowa osoba na próbę** — przycisk pod listą osób (ekran "NOWY" w
 `KioskDashboard.tsx`) zakłada konto komuś, kto przyszedł na dzień próbny, i od
 razu wpuszcza go do jego sesji. Pełny opis: "Pracownik na próbę" niżej.
@@ -896,6 +907,18 @@ Klik na imię pracownika w Rejestr Godzin i Aktywni woła
 `goToEmployeeReport(userId)` z `ManagerDashboard.tsx` — ustawia
 `reportUserId` i przełącza `tab` na `"raporty"`, gdzie `RaportyIKoszty.tsx`
 od razu pokazuje kartę tej osoby.
+
+⚠️ **Zatwierdzanie zmian ma JEDEN układ karty** (0.46.0, rząd od 0.47.0):
+`Sekcja` + `KartaDecyzji` na poziomie modułu w `ZatwierdzanieZmian.tsx` —
+treść po lewej, przyciski W RZĘDZIE po prawej (`data-przyciski`; na telefonie
+pod treścią), równej wysokości, pierwszy zawsze „na tak". Dokładając nowy typ
+decyzji, użyj tych dwóch komponentów zamiast własnej karty. Nagłówek strony
+„Do decyzji · N" i znaczek `zatwierdzanie` w `shellBadges` muszą liczyć te
+same kolejki (sprawdza to `harness-panel.html`).
+
+⚠️ **Pracownicy idą za `selectedLokal` z górnego paska** (`wybranyLokal` w
+`Pracownicy.tsx`). Do lokalu należy osoba z `default_lokal` ALBO z
+`allowed_lokale` — tablety mają pusty `default_lokal`.
 
 **Zatwierdzanie zmian** (`ZatwierdzanieZmian.tsx` + `utils/corrections.ts`)
 — kolejka decyzji dla `issues.type === "correction"` (patrz "Zgłoszenia i
@@ -2189,6 +2212,24 @@ pracownika, potrzebuje SELECT dla tabletu na tych wierszach.**
 
 ⚠️ Kontrola jest w przeglądarce. Twardy zamek (trigger na `shifts`) — razem z
 zawężeniem `shifts` w Etapie 3c-2.
+
+⚠️ **Reguły wpisu idą za lokalem ZMIANY, nie tabletu** — za `formLokal`
+(domyślnie: lokal z dzisiejszego grafiku → `default_lokal` → pierwszy z
+urządzenia), a przy zakończeniu za `openShift.lokal`. Na wspólnym tablecie
+kilku lokali (szatnia dwóch lokali) dwie osoby dostają więc różne sposoby
+wpisu i to jest poprawne — dlatego na takim urządzeniu (`lokaleOptions.length
+> 1`) każde zdanie o regule mówi „W lokalu X…" (`opisGdzie`), a kafelek osoby
+na liście pokazuje jej lokal. Właściciel wziął to 25.09.2026 za pomieszanie
+ustawień.
+
+⚠️ **„Inna godzina" to WIDOCZNY przycisk i WIDOCZNE pole** (`innyStart`/
+`innyKoniec` w `employeeSessionShared.tsx`, 0.47.0). Nie wracaj do pola
+`type="time"` z `opacity-0` położonego na czymś innym — a już na pewno nie W
+ŚRODKU `<button>`: na iPadzie takie pole często się nie otwiera i ekran
+wyglądał, jakby innej godziny nie dało się wpisać. Samo wybranie godziny
+niczego nie zapisuje (kółko iPada potrafi wysłać zmianę w trakcie
+przewijania); zapisuje przycisk z godziną w nazwie. `null` = „teraz”, liczone
+w chwili NACIŚNIĘCIA, nie otwarcia formularza.
 
 ## Pracownik na próbę — dodane 2026-09-19 (0.40.0)
 

@@ -20,7 +20,8 @@ import {
 import { api } from "../api/supabase";
 import { sendToGoogleSheets, toLocalYMD } from "../api/googleSheets";
 import { createManagerNotification } from "../api/notifications";
-import { APP_VERSION } from "../config";
+import { APP_VERSION, PRODUKT } from "../config";
+import ShiftroMark from "./ShiftroMark";
 import { findOverlappingShift, opisKolidujacej, znajdzKolizjeWBazie, getTodaysShiftsForUser } from "../utils/shifts";
 import { zmianaTrwa } from "../utils/porzucone";
 import {
@@ -30,6 +31,7 @@ import {
   dopasujCalaZmiane,
   sprawdzGodzine,
   podpisOkna,
+  opisGdzie,
   czekaNaKoniecOdKierownika,
 } from "../utils/wpisy";
 import WeatherBadge from "./WeatherBadge";
@@ -190,6 +192,10 @@ export const timePlainCls =
 export const razemRowCls =
   "flex items-center justify-between bg-[#E7E7E2] rounded p-3.5";
 export const helperTextCls = "text-[13.5px] text-[#6E6E66] leading-relaxed";
+// Widoczne pole "inna godzina" — tej samej wielkości co duża godzina, którą
+// zastępuje, żeby ekran nie skakał przy przełączeniu.
+export const poleInnejGodzinyCls =
+  "w-full p-3 border-[2.5px] border-[#171714] rounded bg-white font-['Archivo'] font-extrabold text-[30px] text-[#171714] tabular-nums";
 export const sectionLabelCls =
   "text-[11px] font-bold tracking-wider uppercase text-[#8F8E86]";
 export const ruleStrongCls = "h-[2.5px] bg-[#171714] mt-2";
@@ -234,88 +240,106 @@ export const Shell = ({
   // Prywatny telefon pokazuje tylko bloki włączone dla lokalu; Tablet
   // Służbowy dostaje pełną listę i nic nie traci (patrz KioskDashboard).
   const widoczneTaby = TABS.filter((t) => !t.blok || bloki.includes(t.blok));
+  // ⚠️ DWA układy z jednego drzewa (0.47.0, prośba właściciela): na telefonie
+  // wąska kolumna z paskiem zakładek na DOLE; od `md` (768 px — tablet w
+  // pionie) pełna szerokość ekranu i zakładki w ciemnym pasku po LEWEJ, jak
+  // w panelu kierownika. Pasek jest jednym elementem przestawianym klasami
+  // (`order-last md:order-first`), a nie dwoma kopiami — dwie kopie zakładek
+  // rozjechałyby się przy pierwszej nowej zakładce albo znaczku.
+  const znaczekCls =
+    "absolute top-1 right-[18%] md:static md:ml-auto bg-[#DE3A22] text-white font-['Archivo'] font-extrabold text-[9.5px] md:text-[11px] min-w-[15px] md:min-w-[20px] h-[15px] md:h-5 rounded-[3px] flex items-center justify-center px-0.5 md:px-1.5";
   return (
     <div className="h-screen bg-white flex flex-col items-center overflow-hidden">
-      <div className="w-full max-w-md bg-white h-full flex flex-col shadow-lg overflow-hidden">
-        <header className="px-[18px] pt-[22px] pb-[14px] bg-[#F1F1EE] border-b-[1.5px] border-[#B7B6AE] flex items-center justify-between gap-2.5 flex-shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
-            {onBack && (
-              <button
-                onClick={onBack}
-                className="flex items-center gap-1 border-2 border-[#B7B6AE] rounded font-['Archivo'] font-bold text-sm px-3 py-2 text-[#171714] flex-shrink-0"
-              >
-                <ChevronLeft size={16} strokeWidth={2.5} /> Zmień
-              </button>
-            )}
-            {/* Na wspólnym tablecie tytuł ekranu ("Grafik", "Raport") nie
-                mówi, KTO jest wybrany — imię musi być stale widoczne obok
-                przycisku powrotu. Na Pulpicie tytułem jest już imię, więc
-                nie dublujemy. */}
-            {personName && personName !== title && (
-              <span className="font-['Archivo'] font-bold text-[15px] text-[#6E6E66] truncate flex-shrink-0">
-                {personName} ·
-              </span>
-            )}
-            <span className="font-['Archivo'] font-extrabold text-[19px] text-[#171714] truncate">
-              {title}
-            </span>
+      <div className="w-full max-w-md md:max-w-none bg-white h-full flex flex-col md:flex-row shadow-lg md:shadow-none overflow-hidden">
+        <nav className="order-last md:order-first flex md:flex-col md:w-60 border-t-[1.5px] md:border-t-0 border-[#B7B6AE] bg-white md:bg-[#3D3C36] flex-shrink-0">
+          {/* Znak i nazwa produktu tylko w bocznym pasku — na telefonie
+              dolny pasek nie ma na to miejsca, a nagłówek i tak mówi, gdzie
+              jesteśmy. */}
+          <div className="hidden md:flex items-center gap-2.5 px-5 pt-6 pb-5 border-b border-white/15">
+            <ShiftroMark size={26} tone="dark" />
+            <span className="font-['Archivo'] font-extrabold text-lg text-white">{PRODUKT}</span>
           </div>
-          {showPill ? (
-            <span className="flex-shrink-0 bg-[#FAEAE6] text-[#8A3A2B] text-[13px] font-semibold px-3.5 py-2 rounded">
-              na zmianie
-            </span>
-          ) : showBell && bloki.includes("WIADOMOSCI") ? (
-            <button
-              onClick={() => setScreen("WIADOMOSCI")}
-              className="relative border-2 border-[#B7B6AE] rounded w-11 h-11 flex items-center justify-center text-[#171714] flex-shrink-0"
-            >
-              <Bell size={19} />
-              {unreadCount > 0 && (
-                <span className="absolute -top-2 -right-2 bg-[#DE3A22] text-white font-['Archivo'] font-extrabold text-[11px] min-w-[18px] h-[18px] rounded flex items-center justify-center px-1">
-                  {unreadCount}
-                </span>
-              )}
-            </button>
-          ) : null}
-        </header>
-        <main className="flex-1 overflow-y-auto px-5 pt-6 pb-5 flex flex-col">
-          {children}
-        </main>
-        {footer}
-        <nav className="flex border-t-[1.5px] border-[#B7B6AE] bg-white flex-shrink-0">
           {widoczneTaby.map(({ key, label, Icon }) => {
             const active = activeTabKey === key;
             return (
               <button
                 key={key}
                 onClick={() => setScreen(key)}
-                className={`flex-1 flex flex-col items-center gap-1 py-3 pb-3.5 relative border-t-[2.5px] ${
+                className={`flex-1 md:flex-none flex flex-col md:flex-row items-center gap-1 md:gap-3 py-3 pb-3.5 md:py-4 md:px-5 relative border-t-[2.5px] md:border-t-0 md:border-l-[3px] md:w-full md:text-left ${
                   active
-                    ? "text-[#DE3A22] border-[#DE3A22]"
-                    : "text-[#8F8E86] border-transparent"
+                    ? "text-[#DE3A22] border-[#DE3A22] md:text-white md:bg-white/10"
+                    : "text-[#8F8E86] border-transparent md:text-[#C9C8C1]"
                 }`}
               >
                 <Icon size={20} />
-                <span className="text-[11px] font-semibold">{label}</span>
+                <span className="text-[11px] md:text-[16px] font-semibold md:font-['Archivo'] md:font-bold">
+                  {label}
+                </span>
                 {key === "WIECEJ" && unreadCount > 0 && (
-                  <span className="absolute top-1 right-[18%] bg-[#DE3A22] text-white font-['Archivo'] font-extrabold text-[9.5px] min-w-[15px] h-[15px] rounded-[3px] flex items-center justify-center px-0.5">
-                    {unreadCount}
-                  </span>
+                  <span className={znaczekCls}>{unreadCount}</span>
                 )}
                 {key === "GRAFIK" && grafikBadgeCount > 0 && (
-                  <span className="absolute top-1 right-[18%] bg-[#DE3A22] text-white font-['Archivo'] font-extrabold text-[9.5px] min-w-[15px] h-[15px] rounded-[3px] flex items-center justify-center px-0.5">
-                    {grafikBadgeCount}
-                  </span>
+                  <span className={znaczekCls}>{grafikBadgeCount}</span>
                 )}
                 {key === "ZADANIA" && taskBadgeCount > 0 && (
-                  <span className="absolute top-1 right-[18%] bg-[#DE3A22] text-white font-['Archivo'] font-extrabold text-[9.5px] min-w-[15px] h-[15px] rounded-[3px] flex items-center justify-center px-0.5">
-                    {taskBadgeCount}
-                  </span>
+                  <span className={znaczekCls}>{taskBadgeCount}</span>
                 )}
               </button>
             );
           })}
         </nav>
+        <div className="flex-1 min-w-0 min-h-0 flex flex-col">
+          <header className="px-[18px] md:px-8 pt-[22px] pb-[14px] bg-[#F1F1EE] border-b-[1.5px] border-[#B7B6AE] flex items-center justify-between gap-2.5 flex-shrink-0">
+            <div className="flex items-center gap-3 min-w-0">
+              {onBack && (
+                <button
+                  onClick={onBack}
+                  className="flex items-center gap-1 border-2 border-[#B7B6AE] rounded font-['Archivo'] font-bold text-sm px-3 py-2 text-[#171714] flex-shrink-0"
+                >
+                  <ChevronLeft size={16} strokeWidth={2.5} /> Zmień
+                </button>
+              )}
+              {/* Na wspólnym tablecie tytuł ekranu ("Grafik", "Raport") nie
+                  mówi, KTO jest wybrany — imię musi być stale widoczne obok
+                  przycisku powrotu. Na Pulpicie tytułem jest już imię, więc
+                  nie dublujemy. */}
+              {personName && personName !== title && (
+                <span className="font-['Archivo'] font-bold text-[15px] text-[#6E6E66] truncate flex-shrink-0">
+                  {personName} ·
+                </span>
+              )}
+              <span className="font-['Archivo'] font-extrabold text-[19px] text-[#171714] truncate">
+                {title}
+              </span>
+            </div>
+            {showPill ? (
+              <span className="flex-shrink-0 bg-[#FAEAE6] text-[#8A3A2B] text-[13px] font-semibold px-3.5 py-2 rounded">
+                na zmianie
+              </span>
+            ) : showBell && bloki.includes("WIADOMOSCI") ? (
+              <button
+                onClick={() => setScreen("WIADOMOSCI")}
+                className="relative border-2 border-[#B7B6AE] rounded w-11 h-11 flex items-center justify-center text-[#171714] flex-shrink-0"
+              >
+                <Bell size={19} />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-2 -right-2 bg-[#DE3A22] text-white font-['Archivo'] font-extrabold text-[11px] min-w-[18px] h-[18px] rounded flex items-center justify-center px-1">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+            ) : null}
+          </header>
+          {/* Na tablecie treść ma szerokość ekranu, ale nie rozlewa się na
+              całą: formularz albo przycisk "Rozpocznij zmianę" na 900 px
+              szerokości czyta się gorzej niż w kolumnie. Wewnętrzna kolumna
+              zostaje `flex-col`, bo ekrany spychają przyciski na dół
+              `flex-1`-owym odstępem. */}
+          <main className="flex-1 overflow-y-auto px-5 md:px-8 pt-6 pb-5 flex flex-col">
+            <div className="flex-1 flex flex-col w-full md:max-w-3xl md:mx-auto">{children}</div>
+          </main>
+          {footer}
+        </div>
       </div>
     </div>
   );
@@ -404,11 +428,28 @@ export const EmployeeSessionScreens = ({
   );
   const [knowsEnd, setKnowsEnd] = useState(false);
   const [formStartTime, setFormStartTime] = useState(fmtHHMM(new Date()));
+  // "Inna godzina" przy odbiciu (0.47.0). null = "teraz", czyli godzina z
+  // chwili NACIŚNIĘCIA przycisku, nie otwarcia formularza — tablet potrafi
+  // stać na tym ekranie kwadrans, a przy oknie tolerancji lokalu kwadrans
+  // starej godziny to różnica między wpisem przyjętym a odesłanym kierownikowi.
+  // Tekst "HH:MM" = pracownik świadomie wybrał inną godzinę.
+  //
+  // Do 0.46.0 start dało się zmienić tylko dotknięciem niewidocznego pola
+  // schowanego pod dużą godziną, a przy końcu pole czasu siedziało W ŚRODKU
+  // <button> — na iPadzie takie pole często się nie otwiera. Na tablecie
+  // wyglądało to tak, jakby innej godziny nie dało się wpisać wcale.
+  const [innyStart, setInnyStart] = useState(null);
+  const [innyKoniec, setInnyKoniec] = useState(null);
   const [formEndTime, setFormEndTime] = useState("");
   const [saving, setSaving] = useState(false);
   // Reguły wpisu lokalu, w którym zaczyna się zmiana (utils/wpisy.ts) — dla
   // osoby wypożyczonej to lokal, w którym stoi dziś, a nie macierzysty.
   const regulyFormularza = regulyWpisu(lokaleWszystkie, formLokal);
+  // Urządzenie z kilkoma lokalami (wspólny tablet w szatni): każda reguła na
+  // ekranie mówi, KTÓREGO lokalu dotyczy. Inaczej dwie osoby przy tym samym
+  // tablecie widzą dwa różne sposoby wpisu i nie wiadomo, skąd różnica.
+  const kilkaLokali = (lokaleOptions || []).length > 1;
+  const lokalDoOpisu = (nazwa) => (kilkaLokali ? nazwa : null);
   // Lokal może wymusić sposób wpisu. Wtedy przełącznik "Znam godzinę
   // zakończenia" znika, a stan knowsEnd przestaje cokolwiek znaczyć — dlatego
   // wszędzie niżej czytamy znamKoniec, nie knowsEnd.
@@ -696,6 +737,7 @@ export const EmployeeSessionScreens = ({
     setFormStanowisko(employee?.default_stanowisko || "");
     setKnowsEnd(false);
     setFormStartTime(fmtHHMM(new Date()));
+    setInnyStart(null);
     setFormEndTime("");
   };
 
@@ -923,6 +965,7 @@ export const EmployeeSessionScreens = ({
       setShifts(shifts.map((s) => (s.id === openShift.id ? parsed : s)));
       // Fire-and-forget — patrz komentarz w TimeEntryForm.tsx.
       sendToGoogleSheets(parsed, "EDIT_SHIFT");
+      setInnyKoniec(null);
       showMsg("Zmiana zakończona pomyślnie!");
       setJustClosed(true);
       setScreen("ZMIANA");
@@ -995,16 +1038,19 @@ export const EmployeeSessionScreens = ({
 
   // ---- utworzenie zmiany: sam start albo pełna zmiana (jak TimeEntryForm.handleCreateShift) ----
   const handleCreateShift = async () => {
+    // Sam start: "teraz" liczone w chwili naciśnięcia, chyba że pracownik
+    // wybrał inną godzinę. Cała zmiana: obie godziny z pól formularza.
+    const startTekst = znamKoniec ? formStartTime : innyStart || fmtHHMM(new Date());
     if (
       !formLokal ||
       !formStanowisko ||
-      !formStartTime ||
+      !startTekst ||
       (znamKoniec && !formEndTime)
     ) {
       return showMsg("Wypełnij wymagane pola!", "error");
     }
     const today = new Date();
-    const [sh, sm] = formStartTime.split(":").map(Number);
+    const [sh, sm] = startTekst.split(":").map(Number);
     let startD = new Date(
       today.getFullYear(),
       today.getMonth(),
@@ -1052,6 +1098,7 @@ export const EmployeeSessionScreens = ({
     setSaving(true);
     const zapisana = await zapiszNowaZmiane(startD, endD);
     if (zapisana) {
+      setInnyStart(null);
       showMsg(endD ? "Zmiana zapisana!" : "Rozpoczęto zmianę!");
       if (endD) {
         setJustClosed(true);
@@ -1642,24 +1689,62 @@ export const EmployeeSessionScreens = ({
             Tablecie Służbowym. */}
         {bloki.includes("WPISY") ? (
           <>
-            <button
-              onClick={() => handleCloseShift(null)}
-              disabled={saving}
-              className={ctaPrimaryCls}
-            >
-              Zakończ zmianę o {fmtHHMM(now)}
-            </button>
-            <button className={ctaSecondaryCls}>
-              Wybierz inną godzinę
-              <input
-                type="time"
-                onChange={(e) => e.target.value && handleCloseShift(e.target.value)}
-                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-              />
-            </button>
-            {podpisOkna("koniec", regulyWpisu(lokaleWszystkie, openShift.lokal).koniecWstecz) && (
+            {innyKoniec === null ? (
+              <>
+                <button
+                  onClick={() => handleCloseShift(null)}
+                  disabled={saving}
+                  className={ctaPrimaryCls}
+                >
+                  Zakończ zmianę o {fmtHHMM(now)}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInnyKoniec(fmtHHMM(now))}
+                  className={ctaSecondaryCls}
+                >
+                  Wybierz inną godzinę
+                </button>
+              </>
+            ) : (
+              <>
+                {/* Widoczne pole zamiast zamykania zmiany przy pierwszym
+                    ruchu kółka: na iPadzie zdarzenie zmiany potrafi przyjść w
+                    trakcie przewijania, a stara wersja od razu zapisywała. */}
+                <span className={fieldLabelCls}>Godzina zakończenia</span>
+                <input
+                  type="time"
+                  value={innyKoniec}
+                  onChange={(e) => setInnyKoniec(e.target.value)}
+                  className={poleInnejGodzinyCls}
+                />
+                <button
+                  onClick={() => handleCloseShift(innyKoniec)}
+                  disabled={saving || !innyKoniec}
+                  className={`${ctaPrimaryCls} mt-3`}
+                >
+                  Zakończ zmianę o {innyKoniec || "--:--"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInnyKoniec(null)}
+                  className={ctaSecondaryCls}
+                >
+                  Wróć do „teraz”
+                </button>
+              </>
+            )}
+            {podpisOkna(
+              "koniec",
+              regulyWpisu(lokaleWszystkie, openShift.lokal).koniecWstecz,
+              lokalDoOpisu(openShift.lokal)
+            ) && (
               <p className={`${helperTextCls} mt-2.5`}>
-                {podpisOkna("koniec", regulyWpisu(lokaleWszystkie, openShift.lokal).koniecWstecz)}
+                {podpisOkna(
+                  "koniec",
+                  regulyWpisu(lokaleWszystkie, openShift.lokal).koniecWstecz,
+                  lokalDoOpisu(openShift.lokal)
+                )}
               </p>
             )}
           </>
@@ -1768,30 +1853,47 @@ export const EmployeeSessionScreens = ({
         </button>
       ) : (
         <p className={`${helperTextCls} mt-5`}>
+          {opisGdzie(lokalDoOpisu(formLokal))}{" "}
           {wymuszonaCala
-            ? "W tym lokalu wpisujesz całą zmianę naraz — po jej zakończeniu."
-            : "W tym lokalu odbijasz osobno: start teraz, koniec po pracy."}
+            ? "wpisujesz całą zmianę naraz — po jej zakończeniu."
+            : "odbijasz osobno: start teraz, koniec po pracy."}
         </p>
       )}
       <div className="mt-5">
         <span className={fieldLabelCls}>Rozpoczęcie</span>
-        <div className={timeHeroCls}>
-          <div className="flex items-center gap-2.5">
-            <Clock size={20} className="text-[#171714]" />
-            <span className="font-['Archivo'] font-extrabold text-[30px] text-[#171714] tabular-nums">
-              {formStartTime}
-            </span>
+        {znamKoniec ? (
+          <div className={timeHeroCls}>
+            <div className="flex items-center gap-2.5">
+              <Clock size={20} className="text-[#171714]" />
+              <span className="font-['Archivo'] font-extrabold text-[30px] text-[#171714] tabular-nums">
+                {formStartTime}
+              </span>
+            </div>
+            <input
+              type="time"
+              value={formStartTime}
+              onChange={(e) => setFormStartTime(e.target.value)}
+              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+            />
           </div>
-          {!znamKoniec && (
-            <span className="text-[13px] text-[#8F8E86]">teraz · zmień</span>
-          )}
+        ) : innyStart === null ? (
+          <div className={timeHeroCls}>
+            <div className="flex items-center gap-2.5">
+              <Clock size={20} className="text-[#171714]" />
+              <span className="font-['Archivo'] font-extrabold text-[30px] text-[#171714] tabular-nums">
+                {fmtHHMM(now)}
+              </span>
+            </div>
+            <span className="text-[13px] text-[#8F8E86]">teraz</span>
+          </div>
+        ) : (
           <input
             type="time"
-            value={formStartTime}
-            onChange={(e) => setFormStartTime(e.target.value)}
-            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+            value={innyStart}
+            onChange={(e) => setInnyStart(e.target.value)}
+            className={poleInnejGodzinyCls}
           />
-        </div>
+        )}
       </div>
       {znamKoniec && (
         <div className="mt-5">
@@ -1824,23 +1926,38 @@ export const EmployeeSessionScreens = ({
       )}
       {podpisOkna(
         znamKoniec ? "cala" : "start",
-        znamKoniec ? regulyFormularza.koniecWstecz : regulyFormularza.startWstecz
+        znamKoniec ? regulyFormularza.koniecWstecz : regulyFormularza.startWstecz,
+        lokalDoOpisu(formLokal)
       ) && (
         <p className={`${helperTextCls} mt-2`}>
           {podpisOkna(
             znamKoniec ? "cala" : "start",
-            znamKoniec ? regulyFormularza.koniecWstecz : regulyFormularza.startWstecz
+            znamKoniec ? regulyFormularza.koniecWstecz : regulyFormularza.startWstecz,
+            lokalDoOpisu(formLokal)
           )}
         </p>
       )}
       <div className="flex-1" />
       <button
-        onClick={handleCreateShift}
-        disabled={saving}
+        onClick={() => handleCreateShift()}
+        disabled={saving || (!znamKoniec && innyStart === "")}
         className={ctaPrimaryCls}
       >
-        {znamKoniec ? "Zapisz całą zmianę" : "Rozpocznij zmianę"}
+        {znamKoniec
+          ? "Zapisz całą zmianę"
+          : `Rozpocznij zmianę o ${innyStart || fmtHHMM(now)}`}
       </button>
+      {/* Ten sam przycisk co przy zakończeniu zmiany — inna godzina ma być
+          widoczna jako przycisk, a nie ukryta pod dotknięciem godziny. */}
+      {!znamKoniec && (
+        <button
+          type="button"
+          onClick={() => setInnyStart(innyStart === null ? fmtHHMM(now) : null)}
+          className={ctaSecondaryCls}
+        >
+          {innyStart === null ? "Wybierz inną godzinę" : "Wróć do „teraz”"}
+        </button>
+      )}
     </>
   );
 
@@ -1863,10 +1980,10 @@ export const EmployeeSessionScreens = ({
       const godzina = fmtHHMM(p.rodzaj === "start" ? p.startD : p.endD);
       tresc =
         p.rodzaj === "start"
-          ? `W tym lokalu start możesz sam cofnąć najwyżej o ${p.okno} min (najwcześniej ${fmtHHMM(p.najwczesniej)}). Rozpoczniemy zmianę teraz, a start o ${godzina} wyślemy kierownikowi do zatwierdzenia.`
+          ? `${opisGdzie(lokalDoOpisu(formLokal))} start możesz sam cofnąć najwyżej o ${p.okno} min (najwcześniej ${fmtHHMM(p.najwczesniej)}). Rozpoczniemy zmianę teraz, a start o ${godzina} wyślemy kierownikowi do zatwierdzenia.`
           : p.rodzaj === "koniec"
-          ? `W tym lokalu koniec możesz sam cofnąć najwyżej o ${p.okno} min (najwcześniej ${fmtHHMM(p.najwczesniej)}). Koniec o ${godzina} wyślemy kierownikowi do zatwierdzenia.`
-          : `W tym lokalu całą zmianę zapisujesz sam najpóźniej ${p.okno} min po jej zakończeniu. Zmianę ${fmtHHMM(p.startD)}–${godzina} wyślemy kierownikowi do zatwierdzenia.`;
+          ? `${opisGdzie(lokalDoOpisu(p.shift.lokal))} koniec możesz sam cofnąć najwyżej o ${p.okno} min (najwcześniej ${fmtHHMM(p.najwczesniej)}). Koniec o ${godzina} wyślemy kierownikowi do zatwierdzenia.`
+          : `${opisGdzie(lokalDoOpisu(formLokal))} całą zmianę zapisujesz sam najpóźniej ${p.okno} min po jej zakończeniu. Zmianę ${fmtHHMM(p.startD)}–${godzina} wyślemy kierownikowi do zatwierdzenia.`;
     }
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">

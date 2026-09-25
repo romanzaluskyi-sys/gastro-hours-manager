@@ -5,6 +5,45 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.47.0 — 2026-09-25
+
+- **Tablet Służbowy wypełnia cały ekran tabletu.** Dotąd układ był robiony
+  pod telefon i na tablecie stał wąską kolumną na środku.
+- **Lista „Wybierz siebie" po trzy osoby w rzędzie** — przy kilkunastu
+  osobach nie trzeba przewijać, żeby znaleźć siebie.
+- **Zakładki po lewej stronie**, w ciemnym pasku jak w panelu kierownika,
+  zamiast paska na dole ekranu.
+- Na telefonie wszystko zostaje po staremu: jedna kolumna i zakładki na dole.
+- **„Wybierz inną godzinę" przy starcie i przy końcu zmiany** — widoczny
+  przycisk i widoczne pole czasu. Dotąd start dało się zmienić tylko
+  dotknięciem samej godziny, a przy końcu pole często nie otwierało się na
+  iPadzie; przy trybie „tylko odbicie" wyglądało to tak, jakby innej godziny
+  nie dało się wpisać wcale. Przycisk mówi teraz, o której zacznie albo
+  zakończy zmianę, a „teraz" liczy się w chwili naciśnięcia.
+- **Zatwierdzanie zmian: przyciski w rzędzie po prawej stronie karty**, obok
+  treści, wszystkie tej samej wysokości. Na telefonie schodzą pod treść.
+- **Wspólny tablet kilku lokali mówi, którego lokalu dotyczy reguła.** Sposób
+  wpisu i okna tolerancji idą za lokalem wybranym w formularzu zmiany (domyślnie
+  lokal z dzisiejszego grafiku, potem lokal z karty pracownika). Na tablecie
+  obsługującym dwa lokale dwie osoby mogły więc dostać dwa różne sposoby wpisu
+  i wyglądało to na pomieszanie ustawień. Teraz przy każdej osobie na liście
+  stoi jej lokal, a zdania brzmią „W lokalu Bułka i Jacek odbijasz osobno…".
+
+## 0.46.0 — 2026-09-25
+
+- **Zatwierdzanie zmian w jednym układzie.** Każda decyzja — osoba na próbę,
+  brak odbicia, zmiana bez zakończenia, giełda, wniosek o wolne, korekta
+  godzin — ma teraz taką samą kartę: treść po lewej, przyciski jeden pod
+  drugim po prawej, zawsze w tej samej kolejności (najpierw „Zatwierdź" /
+  „Dopisz godziny", pod spodem „Odrzuć" / „Nie było zmiany" / „Popraw").
+  Podział na sekcje zostaje, każda z krótkim opisem.
+- Nagłówek strony mówi, ile decyzji czeka łącznie, a znaczek w menu liczy
+  teraz to samo — wcześniej pomijał osoby, które były w grafiku i nie odbiły.
+- **Pracownicy idą za lokalem z górnego paska.** Wybierasz lokal — lista
+  pokazuje jego ludzi (razem z tabletem i osobami, które mają ten lokal w
+  dozwolonych). Przy „Cała sieć" lista jest pogrupowana po lokalach.
+- Nowy pracownik dodany przy wybranym lokalu od razu ma go ustawionego.
+
 ## 0.45.0 — 2026-09-24
 
 - **Każdy lokal sam decyduje, jak wpisuje się godziny** (Ustawienia → Lokale

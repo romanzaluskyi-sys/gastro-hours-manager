@@ -1,4 +1,7 @@
 <meta charset="utf-8">
+<!-- Jak w public/index.html. Bez tego emulowany telefon renderuje stronę na
+     980 px i łapie układ TABLETU (md), więc podgląd telefonu kłamie. -->
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tablet Służbowy</title>
 <!-- Montuje KioskDashboard, czyli Tablet Służbowy: ekran wyboru osoby i to,
      co widać po jej wybraniu. Urządzenie stoi na sali otwarte cały dzień i
@@ -383,6 +386,16 @@ const poprzedniMiesiac = (h) => {
         await czekaj(500);
         sprawdz("lista osób się pokazała", widac("Dorota"));
 
+        // Układ tabletu (0.47.0): od 768 px osoby stoją po trzy w rzędzie.
+        // CI chodzi w oknie 1280 px, więc sprawdzamy wersję tabletową;
+        // telefon (poniżej 768 px) ma zostać jedną kolumną.
+        const siatka = [...document.querySelectorAll("#app .grid")]
+          .find((g) => g.textContent.includes("Dorota"));
+        const kolumn = siatka
+          ? getComputedStyle(siatka).gridTemplateColumns.split(" ").length : 0;
+        sprawdz(innerWidth >= 768 ? "tablet: osoby po trzy w rzędzie" : "telefon: osoby w jednej kolumnie",
+          kolumn === (innerWidth >= 768 ? 3 : 1), `kolumn ${kolumn} przy ${innerWidth} px`);
+
         klik("Dorota"); await czekaj(200);
         sprawdz("osoba z PIN-em prowadzi do klawiatury", widac("Ten profil jest zablokowany"));
 
@@ -455,6 +468,18 @@ const poprzedniMiesiac = (h) => {
           !widac("Ten profil jest zablokowany"),
           (document.getElementById("app").innerText || "").slice(0, 120));
 
+        // Zakładki: na tablecie pasek po LEWEJ (jak panel kierownika), na
+        // telefonie na DOLE. Jeden element <nav>, przestawiany klasami.
+        {
+          const nav = document.querySelector("#app nav").getBoundingClientRect();
+          const tresc = document.querySelector("#app main").getBoundingClientRect();
+          sprawdz(innerWidth >= 768 ? "tablet: zakładki w pasku po lewej" : "telefon: zakładki na dole",
+            innerWidth >= 768
+              ? nav.right <= tresc.left + 1 && nav.height > nav.width
+              : nav.top >= tresc.bottom - 1,
+            `nav ${Math.round(nav.left)}–${Math.round(nav.right)} × ${Math.round(nav.top)}–${Math.round(nav.bottom)}, main od ${Math.round(tresc.left)}`);
+        }
+
         // --- okno tolerancji wpisu (0.45.0) ---
         //
         // Spóźniony start nie przepada: zmiana zaczyna się TERAZ, a wcześniejsza
@@ -473,11 +498,18 @@ const poprzedniMiesiac = (h) => {
         await czekaj(300);
         sprawdz("formularz mówi z góry, gdzie jest granica",
           widac("Start możesz sam cofnąć najwyżej o 15 min"));
+        // Inna godzina to WIDOCZNY przycisk (0.47.0), nie niewidoczne pole
+        // pod dużą godziną — na iPadzie tamto się nie otwierało.
+        sprawdz("na starcie jest przycisk „Wybierz inną godzinę”",
+          widac("Wybierz inną godzinę") && !document.querySelector('input[type="time"]'));
+        klik("Wybierz inną godzinę"); await czekaj(200);
         const godzinaTemu = new Date(Date.now() - 60 * 60000);
         ustawCzas(document.querySelector('input[type="time"]'), hhmm(godzinaTemu));
         await czekaj(200);
+        sprawdz("przycisk startu mówi, o której zacznie",
+          widac("Rozpocznij zmianę o " + hhmm(godzinaTemu)));
         const przedStartem = window.__zapisy.length;
-        klik("Rozpocznij zmianę"); await czekaj(300);
+        klik("Rozpocznij zmianę o"); await czekaj(300);
         sprawdz("start sprzed godziny: okno zamiast zapisu",
           widac("Za późno na samodzielny wpis") &&
             window.__zapisy.slice(przedStartem).length === 0,
@@ -500,10 +532,16 @@ const poprzedniMiesiac = (h) => {
         // Koniec w przyszłości to nie spóźnienie — tylko wyjaśnienie, nic nie
         // idzie do kierownika.
         const zaGodzine = new Date(Date.now() + 60 * 60000);
-        const poleKonca = [...document.querySelectorAll('input[type="time"]')].pop();
+        sprawdz("na zakończeniu jest przycisk „Wybierz inną godzinę”",
+          widac("Wybierz inną godzinę"));
+        klik("Wybierz inną godzinę"); await czekaj(200);
+        const poleKonca = document.querySelector('input[type="time"]');
         const przedKoncem = window.__zapisy.length;
         ustawCzas(poleKonca, hhmm(zaGodzine));
-        await czekaj(300);
+        await czekaj(200);
+        sprawdz("samo wybranie godziny końca niczego nie zapisuje",
+          window.__zapisy.length === przedKoncem);
+        klik("Zakończ zmianę o " + hhmm(zaGodzine)); await czekaj(300);
         sprawdz("koniec za godzinę: „tej godziny jeszcze nie było”, bez zapisu",
           widac("Tej godziny jeszcze nie było") &&
             window.__zapisy.length === przedKoncem,
