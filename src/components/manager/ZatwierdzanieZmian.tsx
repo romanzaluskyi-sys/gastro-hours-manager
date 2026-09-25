@@ -1,52 +1,127 @@
 // @ts-nocheck
-// Kolejka decyzji kierownika dla issues.type === "correction" (poprawka
-// godzin / "zapomniałem odbić" zgłoszone przez pracownika w Zgłoś). Biржа
-// zmian z Grafiku — świadomie poza zakresem, patrz plan realizacji.
-import React, { useRef, useState } from "react";
+// Zatwierdzanie zmian — ekran "Do decyzji". Wszystko, co czeka na podpis
+// kierownika: osoby na próbę, zmiany z grafiku bez odbicia, zmiany bez
+// zakończenia, giełda, wnioski o wolne i korekty godzin.
+//
+// Układ według makiety właściciela z 2026-09-25 (design system "Shiftro",
+// komponenty ApprovalCard / ApprovalPage / BulkBar / TimeField):
+//   1. JEDNA siatka dla każdej sprawy: zaznaczenie · kto · szczegóły · akcje.
+//      Oko uczy się jednej karty, a nie sześciu.
+//   2. Różnica zamiast dwóch tabel: "Zapisane 09:00–18:00 → Zgłoszone
+//      09:00–18:30 +30 min", zmieniona godzina czerwona.
+//   3. Główny przycisk mówi, co się stanie ("Dopisz 10 h"), i liczy się na
+//      żywo, gdy kierownik poprawia godziny. Stoi zawsze NAJBARDZIEJ Z PRAWEJ.
+//   4. Poprawka bez wychodzenia z listy: "Popraw" otwiera panel pod kartą
+//      (na telefonie — arkusz od dołu), z krokiem ±15 min, szybkimi godzinami
+//      i gotowymi powodami.
+//   5. Proste sprawy hurtem: zaznacz → jeden "Zatwierdź N" w pasku na dole.
+//   6. Każdą decyzję da się COFNĄĆ przez 6 s — patrz "Decyzje odłożone" niżej.
+//
+// ⚠️ Zapis dalej idzie przez te same funkcje co wcześniej (resolveCorrection,
+// rozliczBrakOdbicia, rozliczPorzucona, …) i przez ten sam zamek na refie —
+// nowy wygląd niczego nie zmienia w tym, CO trafia do bazy.
+import React, { useEffect, useRef, useState } from "react";
 import {
   Check,
-  Edit2,
+  X,
+  Pencil,
   HelpCircle,
   AlertCircle,
-  X,
+  AlertTriangle,
+  Info,
   Palmtree,
   ArrowLeftRight,
+  ArrowRight,
   Clock,
   Hourglass,
   UserPlus,
   User,
 } from "lucide-react";
-import { resolveCorrection, askAboutCorrection } from "../../utils/corrections";
+import { resolveCorrection, askAboutCorrection, odrzucKorekte } from "../../utils/corrections";
 import { countWorkdays, URLOP_HOURS_PER_DAY } from "../../utils/absences";
-import { trimTime, shiftHours, toLocalYMD } from "../../utils/grafik";
+import { trimTime, shiftHours, toLocalYMD, publishedShiftsFor } from "../../utils/grafik";
 import { monthPlanHours, typWymiany, wzajemnaZmiana } from "../../utils/swaps";
-import { pageTitleCls, statLabelCls, btnPrimaryCls, btnSecondaryCls } from "./designTokens";
+import { zmianyBezOdbicia, rozliczBrakOdbicia } from "../../utils/odbicia";
+import { zmianyPorzucone, rozliczPorzucona } from "../../utils/porzucone";
+import { czekaNaKoniecOdKierownika } from "../../utils/wpisy";
+import {
+  probniDoDecyzji,
+  zatwierdzProbnego,
+  odrzucProbnego,
+  godzinyProbnego,
+} from "../../utils/probni";
+import { pageTitleCls } from "./designTokens";
 
-const fmtPLAbs = (dateStr) =>
-  dateStr
-    ? new Date(dateStr + "T00:00:00").toLocaleDateString("pl-PL", {
+// ---------------------------------------------------------------------------
+// Czas i daty
+// ---------------------------------------------------------------------------
+const pad = (n) => String(n).padStart(2, "0");
+
+const fmtHHMM = (d) => (d ? `${pad(d.getHours())}:${pad(d.getMinutes())}` : "");
+
+// "11:00", "11.00", "1100", "930" → minuty od północy; cokolwiek innego → null.
+// Kierownik wpisuje godzinę z klawiatury telefonu, na której dwukropek jest
+// trzy dotknięcia dalej.
+const naMin = (tekst) => {
+  const s = String(tekst || "").trim().replace(".", ":");
+  let m = /^(\d{1,2}):(\d{2})$/.exec(s);
+  if (!m) m = /^(\d{1,2})(\d{2})$/.exec(s);
+  if (!m) return null;
+  const h = +m[1];
+  const mm = +m[2];
+  return h < 24 && mm < 60 ? h * 60 + mm : null;
+};
+const zMin = (min) => {
+  const x = ((min % 1440) + 1440) % 1440;
+  return `${pad(Math.floor(x / 60))}:${pad(x % 60)}`;
+};
+// Długość zmiany w minutach; koniec przed startem = zmiana przez północ.
+const dlugosc = (od, doG) => {
+  const a = naMin(od);
+  const b = naMin(doG);
+  if (a == null || b == null) return null;
+  const d = b - a;
+  return d <= 0 ? d + 1440 : d;
+};
+const godzTekst = (min) => `${String(Math.round((min / 60) * 100) / 100).replace(".", ",")} h`;
+const roznicaTekst = (min) => {
+  const a = Math.abs(min);
+  return `${min > 0 ? "+" : "−"}${a < 60 ? `${a} min` : godzTekst(a)}`;
+};
+
+const DNI = ["ndz", "pon", "wt", "śr", "czw", "pt", "sob"];
+// "ndz 13.09" — dzień tygodnia mówi kierownikowi więcej niż sama data
+// ("to była niedziela, wtedy zamykamy później").
+const dzienKrotki = (ymd) => {
+  if (!ymd) return "";
+  const d = new Date(`${ymd}T00:00:00`);
+  return `${DNI[d.getDay()]} ${pad(d.getDate())}.${pad(d.getMonth() + 1)}`;
+};
+const fmtPLAbs = (ymd) =>
+  ymd
+    ? new Date(`${ymd}T00:00:00`).toLocaleDateString("pl-PL", {
         day: "2-digit",
         month: "2-digit",
         year: "numeric",
       })
     : "";
-
-const fmtHHMM = (d) =>
-  d
-    ? `${String(d.getHours()).padStart(2, "0")}:${String(
-        d.getMinutes()
-      ).padStart(2, "0")}`
-    : "";
-
-const fmtPL = (dateStr) =>
-  dateStr
-    ? new Date(dateStr + "T00:00:00").toLocaleDateString("pl-PL", {
-        day: "2-digit",
-        month: "2-digit",
-      })
-    : "";
-
-const diffCls = (a, b) => (a !== b ? "text-[#DE3A22] font-bold" : "text-[#171714]");
+const zakresDat = (od, doD) => {
+  if (!od) return "";
+  if (!doD || doD === od) return `${dzienKrotki(od)}.${od.slice(0, 4)}`;
+  const a = new Date(`${od}T00:00:00`);
+  return `${pad(a.getDate())}.${pad(a.getMonth() + 1)} – ${fmtPLAbs(doD)}`;
+};
+const dniOd = (kiedy) => {
+  if (!kiedy) return 0;
+  const d =
+    kiedy instanceof Date
+      ? kiedy
+      : new Date(String(kiedy).length === 10 ? `${kiedy}T00:00:00` : kiedy);
+  return Math.max(0, Math.floor((Date.now() - d.getTime()) / 86400000));
+};
+// Sprawa czekająca tydzień i dłużej dostaje podpis — przed wypłatą stare
+// pozycje giną w kolejce najłatwiej.
+const PROG_CZEKANIA_DNI = 7;
 
 // Podpowiedź godziny zakończenia dla zmiany bez odbitego końca: to, co stało
 // w grafiku. Gdy grafiku nie było, pole zostaje PUSTE — podstawiona "teraz"
@@ -63,97 +138,255 @@ const odKiedyCzeka = (prog, teraz = new Date()) => {
   return dni === 1 ? "wczoraj" : `${dni} dni temu`;
 };
 
-import { zmianyBezOdbicia, rozliczBrakOdbicia } from "../../utils/odbicia";
-import { zmianyPorzucone, rozliczPorzucona } from "../../utils/porzucone";
-import { czekaNaKoniecOdKierownika } from "../../utils/wpisy";
-import {
-  probniDoDecyzji,
-  zatwierdzProbnego,
-  odrzucProbnego,
-  godzinyProbnego,
-} from "../../utils/probni";
+// ---------------------------------------------------------------------------
+// Klasy — wartości z tokenów design systemu "Shiftro" (tokens.json); akcent i
+// neutralne tła jak w reszcie panelu (designTokens.ts).
+// ---------------------------------------------------------------------------
+const btnCls =
+  "inline-flex items-center justify-center gap-2 min-h-[48px] md:min-h-[44px] px-[18px] rounded-lg border-[2px] font-['Archivo'] font-bold text-[15px] leading-5 whitespace-nowrap transition-colors active:translate-y-px disabled:opacity-50 disabled:cursor-not-allowed";
+const btnObrysCls = `${btnCls} border-[#171714] bg-white text-[#171714] hover:bg-[#F6F5F1]`;
+const btnGlownyCls = `${btnCls} border-[#DE3A22] bg-[#DE3A22] text-white hover:bg-[#B8321A] hover:border-[#B8321A]`;
+const btnDuchCls =
+  "inline-flex items-center gap-2 min-h-[36px] px-3 rounded-lg font-['Archivo'] font-bold text-sm text-[#6E6E66] hover:bg-[#F6F5F1] hover:text-[#171714]";
+const etykietaCls = "text-[12px] leading-4 font-bold tracking-[0.06em] uppercase text-[#6E6E66]";
+const wartoscCls = "text-[17px] leading-6 font-bold tabular-nums text-[#171714]";
+const chipCls = (wlaczony) =>
+  `inline-flex items-center h-[34px] px-3 rounded-full border-[1.5px] text-sm font-semibold whitespace-nowrap ${
+    wlaczony
+      ? "border-[#171714] bg-[#171714] text-white"
+      : "border-[#DEDCD4] bg-white text-[#171714] hover:border-[#171714]"
+  }`;
+const tonCls = {
+  warn: "bg-[#FDF0D8] text-[#8A5300]",
+  info: "bg-[#E3EEFB] text-[#1D5FA8]",
+  neutral: "bg-[#ECEBE6] text-[#171714]",
+};
+const tagCls = (ton) =>
+  `inline-flex items-center gap-1.5 h-[26px] px-2.5 rounded-md text-[13px] font-bold whitespace-nowrap ${tonCls[ton]}`;
+const ostrzezenieCls = "text-[13px] font-bold text-[#8A5300] mt-0.5";
 
 // ---------------------------------------------------------------------------
-// Jeden układ dla KAŻDEJ decyzji na tej stronie.
-//
-// Do 0.45.0 każda sekcja miała własny kształt karty: osoby na próbę i braki
-// odbicia miały przyciski w wierszu obok treści, giełda i wnioski — po prawej,
-// korekty — jeszcze inaczej, a kolejność "tak/nie" zmieniała się między
-// sekcjami ("Odrzuć" raz stał przed "Zatwierdź", raz po). Kierownik, który
-// przechodzi przez kolejkę szybko, klika tam, gdzie przycisk stał w
-// poprzedniej karcie — więc układ ma być ten sam wszędzie (prośba właściciela
-// z 2026-09-25): treść po lewej, przyciski W RZĘDZIE po prawej stronie karty
-// (tam jest wolne miejsce), wszystkie tej samej wysokości; na telefonie rząd
-// schodzi pod treść. Zawsze w tej samej kolejności — decyzja "na tak", potem
-// "na nie" albo "popraw", na końcu rzeczy poboczne. (Historia: 0.46.0 miała
-// kolumnę po prawej, potem pasek na dole karty — właściciel chciał rząd, ale
-// w wolnym miejscu po prawej.)
-//
-// ⚠️ Oba komponenty stoją na poziomie modułu, nie w środku ZatwierdzanieZmian
-// — patrz błąd #10 w CLAUDE.md (komponent zdefiniowany w komponencie
-// odmontowuje całe poddrzewo przy każdym renderze rodzica, a z nim pola
-// godzin, w których kierownik akurat pisze).
+// Komponenty na poziomie modułu — NIGDY w środku ZatwierdzanieZmian (błąd #10
+// w CLAUDE.md: komponent zdefiniowany w komponencie remontuje się przy każdym
+// renderze rodzica, a z nim pola godzin, w których kierownik akurat pisze).
 // ---------------------------------------------------------------------------
-// Szerokość: na telefonie przyciski dzielą pasek po równo (flex-1), od `md`
-// mają jedną, stałą szerokość — kilka kart pod sobą ma wtedy przyciski w tych
-// samych miejscach. 150 px, bo stoją OBOK treści: trzy przyciski po 180 px
-// zjadały na tablecie połowę karty. Dłuższy napis ("Nie było zmiany") łamie
-// się w dwie linie, a wysokość wyrównuje sam pasek (flex, items-stretch).
-const przyciskRzadCls = "flex-1 md:flex-none md:w-[150px] flex items-center justify-center gap-1.5 text-center";
-const przyciskTakCls = `${btnPrimaryCls} ${przyciskRzadCls}`;
-const przyciskNieCls = `${btnSecondaryCls} ${przyciskRzadCls}`;
-const przyciskBocznyCls =
-  `${przyciskRzadCls} px-4 py-2.5 rounded border-[2px] border-[#B7B6AE] bg-white text-[#6E6E66] font-['Archivo'] font-bold text-sm hover:border-[#171714] hover:text-[#171714] disabled:opacity-50`;
-const poleGodzinyCls = "p-2 border-[2px] border-[#171714] rounded";
 
-function Sekcja({ Icon, tytul, liczba, opis, akcja, children }) {
+// Pole godziny: wpisz "18:30" albo przesuń o ±15 min. Zmienione względem
+// zapisu robi się bursztynowe — widać, który koniec zmiany ruszono.
+function PoleCzasu({ value, onChange, zmienione = false, bazowa = "", aria }) {
+  const [tekst, setTekst] = useState(value || "");
+  useEffect(() => setTekst(value || ""), [value]);
+  const zatwierdz = () => {
+    const m = naMin(tekst);
+    if (m != null) onChange(zMin(m));
+    else setTekst(value || "");
+  };
+  const krok = (d) => {
+    const m = naMin(value) ?? naMin(bazowa) ?? 0;
+    onChange(zMin(m + d));
+  };
+  const przyciskCls =
+    "w-[34px] flex-shrink-0 text-[#6E6E66] text-lg font-bold hover:bg-[#F6F5F1] hover:text-[#171714]";
   return (
-    <section className="mb-8">
-      <div className="flex items-center justify-between gap-3 flex-wrap mb-1">
-        <h3 className="font-['Archivo'] font-extrabold text-lg flex items-center gap-2">
-          <Icon size={18} /> {tytul} · {liczba}
-        </h3>
-        {akcja}
+    <span
+      className={`inline-flex items-stretch h-11 border-[2px] rounded-md overflow-hidden focus-within:ring-[3px] focus-within:ring-[#DE3A22] focus-within:ring-offset-2 ${
+        zmienione ? "border-[#8A5300] bg-[#FDF0D8]" : "border-[#171714] bg-white"
+      }`}
+    >
+      <button type="button" onClick={() => krok(-15)} aria-label="−15 min" className={przyciskCls}>
+        −
+      </button>
+      <input
+        value={tekst}
+        onChange={(e) => setTekst(e.target.value)}
+        onBlur={zatwierdz}
+        onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+        inputMode="numeric"
+        placeholder="--:--"
+        aria-label={aria}
+        className="w-16 min-w-0 bg-transparent text-center text-[17px] font-bold tabular-nums outline-none text-[#171714]"
+      />
+      <button type="button" onClick={() => krok(15)} aria-label="+15 min" className={przyciskCls}>
+        +
+      </button>
+    </span>
+  );
+}
+
+function Kv({ etykieta, children }) {
+  return (
+    <div className="flex flex-col gap-0.5 min-w-0">
+      <span className={etykietaCls}>{etykieta}</span>
+      <span className={wartoscCls}>{children}</span>
+    </div>
+  );
+}
+
+function Czeka({ dni }) {
+  return dni >= PROG_CZEKANIA_DNI ? <p className={ostrzezenieCls}>Czeka {dni} dni</p> : null;
+}
+
+function Zaznaczenie({ zaznaczone, onZmiana, dostepne, kto }) {
+  return (
+    <label
+      className={`relative w-11 h-11 -m-2.5 inline-flex items-center justify-center flex-shrink-0 ${
+        dostepne ? "cursor-pointer" : "opacity-30 cursor-not-allowed"
+      }`}
+    >
+      <input
+        type="checkbox"
+        className="peer absolute inset-0 opacity-0 m-0 cursor-pointer disabled:cursor-not-allowed"
+        checked={!!zaznaczone}
+        disabled={!dostepne}
+        onChange={(e) => onZmiana(e.target.checked)}
+        aria-label={`Zaznacz: ${kto}`}
+      />
+      <span
+        className={`w-[22px] h-[22px] border-[2px] rounded-[5px] flex items-center justify-center peer-focus-visible:ring-[3px] peer-focus-visible:ring-[#DE3A22] peer-focus-visible:ring-offset-2 ${
+          zaznaczone ? "bg-[#DE3A22] border-[#DE3A22] text-white" : "bg-white border-[#171714]"
+        }`}
+      >
+        {zaznaczone && <Check size={14} strokeWidth={3} />}
+      </span>
+    </label>
+  );
+}
+
+// Karta jednej sprawy. Na komputerze siatka "zaznaczenie · kto · szczegóły ·
+// akcje"; na telefonie kto na górze, szczegóły w zagłębionym bloku, pod nimi
+// dwa równe przyciski na całą szerokość.
+function Karta({
+  kto,
+  znacznik,
+  meta,
+  ostrzezenia,
+  zaznaczone,
+  onZaznacz,
+  moznaZaznaczyc,
+  szczegoly,
+  akcje,
+  notatka,
+  pod,
+}) {
+  return (
+    <article
+      data-karta
+      className={`rounded-xl border-[2px] border-[#171714] transition-colors ${
+        zaznaczone ? "bg-[#FFF3EF]" : "bg-white"
+      }`}
+    >
+      <div className="grid grid-cols-[24px_minmax(0,1fr)] md:grid-cols-[24px_minmax(170px,210px)_minmax(0,1fr)_auto] items-start md:items-center gap-x-3.5 gap-y-3 md:gap-5 px-4 pt-3.5 pb-4 md:px-5 md:py-[18px]">
+        <Zaznaczenie
+          zaznaczone={zaznaczone}
+          onZmiana={onZaznacz}
+          dostepne={moznaZaznaczyc}
+          kto={kto}
+        />
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="font-['Archivo'] font-bold text-[18px] leading-6 text-[#171714]">{kto}</p>
+            {znacznik}
+          </div>
+          {meta && <p className="text-[14px] leading-5 text-[#6E6E66]">{meta}</p>}
+          {ostrzezenia}
+        </div>
+        <div className="col-span-2 md:col-span-1 flex items-center gap-x-[22px] gap-y-3 flex-wrap min-w-0 bg-[#F6F5F1] md:bg-transparent rounded-lg md:rounded-none p-3 md:p-0">
+          {szczegoly}
+        </div>
+        {akcje && (
+          <div
+            data-przyciski
+            className="col-span-2 md:col-span-1 grid grid-cols-2 md:flex gap-2 md:justify-end md:[&>button]:min-w-[132px]"
+          >
+            {akcje}
+          </div>
+        )}
       </div>
-      {opis && <p className="text-[13px] text-[#6E6E66] mb-3 max-w-[70ch]">{opis}</p>}
-      <div className={`space-y-3 ${opis ? "" : "mt-3"}`}>{children}</div>
+      {notatka && (
+        <p className="px-4 md:pl-[64px] md:pr-5 -mt-1 pb-4 text-sm italic text-[#6E6E66]">„{notatka}”</p>
+      )}
+      {pod}
+    </article>
+  );
+}
+
+function Sekcja({ Icon, tytul, tytulKrotki, liczba, opis, onZaznaczWszystkie, children }) {
+  return (
+    <section className="mt-8 first:mt-0">
+      <div className="flex items-center gap-3 mb-1">
+        <h3 className="font-['Archivo'] font-extrabold text-[20px] leading-[26px] text-[#171714] flex items-center gap-2.5 min-w-0">
+          <Icon size={20} className="flex-shrink-0" />
+          <span className="hidden md:inline">{tytul}</span>
+          <span className="md:hidden">{tytulKrotki}</span>
+          <span className="tabular-nums">· {liczba}</span>
+        </h3>
+        {onZaznaczWszystkie && (
+          <button type="button" onClick={onZaznaczWszystkie} className={`${btnDuchCls} ml-auto`}>
+            <span className="hidden md:inline">Zaznacz wszystkie</span>
+            <span className="md:hidden">Zaznacz</span>
+          </button>
+        )}
+      </div>
+      {opis && <p className="mb-3 text-[14px] text-[#6E6E66] max-w-[640px]">{opis}</p>}
+      <div className="space-y-3">{children}</div>
     </section>
   );
 }
 
-function KartaDecyzji({ naglowek, znacznik, podtytul, meta, zaznaczenie, children, przyciski, stopka }) {
-  return (
-    <div className="bg-white rounded-xl border-[2px] border-[#171714] p-4">
-      <div className="flex flex-col md:flex-row md:items-start gap-4">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start gap-3">
-            {zaznaczenie}
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <p className="font-['Archivo'] font-extrabold text-[16px] text-[#171714]">
-                  {naglowek}
-                </p>
-                {znacznik}
-              </div>
-              {podtytul && <p className="text-[13px] text-[#6E6E66]">{podtytul}</p>}
-              {meta && <p className="text-[12px] text-[#8F8E86] mt-0.5">{meta}</p>}
-            </div>
-          </div>
-          {children && <div className="mt-3">{children}</div>}
-        </div>
-        {przyciski && (
-          <div
-            data-przyciski
-            className="flex items-stretch gap-2 flex-shrink-0 pt-3 border-t-[2px] border-[#E7E7E2] md:pt-0 md:border-t-0"
-          >
-            {przyciski}
-          </div>
-        )}
-      </div>
-      {stopka}
-    </div>
-  );
-}
+const GRUPY = [
+  {
+    typ: "probny",
+    Icon: UserPlus,
+    tytul: "Pracownicy na próbę",
+    tab: "Na próbę",
+    opis: "Dodani z Tabletu Służbowego. Odbijają godziny, ale nie ma ich w Grafiku i nie mogą się nigdzie zalogować, dopóki nie zdecydujesz.",
+  },
+  {
+    typ: "odbicie",
+    Icon: Clock,
+    tytul: "Był w grafiku, nie odbił",
+    tab: "Brak odbicia",
+    opis: "Zwykle zapomniany tablet. Sprawdź godziny i dopisz — bez decyzji nie trafią na wypłatę.",
+  },
+  {
+    typ: "porzucona",
+    Icon: Hourglass,
+    tytul: "Zmiany bez zakończenia",
+    tab: "Bez końca",
+    opis: "Ktoś odbił start i wyszedł bez odbicia końca. Godzin nie zgadujemy — do Twojej decyzji liczą się jako zero.",
+  },
+  {
+    typ: "gielda",
+    Icon: ArrowLeftRight,
+    tytul: "Giełda zmian",
+    tab: "Giełda",
+    opis: "Pracownicy sami uzgodnili przejęcie albo zamianę zmiany. Ostatnie słowo należy do Ciebie.",
+  },
+  {
+    typ: "wolne",
+    Icon: Palmtree,
+    tytul: "Wnioski o wolne",
+    tab: "Wolne",
+    opis: "Urlop dopisuje 8 h za każdy dzień roboczy. Niedostępność tylko blokuje termin w Grafiku.",
+  },
+  {
+    typ: "korekta",
+    Icon: Pencil,
+    tytul: "Korekty godzin",
+    tab: "Korekty",
+    opis: "Pracownik prosi o zmianę zapisanych godzin. Na czerwono — co się zmienia.",
+  },
+];
+
+const POWODY = [
+  "Potwierdzone z kierownikiem zmiany",
+  "Zamknięcie kasy",
+  "Zgodnie z monitoringiem",
+];
+
+// Po ilu milisekundach decyzja trafia do bazy. Do tego czasu karta jest tylko
+// schowana i "Cofnij" przywraca ją bez żadnego zapisu.
+const CZAS_NA_COFNIECIE_MS = 6000;
 
 export default function ZatwierdzanieZmian({
   currentUser,
@@ -177,6 +410,7 @@ export default function ZatwierdzanieZmian({
   pendingSwaps = [],
   planShifts = [],
   onResolveSwap,
+  zakres = "Cała sieć",
   showMsg,
 }) {
   // ⚠️ Zamek na REF, nie na stanie. Wszystkie decyzje na tej stronie pilnował
@@ -197,23 +431,18 @@ export default function ZatwierdzanieZmian({
   };
   const zwolnij = (klucz) => wTrakcie.current.delete(klucz);
 
-  const [selected, setSelected] = useState({});
-  const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const [absenceBusyId, setAbsenceBusyId] = useState(null);
-  const [swapBusyId, setSwapBusyId] = useState(null);
-  const [odbicieBusyId, setOdbicieBusyId] = useState(null);
-  // Poprawione godziny dla pozycji "był w grafiku, nie odbił" — trzymamy je
-  // per pozycja, bo kierownik potrafi poprawiać kilka naraz.
+  const [filtr, setFiltr] = useState("all");
+  const [zaznaczone, setZaznaczone] = useState({});
+  // Poprawione godziny per pozycja — kierownik potrafi poprawiać kilka naraz.
   const [odbicieGodziny, setOdbicieGodziny] = useState({});
-
-  const [porzuconeBusyId, setPorzuconeBusyId] = useState(null);
-  // Godzina zakończenia wpisywana per pozycja — kierownik potrafi rozliczać
-  // kilka naraz, tak samo jak przy brakach odbicia.
   const [porzuconeGodziny, setPorzuconeGodziny] = useState({});
-  const [probnyBusyId, setProbnyBusyId] = useState(null);
+  // Otwarty panel "Popraw" korekty: { id, date, lokal, stanowisko, start,
+  // end, reason, miejsce (czy pokazać datę/lokal/stanowisko) }.
+  const [edycja, setEdycja] = useState(null);
 
+  // -------------------------------------------------------------------------
+  // Listy spraw
+  // -------------------------------------------------------------------------
   const brakiOdbicia = zmianyBezOdbicia({
     planShifts,
     shifts,
@@ -235,893 +464,1175 @@ export default function ZatwierdzanieZmian({
 
   const probni = probniDoDecyzji({ users, lokalOk: hasAccessToLokal });
 
-  const rozliczZmiane = async (poz, decyzja) => {
+  const rows = issues
+    .filter((iss) => iss.type === "correction" && iss.status === "nowe")
+    .map((iss) => {
+      const existingShift = iss.shift_id ? shifts.find((s) => s.id === iss.shift_id) : null;
+      const lokal = existingShift ? existingShift.lokal : iss.proposed_lokal;
+      return { issue: iss, existingShift, lokal };
+    })
+    .filter((r) => hasAccessToLokal(r.lokal))
+    .sort((a, b) => new Date(a.issue.created_at) - new Date(b.issue.created_at));
+
+  // Ta sama prośba wysłana dwa razy (podwójne dotknięcie na tablecie, dwa
+  // urządzenia). Pierwsza zostaje zwykłą korektą, każda następna dostaje
+  // ostrzeżenie i "Odrzuć duplikat" zamiast "Popraw" — zatwierdzone obie
+  // dałyby dwa razy te same godziny.
+  const odciskKorekty = (iss) =>
+    [
+      iss.user_id,
+      iss.proposed_date,
+      iss.proposed_start_time,
+      iss.proposed_end_time || "",
+      iss.shift_id || "",
+    ].join("|");
+  const duplikaty = new Set();
+  {
+    const widziane = new Set();
+    for (const r of rows) {
+      const k = odciskKorekty(r.issue);
+      if (widziane.has(k)) duplikaty.add(r.issue.id);
+      widziane.add(k);
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Zapisy — te same funkcje co przed nowym wyglądem. Komunikat sukcesu
+  // wypadł (o decyzji mówi pasek "Cofnij"); zostają komunikaty BŁĘDÓW, bo
+  // przychodzą po zniknięciu paska, kiedy karta wraca na listę.
+  // -------------------------------------------------------------------------
+  const rozliczZmiane = async (poz, decyzja, koniec) => {
     if (!zajmij(`porzucona:${poz.shift.id}`)) return;
-    setPorzuconeBusyId(poz.shift.id);
     try {
       await rozliczPorzucona({
         shift: poz.shift,
         decyzja,
-        end: porzuconeGodziny[poz.shift.id] ?? domyslnyKoniec(poz),
+        end: koniec,
         kto: currentUser.name,
         shifts,
         setShifts,
       });
-      showMsg(
-        decyzja === "zapisano" ? "Godziny zapisane" : "Zmiana odrzucona — bez godzin"
-      );
     } catch (e) {
-      showMsg(e.message || "Błąd zapisu", "error");
+      showMsg(`${poz.shift.user_name}: ${e.message || "błąd zapisu"}`, "error");
     }
     zwolnij(`porzucona:${poz.shift.id}`);
-    setPorzuconeBusyId(null);
   };
 
   const decyzjaOProbnym = async (user, decyzja) => {
     if (!zajmij(`probny:${user.id}`)) return;
-    setProbnyBusyId(user.id);
     try {
       const zapisany =
-        decyzja === "zatwierdzony"
-          ? await zatwierdzProbnego(user)
-          : await odrzucProbnego(user);
+        decyzja === "zatwierdzony" ? await zatwierdzProbnego(user) : await odrzucProbnego(user);
       setUsers((prev) => prev.map((u) => (u.id === zapisany.id ? zapisany : u)));
-      showMsg(
-        decyzja === "zatwierdzony"
-          ? `${user.name} jest już zwykłym pracownikiem — uzupełnij kartę.`
-          : `${user.name} odrzucony(-a). Konto poszło do archiwum, godziny zostają.`
-      );
     } catch (e) {
-      showMsg(`Błąd zapisu: ${e.message || "nieznany błąd"}`, "error");
+      showMsg(`${user.name}: ${e.message || "błąd zapisu"}`, "error");
     }
     zwolnij(`probny:${user.id}`);
-    setProbnyBusyId(null);
   };
 
-  const rozliczOdbicie = async (poz, decyzja) => {
+  const rozliczOdbicie = async (poz, decyzja, godziny) => {
     if (!zajmij(`odbicie:${poz.plan.id}`)) return;
-    setOdbicieBusyId(poz.plan.id);
     try {
-      const g = odbicieGodziny[poz.plan.id] || {};
       await rozliczBrakOdbicia({
         plan: poz.plan,
         user: poz.user,
         decyzja,
-        start: g.start,
-        end: g.end,
+        start: godziny.start,
+        end: godziny.end,
         kto: currentUser.name,
         shifts,
         setShifts,
         planShifts,
         setPlanShifts,
       });
-      showMsg(
-        decyzja === "zapisano" ? "Zmiana dopisana do godzin" : "Pozycja odrzucona",
-        "success"
-      );
     } catch (e) {
-      showMsg(e.message || "Błąd zapisu", "error");
+      showMsg(`${poz.user.name}: ${e.message || "błąd zapisu"}`, "error");
     }
     zwolnij(`odbicie:${poz.plan.id}`);
-    setOdbicieBusyId(null);
   };
 
-  const rows = issues
-    .filter((iss) => iss.type === "correction" && iss.status === "nowe")
-    .map((iss) => {
-      const existingShift = iss.shift_id
-        ? shifts.find((s) => s.id === iss.shift_id)
-        : null;
-      const lokal = existingShift ? existingShift.lokal : iss.proposed_lokal;
-      return { issue: iss, existingShift, lokal };
-    })
-    .filter((r) => hasAccessToLokal(r.lokal))
-    .sort(
-      (a, b) => new Date(a.issue.created_at) - new Date(b.issue.created_at)
-    );
-
   const onSaved = (issueId, { shift, shiftEdit }) => {
-    setIssues(
-      issues.map((iss) =>
-        iss.id === issueId ? { ...iss, status: "rozwiazane" } : iss
-      )
+    setIssues((prev) =>
+      prev.map((iss) => (iss.id === issueId ? { ...iss, status: "rozwiazane" } : iss))
     );
     setShifts((prev) => {
       const exists = prev.some((s) => s.id === shift.id);
-      return exists
-        ? prev.map((s) => (s.id === shift.id ? shift : s))
-        : [...prev, shift];
+      return exists ? prev.map((s) => (s.id === shift.id ? shift : s)) : [...prev, shift];
     });
     // shiftEdit bywa pusty, gdy wiersz godzin już istniał i nie tworzyliśmy
     // go drugi raz — patrz znajdzKolizjeWBazie w utils/corrections.ts.
     if (shiftEdit) setShiftEdits((prev) => [...prev, shiftEdit]);
   };
 
-  const handleZatwierdz = async (row) => {
+  // `wartosci` i `powod` przychodzą z chwili decyzji — zapis rusza 6 s
+  // później, kiedy panel "Popraw" jest już zamknięty.
+  const zapiszKorekte = async (row, wartosci, powod) => {
     if (!zajmij(`korekta:${row.issue.id}`)) return;
-    setBusy(true);
     try {
       const saved = await resolveCorrection({
         issue: row.issue,
         shifts,
         editorName: currentUser.name,
-        finalValues: {
+        finalValues: wartosci || {
           date: row.issue.proposed_date,
           lokal: row.issue.proposed_lokal,
           stanowisko: row.issue.proposed_stanowisko,
           start: row.issue.proposed_start_time,
           end: row.issue.proposed_end_time,
         },
+        reason: powod || undefined,
       });
       onSaved(row.issue.id, saved);
-      showMsg("Zmiana zatwierdzona!");
     } catch (err) {
-      showMsg(`Błąd zatwierdzania: ${err.message || "nieznany błąd"}`, "error");
+      showMsg(`${row.issue.user_name}: ${err.message || "błąd zatwierdzania"}`, "error");
     }
     zwolnij(`korekta:${row.issue.id}`);
-    setBusy(false);
   };
 
-  const handleZatwierdzWybrane = async () => {
-    const toApprove = rows.filter((r) => selected[r.issue.id]);
-    if (toApprove.length === 0) return;
-    setBusy(true);
-    for (const row of toApprove) {
-      try {
-        const saved = await resolveCorrection({
-          issue: row.issue,
-          shifts,
-          editorName: currentUser.name,
-          finalValues: {
-            date: row.issue.proposed_date,
-            lokal: row.issue.proposed_lokal,
-            stanowisko: row.issue.proposed_stanowisko,
-            start: row.issue.proposed_start_time,
-            end: row.issue.proposed_end_time,
-          },
-        });
-        onSaved(row.issue.id, saved);
-      } catch (err) {
-        showMsg(
-          `Błąd przy ${row.issue.user_name}: ${err.message || "nieznany błąd"}`,
-          "error"
-        );
-      }
-    }
-    setSelected({});
-    setBusy(false);
-    showMsg("Wybrane zmiany zatwierdzone!");
-  };
-
-  const openPopraw = (row) => {
-    setEditingId(row.issue.id);
-    setEditForm({
-      date: row.issue.proposed_date || "",
-      lokal: row.issue.proposed_lokal || row.lokal || availableLokale[0]?.name || "",
-      stanowisko: row.issue.proposed_stanowisko || "",
-      start: row.issue.proposed_start_time || "",
-      // Prośba o sam start (wpis poza oknem tolerancji) nie ma końca — koniec
-      // zostaje taki, jaki jest w zmianie, więc od niego zaczynamy.
-      end:
-        row.issue.proposed_end_time ||
-        (row.existingShift && row.existingShift.end_time
-          ? fmtHHMM(row.existingShift.end_time)
-          : ""),
-      reason: "",
-    });
-  };
-
-  const handleZapiszIZatwierdz = async (row) => {
-    if (!editForm.reason.trim()) {
-      return showMsg("Podaj powód korekty — pracownik go zobaczy.", "error");
-    }
+  const odrzucDuplikat = async (row) => {
     if (!zajmij(`korekta:${row.issue.id}`)) return;
-    setBusy(true);
     try {
-      const saved = await resolveCorrection({
-        issue: row.issue,
-        shifts,
-        editorName: currentUser.name,
-        finalValues: editForm,
-        reason: editForm.reason.trim(),
-      });
-      onSaved(row.issue.id, saved);
-      setEditingId(null);
-      setEditForm(null);
-      showMsg("Zmiana poprawiona i zatwierdzona!");
+      await odrzucKorekte(row.issue);
+      setIssues((prev) =>
+        prev.map((iss) => (iss.id === row.issue.id ? { ...iss, status: "rozwiazane" } : iss))
+      );
     } catch (err) {
-      showMsg(`Błąd zapisu: ${err.message || "nieznany błąd"}`, "error");
+      showMsg(`${row.issue.user_name}: ${err.message || "błąd zapisu"}`, "error");
     }
     zwolnij(`korekta:${row.issue.id}`);
-    setBusy(false);
   };
 
   const handleZapytaj = async (row) => {
-    setBusy(true);
     try {
       await askAboutCorrection(row.issue, currentUser.name);
-      showMsg("Wysłano pytanie do pracownika.");
+      showMsg(`Wysłano pytanie do: ${row.issue.user_name}.`);
     } catch (err) {
       showMsg("Błąd wysyłki pytania.", "error");
     }
-    setBusy(false);
   };
 
-  const selectedCount = Object.values(selected).filter(Boolean).length;
-
-  const handleAbsenceDecision = async (absence, decision) => {
-    setAbsenceBusyId(absence.id);
+  const decyzjaOWolnym = async (absence, decision) => {
     try {
       await onResolveAbsence(absence, decision);
-      showMsg(decision === "approved" ? "Wniosek zatwierdzony!" : "Wniosek odrzucony.");
     } catch (err) {
-      showMsg(`Błąd zapisu: ${err.message || "nieznany błąd"}`, "error");
+      showMsg(`${absence.user_name}: ${err.message || "błąd zapisu"}`, "error");
     }
-    setAbsenceBusyId(null);
   };
 
-  const handleSwapDecision = async (swap, decision) => {
-    setSwapBusyId(swap.id);
+  const decyzjaOGieldzie = async (swap, decision) => {
     await onResolveSwap(swap, decision);
-    setSwapBusyId(null);
   };
 
-  const lacznie =
-    probni.length +
-    brakiOdbicia.length +
-    porzucone.length +
-    pendingSwaps.length +
-    pendingAbsences.length +
-    rows.length;
+  // -------------------------------------------------------------------------
+  // Decyzje odłożone o 6 s ("Cofnij").
+  //
+  // Karta znika od razu, ale zapis rusza dopiero po CZAS_NA_COFNIECIE_MS.
+  // "Cofnij" w tym czasie po prostu anuluje zapis — nic w bazie nie trzeba
+  // odkręcać. Najgorszy przypadek (przeglądarka zamknięta w tych 6 s mimo
+  // pytania) zostawia sprawę w kolejce, czyli tam, gdzie była — bezpieczniej
+  // niż zapis, którego nie dałoby się cofnąć.
+  //
+  // ⚠️ Zapis woła funkcję z NAJNOWSZEGO renderu (akcjeRef), a nie z chwili
+  // kliknięcia: w ciągu 6 s poll potrafi podmienić `shifts`, a funkcja ze
+  // starą listą nadpisałaby w stanie świeże wiersze starymi.
+  // -------------------------------------------------------------------------
+  const akcjeRef = useRef({});
+  akcjeRef.current = {
+    rozliczZmiane,
+    decyzjaOProbnym,
+    rozliczOdbicie,
+    zapiszKorekte,
+    odrzucDuplikat,
+    decyzjaOWolnym,
+    decyzjaOGieldzie,
+  };
+  const kolejka = useRef([]);
+  const [odlozone, setOdlozone] = useState({});
+  const [toast, setToast] = useState(null);
+
+  const wykonajPartie = async (partia) => {
+    const i = kolejka.current.indexOf(partia);
+    if (i < 0) return;
+    kolejka.current.splice(i, 1);
+    clearTimeout(partia.timer);
+    setToast((t) => (t && t.partia === partia ? null : t));
+    for (const [nazwa, args] of partia.zadania) {
+      await akcjeRef.current[nazwa](...args);
+    }
+    setOdlozone((prev) => {
+      const n = { ...prev };
+      partia.klucze.forEach((k) => delete n[k]);
+      return n;
+    });
+  };
+
+  // pozycje: [{ klucz, zadanie: [nazwaFunkcji, argumenty] }]
+  const decyduj = (pozycje, opis) => {
+    if (!pozycje.length) return;
+    const partia = {
+      klucze: pozycje.map((p) => p.klucz),
+      zadania: pozycje.map((p) => p.zadanie),
+    };
+    partia.timer = setTimeout(() => wykonajPartie(partia), CZAS_NA_COFNIECIE_MS);
+    kolejka.current.push(partia);
+    setOdlozone((prev) => {
+      const n = { ...prev };
+      partia.klucze.forEach((k) => (n[k] = true));
+      return n;
+    });
+    setZaznaczone((prev) => {
+      const n = { ...prev };
+      partia.klucze.forEach((k) => delete n[k]);
+      return n;
+    });
+    setToast({ partia, opis });
+  };
+
+  const cofnij = () => {
+    const partia = toast?.partia;
+    if (!partia) return;
+    clearTimeout(partia.timer);
+    kolejka.current = kolejka.current.filter((p) => p !== partia);
+    setOdlozone((prev) => {
+      const n = { ...prev };
+      partia.klucze.forEach((k) => delete n[k]);
+      return n;
+    });
+    setToast(null);
+  };
+
+  // Wyjście z zakładki nie może zgubić decyzji: wszystko, co czeka, idzie do
+  // bazy od razu. Zamknięcie karty przeglądarki w tych 6 s pyta o
+  // potwierdzenie — bez pytania zapis nie zdążyłby wyjść.
+  useEffect(() => {
+    const przyWyjsciu = (e) => {
+      if (!kolejka.current.length) return;
+      kolejka.current.slice().forEach((p) => wykonajPartie(p));
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", przyWyjsciu);
+    return () => {
+      window.removeEventListener("beforeunload", przyWyjsciu);
+      kolejka.current.slice().forEach((p) => wykonajPartie(p));
+    };
+  }, []);
+
+  // -------------------------------------------------------------------------
+  // Sprawy w jednym kształcie: { klucz, typ, kto, wiek, tak, opisTak, karta }.
+  // `tak` = zatwierdzenie (to samo robi "Zatwierdź N" w pasku zaznaczenia);
+  // null, gdy tej sprawy nie da się zatwierdzić bez dodatkowej decyzji.
+  // -------------------------------------------------------------------------
+  const sprawy = [];
+
+  // --- Pracownicy na próbę ---
+  for (const u of probni) {
+    const klucz = `probny:${u.id}`;
+    const godziny = godzinyProbnego(shifts, u);
+    const tak = { klucz, zadanie: ["decyzjaOProbnym", [u, "zatwierdzony"]] };
+    sprawy.push({
+      klucz,
+      typ: "probny",
+      kto: u.name,
+      wiek: dniOd(u.probny_od),
+      tak,
+      opisTak: `Zatwierdzono: ${u.name}`,
+      karta: (z, onZ) => (
+        <Karta
+          key={klucz}
+          kto={u.name}
+          meta={[u.default_lokal, u.default_stanowisko, u.probny_od ? `od ${dzienKrotki(u.probny_od)}` : ""]
+            .filter(Boolean)
+            .join(" · ")}
+          ostrzezenia={
+            <>
+              <Czeka dni={dniOd(u.probny_od)} />
+              {u.probny_przez && (
+                <p className="text-[12px] text-[#8F8E86] mt-0.5">dodany(-a) na tablecie: {u.probny_przez}</p>
+              )}
+              {onOpenEmployee && (
+                <button
+                  type="button"
+                  onClick={() => onOpenEmployee(u.id)}
+                  className="mt-1 inline-flex items-center gap-1 text-[13px] font-bold text-[#6E6E66] underline underline-offset-[3px] hover:text-[#171714]"
+                >
+                  <User size={13} /> Otwórz kartę
+                </button>
+              )}
+            </>
+          }
+          zaznaczone={z}
+          onZaznacz={onZ}
+          moznaZaznaczyc
+          szczegoly={
+            // Liczba godzin jest tu najważniejsza: od niej zależy, czy
+            // odrzucenie kogokolwiek kosztuje pieniądze.
+            <Kv etykieta="Odbite godziny">
+              <span className={tagCls(godziny > 0 ? "warn" : "neutral")}>
+                {godziny > 0 ? `${godziny.toFixed(1).replace(".", ",")} h` : "bez godzin"}
+              </span>
+            </Kv>
+          }
+          akcje={
+            <>
+              <button
+                type="button"
+                className={btnObrysCls}
+                onClick={() =>
+                  decyduj(
+                    [{ klucz, zadanie: ["decyzjaOProbnym", [u, "odrzucony"]] }],
+                    `Odrzucono: ${u.name} — konto w archiwum, godziny zostają`
+                  )
+                }
+              >
+                <X size={18} /> Odrzuć
+              </button>
+              <button
+                type="button"
+                className={btnGlownyCls}
+                onClick={() => decyduj([tak], `Zatwierdzono: ${u.name} — uzupełnij kartę`)}
+              >
+                <Check size={18} /> Zatwierdź
+              </button>
+            </>
+          }
+        />
+      ),
+    });
+  }
+
+  // --- Był w grafiku, nie odbił ---
+  for (const poz of brakiOdbicia) {
+    const klucz = `odbicie:${poz.plan.id}`;
+    const planOd = trimTime(poz.plan.start_time);
+    const planDo = trimTime(poz.plan.end_time);
+    const g = odbicieGodziny[poz.plan.id] || {};
+    const od = g.start ?? planOd;
+    const doG = g.end ?? planDo;
+    const min = dlugosc(od, doG);
+    const ustaw = (pole, v) =>
+      setOdbicieGodziny((prev) => ({
+        ...prev,
+        [poz.plan.id]: { ...(prev[poz.plan.id] || {}), [pole]: v },
+      }));
+    const tak =
+      min != null
+        ? { klucz, zadanie: ["rozliczOdbicie", [poz, "zapisano", { start: od, end: doG }]] }
+        : null;
+    sprawy.push({
+      klucz,
+      typ: "odbicie",
+      kto: poz.user.name,
+      wiek: dniOd(poz.plan.date),
+      tak,
+      opisTak: `Dopisano: ${poz.user.name} · ${dzienKrotki(poz.plan.date)}`,
+      karta: (z, onZ) => (
+        <Karta
+          key={klucz}
+          kto={poz.user.name}
+          meta={[poz.plan.lokal, poz.plan.stanowisko].filter(Boolean).join(" · ")}
+          ostrzezenia={<Czeka dni={dniOd(poz.plan.date)} />}
+          zaznaczone={z}
+          onZaznacz={onZ}
+          moznaZaznaczyc={!!tak}
+          szczegoly={
+            <>
+              <Kv etykieta="Dzień">{dzienKrotki(poz.plan.date)}</Kv>
+              <div className="flex flex-col gap-1.5">
+                <span className={etykietaCls}>Godziny do dopisania</span>
+                <span className="inline-flex items-center gap-2 flex-wrap">
+                  <PoleCzasu value={od} onChange={(v) => ustaw("start", v)} zmienione={od !== planOd} aria="Wejście" />
+                  <span className="text-[#6E6E66] font-bold">–</span>
+                  <PoleCzasu value={doG} onChange={(v) => ustaw("end", v)} zmienione={doG !== planDo} aria="Wyjście" />
+                </span>
+              </div>
+            </>
+          }
+          akcje={
+            <>
+              <button
+                type="button"
+                className={btnObrysCls}
+                onClick={() =>
+                  decyduj(
+                    [{ klucz, zadanie: ["rozliczOdbicie", [poz, "odrzucono", {}]] }],
+                    `Oznaczono „nie było zmiany”: ${poz.user.name}`
+                  )
+                }
+              >
+                <X size={18} className="hidden md:block" /> Nie było zmiany
+              </button>
+              <button
+                type="button"
+                className={btnGlownyCls}
+                disabled={!tak}
+                onClick={() =>
+                  decyduj([tak], `Dopisano ${godzTekst(min)}: ${poz.user.name} · ${dzienKrotki(poz.plan.date)}`)
+                }
+              >
+                <Check size={18} /> Dopisz {min != null ? godzTekst(min) : ""}
+              </button>
+            </>
+          }
+        />
+      ),
+    });
+  }
+
+  // --- Zmiany bez zakończenia ---
+  for (const poz of porzucone) {
+    const klucz = `porzucona:${poz.shift.id}`;
+    const start = fmtHHMM(poz.shift.start_time);
+    const koniec = porzuconeGodziny[poz.shift.id] ?? domyslnyKoniec(poz);
+    const min = koniec ? dlugosc(start, koniec) : null;
+    const tak = min != null ? { klucz, zadanie: ["rozliczZmiane", [poz, "zapisano", koniec]] } : null;
+    const dzien = toLocalYMD(poz.shift.start_time);
+    sprawy.push({
+      klucz,
+      typ: "porzucona",
+      kto: poz.shift.user_name,
+      wiek: dniOd(poz.prog),
+      tak,
+      opisTak: `Zapisano godziny: ${poz.shift.user_name} · ${dzienKrotki(dzien)}`,
+      karta: (z, onZ) => (
+        <Karta
+          key={klucz}
+          kto={poz.shift.user_name}
+          meta={[poz.shift.lokal, poz.shift.stanowisko].filter(Boolean).join(" · ")}
+          ostrzezenia={
+            <>
+              <Czeka dni={dniOd(poz.prog)} />
+              <p className="text-[12px] text-[#8F8E86] mt-0.5">
+                {poz.powod === "grafik"
+                  ? `wg grafiku do ${fmtHHMM(poz.koniecPlanu)}, minęło ${poz.tolerancja} godz. tolerancji`
+                  : `poza grafikiem, ponad ${poz.maks} godz.`}{" "}
+                · {odKiedyCzeka(poz.prog)}
+              </p>
+            </>
+          }
+          zaznaczone={z}
+          onZaznacz={onZ}
+          moznaZaznaczyc={!!tak}
+          szczegoly={
+            <>
+              <Kv etykieta="Dzień">{dzienKrotki(dzien)}</Kv>
+              <Kv etykieta="Start">{start}</Kv>
+              <div className="flex flex-col gap-1.5">
+                <span className={etykietaCls}>Koniec</span>
+                <PoleCzasu
+                  value={koniec}
+                  bazowa={start}
+                  onChange={(v) => setPorzuconeGodziny((prev) => ({ ...prev, [poz.shift.id]: v }))}
+                  aria="Koniec zmiany"
+                />
+              </div>
+            </>
+          }
+          akcje={
+            <>
+              <button
+                type="button"
+                className={btnObrysCls}
+                onClick={() =>
+                  decyduj(
+                    [{ klucz, zadanie: ["rozliczZmiane", [poz, "odrzucono", null]] }],
+                    `Oznaczono „nie było zmiany”: ${poz.shift.user_name}`
+                  )
+                }
+              >
+                <X size={18} className="hidden md:block" /> Nie było zmiany
+              </button>
+              <button
+                type="button"
+                className={btnGlownyCls}
+                disabled={!tak}
+                onClick={() => decyduj([tak], `Zapisano ${godzTekst(min)}: ${poz.shift.user_name}`)}
+              >
+                <Check size={18} /> {min != null ? `Zapisz ${godzTekst(min)}` : "Podaj koniec"}
+              </button>
+            </>
+          }
+        />
+      ),
+    });
+  }
+
+  // --- Giełda zmian ---
+  for (const sw of pendingSwaps) {
+    const klucz = `gielda:${sw.id}`;
+    const ps = planShifts.find((p) => String(p.id) === String(sw.grafik_shift_id));
+    const typ = typWymiany(sw);
+    const wz = wzajemnaZmiana(sw, planShifts);
+    const moznaZatwierdzic = !!ps && !(typ === "zamiana" && !wz);
+    const tak = moznaZatwierdzic ? { klucz, zadanie: ["decyzjaOGieldzie", [sw, "approve"]] } : null;
+    // Różnica godzin w miesiącu dla obu stron — bez niej nie da się
+    // odpowiedzialnie zdecydować, gdy ktoś pracuje na etat. Przy zamianie każda
+    // strona i bierze, i oddaje; zmiana spoza tego miesiąca liczy się zerem.
+    let strony = [];
+    if (ps) {
+      const mies = ps.date.slice(0, 7);
+      const h = shiftHours(ps);
+      const hw = typ === "zamiana" && wz && wz.date.slice(0, 7) === mies ? shiftHours(wz) : 0;
+      strony = [
+        {
+          osoba: sw.taker_user_name,
+          teraz: monthPlanHours(planShifts, { id: sw.taker_user_id, name: sw.taker_user_name }, mies),
+          delta: h - hw,
+        },
+        {
+          osoba: sw.author_user_name,
+          teraz: monthPlanHours(planShifts, { id: sw.author_user_id, name: sw.author_user_name }, mies),
+          delta: hw - h,
+        },
+      ];
+    }
+    sprawy.push({
+      klucz,
+      typ: "gielda",
+      kto: sw.taker_user_name,
+      wiek: dniOd(sw.created_at),
+      tak,
+      opisTak: `Zatwierdzono giełdę: ${sw.taker_user_name}`,
+      karta: (z, onZ) => (
+        <Karta
+          key={klucz}
+          kto={sw.taker_user_name}
+          znacznik={typ === "oddanie" ? <span className={tagCls("neutral")}>oddane wprost</span> : null}
+          meta={
+            typ === "zamiana"
+              ? `zamienia się z: ${sw.author_user_name}`
+              : `przejmuje od: ${sw.author_user_name}`
+          }
+          ostrzezenia={<Czeka dni={dniOd(sw.created_at)} />}
+          zaznaczone={z}
+          onZaznacz={onZ}
+          moznaZaznaczyc={!!tak}
+          szczegoly={
+            <>
+              <Kv etykieta="Dzień">{ps ? dzienKrotki(ps.date) : dzienKrotki(sw.date)}</Kv>
+              <Kv etykieta="Zmiana">
+                {ps ? `${trimTime(ps.start_time)}–${trimTime(ps.end_time)}` : "już nie istnieje"}
+              </Kv>
+              {ps && <Kv etykieta="Gdzie">{`${ps.stanowisko} · ${ps.lokal}`}</Kv>}
+              {/* Przy zamianie kierownik musi zobaczyć OBIE zmiany — zatwierdza
+                  dwa przepisania naraz, a druga strona jest tak samo wiążąca. */}
+              {typ === "zamiana" && (
+                <Kv etykieta={`W zamian → ${sw.author_user_name}`}>
+                  {wz ? (
+                    `${dzienKrotki(wz.date)} · ${trimTime(wz.start_time)}–${trimTime(wz.end_time)}`
+                  ) : (
+                    <span className="text-[#DE3A22]">druga zmiana już nie istnieje</span>
+                  )}
+                </Kv>
+              )}
+              {strony.length > 0 && (
+                <div className="basis-full flex flex-wrap gap-x-5 gap-y-1 text-[13px] text-[#6E6E66]">
+                  {strony.map((r) => (
+                    <span key={r.osoba} className="tabular-nums">
+                      <span className="font-bold text-[#171714]">{r.osoba}</span>{" "}
+                      {Math.round(r.teraz * 10) / 10} h → {Math.round((r.teraz + r.delta) * 10) / 10} h{" "}
+                      <span className="font-extrabold text-[#171714]">
+                        (
+                        {r.delta === 0
+                          ? "bez zmian"
+                          : `${r.delta > 0 ? "+" : "−"}${Math.round(Math.abs(r.delta) * 10) / 10} h`}
+                        )
+                      </span>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </>
+          }
+          notatka={sw.note}
+          akcje={
+            <>
+              <button
+                type="button"
+                className={btnObrysCls}
+                onClick={() =>
+                  decyduj(
+                    [{ klucz, zadanie: ["decyzjaOGieldzie", [sw, "reject"]] }],
+                    `Odrzucono giełdę: ${sw.taker_user_name}`
+                  )
+                }
+              >
+                <X size={18} /> Odrzuć
+              </button>
+              <button
+                type="button"
+                className={btnGlownyCls}
+                disabled={!tak}
+                onClick={() => decyduj([tak], `Zatwierdzono giełdę: ${sw.taker_user_name}`)}
+              >
+                <Check size={18} /> Zatwierdź
+              </button>
+            </>
+          }
+        />
+      ),
+    });
+  }
+
+  // --- Wnioski o wolne ---
+  for (const a of pendingAbsences) {
+    const klucz = `wolne:${a.id}`;
+    const dniRobocze = countWorkdays(a.start_date, a.end_date);
+    const urlop = a.type === "urlop";
+    const godziny = urlop ? dniRobocze * URLOP_HOURS_PER_DAY : 0;
+    const tak = { klucz, zadanie: ["decyzjaOWolnym", [a, "approved"]] };
+    sprawy.push({
+      klucz,
+      typ: "wolne",
+      kto: a.user_name || "Pracownik",
+      wiek: dniOd(a.created_at),
+      tak,
+      opisTak: `Zatwierdzono wolne: ${a.user_name}`,
+      karta: (z, onZ) => (
+        <Karta
+          key={klucz}
+          kto={a.user_name || "Pracownik"}
+          znacznik={<span className={tagCls(urlop ? "info" : "neutral")}>{urlop ? "Urlop" : "Niedostępność"}</span>}
+          meta={a.lokal}
+          ostrzezenia={<Czeka dni={dniOd(a.created_at)} />}
+          zaznaczone={z}
+          onZaznacz={onZ}
+          moznaZaznaczyc
+          szczegoly={
+            <>
+              <Kv etykieta="Termin">{zakresDat(a.start_date, a.end_date)}</Kv>
+              <Kv etykieta="Dni robocze">{dniRobocze}</Kv>
+              <Kv etykieta="Do godzin">{urlop ? `+${godziny} h` : "—"}</Kv>
+              {!urlop && (
+                <span className={tagCls("neutral")}>
+                  <Info size={15} /> Tylko blokada w Grafiku
+                </span>
+              )}
+            </>
+          }
+          notatka={a.note}
+          akcje={
+            <>
+              <button
+                type="button"
+                className={btnObrysCls}
+                onClick={() =>
+                  decyduj(
+                    [{ klucz, zadanie: ["decyzjaOWolnym", [a, "rejected"]] }],
+                    `Odrzucono wniosek: ${a.user_name}`
+                  )
+                }
+              >
+                <X size={18} /> Odrzuć
+              </button>
+              <button
+                type="button"
+                className={btnGlownyCls}
+                onClick={() => decyduj([tak], `Zatwierdzono wolne: ${a.user_name}`)}
+              >
+                <Check size={18} /> Zatwierdź
+              </button>
+            </>
+          }
+        />
+      ),
+    });
+  }
+
+  // --- Korekty godzin ---
+  for (const row of rows) {
+    const iss = row.issue;
+    const klucz = `korekta:${iss.id}`;
+    const zm = row.existingShift;
+    const zapOd = zm ? fmtHHMM(zm.start_time) : "";
+    const zapDo = zm && zm.end_time ? fmtHHMM(zm.end_time) : "";
+    // Bez proponowanego końca przy ISTNIEJĄCEJ zmianie koniec się nie zmienia
+    // (resolveCorrection go zachowuje) — pokazujemy ten, który jest.
+    const zgOd = iss.proposed_start_time || "";
+    const zgDo = iss.proposed_end_time || zapDo;
+    const minZap = zapOd && zapDo ? dlugosc(zapOd, zapDo) : null;
+    const minZg = zgOd && zgDo ? dlugosc(zgOd, zgDo) : null;
+    const roznica = minZap != null && minZg != null ? minZg - minZap : null;
+    const duplikat = duplikaty.has(iss.id);
+    // Zatwierdzić da się także prośbę bez końca, gdy dotyczy istniejącej
+    // zmiany — koniec zostaje wtedy nietknięty. Nowy wpis bez końca wymaga
+    // pytania do pracownika.
+    const moznaZatwierdzic = !!(iss.proposed_end_time || zm) && !duplikat;
+    const tak = moznaZatwierdzic ? { klucz, zadanie: ["zapiszKorekte", [row, null, null]] } : null;
+    // Grafik tego dnia (jeśli był) — pod szybką godziną "Jak w grafiku".
+    const zGrafiku = publishedShiftsFor(planShifts, { id: iss.user_id, name: iss.user_name }).find(
+      (p) => p.date === iss.proposed_date && (!row.lokal || p.lokal === row.lokal)
+    );
+    const otwarta = edycja && edycja.id === iss.id;
+
+    const otworzEdycje = () =>
+      setEdycja({
+        id: iss.id,
+        date: iss.proposed_date || "",
+        lokal: iss.proposed_lokal || row.lokal || availableLokale[0]?.name || "",
+        stanowisko: iss.proposed_stanowisko || zm?.stanowisko || "",
+        start: zgOd,
+        end: zgDo,
+        reason: "",
+        miejsce: false,
+      });
+
+    const zapiszEdycje = () => {
+      if (!edycja.reason.trim()) {
+        return showMsg("Podaj powód korekty — pracownik go zobaczy.", "error");
+      }
+      if (naMin(edycja.start) == null) {
+        return showMsg("Podaj godzinę wejścia.", "error");
+      }
+      const wartosci = {
+        date: edycja.date,
+        lokal: edycja.lokal,
+        stanowisko: edycja.stanowisko,
+        start: edycja.start,
+        end: edycja.end,
+      };
+      const powod = edycja.reason.trim();
+      setEdycja(null);
+      decyduj(
+        [{ klucz, zadanie: ["zapiszKorekte", [row, wartosci, powod]] }],
+        `Poprawiono i zatwierdzono: ${iss.user_name}`
+      );
+    };
+
+    const minEdycji = otwarta ? dlugosc(edycja.start, edycja.end) : null;
+    const panel = otwarta && (
+      <>
+        {/* Na telefonie panel jest arkuszem od dołu — pod kartą nie byłoby go
+            widać nad klawiaturą. Jeden element, dwa układy. */}
+        <div
+          className="md:hidden fixed inset-0 z-40 bg-[rgba(20,19,17,0.45)]"
+          onClick={() => setEdycja(null)}
+        />
+        <div
+          role="dialog"
+          aria-label="Popraw godziny"
+          data-panel-popraw
+          className="fixed md:static inset-x-0 bottom-0 z-50 max-h-[90vh] overflow-y-auto md:overflow-visible bg-white md:bg-[#F6F5F1] rounded-t-[20px] md:rounded-none md:rounded-b-[10px] border-t-[2px] border-[#171714] md:border-t-[1.5px] md:border-[#DEDCD4] px-4 pt-2.5 pb-8 md:pr-5 md:pb-5 md:pt-[18px] md:pl-[64px]"
+        >
+          <div className="md:hidden w-11 h-[5px] rounded bg-[#DEDCD4] mx-auto mb-3" />
+          <div className="md:hidden mb-3.5">
+            <h3 className="font-['Archivo'] font-extrabold text-[20px]">Popraw godziny</h3>
+            <p className="text-sm text-[#6E6E66]">
+              {iss.user_name} · {row.lokal} · {dzienKrotki(edycja.date)}
+            </p>
+          </div>
+          <div className="grid grid-cols-2 md:flex md:flex-wrap md:items-end gap-3 md:gap-5">
+            <div className="flex flex-col gap-1.5 min-w-0">
+              <span className={etykietaCls}>Wejście</span>
+              <PoleCzasu
+                value={edycja.start}
+                onChange={(v) => setEdycja((e) => ({ ...e, start: v }))}
+                zmienione={!!zapOd && edycja.start !== zapOd}
+                aria="Wejście"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5 min-w-0">
+              <span className={etykietaCls}>Wyjście</span>
+              <PoleCzasu
+                value={edycja.end}
+                bazowa={edycja.start}
+                onChange={(v) => setEdycja((e) => ({ ...e, end: v }))}
+                zmienione={!!zapDo && edycja.end !== zapDo}
+                aria="Wyjście"
+              />
+            </div>
+            <div className="col-span-2 flex flex-col gap-1.5">
+              <span className={etykietaCls}>Szybko</span>
+              <div className="flex gap-2 flex-wrap">
+                {zGrafiku && (
+                  <button
+                    type="button"
+                    className={chipCls(false)}
+                    onClick={() =>
+                      setEdycja((e) => ({
+                        ...e,
+                        start: trimTime(zGrafiku.start_time),
+                        end: trimTime(zGrafiku.end_time),
+                      }))
+                    }
+                  >
+                    Jak w grafiku · {trimTime(zGrafiku.end_time)}
+                  </button>
+                )}
+                {zm && zapDo && (
+                  <button
+                    type="button"
+                    className={chipCls(false)}
+                    onClick={() => setEdycja((e) => ({ ...e, start: zapOd, end: zapDo }))}
+                  >
+                    Jak zapisane · {zapDo}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className={chipCls(false)}
+                  onClick={() => setEdycja((e) => ({ ...e, start: zgOd, end: zgDo }))}
+                >
+                  Jak zgłoszone{zgDo ? ` · ${zgDo}` : ""}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5 mt-4">
+            <span className={etykietaCls}>Powód korekty · widzi go pracownik</span>
+            <input
+              value={edycja.reason}
+              onChange={(e) => setEdycja({ ...edycja, reason: e.target.value })}
+              placeholder="Np. potwierdzone z kierownikiem zmiany"
+              className="h-11 w-full px-3 border-[2px] border-[#171714] rounded-md bg-white text-[15px]"
+            />
+            <div className="flex gap-2 flex-wrap">
+              {POWODY.map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  className={chipCls(edycja.reason === p)}
+                  onClick={() => setEdycja({ ...edycja, reason: p })}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {edycja.miejsce && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
+              <div className="flex flex-col gap-1.5">
+                <span className={etykietaCls}>Data</span>
+                <input
+                  type="date"
+                  value={edycja.date}
+                  onChange={(e) => setEdycja({ ...edycja, date: e.target.value })}
+                  className="h-11 px-3 border-[2px] border-[#171714] rounded-md bg-white"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <span className={etykietaCls}>Lokal</span>
+                <select
+                  value={edycja.lokal}
+                  onChange={(e) => setEdycja({ ...edycja, lokal: e.target.value })}
+                  className="h-11 px-3 border-[2px] border-[#171714] rounded-md bg-white"
+                >
+                  {availableLokale.map((l) => (
+                    <option key={l.id} value={l.name}>
+                      {l.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <span className={etykietaCls}>Stanowisko</span>
+                <select
+                  value={edycja.stanowisko}
+                  onChange={(e) => setEdycja({ ...edycja, stanowisko: e.target.value })}
+                  className="h-11 px-3 border-[2px] border-[#171714] rounded-md bg-white"
+                >
+                  {activeStanowiska
+                    .filter((s) => s.lokal_name === edycja.lokal)
+                    .map((s) => (
+                      <option key={s.id} value={s.name}>
+                        {s.name}
+                      </option>
+                    ))}
+                </select>
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-2 mt-4">
+            {!edycja.miejsce && (
+              <button
+                type="button"
+                onClick={() => setEdycja({ ...edycja, miejsce: true })}
+                className="text-sm font-bold text-[#6E6E66] underline underline-offset-[3px]"
+              >
+                Zmień datę, lokal lub stanowisko
+              </button>
+            )}
+            <span className="ml-auto text-[#6E6E66] text-sm">
+              Do wypłaty:{" "}
+              <b className="text-[#171714] tabular-nums">{minEdycji != null ? godzTekst(minEdycji) : "—"}</b>
+            </span>
+            <div className="basis-full md:basis-auto grid grid-cols-[1fr_1.6fr] md:flex gap-2 mt-2 md:mt-0">
+              <button type="button" className={btnObrysCls} onClick={() => setEdycja(null)}>
+                Anuluj
+              </button>
+              <button type="button" className={btnGlownyCls} onClick={zapiszEdycje}>
+                <Check size={18} /> Zapisz i zatwierdź
+              </button>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+
+    sprawy.push({
+      klucz,
+      typ: "korekta",
+      kto: iss.user_name || "Anonim",
+      wiek: dniOd(iss.created_at),
+      tak,
+      opisTak: `Zatwierdzono: ${iss.user_name}`,
+      karta: (z, onZ) => (
+        <Karta
+          key={klucz}
+          kto={iss.user_name || "Anonim"}
+          meta={[row.lokal, iss.proposed_stanowisko || zm?.stanowisko].filter(Boolean).join(" · ")}
+          ostrzezenia={
+            <>
+              <Czeka dni={dniOd(iss.created_at)} />
+              {duplikat && (
+                <p className={`${ostrzezenieCls} flex items-center gap-1`}>
+                  <AlertTriangle size={13} /> Takie samo jak wyżej
+                </p>
+              )}
+            </>
+          }
+          zaznaczone={z}
+          onZaznacz={onZ}
+          moznaZaznaczyc={!!tak}
+          szczegoly={
+            <>
+              <Kv etykieta="Dzień">{dzienKrotki(iss.proposed_date)}</Kv>
+              {/* "Zapisane", a nie "Grafik": po lewej stoi to, co JUŻ jest w
+                  Rejestrze godzin (odbicie), a nie plan. Grafik tego dnia jest
+                  pod szybką godziną w panelu "Popraw". */}
+              <Kv etykieta="Zapisane">
+                {zm ? (
+                  `${zapOd}–${zapDo || "trwa"}`
+                ) : (
+                  <span className="text-[#8F8E86] font-medium">brak — nowy wpis</span>
+                )}
+              </Kv>
+              <ArrowRight size={18} className="hidden md:block self-end mb-[3px] text-[#6E6E66]" />
+              <Kv etykieta="Zgłoszone">
+                <span className={zm && zgOd !== zapOd ? "text-[#DE3A22]" : ""}>{zgOd || "—"}</span>–
+                <span className={zm && zgDo !== zapDo ? "text-[#DE3A22]" : ""}>{zgDo || "brak"}</span>
+              </Kv>
+              {roznica != null && roznica !== 0 && (
+                <span
+                  className={`inline-flex items-center h-[26px] px-[9px] rounded-md font-extrabold text-[14px] tabular-nums ${
+                    roznica > 0 ? tonCls.warn : tonCls.info
+                  }`}
+                >
+                  {roznicaTekst(roznica)}
+                </span>
+              )}
+            </>
+          }
+          notatka={iss.issue_text}
+          akcje={
+            otwarta ? null : (
+              <>
+                {duplikat ? (
+                  <button
+                    type="button"
+                    className={btnObrysCls}
+                    onClick={() =>
+                      decyduj(
+                        [{ klucz, zadanie: ["odrzucDuplikat", [row]] }],
+                        `Odrzucono duplikat: ${iss.user_name}`
+                      )
+                    }
+                  >
+                    <X size={18} className="hidden md:block" /> Odrzuć duplikat
+                  </button>
+                ) : (
+                  <button type="button" className={btnObrysCls} onClick={otworzEdycje}>
+                    <Pencil size={18} /> Popraw
+                  </button>
+                )}
+                {tak || duplikat ? (
+                  <button
+                    type="button"
+                    className={btnGlownyCls}
+                    disabled={!tak}
+                    onClick={() =>
+                      decyduj([tak], `Zatwierdzono: ${iss.user_name} · ${dzienKrotki(iss.proposed_date)}`)
+                    }
+                  >
+                    <Check size={18} /> Zatwierdź
+                  </button>
+                ) : (
+                  <button type="button" className={btnGlownyCls} onClick={() => handleZapytaj(row)}>
+                    <HelpCircle size={18} /> Zapytaj
+                  </button>
+                )}
+              </>
+            )
+          }
+          pod={panel}
+        />
+      ),
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Widok
+  // -------------------------------------------------------------------------
+  const widoczne = sprawy.filter((s) => !odlozone[s.klucz]);
+  const lacznie = widoczne.length;
+  const liczbaTypu = (typ) => widoczne.filter((s) => s.typ === typ).length;
+  const najstarsza = widoczne.reduce((m, s) => Math.max(m, s.wiek || 0), 0);
+  const zaznaczoneSprawy = widoczne.filter((s) => zaznaczone[s.klucz] && s.tak);
+  const aktywnyFiltr = filtr === "all" || liczbaTypu(filtr) > 0 ? filtr : "all";
+
+  const zaznaczGrupe = (typ) => {
+    const doZaznaczenia = widoczne.filter((s) => s.typ === typ && s.tak);
+    const wszystkie = doZaznaczenia.every((s) => zaznaczone[s.klucz]);
+    setZaznaczone((prev) => {
+      const n = { ...prev };
+      doZaznaczenia.forEach((s) => (n[s.klucz] = !wszystkie));
+      return n;
+    });
+  };
+
+  const zatwierdzZaznaczone = () => {
+    const n = zaznaczoneSprawy.length;
+    if (!n) return;
+    decyduj(
+      zaznaczoneSprawy.map((s) => s.tak),
+      n === 1 ? zaznaczoneSprawy[0].opisTak : `Zatwierdzono ${n} ${n < 5 ? "sprawy" : "spraw"}`
+    );
+  };
+
+  const imionaZaznaczonych = [...new Set(zaznaczoneSprawy.map((s) => s.kto))].join(", ");
 
   return (
-    <div className="max-w-5xl mx-auto">
-      <h2 className={`${pageTitleCls} mb-6`}>Do decyzji · {lacznie}</h2>
+    <div className="max-w-6xl mx-auto">
+      <div className="mb-[18px]">
+        <h2 className={`${pageTitleCls} md:text-[30px] md:leading-9`}>
+          Do decyzji · <span className="tabular-nums">{lacznie}</span>
+        </h2>
+        <p className="mt-1 text-[#6E6E66]">
+          {zakres}
+          {lacznie > 0 &&
+            ` · ${
+              najstarsza >= 1
+                ? `najstarsza sprawa czeka ${najstarsza} ${najstarsza === 1 ? "dzień" : "dni"}`
+                : "wszystko z ostatniej doby"
+            }`}
+        </p>
+      </div>
 
-      {lacznie === 0 && (
-        <div className="bg-white p-8 rounded-xl border-[2px] border-[#171714] text-center text-[#8F8E86] mb-8">
-          Nic nie czeka na Twoją decyzję.
+      {lacznie > 0 && (
+        <div className="flex gap-2 overflow-x-auto pb-1 mb-6 [scrollbar-width:none]" role="tablist">
+          {[{ typ: "all", tab: "Wszystkie", liczba: lacznie }]
+            .concat(GRUPY.filter((g) => liczbaTypu(g.typ) > 0).map((g) => ({ ...g, liczba: liczbaTypu(g.typ) })))
+            .map((g) => {
+              const wl = aktywnyFiltr === g.typ;
+              return (
+                <button
+                  key={g.typ}
+                  type="button"
+                  role="tab"
+                  aria-selected={wl}
+                  onClick={() => setFiltr(g.typ)}
+                  className={`inline-flex items-center gap-2 h-10 px-3.5 rounded-full border-[2px] font-bold text-sm whitespace-nowrap flex-shrink-0 ${
+                    wl ? "bg-[#171714] border-[#171714] text-white" : "bg-white border-[#DEDCD4] text-[#171714]"
+                  }`}
+                >
+                  {g.tab}
+                  <span className={`tabular-nums ${wl ? "opacity-75" : "text-[#6E6E66]"}`}>{g.liczba}</span>
+                </button>
+              );
+            })}
         </div>
       )}
 
-      {/* Najpierw osoby na próbę: dzień próbny trwa jeden dzień, a decyzja
-          spóźniona o tydzień jest tyle samo warta co jej brak. */}
-      {probni.length > 0 && (
-        <Sekcja
-          Icon={UserPlus}
-          tytul="Pracownicy na próbę"
-          liczba={probni.length}
-          opis="Dodani z Tabletu Służbowego. Odbijają godziny, ale nie ma ich w Grafiku i nie mogą się nigdzie zalogować, dopóki nie zdecydujesz."
-        >
-          {probni.map((u) => {
-            const godziny = godzinyProbnego(shifts, u);
-            const zajety = probnyBusyId === u.id;
-            return (
-              <KartaDecyzji
-                key={u.id}
-                naglowek={u.name}
-                podtytul={`${u.default_lokal || ""}${
-                  u.default_stanowisko ? ` · ${u.default_stanowisko}` : ""
-                }${u.probny_od ? ` · od ${fmtPLAbs(u.probny_od)}` : ""}`}
-                meta={u.probny_przez ? `dodany(-a) na tablecie: ${u.probny_przez}` : null}
-                przyciski={
-                  <>
-                    <button
-                      disabled={zajety}
-                      onClick={() => decyzjaOProbnym(u, "zatwierdzony")}
-                      className={przyciskTakCls}
-                    >
-                      <Check size={16} /> Zatwierdź
-                    </button>
-                    <button
-                      disabled={zajety}
-                      onClick={() => decyzjaOProbnym(u, "odrzucony")}
-                      className={przyciskNieCls}
-                    >
-                      <X size={16} /> Odrzuć
-                    </button>
-                    {onOpenEmployee && (
-                      <button
-                        type="button"
-                        onClick={() => onOpenEmployee(u.id)}
-                        className={przyciskBocznyCls}
-                      >
-                        <User size={16} /> Otwórz kartę
-                      </button>
-                    )}
-                  </>
-                }
-              >
-                {/* Liczba godzin jest tu najważniejsza: od niej zależy, czy
-                    odrzucenie kogokolwiek kosztuje pieniądze. */}
-                <span
-                  className={`inline-block text-[13px] font-bold px-3 py-1.5 rounded ${
-                    godziny > 0
-                      ? "bg-[#FAEAE6] text-[#8A3A2B]"
-                      : "bg-[#EAEAE5] text-[#4A4A43]"
-                  }`}
-                >
-                  {godziny > 0
-                    ? `${godziny.toFixed(1).replace(".", ",")} godz. odbite`
-                    : "bez godzin"}
-                </span>
-              </KartaDecyzji>
-            );
-          })}
-        </Sekcja>
+      {lacznie === 0 && (
+        <div className="text-center py-12 px-5 border-[2px] border-dashed border-[#DEDCD4] rounded-xl text-[#6E6E66]">
+          <b className="block text-[#171714] text-[18px] mb-1">Wszystko zatwierdzone</b>
+          Godziny są już w Rejestrze godzin.
+        </div>
       )}
 
-      {brakiOdbicia.length > 0 && (
-        <Sekcja
-          Icon={Clock}
-          tytul="Był w grafiku, nie odbił"
-          liczba={brakiOdbicia.length}
-          opis="Zwykle to zapomniany tablet, nie nieobecność. Bez decyzji te godziny nie trafią ani do raportu, ani na wypłatę."
-        >
-          {brakiOdbicia.map((poz) => {
-            const g = odbicieGodziny[poz.plan.id] || {};
-            const zajety = odbicieBusyId === poz.plan.id;
-            return (
-              <KartaDecyzji
-                key={poz.plan.id}
-                naglowek={poz.user.name}
-                podtytul={`${poz.plan.date.split("-").reverse().join(".")} · ${poz.plan.lokal}${
-                  poz.plan.stanowisko ? ` · ${poz.plan.stanowisko}` : ""
-                }`}
-                przyciski={
-                  <>
-                    <button
-                      disabled={zajety}
-                      onClick={() => rozliczOdbicie(poz, "zapisano")}
-                      className={przyciskTakCls}
-                    >
-                      <Check size={16} /> Dopisz godziny
-                    </button>
-                    <button
-                      disabled={zajety}
-                      onClick={() => rozliczOdbicie(poz, "odrzucono")}
-                      className={przyciskNieCls}
-                    >
-                      <X size={16} /> Nie było zmiany
-                    </button>
-                  </>
-                }
-              >
-                <p className={`${statLabelCls} mb-1`}>Godziny do dopisania</p>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="time"
-                    value={g.start ?? trimTime(poz.plan.start_time)}
-                    onChange={(e) =>
-                      setOdbicieGodziny({
-                        ...odbicieGodziny,
-                        [poz.plan.id]: { ...g, start: e.target.value },
-                      })
-                    }
-                    className={poleGodzinyCls}
-                  />
-                  <span className="text-[#6E6E66]">–</span>
-                  <input
-                    type="time"
-                    value={g.end ?? trimTime(poz.plan.end_time)}
-                    onChange={(e) =>
-                      setOdbicieGodziny({
-                        ...odbicieGodziny,
-                        [poz.plan.id]: { ...g, end: e.target.value },
-                      })
-                    }
-                    className={poleGodzinyCls}
-                  />
-                </div>
-              </KartaDecyzji>
-            );
-          })}
-        </Sekcja>
+      {/* Kolejność grup: najpierw osoby na próbę (dzień próbny trwa dzień, a
+          spóźniona decyzja jest tyle samo warta co jej brak), korekty na końcu. */}
+      {GRUPY.map((g) => {
+        if (aktywnyFiltr !== "all" && aktywnyFiltr !== g.typ) return null;
+        const lista = widoczne.filter((s) => s.typ === g.typ);
+        if (!lista.length) return null;
+        return (
+          <Sekcja
+            key={g.typ}
+            Icon={g.Icon}
+            tytul={g.tytul}
+            tytulKrotki={g.tab}
+            liczba={lista.length}
+            opis={g.opis}
+            onZaznaczWszystkie={lista.some((s) => s.tak) ? () => zaznaczGrupe(g.typ) : null}
+          >
+            {lista.map((s) =>
+              s.karta(!!zaznaczone[s.klucz], (v) => setZaznaczone((prev) => ({ ...prev, [s.klucz]: v })))
+            )}
+          </Sekcja>
+        );
+      })}
+
+      {lacznie > 0 && (
+        <div className="mt-7 flex gap-2.5 items-start text-sm text-[#6E6E66]">
+          <AlertCircle size={18} className="flex-shrink-0 mt-0.5" />
+          <p>
+            Zatwierdzone trafiają do Rejestru godzin i arkusza rozliczeniowego. Każda korekta zapisuje,
+            kto i kiedy zmienił godzinę.
+          </p>
+        </div>
       )}
 
-      {/* Rodzeństwo sekcji wyżej: tam ktoś nie odbił NICZEGO, tutaj odbił
-          start i nie odbił końca. Obie kończą się tą samą decyzją. */}
-      {porzucone.length > 0 && (
-        <Sekcja
-          Icon={Hourglass}
-          tytul="Zmiany bez zakończenia"
-          liczba={porzucone.length}
-          opis="Ktoś odbił start i wyszedł bez odbicia końca. Godzin nie zgadujemy — do czasu Twojej decyzji te zmiany liczą się jako zero godzin."
-        >
-          {porzucone.map((poz) => {
-            const zajety = porzuconeBusyId === poz.shift.id;
-            const koniec = porzuconeGodziny[poz.shift.id] ?? domyslnyKoniec(poz);
-            return (
-              <KartaDecyzji
-                key={poz.shift.id}
-                naglowek={poz.shift.user_name}
-                podtytul={`${fmtPLAbs(toLocalYMD(poz.shift.start_time))} · ${poz.shift.lokal}${
-                  poz.shift.stanowisko ? ` · ${poz.shift.stanowisko}` : ""
-                }`}
-                meta={`${
-                  poz.powod === "grafik"
-                    ? `wg grafiku do ${fmtHHMM(poz.koniecPlanu)}, minęło ${poz.tolerancja} godz. tolerancji`
-                    : `poza grafikiem, zmiana przekroczyła ${poz.maks} godz.`
-                } · ${odKiedyCzeka(poz.prog)}`}
-                przyciski={
-                  <>
-                    <button
-                      disabled={zajety || !koniec}
-                      onClick={() => rozliczZmiane(poz, "zapisano")}
-                      className={przyciskTakCls}
-                    >
-                      <Check size={16} /> Zapisz godziny
-                    </button>
-                    <button
-                      disabled={zajety}
-                      onClick={() => rozliczZmiane(poz, "odrzucono")}
-                      className={przyciskNieCls}
-                    >
-                      <X size={16} /> Nie było zmiany
-                    </button>
-                  </>
-                }
+      {/* Pasek na dole: zaznaczenie ma pierwszeństwo przed paskiem "Cofnij".
+          Hurtem tylko ZATWIERDZAMY — odrzucenie zostaje decyzją podejmowaną
+          karta po karcie. */}
+      {(zaznaczoneSprawy.length > 0 || toast) && (
+        <div className="sticky bottom-0 z-30 mt-5">
+          {zaznaczoneSprawy.length > 0 ? (
+            <div
+              data-pasek-zaznaczenia
+              className="flex flex-wrap md:flex-nowrap items-center gap-3 p-2.5 pl-[18px] bg-[#171714] text-white rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.22)]"
+            >
+              <span className="font-bold">
+                Zaznaczono {zaznaczoneSprawy.length}
+                <small className="font-medium opacity-75 text-sm ml-1.5">{imionaZaznaczonych}</small>
+              </span>
+              <span className="flex-1" />
+              <button
+                type="button"
+                onClick={() => setZaznaczone({})}
+                className="inline-flex items-center min-h-[44px] px-3 rounded-lg font-bold text-[15px] text-white/80 hover:text-white"
               >
-                <p className={`${statLabelCls} mb-1`}>Godzina zakończenia</p>
-                <div className="flex items-center gap-2">
-                  <span className="text-[13px] text-[#6E6E66]">
-                    od <strong>{fmtHHMM(poz.shift.start_time)}</strong> do
-                  </span>
-                  <input
-                    type="time"
-                    value={koniec}
-                    onChange={(e) =>
-                      setPorzuconeGodziny({
-                        ...porzuconeGodziny,
-                        [poz.shift.id]: e.target.value,
-                      })
-                    }
-                    className={poleGodzinyCls}
-                  />
-                </div>
-              </KartaDecyzji>
-            );
-          })}
-        </Sekcja>
-      )}
-
-      {pendingSwaps.length > 0 && (
-        <Sekcja
-          Icon={ArrowLeftRight}
-          tytul="Giełda zmian"
-          liczba={pendingSwaps.length}
-          opis="Pracownicy sami uzgodnili przejęcie albo zamianę zmiany. Ostatnie słowo należy do Ciebie."
-        >
-          {pendingSwaps.map((sw) => {
-            const ps = planShifts.find((p) => String(p.id) === String(sw.grafik_shift_id));
-            const typ = typWymiany(sw);
-            const wz = wzajemnaZmiana(sw, planShifts);
-            return (
-              <KartaDecyzji
-                key={sw.id}
-                naglowek={
-                  typ === "zamiana"
-                    ? `${sw.taker_user_name} i ${sw.author_user_name} zamieniają się zmianami`
-                    : `${sw.taker_user_name} przejmuje zmianę od: ${sw.author_user_name}`
-                }
-                znacznik={
-                  typ === "oddanie" && (
-                    <span className="text-[11px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#F1F1EE] text-[#6E6E66]">
-                      oddane wprost
-                    </span>
-                  )
-                }
-                podtytul={
-                  ps
-                    ? `${fmtPLAbs(ps.date)} · ${trimTime(ps.start_time)}–${trimTime(
-                        ps.end_time
-                      )} · ${ps.stanowisko} · ${ps.lokal}`
-                    : `${fmtPLAbs(sw.date)} · ${sw.lokal} · zmiana już nie istnieje`
-                }
-                przyciski={
-                  <>
-                    <button
-                      onClick={() => handleSwapDecision(sw, "approve")}
-                      disabled={swapBusyId === sw.id || !ps || (typ === "zamiana" && !wz)}
-                      className={przyciskTakCls}
-                    >
-                      <Check size={16} /> Zatwierdź
-                    </button>
-                    <button
-                      onClick={() => handleSwapDecision(sw, "reject")}
-                      disabled={swapBusyId === sw.id}
-                      className={przyciskNieCls}
-                    >
-                      <X size={16} /> Odrzuć
-                    </button>
-                  </>
-                }
-              >
-                {/* Przy zamianie kierownik musi zobaczyć OBIE zmiany —
-                    zatwierdza dwa przepisania naraz, a druga strona jest
-                    tak samo wiążąca jak pierwsza. */}
-                {typ === "zamiana" && (
-                  <div className="text-[14px] text-[#6E6E66]">
-                    {wz ? (
-                      <>
-                        <span className="font-bold">w zamian: </span>
-                        {`${fmtPLAbs(wz.date)} · ${trimTime(wz.start_time)}–${trimTime(
-                          wz.end_time
-                        )} · ${wz.stanowisko} · ${wz.lokal}`}{" "}
-                        → {sw.author_user_name}
-                      </>
-                    ) : (
-                      <span className="text-[#DE3A22] font-bold">
-                        druga zmiana już nie istnieje — nie da się zatwierdzić
-                      </span>
-                    )}
-                  </div>
-                )}
-                {sw.note && <div className="text-[13px] text-[#6E6E66] mt-1">{sw.note}</div>}
-                {ps &&
-                  (() => {
-                    // Różnica godzin w miesiącu dla obu stron — bez tego
-                    // nie da się odpowiedzialnie zdecydować, gdy ktoś
-                    // pracuje na etat. (Sam etat to osobny temat; tutaj
-                    // pokazujemy wyłącznie liczby.)
-                    const mies = ps.date.slice(0, 7);
-                    const h = shiftHours(ps);
-                    // Przy zamianie każda strona i bierze, i oddaje —
-                    // pokazanie samej przejmowanej zmiany sugerowałoby
-                    // wzrost godzin tam, gdzie realnie prawie nic się nie
-                    // zmienia. Zmiana spoza tego miesiąca liczy się zerem.
-                    const hw =
-                      typ === "zamiana" && wz && wz.date.slice(0, 7) === mies
-                        ? shiftHours(wz)
-                        : 0;
-                    const strony = [
-                      {
-                        osoba: sw.taker_user_name,
-                        teraz: monthPlanHours(
-                          planShifts,
-                          { id: sw.taker_user_id, name: sw.taker_user_name },
-                          mies
-                        ),
-                        delta: h - hw,
-                      },
-                      {
-                        osoba: sw.author_user_name,
-                        teraz: monthPlanHours(
-                          planShifts,
-                          { id: sw.author_user_id, name: sw.author_user_name },
-                          mies
-                        ),
-                        delta: hw - h,
-                      },
-                    ];
-                    return (
-                      <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-[13px]">
-                        {strony.map((r) => (
-                          <span key={r.osoba} className="tabular-nums">
-                            <span className="font-bold">{r.osoba}</span>{" "}
-                            {Math.round(r.teraz * 10) / 10} h →{" "}
-                            {Math.round((r.teraz + r.delta) * 10) / 10} h{" "}
-                            <span
-                              className={`font-extrabold ${
-                                r.delta === 0
-                                  ? "text-[#6E6E66]"
-                                  : r.delta > 0
-                                  ? "text-[#2F7A2A]"
-                                  : "text-[#DE3A22]"
-                              }`}
-                            >
-                              ({r.delta === 0 ? "bez zmian" : ""}
-                              {r.delta !== 0 && (r.delta > 0 ? "+" : "−")}
-                              {r.delta !== 0
-                                ? `${Math.round(Math.abs(r.delta) * 10) / 10} h`
-                                : ""}
-                              )
-                            </span>
-                          </span>
-                        ))}
-                      </div>
-                    );
-                  })()}
-              </KartaDecyzji>
-            );
-          })}
-        </Sekcja>
-      )}
-
-      {pendingAbsences.length > 0 && (
-        <Sekcja
-          Icon={Palmtree}
-          tytul="Wnioski o wolne"
-          liczba={pendingAbsences.length}
-          opis="Zatwierdzony urlop dopisuje 8 godz. za każdy dzień roboczy. Niedostępność godzin nie dopisuje — blokuje tylko termin w Grafiku."
-        >
-          {pendingAbsences.map((a) => {
-            const dniRobocze = countWorkdays(a.start_date, a.end_date);
-            const godziny = a.type === "urlop" ? dniRobocze * URLOP_HOURS_PER_DAY : null;
-            return (
-              <KartaDecyzji
-                key={a.id}
-                naglowek={a.user_name || "Pracownik"}
-                podtytul={`${a.lokal} · ${a.type === "urlop" ? "Urlop" : "Niedostępność"}`}
-                przyciski={
-                  <>
-                    <button
-                      onClick={() => handleAbsenceDecision(a, "approved")}
-                      disabled={absenceBusyId === a.id}
-                      className={przyciskTakCls}
-                    >
-                      <Check size={16} /> Zatwierdź
-                    </button>
-                    <button
-                      onClick={() => handleAbsenceDecision(a, "rejected")}
-                      disabled={absenceBusyId === a.id}
-                      className={przyciskNieCls}
-                    >
-                      <X size={16} /> Odrzuć
-                    </button>
-                  </>
-                }
-              >
-                <p className="text-sm text-[#171714]">
-                  {fmtPLAbs(a.start_date)}–{fmtPLAbs(a.end_date)} ·{" "}
-                  <span className="font-bold">
-                    {dniRobocze} {dniRobocze === 1 ? "dzień roboczy" : "dni robocze"}
-                  </span>
-                  {godziny != null && (
-                    <>
-                      {" "}
-                      · <span className="font-bold">{godziny}h</span>
-                    </>
-                  )}
-                </p>
-                {a.note && <p className="text-sm text-[#6E6E66] mt-1.5 italic">„{a.note}”</p>}
-              </KartaDecyzji>
-            );
-          })}
-        </Sekcja>
-      )}
-
-      {rows.length > 0 && (
-        <Sekcja
-          Icon={Edit2}
-          tytul="Korekty godzin"
-          liczba={rows.length}
-          opis="Pracownik prosi o zmianę zapisanych godzin albo o dopisanie zmiany, której nie odbił."
-          akcja={
-            selectedCount > 0 && (
-              <button onClick={handleZatwierdzWybrane} disabled={busy} className={btnPrimaryCls}>
-                Zatwierdź wybrane · {selectedCount}
+                Wyczyść
               </button>
-            )
-          }
-        >
-          {rows.map((row) => {
-            const { issue: iss, existingShift } = row;
-            const isEditing = editingId === iss.id;
-            // Bez proponowanego końca przy ISTNIEJĄCEJ zmianie koniec się nie
-            // zmienia (resolveCorrection go zachowuje) — pokazujemy więc ten,
-            // który jest, a nie "brak", który wyglądał jak prośba o skasowanie.
-            const proposedEnd =
-              iss.proposed_end_time ||
-              (existingShift && existingShift.end_time ? fmtHHMM(existingShift.end_time) : "");
-            const proposedH =
-              iss.proposed_start_time && proposedEnd
-                ? (() => {
-                    const [sh, sm] = iss.proposed_start_time.split(":").map(Number);
-                    const [eh, em] = proposedEnd.split(":").map(Number);
-                    let mins = eh * 60 + em - (sh * 60 + sm);
-                    if (mins < 0) mins += 24 * 60;
-                    return mins / 60;
-                  })()
-                : null;
-            const currentH = existingShift
-              ? existingShift.end_time
-                ? (existingShift.end_time - existingShift.start_time) / 3600000
-                : null
-              : null;
-            const delta = proposedH != null && currentH != null ? proposedH - currentH : null;
-
-            return (
-              <KartaDecyzji
-                key={iss.id}
-                naglowek={iss.user_name || "Anonim"}
-                podtytul={`${row.lokal} · ${fmtPL(iss.proposed_date)}`}
-                zaznaczenie={
-                  <input
-                    type="checkbox"
-                    className="mt-1.5 w-4 h-4"
-                    checked={!!selected[iss.id]}
-                    onChange={(e) => setSelected({ ...selected, [iss.id]: e.target.checked })}
-                  />
-                }
-                przyciski={
-                  !isEditing && (
-                    <>
-                      {/* Zatwierdzić da się także prośbę bez końca, gdy dotyczy
-                          istniejącej zmiany — koniec zostaje wtedy nietknięty.
-                          "Zapytaj" zostaje dla nowego wpisu bez końca. */}
-                      {iss.proposed_end_time || existingShift ? (
-                        <button
-                          onClick={() => handleZatwierdz(row)}
-                          disabled={busy}
-                          className={przyciskTakCls}
-                        >
-                          <Check size={16} /> Zatwierdź
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => handleZapytaj(row)}
-                          disabled={busy}
-                          className={przyciskNieCls}
-                        >
-                          <HelpCircle size={16} /> Zapytaj
-                        </button>
-                      )}
-                      <button
-                        onClick={() => openPopraw(row)}
-                        disabled={busy}
-                        className={przyciskNieCls}
-                      >
-                        <Edit2 size={16} /> Popraw
-                      </button>
-                    </>
-                  )
-                }
-                stopka={
-                  isEditing && (
-                    <div className="mt-4 pt-4 border-t-2 border-[#171714] grid grid-cols-2 md:grid-cols-6 gap-3 items-end">
-                      <div>
-                        <label className="text-xs font-bold text-[#6E6E66]">Data</label>
-                        <input
-                          type="date"
-                          value={editForm.date}
-                          onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
-                          className="w-full border-[2px] border-[#171714] rounded p-2 text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-bold text-[#6E6E66]">Lokal</label>
-                        <select
-                          value={editForm.lokal}
-                          onChange={(e) => setEditForm({ ...editForm, lokal: e.target.value })}
-                          className="w-full border-[2px] border-[#171714] rounded p-2 text-sm"
-                        >
-                          {availableLokale.map((l) => (
-                            <option key={l.id} value={l.name}>
-                              {l.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="text-xs font-bold text-[#6E6E66]">Stanowisko</label>
-                        <select
-                          value={editForm.stanowisko}
-                          onChange={(e) =>
-                            setEditForm({ ...editForm, stanowisko: e.target.value })
-                          }
-                          className="w-full border-[2px] border-[#171714] rounded p-2 text-sm"
-                        >
-                          {activeStanowiska
-                            .filter((s) => s.lokal_name === editForm.lokal)
-                            .map((s) => (
-                              <option key={s.id} value={s.name}>
-                                {s.name}
-                              </option>
-                            ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="text-xs font-bold text-[#6E6E66]">Wejście</label>
-                        <input
-                          type="time"
-                          value={editForm.start}
-                          onChange={(e) => setEditForm({ ...editForm, start: e.target.value })}
-                          className="w-full border-[2px] border-[#171714] rounded p-2 text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-bold text-[#6E6E66]">Wyjście</label>
-                        <input
-                          type="time"
-                          value={editForm.end}
-                          onChange={(e) => setEditForm({ ...editForm, end: e.target.value })}
-                          className="w-full border-[2px] border-[#171714] rounded p-2 text-sm"
-                        />
-                      </div>
-                      <div className="col-span-2 md:col-span-6">
-                        <label className="text-xs font-bold text-[#6E6E66]">
-                          Powód korekty (widoczny dla pracownika)
-                        </label>
-                        <input
-                          type="text"
-                          value={editForm.reason}
-                          onChange={(e) => setEditForm({ ...editForm, reason: e.target.value })}
-                          placeholder="Np. potwierdzone z kierownikiem zmiany"
-                          className="w-full border-[2px] border-[#171714] rounded p-2 text-sm"
-                        />
-                      </div>
-                      <div className="col-span-2 md:col-span-6 flex gap-2">
-                        <button
-                          onClick={() => handleZapiszIZatwierdz(row)}
-                          disabled={busy}
-                          className={btnPrimaryCls}
-                        >
-                          Zapisz i zatwierdź
-                        </button>
-                        <button
-                          onClick={() => {
-                            setEditingId(null);
-                            setEditForm(null);
-                          }}
-                          className={btnSecondaryCls}
-                        >
-                          Anuluj
-                        </button>
-                      </div>
-                    </div>
-                  )
-                }
+              <button type="button" className={btnGlownyCls} onClick={zatwierdzZaznaczone}>
+                <Check size={18} /> Zatwierdź {zaznaczoneSprawy.length}
+              </button>
+            </div>
+          ) : (
+            <div
+              role="status"
+              data-pasek-cofnij
+              className="flex items-center gap-3 p-2.5 pl-3.5 bg-[#171714] text-white rounded-lg font-semibold shadow-[0_10px_30px_rgba(0,0,0,0.22)] max-w-[560px]"
+            >
+              <span className="w-[26px] h-[26px] rounded-full bg-[#E2F3E9] text-[#1F7A4A] flex items-center justify-center flex-shrink-0">
+                <Check size={15} strokeWidth={3} />
+              </span>
+              <span className="min-w-0">{toast.opis}</span>
+              <button
+                type="button"
+                onClick={cofnij}
+                className="ml-auto px-2.5 py-2 font-extrabold underline underline-offset-[3px]"
               >
-                <div className="flex gap-8 text-sm flex-wrap">
-                  <div>
-                    <p className={statLabelCls}>Grafik</p>
-                    {existingShift ? (
-                      <p className="font-['Archivo'] font-bold">
-                        {fmtHHMM(existingShift.start_time)}–
-                        {existingShift.end_time ? fmtHHMM(existingShift.end_time) : "trwa"}
-                      </p>
-                    ) : (
-                      <p className="text-[#8F8E86]">Brak — nowy wpis</p>
-                    )}
-                  </div>
-                  <div>
-                    <p className={statLabelCls}>Zgłoszone</p>
-                    <p>
-                      <span
-                        className={diffCls(
-                          existingShift ? fmtHHMM(existingShift.start_time) : "",
-                          iss.proposed_start_time
-                        )}
-                      >
-                        {iss.proposed_start_time || "—"}
-                      </span>
-                      –
-                      <span
-                        className={diffCls(
-                          existingShift && existingShift.end_time
-                            ? fmtHHMM(existingShift.end_time)
-                            : "",
-                          proposedEnd
-                        )}
-                      >
-                        {proposedEnd || "brak"}
-                      </span>
-                      {delta != null && delta !== 0 && (
-                        <span className="text-[#DE3A22] font-bold ml-2">
-                          {delta > 0 ? "+" : ""}
-                          {delta.toFixed(2)}h
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                </div>
-                {iss.issue_text && (
-                  <p className="text-sm text-[#6E6E66] mt-3 italic">„{iss.issue_text}”</p>
-                )}
-              </KartaDecyzji>
-            );
-          })}
-        </Sekcja>
+                Cofnij
+              </button>
+            </div>
+          )}
+        </div>
       )}
-
-      <div className="mt-6 flex items-start gap-2 text-sm text-[#6E6E66]">
-        <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
-        <p>
-          Zatwierdzone zmiany trafiają do Rejestru godzin i do arkusza
-          rozliczeniowego. Każda korekta zapisuje kto i kiedy zmienił godzinę.
-        </p>
-      </div>
     </div>
   );
 }

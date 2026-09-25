@@ -5,6 +5,29 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.48.0 — 2026-09-25
+
+- **Nowy wygląd „Do decyzji" (Zatwierdzanie zmian)** według makiety:
+  - u góry liczba spraw i to, ile czeka najstarsza; pod spodem **filtry po
+    typie** (Brak odbicia, Wolne, Korekty…), każdy z liczbą;
+  - każda sprawa w tej samej siatce: zaznaczenie · kto · szczegóły ·
+    przyciski, główny przycisk zawsze po prawej i mówi, co się stanie —
+    **„Dopisz 10 h"** liczy się na żywo, gdy poprawiasz godziny;
+  - godziny wpisuje się z klawiatury albo **przyciskami −/+ o 15 minut**;
+    zmieniona godzina robi się bursztynowa;
+  - korekta pokazuje **różnicę**: „Zapisane 08:00–16:00 → Zgłoszone
+    07:30–16:00 · +30 min", zmieniona godzina na czerwono;
+  - **„Popraw" otwiera się w karcie** (na telefonie jako arkusz od dołu):
+    szybkie godziny „Jak w grafiku / Jak zapisane / Jak zgłoszone", gotowe
+    powody jednym dotknięciem i „Do wypłaty: 9,25 h";
+  - **zaznacz kilka spraw → „Zatwierdź N"** w pasku na dole; „Zaznacz
+    wszystkie" przy każdej grupie;
+  - **każdą decyzję można cofnąć przez 6 sekund** — dopiero potem trafia do
+    bazy;
+  - sprawy czekające tydzień i dłużej mają podpis „Czeka N dni", a ta sama
+    korekta wysłana dwa razy — „Takie samo jak wyżej" i przycisk „Odrzuć
+    duplikat".
+
 ## 0.47.0 — 2026-09-25
 
 - **Tablet Służbowy wypełnia cały ekran tabletu.** Dotąd układ był robiony

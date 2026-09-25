@@ -2114,6 +2114,7 @@ const ManagerDashboard = ({
             pendingSwaps={pendingSwaps}
             planShifts={planShifts}
             onResolveSwap={handleResolveSwap}
+            zakres={isLocalManager ? "Twoje lokale" : "Cała sieć"}
             showMsg={showMsg}
             users={users}
             setUsers={setUsers}

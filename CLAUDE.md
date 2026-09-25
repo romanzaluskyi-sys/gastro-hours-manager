@@ -908,13 +908,33 @@ Klik na imię pracownika w Rejestr Godzin i Aktywni woła
 `reportUserId` i przełącza `tab` na `"raporty"`, gdzie `RaportyIKoszty.tsx`
 od razu pokazuje kartę tej osoby.
 
-⚠️ **Zatwierdzanie zmian ma JEDEN układ karty** (0.46.0, rząd od 0.47.0):
-`Sekcja` + `KartaDecyzji` na poziomie modułu w `ZatwierdzanieZmian.tsx` —
-treść po lewej, przyciski W RZĘDZIE po prawej (`data-przyciski`; na telefonie
-pod treścią), równej wysokości, pierwszy zawsze „na tak". Dokładając nowy typ
-decyzji, użyj tych dwóch komponentów zamiast własnej karty. Nagłówek strony
-„Do decyzji · N" i znaczek `zatwierdzanie` w `shellBadges` muszą liczyć te
-same kolejki (sprawdza to `harness-panel.html`).
+⚠️ **„Do decyzji" (Zatwierdzanie zmian) — układ z makiety właściciela
+(0.48.0, design system „Shiftro" w artefaktach).** Każda sprawa to jeden
+obiekt `{ klucz, typ, kto, wiek, tak, karta }` w tablicy `sprawy`, rysowany
+komponentem `Karta` (siatka: zaznaczenie · kto · szczegóły · akcje; główny
+przycisk NAJBARDZIEJ Z PRAWEJ). Dokładając nowy typ decyzji, dopisz grupę do
+`GRUPY` i sprawę do `sprawy` — nie własną kartę. Nagłówek „Do decyzji · N" i
+znaczek `zatwierdzanie` w `shellBadges` muszą liczyć te same kolejki
+(sprawdza `harness-panel.html`).
+
+⚠️ **Decyzje są ODŁOŻONE o 6 s** (`decyduj` → `wykonajPartie`,
+`CZAS_NA_COFNIECIE_MS`). Karta znika od razu, zapis rusza po 6 s; „Cofnij"
+anuluje go bez żadnego odkręcania w bazie. Trzy rzeczy, których nie widać:
+1. Zapis woła funkcję z NAJNOWSZEGO renderu (`akcjeRef`), nie z chwili
+   kliknięcia — w ciągu 6 s poll podmienia `shifts`.
+2. Argumenty (godziny, poprawione wartości, powód) są zamrożone w chwili
+   decyzji — panel „Popraw" jest już wtedy zamknięty.
+3. Wyjście z zakładki zapisuje wszystko, co czeka (cleanup efektu), a
+   zamknięcie karty przeglądarki pyta o potwierdzenie (`beforeunload`).
+   Najgorszy przypadek zostawia sprawę w kolejce — nigdy zapisu bez decyzji.
+Hurtem („Zatwierdź N") tylko zatwierdzamy; odrzucenie zostaje decyzją
+podejmowaną karta po karcie.
+
+⚠️ **Korekta pokazuje „Zapisane → Zgłoszone"**, nie „Grafik → Zgłoszone":
+po lewej stoi odbicie z Rejestru godzin. Grafik tego dnia jest pod szybką
+godziną „Jak w grafiku" w panelu „Popraw". Duplikat (ta sama osoba, dzień,
+godziny i zmiana) dostaje „Odrzuć duplikat" (`odrzucKorekte` w
+`utils/corrections.ts` — bez powiadomienia i bez śladu w `shift_edits`).
 
 ⚠️ **Pracownicy idą za `selectedLokal` z górnego paska** (`wybranyLokal` w
 `Pracownicy.tsx`). Do lokalu należy osoba z `default_lokal` ALBO z

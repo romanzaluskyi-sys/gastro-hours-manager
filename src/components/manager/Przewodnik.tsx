@@ -23,6 +23,17 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.48.0",
+    date: "2026-09-25",
+    items: [
+      "Do decyzji: nowy wygląd — filtry po typie, jedna karta dla każdej sprawy, różnica godzin zamiast dwóch tabel.",
+      "Godziny przyciskami −/+ o 15 minut; „Dopisz 10 h” liczy się na żywo.",
+      "„Popraw” w karcie (na telefonie od dołu), z szybkimi godzinami i gotowymi powodami.",
+      "Zaznacz kilka → „Zatwierdź N”. Każdą decyzję można cofnąć przez 6 sekund.",
+      "Podpis „Czeka N dni” i wykrywanie zdublowanych korekt.",
+    ],
+  },
+  {
     version: "0.47.0",
     date: "2026-09-25",
     items: [

@@ -161,6 +161,15 @@ export const resolveCorrection = async ({
   };
 };
 
+// Zamknięcie korekty BEZ zmiany godzin — dziś tylko dla duplikatu (ta sama
+// prośba wysłana dwa razy, zwykle podwójne dotknięcie na tablecie). Bez
+// powiadomienia: pracownik dostaje odpowiedź na pierwszą, identyczną prośbę,
+// a druga wiadomość o tym samym tylko by go myliła. Bez śladu w shift_edits,
+// bo niczego w godzinach nie zmieniamy.
+export const odrzucKorekte = async (issue) => {
+  await api.patch("issues", issue.id, { status: "rozwiazane" });
+};
+
 // "Zapytaj" — kierownik prosi pracownika o doprecyzowanie, bez rozwiązywania zgłoszenia.
 export const askAboutCorrection = async (issue, editorName) => {
   if (!issue.user_name) return;

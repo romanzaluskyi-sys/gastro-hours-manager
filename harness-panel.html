@@ -1,4 +1,6 @@
 <meta charset="utf-8">
+<!-- Jak w public/index.html — bez tego telefon renderuje panel na 980 px. -->
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Panel Kierownika — pełny łańcuch</title>
 <!-- Renderuje CAŁY ManagerDashboard z propsami takimi, jakie podaje App.tsx.
      Sprawdza to, czego dwa pozostałe harnessy nie mogą: czy props faktycznie
@@ -677,15 +679,13 @@ const poprzedniMiesiac = (h) => {
       try {
         if (new URLSearchParams(location.search).get("rola") !== "manager") {
           klik("Zatwierdzanie zmian"); await czekaj(400);
-          const kartaAli = [...document.querySelectorAll("#app div.rounded-xl")]
-            .find((d) => d.textContent.includes("07:30") && d.textContent.includes("Ala")
-              && d.querySelector("button"));
+          const karty = () => [...document.querySelectorAll("#app [data-karta]")];
+          const kartaAli = karty().find((d) => d.textContent.includes("07:30") && d.textContent.includes("Ala"));
           sprawdz("prośba o start stoi w kolejce korekt", !!kartaAli);
 
-          // Jeden układ karty dla każdego typu decyzji (0.46.0, rząd od
-          // 0.47.0): przyciski w pasku na dole karty, w RZĘDZIE, wszystkie tej
-          // samej wysokości, a pierwszy zawsze "na tak".
-          const paski = [...document.querySelectorAll("#app [data-przyciski]")];
+          // Makieta 0.47.0: jedna siatka dla każdej sprawy, przyciski w
+          // rzędzie po prawej, równej wysokości, główny NAJBARDZIEJ Z PRAWEJ.
+          const paski = [...document.querySelectorAll("#app [data-karta] [data-przyciski]")];
           const wRzedzie = paski.every((p) => {
             const b = [...p.querySelectorAll(":scope > button")].map((x) => x.getBoundingClientRect());
             return b.length > 0 &&
@@ -693,22 +693,79 @@ const poprzedniMiesiac = (h) => {
           });
           sprawdz("każda karta decyzji ma przyciski w rzędzie, równej wysokości",
             paski.length >= 3 && wRzedzie, `pasków ${paski.length}`);
-          const pierwsze = paski.map((p) => (p.querySelector("button") || {}).textContent || "");
-          sprawdz("pierwszy przycisk w każdej karcie to decyzja „na tak”",
-            pierwsze.length > 0 && pierwsze.every((x) => !/Odrzuć|Nie było/.test(x)),
-            pierwsze.join(" | "));
+          const ostatnie = paski.map((p) => ([...p.querySelectorAll(":scope > button")].pop() || {}).textContent || "");
+          sprawdz("główna decyzja stoi zawsze najbardziej z prawej",
+            ostatnie.length > 0 && ostatnie.every((x) => !/Odrzuć|Nie było|Popraw/.test(x)),
+            ostatnie.join(" | "));
           sprawdz("pokazuje obecny koniec zmiany, nie „brak”",
             !!kartaAli && /07:30\s*–\s*16:00/.test(kartaAli.textContent),
             kartaAli ? kartaAli.textContent.slice(0, 160) : "");
-          const zatwierdz = kartaAli && [...kartaAli.querySelectorAll("button")]
+
+          // Przycisk mówi, co się stanie — "Dopisz N h", nie "Zatwierdź".
+          const kartaOdbicia = karty().find((k) => /Dopisz \d/.test(k.textContent));
+          sprawdz("brak odbicia: przycisk mówi, ile godzin dopisze", !!kartaOdbicia);
+
+          // "Cofnij": karta znika od razu, zapis NIE wychodzi, Cofnij ją przywraca.
+          if (kartaOdbicia) {
+            const nazwa = kartaOdbicia.querySelector("p").textContent;
+            const przedCofnij = window.__zapisy.length;
+            [...kartaOdbicia.querySelectorAll("button")].find((b) => /Dopisz \d/.test(b.textContent))
+              .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            await czekaj(300);
+            sprawdz("decyzja chowa kartę od razu i pokazuje „Cofnij”",
+              !document.body.contains(kartaOdbicia) && !!document.querySelector("#app [data-pasek-cofnij]"));
+            sprawdz("…ale nic jeszcze nie zapisuje",
+              window.__zapisy.length === przedCofnij,
+              JSON.stringify(window.__zapisy.slice(przedCofnij).map((z) => z[0])));
+            [...document.querySelectorAll("#app [data-pasek-cofnij] button")].pop()
+              .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            await czekaj(300);
+            sprawdz("„Cofnij” przywraca kartę",
+              karty().some((k) => /Dopisz \d/.test(k.textContent) && k.textContent.includes(nazwa)));
+          }
+
+          // Zaznaczenie → pasek "Zaznaczono N · Zatwierdź N".
+          const pola = [...document.querySelectorAll("#app [data-karta] input[type=checkbox]")]
+            .filter((x) => !x.disabled).slice(0, 2);
+          pola.forEach((x) => x.click());
+          await czekaj(200);
+          const pasekZ = document.querySelector("#app [data-pasek-zaznaczenia]");
+          sprawdz("dwie zaznaczone sprawy → pasek „Zaznaczono 2”",
+            !!pasekZ && /Zaznaczono 2/.test(pasekZ.textContent) && /Zatwierdź 2/.test(pasekZ.textContent),
+            pasekZ ? pasekZ.textContent : "brak paska");
+          if (pasekZ) {
+            [...pasekZ.querySelectorAll("button")].find((b) => b.textContent.includes("Wyczyść")).click();
+            await czekaj(200);
+          }
+
+          // "Popraw" otwiera panel w karcie: szybkie godziny i gotowe powody.
+          const kartaAli2 = karty().find((d) => d.textContent.includes("07:30") && d.textContent.includes("Ala"));
+          const popraw = kartaAli2 && [...kartaAli2.querySelectorAll("button")].find((b) => b.textContent.includes("Popraw"));
+          if (popraw) {
+            popraw.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            await czekaj(200);
+            const panel = document.querySelector("#app [data-panel-popraw]");
+            sprawdz("„Popraw” otwiera panel z szybkimi godzinami i powodami",
+              !!panel && /Jak zgłoszone/.test(panel.textContent) && /Zamknięcie kasy/.test(panel.textContent));
+            if (panel) {
+              [...panel.querySelectorAll("button")].find((b) => b.textContent.trim() === "Anuluj").click();
+              await czekaj(200);
+            }
+          } else {
+            sprawdz("„Popraw” otwiera panel z szybkimi godzinami i powodami", false, "brak przycisku");
+          }
+
+          const kartaAli3 = karty().find((d) => d.textContent.includes("07:30") && d.textContent.includes("Ala"));
+          const zatwierdz = kartaAli3 && [...kartaAli3.querySelectorAll("button")]
             .find((b) => b.textContent.includes("Zatwierdź"));
           sprawdz("da się ją zatwierdzić jednym kliknięciem", !!zatwierdz);
           if (zatwierdz) {
             const przed = window.__zapisy.length;
             zatwierdz.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-            await czekaj(500);
-            const patch = window.__zapisy.slice(przed)
-              .find((z) => z[0] === "shifts" && z[1] === "sh1");
+            // Zapis wychodzi dopiero po 6 s na "Cofnij".
+            await czekaj(6800);
+            const nowe_ = window.__zapisy.slice(przed);
+            const patch = nowe_.find((z) => z[0] === "shifts" && z[1] === "sh1");
             const nowe = patch && patch[2];
             sprawdz("zatwierdzenie przestawia start na 07:30",
               !!nowe && new Date(nowe.start_time).getHours() === 7 &&
@@ -718,6 +775,9 @@ const poprzedniMiesiac = (h) => {
               !!nowe && !!nowe.end_time && new Date(nowe.end_time).getHours() === 16 &&
                 nowe.godzin === 8.5,
               JSON.stringify(nowe));
+            sprawdz("cofnięta decyzja nie dopisała godzin także po 6 s",
+              !nowe_.some((z) => z[0] === "shifts" && typeof z[1] === "object"),
+              JSON.stringify(nowe_.map((z) => z[0])));
           }
         }
       } catch (e) {
