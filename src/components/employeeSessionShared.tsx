@@ -191,6 +191,10 @@ export const timePlainCls =
 export const razemRowCls =
   "flex items-center justify-between bg-[#E7E7E2] rounded p-3.5";
 export const helperTextCls = "text-[13.5px] text-[#6E6E66] leading-relaxed";
+// Widoczne pole "inna godzina" — tej samej wielkości co duża godzina, którą
+// zastępuje, żeby ekran nie skakał przy przełączeniu.
+export const poleInnejGodzinyCls =
+  "w-full p-3 border-[2.5px] border-[#171714] rounded bg-white font-['Archivo'] font-extrabold text-[30px] text-[#171714] tabular-nums";
 export const sectionLabelCls =
   "text-[11px] font-bold tracking-wider uppercase text-[#8F8E86]";
 export const ruleStrongCls = "h-[2.5px] bg-[#171714] mt-2";
@@ -423,6 +427,18 @@ export const EmployeeSessionScreens = ({
   );
   const [knowsEnd, setKnowsEnd] = useState(false);
   const [formStartTime, setFormStartTime] = useState(fmtHHMM(new Date()));
+  // "Inna godzina" przy odbiciu (0.47.0). null = "teraz", czyli godzina z
+  // chwili NACIŚNIĘCIA przycisku, nie otwarcia formularza — tablet potrafi
+  // stać na tym ekranie kwadrans, a przy oknie tolerancji lokalu kwadrans
+  // starej godziny to różnica między wpisem przyjętym a odesłanym kierownikowi.
+  // Tekst "HH:MM" = pracownik świadomie wybrał inną godzinę.
+  //
+  // Do 0.46.0 start dało się zmienić tylko dotknięciem niewidocznego pola
+  // schowanego pod dużą godziną, a przy końcu pole czasu siedziało W ŚRODKU
+  // <button> — na iPadzie takie pole często się nie otwiera. Na tablecie
+  // wyglądało to tak, jakby innej godziny nie dało się wpisać wcale.
+  const [innyStart, setInnyStart] = useState(null);
+  const [innyKoniec, setInnyKoniec] = useState(null);
   const [formEndTime, setFormEndTime] = useState("");
   const [saving, setSaving] = useState(false);
   // Reguły wpisu lokalu, w którym zaczyna się zmiana (utils/wpisy.ts) — dla
@@ -715,6 +731,7 @@ export const EmployeeSessionScreens = ({
     setFormStanowisko(employee?.default_stanowisko || "");
     setKnowsEnd(false);
     setFormStartTime(fmtHHMM(new Date()));
+    setInnyStart(null);
     setFormEndTime("");
   };
 
@@ -942,6 +959,7 @@ export const EmployeeSessionScreens = ({
       setShifts(shifts.map((s) => (s.id === openShift.id ? parsed : s)));
       // Fire-and-forget — patrz komentarz w TimeEntryForm.tsx.
       sendToGoogleSheets(parsed, "EDIT_SHIFT");
+      setInnyKoniec(null);
       showMsg("Zmiana zakończona pomyślnie!");
       setJustClosed(true);
       setScreen("ZMIANA");
@@ -1014,16 +1032,19 @@ export const EmployeeSessionScreens = ({
 
   // ---- utworzenie zmiany: sam start albo pełna zmiana (jak TimeEntryForm.handleCreateShift) ----
   const handleCreateShift = async () => {
+    // Sam start: "teraz" liczone w chwili naciśnięcia, chyba że pracownik
+    // wybrał inną godzinę. Cała zmiana: obie godziny z pól formularza.
+    const startTekst = znamKoniec ? formStartTime : innyStart || fmtHHMM(new Date());
     if (
       !formLokal ||
       !formStanowisko ||
-      !formStartTime ||
+      !startTekst ||
       (znamKoniec && !formEndTime)
     ) {
       return showMsg("Wypełnij wymagane pola!", "error");
     }
     const today = new Date();
-    const [sh, sm] = formStartTime.split(":").map(Number);
+    const [sh, sm] = startTekst.split(":").map(Number);
     let startD = new Date(
       today.getFullYear(),
       today.getMonth(),
@@ -1071,6 +1092,7 @@ export const EmployeeSessionScreens = ({
     setSaving(true);
     const zapisana = await zapiszNowaZmiane(startD, endD);
     if (zapisana) {
+      setInnyStart(null);
       showMsg(endD ? "Zmiana zapisana!" : "Rozpoczęto zmianę!");
       if (endD) {
         setJustClosed(true);
@@ -1661,21 +1683,51 @@ export const EmployeeSessionScreens = ({
             Tablecie Służbowym. */}
         {bloki.includes("WPISY") ? (
           <>
-            <button
-              onClick={() => handleCloseShift(null)}
-              disabled={saving}
-              className={ctaPrimaryCls}
-            >
-              Zakończ zmianę o {fmtHHMM(now)}
-            </button>
-            <button className={ctaSecondaryCls}>
-              Wybierz inną godzinę
-              <input
-                type="time"
-                onChange={(e) => e.target.value && handleCloseShift(e.target.value)}
-                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-              />
-            </button>
+            {innyKoniec === null ? (
+              <>
+                <button
+                  onClick={() => handleCloseShift(null)}
+                  disabled={saving}
+                  className={ctaPrimaryCls}
+                >
+                  Zakończ zmianę o {fmtHHMM(now)}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInnyKoniec(fmtHHMM(now))}
+                  className={ctaSecondaryCls}
+                >
+                  Wybierz inną godzinę
+                </button>
+              </>
+            ) : (
+              <>
+                {/* Widoczne pole zamiast zamykania zmiany przy pierwszym
+                    ruchu kółka: na iPadzie zdarzenie zmiany potrafi przyjść w
+                    trakcie przewijania, a stara wersja od razu zapisywała. */}
+                <span className={fieldLabelCls}>Godzina zakończenia</span>
+                <input
+                  type="time"
+                  value={innyKoniec}
+                  onChange={(e) => setInnyKoniec(e.target.value)}
+                  className={poleInnejGodzinyCls}
+                />
+                <button
+                  onClick={() => handleCloseShift(innyKoniec)}
+                  disabled={saving || !innyKoniec}
+                  className={`${ctaPrimaryCls} mt-3`}
+                >
+                  Zakończ zmianę o {innyKoniec || "--:--"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInnyKoniec(null)}
+                  className={ctaSecondaryCls}
+                >
+                  Wróć do „teraz”
+                </button>
+              </>
+            )}
             {podpisOkna("koniec", regulyWpisu(lokaleWszystkie, openShift.lokal).koniecWstecz) && (
               <p className={`${helperTextCls} mt-2.5`}>
                 {podpisOkna("koniec", regulyWpisu(lokaleWszystkie, openShift.lokal).koniecWstecz)}
@@ -1794,23 +1846,39 @@ export const EmployeeSessionScreens = ({
       )}
       <div className="mt-5">
         <span className={fieldLabelCls}>Rozpoczęcie</span>
-        <div className={timeHeroCls}>
-          <div className="flex items-center gap-2.5">
-            <Clock size={20} className="text-[#171714]" />
-            <span className="font-['Archivo'] font-extrabold text-[30px] text-[#171714] tabular-nums">
-              {formStartTime}
-            </span>
+        {znamKoniec ? (
+          <div className={timeHeroCls}>
+            <div className="flex items-center gap-2.5">
+              <Clock size={20} className="text-[#171714]" />
+              <span className="font-['Archivo'] font-extrabold text-[30px] text-[#171714] tabular-nums">
+                {formStartTime}
+              </span>
+            </div>
+            <input
+              type="time"
+              value={formStartTime}
+              onChange={(e) => setFormStartTime(e.target.value)}
+              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+            />
           </div>
-          {!znamKoniec && (
-            <span className="text-[13px] text-[#8F8E86]">teraz · zmień</span>
-          )}
+        ) : innyStart === null ? (
+          <div className={timeHeroCls}>
+            <div className="flex items-center gap-2.5">
+              <Clock size={20} className="text-[#171714]" />
+              <span className="font-['Archivo'] font-extrabold text-[30px] text-[#171714] tabular-nums">
+                {fmtHHMM(now)}
+              </span>
+            </div>
+            <span className="text-[13px] text-[#8F8E86]">teraz</span>
+          </div>
+        ) : (
           <input
             type="time"
-            value={formStartTime}
-            onChange={(e) => setFormStartTime(e.target.value)}
-            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+            value={innyStart}
+            onChange={(e) => setInnyStart(e.target.value)}
+            className={poleInnejGodzinyCls}
           />
-        </div>
+        )}
       </div>
       {znamKoniec && (
         <div className="mt-5">
@@ -1854,12 +1922,25 @@ export const EmployeeSessionScreens = ({
       )}
       <div className="flex-1" />
       <button
-        onClick={handleCreateShift}
-        disabled={saving}
+        onClick={() => handleCreateShift()}
+        disabled={saving || (!znamKoniec && innyStart === "")}
         className={ctaPrimaryCls}
       >
-        {znamKoniec ? "Zapisz całą zmianę" : "Rozpocznij zmianę"}
+        {znamKoniec
+          ? "Zapisz całą zmianę"
+          : `Rozpocznij zmianę o ${innyStart || fmtHHMM(now)}`}
       </button>
+      {/* Ten sam przycisk co przy zakończeniu zmiany — inna godzina ma być
+          widoczna jako przycisk, a nie ukryta pod dotknięciem godziny. */}
+      {!znamKoniec && (
+        <button
+          type="button"
+          onClick={() => setInnyStart(innyStart === null ? fmtHHMM(now) : null)}
+          className={ctaSecondaryCls}
+        >
+          {innyStart === null ? "Wybierz inną godzinę" : "Wróć do „teraz”"}
+        </button>
+      )}
     </>
   );
 

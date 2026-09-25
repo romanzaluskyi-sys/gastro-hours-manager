@@ -908,9 +908,10 @@ Klik na imię pracownika w Rejestr Godzin i Aktywni woła
 `reportUserId` i przełącza `tab` na `"raporty"`, gdzie `RaportyIKoszty.tsx`
 od razu pokazuje kartę tej osoby.
 
-⚠️ **Zatwierdzanie zmian ma JEDEN układ karty** (0.46.0): `Sekcja` +
-`KartaDecyzji` na poziomie modułu w `ZatwierdzanieZmian.tsx` — treść po lewej,
-przyciski w kolumnie po prawej, pierwszy zawsze „na tak". Dokładając nowy typ
+⚠️ **Zatwierdzanie zmian ma JEDEN układ karty** (0.46.0, rząd od 0.47.0):
+`Sekcja` + `KartaDecyzji` na poziomie modułu w `ZatwierdzanieZmian.tsx` —
+treść na górze, przyciski W RZĘDZIE w pasku na dole karty (`data-przyciski`),
+równej wysokości, pierwszy zawsze „na tak". Dokładając nowy typ
 decyzji, użyj tych dwóch komponentów zamiast własnej karty. Nagłówek strony
 „Do decyzji · N" i znaczek `zatwierdzanie` w `shellBadges` muszą liczyć te
 same kolejki (sprawdza to `harness-panel.html`).
@@ -2211,6 +2212,15 @@ pracownika, potrzebuje SELECT dla tabletu na tych wierszach.**
 
 ⚠️ Kontrola jest w przeglądarce. Twardy zamek (trigger na `shifts`) — razem z
 zawężeniem `shifts` w Etapie 3c-2.
+
+⚠️ **„Inna godzina" to WIDOCZNY przycisk i WIDOCZNE pole** (`innyStart`/
+`innyKoniec` w `employeeSessionShared.tsx`, 0.47.0). Nie wracaj do pola
+`type="time"` z `opacity-0` położonego na czymś innym — a już na pewno nie W
+ŚRODKU `<button>`: na iPadzie takie pole często się nie otwiera i ekran
+wyglądał, jakby innej godziny nie dało się wpisać. Samo wybranie godziny
+niczego nie zapisuje (kółko iPada potrafi wysłać zmianę w trakcie
+przewijania); zapisuje przycisk z godziną w nazwie. `null` = „teraz”, liczone
+w chwili NACIŚNIĘCIA, nie otwarcia formularza.
 
 ## Pracownik na próbę — dodane 2026-09-19 (0.40.0)
 

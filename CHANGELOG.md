@@ -14,6 +14,14 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 - **Zakładki po lewej stronie**, w ciemnym pasku jak w panelu kierownika,
   zamiast paska na dole ekranu.
 - Na telefonie wszystko zostaje po staremu: jedna kolumna i zakładki na dole.
+- **„Wybierz inną godzinę" przy starcie i przy końcu zmiany** — widoczny
+  przycisk i widoczne pole czasu. Dotąd start dało się zmienić tylko
+  dotknięciem samej godziny, a przy końcu pole często nie otwierało się na
+  iPadzie; przy trybie „tylko odbicie" wyglądało to tak, jakby innej godziny
+  nie dało się wpisać wcale. Przycisk mówi teraz, o której zacznie albo
+  zakończy zmianę, a „teraz" liczy się w chwili naciśnięcia.
+- **Zatwierdzanie zmian: przyciski w rzędzie**, w pasku na dole każdej karty,
+  wszystkie tej samej wysokości.
 
 ## 0.46.0 — 2026-09-25
 

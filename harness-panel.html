@@ -682,16 +682,18 @@ const poprzedniMiesiac = (h) => {
               && d.querySelector("button"));
           sprawdz("prośba o start stoi w kolejce korekt", !!kartaAli);
 
-          // Jeden układ karty dla każdego typu decyzji (0.46.0): przyciski
-          // jeden pod drugim, a pierwszy zawsze "na tak".
-          const karty = [...document.querySelectorAll("#app div.rounded-xl")]
-            .filter((d) => d.querySelector(":scope > div.grid"));
-          const kolumny = karty.map((k) => k.querySelector(":scope > div.grid > div.flex-col"));
-          sprawdz("każda karta decyzji ma przyciski w kolumnie",
-            karty.length >= 3 && kolumny.every(Boolean),
-            `kart ${karty.length}, bez kolumny ${kolumny.filter((k) => !k).length}`);
-          const pierwsze = kolumny.filter(Boolean)
-            .map((k) => (k.querySelector("button") || {}).textContent || "");
+          // Jeden układ karty dla każdego typu decyzji (0.46.0, rząd od
+          // 0.47.0): przyciski w pasku na dole karty, w RZĘDZIE, wszystkie tej
+          // samej wysokości, a pierwszy zawsze "na tak".
+          const paski = [...document.querySelectorAll("#app [data-przyciski]")];
+          const wRzedzie = paski.every((p) => {
+            const b = [...p.querySelectorAll(":scope > button")].map((x) => x.getBoundingClientRect());
+            return b.length > 0 &&
+              b.every((r) => Math.abs(r.top - b[0].top) < 1 && Math.abs(r.height - b[0].height) < 1);
+          });
+          sprawdz("każda karta decyzji ma przyciski w rzędzie, równej wysokości",
+            paski.length >= 3 && wRzedzie, `pasków ${paski.length}`);
+          const pierwsze = paski.map((p) => (p.querySelector("button") || {}).textContent || "");
           sprawdz("pierwszy przycisk w każdej karcie to decyzja „na tak”",
             pierwsze.length > 0 && pierwsze.every((x) => !/Odrzuć|Nie było/.test(x)),
             pierwsze.join(" | "));

@@ -82,19 +82,24 @@ import {
 // sekcjami ("Odrzuć" raz stał przed "Zatwierdź", raz po). Kierownik, który
 // przechodzi przez kolejkę szybko, klika tam, gdzie przycisk stał w
 // poprzedniej karcie — więc układ ma być ten sam wszędzie (prośba właściciela
-// z 2026-09-25): treść po lewej, przyciski JEDEN POD DRUGIM po prawej, na
-// telefonie pod treścią, zawsze w tej samej kolejności — decyzja "na tak",
-// potem "na nie" albo "popraw", na końcu rzeczy poboczne.
+// z 2026-09-25): treść na górze, przyciski W RZĘDZIE w osobnym pasku na dole
+// karty, wszystkie tej samej wysokości (pierwsza wersja 0.46.0 miała je w
+// kolumnie po prawej — właściciel wolał rząd), zawsze w tej samej kolejności
+// — decyzja "na tak", potem "na nie" albo "popraw", na końcu rzeczy poboczne.
 //
 // ⚠️ Oba komponenty stoją na poziomie modułu, nie w środku ZatwierdzanieZmian
 // — patrz błąd #10 w CLAUDE.md (komponent zdefiniowany w komponencie
 // odmontowuje całe poddrzewo przy każdym renderze rodzica, a z nim pola
 // godzin, w których kierownik akurat pisze).
 // ---------------------------------------------------------------------------
-const przyciskTakCls = `${btnPrimaryCls} w-full flex items-center justify-center gap-1.5`;
-const przyciskNieCls = `${btnSecondaryCls} w-full flex items-center justify-center gap-1.5`;
+// Szerokość: na telefonie przyciski dzielą pasek po równo (flex-1), od `md`
+// mają jedną, stałą szerokość — kilka kart pod sobą ma wtedy przyciski w tych
+// samych miejscach. Wysokość wyrównuje sam pasek (flex, items-stretch).
+const przyciskRzadCls = "flex-1 md:flex-none md:w-[180px] flex items-center justify-center gap-1.5 text-center";
+const przyciskTakCls = `${btnPrimaryCls} ${przyciskRzadCls}`;
+const przyciskNieCls = `${btnSecondaryCls} ${przyciskRzadCls}`;
 const przyciskBocznyCls =
-  "w-full px-4 py-2.5 rounded border-[2px] border-[#B7B6AE] bg-white text-[#6E6E66] font-['Archivo'] font-bold text-sm hover:border-[#171714] hover:text-[#171714] disabled:opacity-50 flex items-center justify-center gap-1.5";
+  `${przyciskRzadCls} px-4 py-2.5 rounded border-[2px] border-[#B7B6AE] bg-white text-[#6E6E66] font-['Archivo'] font-bold text-sm hover:border-[#171714] hover:text-[#171714] disabled:opacity-50`;
 const poleGodzinyCls = "p-2 border-[2px] border-[#171714] rounded";
 
 function Sekcja({ Icon, tytul, liczba, opis, akcja, children }) {
@@ -115,25 +120,30 @@ function Sekcja({ Icon, tytul, liczba, opis, akcja, children }) {
 function KartaDecyzji({ naglowek, znacznik, podtytul, meta, zaznaczenie, children, przyciski, stopka }) {
   return (
     <div className="bg-white rounded-xl border-[2px] border-[#171714] p-4">
-      <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_190px]">
-        <div className="min-w-0">
-          <div className="flex items-start gap-3">
-            {zaznaczenie}
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <p className="font-['Archivo'] font-extrabold text-[16px] text-[#171714]">
-                  {naglowek}
-                </p>
-                {znacznik}
-              </div>
-              {podtytul && <p className="text-[13px] text-[#6E6E66]">{podtytul}</p>}
-              {meta && <p className="text-[12px] text-[#8F8E86] mt-0.5">{meta}</p>}
+      <div className="min-w-0">
+        <div className="flex items-start gap-3">
+          {zaznaczenie}
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="font-['Archivo'] font-extrabold text-[16px] text-[#171714]">
+                {naglowek}
+              </p>
+              {znacznik}
             </div>
+            {podtytul && <p className="text-[13px] text-[#6E6E66]">{podtytul}</p>}
+            {meta && <p className="text-[12px] text-[#8F8E86] mt-0.5">{meta}</p>}
           </div>
-          {children && <div className="mt-3">{children}</div>}
         </div>
-        {przyciski && <div className="flex flex-col gap-2">{przyciski}</div>}
+        {children && <div className="mt-3">{children}</div>}
       </div>
+      {przyciski && (
+        <div
+          data-przyciski
+          className="mt-4 pt-3 border-t-[2px] border-[#E7E7E2] flex items-stretch gap-2"
+        >
+          {przyciski}
+        </div>
+      )}
       {stopka}
     </div>
   );

@@ -29,6 +29,8 @@ const CHANGELOG = [
       "Tablet Służbowy na całą szerokość tabletu, osoby po trzy w rzędzie.",
       "Zakładki na tablecie w pasku po lewej, jak w panelu kierownika.",
       "Na telefonie bez zmian — zakładki dalej na dole.",
+      "Widoczny przycisk „Wybierz inną godzinę” przy starcie i przy końcu zmiany.",
+      "Zatwierdzanie zmian: przyciski w rzędzie, na dole każdej karty.",
     ],
   },
   {

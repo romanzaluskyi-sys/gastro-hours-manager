@@ -498,11 +498,18 @@ const poprzedniMiesiac = (h) => {
         await czekaj(300);
         sprawdz("formularz mówi z góry, gdzie jest granica",
           widac("Start możesz sam cofnąć najwyżej o 15 min"));
+        // Inna godzina to WIDOCZNY przycisk (0.47.0), nie niewidoczne pole
+        // pod dużą godziną — na iPadzie tamto się nie otwierało.
+        sprawdz("na starcie jest przycisk „Wybierz inną godzinę”",
+          widac("Wybierz inną godzinę") && !document.querySelector('input[type="time"]'));
+        klik("Wybierz inną godzinę"); await czekaj(200);
         const godzinaTemu = new Date(Date.now() - 60 * 60000);
         ustawCzas(document.querySelector('input[type="time"]'), hhmm(godzinaTemu));
         await czekaj(200);
+        sprawdz("przycisk startu mówi, o której zacznie",
+          widac("Rozpocznij zmianę o " + hhmm(godzinaTemu)));
         const przedStartem = window.__zapisy.length;
-        klik("Rozpocznij zmianę"); await czekaj(300);
+        klik("Rozpocznij zmianę o"); await czekaj(300);
         sprawdz("start sprzed godziny: okno zamiast zapisu",
           widac("Za późno na samodzielny wpis") &&
             window.__zapisy.slice(przedStartem).length === 0,
@@ -525,10 +532,16 @@ const poprzedniMiesiac = (h) => {
         // Koniec w przyszłości to nie spóźnienie — tylko wyjaśnienie, nic nie
         // idzie do kierownika.
         const zaGodzine = new Date(Date.now() + 60 * 60000);
-        const poleKonca = [...document.querySelectorAll('input[type="time"]')].pop();
+        sprawdz("na zakończeniu jest przycisk „Wybierz inną godzinę”",
+          widac("Wybierz inną godzinę"));
+        klik("Wybierz inną godzinę"); await czekaj(200);
+        const poleKonca = document.querySelector('input[type="time"]');
         const przedKoncem = window.__zapisy.length;
         ustawCzas(poleKonca, hhmm(zaGodzine));
-        await czekaj(300);
+        await czekaj(200);
+        sprawdz("samo wybranie godziny końca niczego nie zapisuje",
+          window.__zapisy.length === przedKoncem);
+        klik("Zakończ zmianę o " + hhmm(zaGodzine)); await czekaj(300);
         sprawdz("koniec za godzinę: „tej godziny jeszcze nie było”, bez zapisu",
           widac("Tej godziny jeszcze nie było") &&
             window.__zapisy.length === przedKoncem,
