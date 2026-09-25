@@ -23,6 +23,15 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.47.0",
+    date: "2026-09-25",
+    items: [
+      "Tablet Służbowy na całą szerokość tabletu, osoby po trzy w rzędzie.",
+      "Zakładki na tablecie w pasku po lewej, jak w panelu kierownika.",
+      "Na telefonie bez zmian — zakładki dalej na dole.",
+    ],
+  },
+  {
     version: "0.46.0",
     date: "2026-09-25",
     items: [

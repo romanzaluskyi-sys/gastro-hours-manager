@@ -5,6 +5,16 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.47.0 — 2026-09-25
+
+- **Tablet Służbowy wypełnia cały ekran tabletu.** Dotąd układ był robiony
+  pod telefon i na tablecie stał wąską kolumną na środku.
+- **Lista „Wybierz siebie" po trzy osoby w rzędzie** — przy kilkunastu
+  osobach nie trzeba przewijać, żeby znaleźć siebie.
+- **Zakładki po lewej stronie**, w ciemnym pasku jak w panelu kierownika,
+  zamiast paska na dole ekranu.
+- Na telefonie wszystko zostaje po staremu: jedna kolumna i zakładki na dole.
+
 ## 0.46.0 — 2026-09-25
 
 - **Zatwierdzanie zmian w jednym układzie.** Każda decyzja — osoba na próbę,

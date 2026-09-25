@@ -830,6 +830,17 @@ na urządzeniu, `showEmployeeNameInMessages=true`; konto osobiste: tylko
 tego filtrowania do środka komponentu współdzielonego**, to jedyna
 świadoma różnica logiki między dwoma konsumentami.
 
+⚠️ **Dwa układy z jednego drzewa (0.47.0).** Poniżej `md` (768 px) —
+telefon: wąska kolumna, zakładki na DOLE. Od `md` — tablet: pełna szerokość,
+zakładki w ciemnym pasku po LEWEJ (jak panel kierownika), lista „Wybierz
+siebie" po trzy w rzędzie. `<nav>` w `Shell` jest JEDNYM elementem
+przestawianym klasami (`order-last md:order-first`), nie dwiema kopiami —
+nowa zakładka albo znaczek ma się pojawić w obu układach sam. Dotyczy też
+`PersonalDashboard` otwartego na tablecie. ⚠️ Harness bez
+`<meta name="viewport">` renderuje „telefon" na 980 px i pokazuje układ
+tabletu — `harness-kiosk.html` ma ten znacznik i sprawdza oba układy zależnie
+od szerokości okna.
+
 **Nowa osoba na próbę** — przycisk pod listą osób (ekran "NOWY" w
 `KioskDashboard.tsx`) zakłada konto komuś, kto przyszedł na dzień próbny, i od
 razu wpuszcza go do jego sesji. Pełny opis: "Pracownik na próbę" niżej.

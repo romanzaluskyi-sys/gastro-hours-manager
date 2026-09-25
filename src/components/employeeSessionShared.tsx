@@ -20,7 +20,8 @@ import {
 import { api } from "../api/supabase";
 import { sendToGoogleSheets, toLocalYMD } from "../api/googleSheets";
 import { createManagerNotification } from "../api/notifications";
-import { APP_VERSION } from "../config";
+import { APP_VERSION, PRODUKT } from "../config";
+import ShiftroMark from "./ShiftroMark";
 import { findOverlappingShift, opisKolidujacej, znajdzKolizjeWBazie, getTodaysShiftsForUser } from "../utils/shifts";
 import { zmianaTrwa } from "../utils/porzucone";
 import {
@@ -234,88 +235,106 @@ export const Shell = ({
   // Prywatny telefon pokazuje tylko bloki włączone dla lokalu; Tablet
   // Służbowy dostaje pełną listę i nic nie traci (patrz KioskDashboard).
   const widoczneTaby = TABS.filter((t) => !t.blok || bloki.includes(t.blok));
+  // ⚠️ DWA układy z jednego drzewa (0.47.0, prośba właściciela): na telefonie
+  // wąska kolumna z paskiem zakładek na DOLE; od `md` (768 px — tablet w
+  // pionie) pełna szerokość ekranu i zakładki w ciemnym pasku po LEWEJ, jak
+  // w panelu kierownika. Pasek jest jednym elementem przestawianym klasami
+  // (`order-last md:order-first`), a nie dwoma kopiami — dwie kopie zakładek
+  // rozjechałyby się przy pierwszej nowej zakładce albo znaczku.
+  const znaczekCls =
+    "absolute top-1 right-[18%] md:static md:ml-auto bg-[#DE3A22] text-white font-['Archivo'] font-extrabold text-[9.5px] md:text-[11px] min-w-[15px] md:min-w-[20px] h-[15px] md:h-5 rounded-[3px] flex items-center justify-center px-0.5 md:px-1.5";
   return (
     <div className="h-screen bg-white flex flex-col items-center overflow-hidden">
-      <div className="w-full max-w-md bg-white h-full flex flex-col shadow-lg overflow-hidden">
-        <header className="px-[18px] pt-[22px] pb-[14px] bg-[#F1F1EE] border-b-[1.5px] border-[#B7B6AE] flex items-center justify-between gap-2.5 flex-shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
-            {onBack && (
-              <button
-                onClick={onBack}
-                className="flex items-center gap-1 border-2 border-[#B7B6AE] rounded font-['Archivo'] font-bold text-sm px-3 py-2 text-[#171714] flex-shrink-0"
-              >
-                <ChevronLeft size={16} strokeWidth={2.5} /> Zmień
-              </button>
-            )}
-            {/* Na wspólnym tablecie tytuł ekranu ("Grafik", "Raport") nie
-                mówi, KTO jest wybrany — imię musi być stale widoczne obok
-                przycisku powrotu. Na Pulpicie tytułem jest już imię, więc
-                nie dublujemy. */}
-            {personName && personName !== title && (
-              <span className="font-['Archivo'] font-bold text-[15px] text-[#6E6E66] truncate flex-shrink-0">
-                {personName} ·
-              </span>
-            )}
-            <span className="font-['Archivo'] font-extrabold text-[19px] text-[#171714] truncate">
-              {title}
-            </span>
+      <div className="w-full max-w-md md:max-w-none bg-white h-full flex flex-col md:flex-row shadow-lg md:shadow-none overflow-hidden">
+        <nav className="order-last md:order-first flex md:flex-col md:w-60 border-t-[1.5px] md:border-t-0 border-[#B7B6AE] bg-white md:bg-[#3D3C36] flex-shrink-0">
+          {/* Znak i nazwa produktu tylko w bocznym pasku — na telefonie
+              dolny pasek nie ma na to miejsca, a nagłówek i tak mówi, gdzie
+              jesteśmy. */}
+          <div className="hidden md:flex items-center gap-2.5 px-5 pt-6 pb-5 border-b border-white/15">
+            <ShiftroMark size={26} tone="dark" />
+            <span className="font-['Archivo'] font-extrabold text-lg text-white">{PRODUKT}</span>
           </div>
-          {showPill ? (
-            <span className="flex-shrink-0 bg-[#FAEAE6] text-[#8A3A2B] text-[13px] font-semibold px-3.5 py-2 rounded">
-              na zmianie
-            </span>
-          ) : showBell && bloki.includes("WIADOMOSCI") ? (
-            <button
-              onClick={() => setScreen("WIADOMOSCI")}
-              className="relative border-2 border-[#B7B6AE] rounded w-11 h-11 flex items-center justify-center text-[#171714] flex-shrink-0"
-            >
-              <Bell size={19} />
-              {unreadCount > 0 && (
-                <span className="absolute -top-2 -right-2 bg-[#DE3A22] text-white font-['Archivo'] font-extrabold text-[11px] min-w-[18px] h-[18px] rounded flex items-center justify-center px-1">
-                  {unreadCount}
-                </span>
-              )}
-            </button>
-          ) : null}
-        </header>
-        <main className="flex-1 overflow-y-auto px-5 pt-6 pb-5 flex flex-col">
-          {children}
-        </main>
-        {footer}
-        <nav className="flex border-t-[1.5px] border-[#B7B6AE] bg-white flex-shrink-0">
           {widoczneTaby.map(({ key, label, Icon }) => {
             const active = activeTabKey === key;
             return (
               <button
                 key={key}
                 onClick={() => setScreen(key)}
-                className={`flex-1 flex flex-col items-center gap-1 py-3 pb-3.5 relative border-t-[2.5px] ${
+                className={`flex-1 md:flex-none flex flex-col md:flex-row items-center gap-1 md:gap-3 py-3 pb-3.5 md:py-4 md:px-5 relative border-t-[2.5px] md:border-t-0 md:border-l-[3px] md:w-full md:text-left ${
                   active
-                    ? "text-[#DE3A22] border-[#DE3A22]"
-                    : "text-[#8F8E86] border-transparent"
+                    ? "text-[#DE3A22] border-[#DE3A22] md:text-white md:bg-white/10"
+                    : "text-[#8F8E86] border-transparent md:text-[#C9C8C1]"
                 }`}
               >
                 <Icon size={20} />
-                <span className="text-[11px] font-semibold">{label}</span>
+                <span className="text-[11px] md:text-[16px] font-semibold md:font-['Archivo'] md:font-bold">
+                  {label}
+                </span>
                 {key === "WIECEJ" && unreadCount > 0 && (
-                  <span className="absolute top-1 right-[18%] bg-[#DE3A22] text-white font-['Archivo'] font-extrabold text-[9.5px] min-w-[15px] h-[15px] rounded-[3px] flex items-center justify-center px-0.5">
-                    {unreadCount}
-                  </span>
+                  <span className={znaczekCls}>{unreadCount}</span>
                 )}
                 {key === "GRAFIK" && grafikBadgeCount > 0 && (
-                  <span className="absolute top-1 right-[18%] bg-[#DE3A22] text-white font-['Archivo'] font-extrabold text-[9.5px] min-w-[15px] h-[15px] rounded-[3px] flex items-center justify-center px-0.5">
-                    {grafikBadgeCount}
-                  </span>
+                  <span className={znaczekCls}>{grafikBadgeCount}</span>
                 )}
                 {key === "ZADANIA" && taskBadgeCount > 0 && (
-                  <span className="absolute top-1 right-[18%] bg-[#DE3A22] text-white font-['Archivo'] font-extrabold text-[9.5px] min-w-[15px] h-[15px] rounded-[3px] flex items-center justify-center px-0.5">
-                    {taskBadgeCount}
-                  </span>
+                  <span className={znaczekCls}>{taskBadgeCount}</span>
                 )}
               </button>
             );
           })}
         </nav>
+        <div className="flex-1 min-w-0 min-h-0 flex flex-col">
+          <header className="px-[18px] md:px-8 pt-[22px] pb-[14px] bg-[#F1F1EE] border-b-[1.5px] border-[#B7B6AE] flex items-center justify-between gap-2.5 flex-shrink-0">
+            <div className="flex items-center gap-3 min-w-0">
+              {onBack && (
+                <button
+                  onClick={onBack}
+                  className="flex items-center gap-1 border-2 border-[#B7B6AE] rounded font-['Archivo'] font-bold text-sm px-3 py-2 text-[#171714] flex-shrink-0"
+                >
+                  <ChevronLeft size={16} strokeWidth={2.5} /> Zmień
+                </button>
+              )}
+              {/* Na wspólnym tablecie tytuł ekranu ("Grafik", "Raport") nie
+                  mówi, KTO jest wybrany — imię musi być stale widoczne obok
+                  przycisku powrotu. Na Pulpicie tytułem jest już imię, więc
+                  nie dublujemy. */}
+              {personName && personName !== title && (
+                <span className="font-['Archivo'] font-bold text-[15px] text-[#6E6E66] truncate flex-shrink-0">
+                  {personName} ·
+                </span>
+              )}
+              <span className="font-['Archivo'] font-extrabold text-[19px] text-[#171714] truncate">
+                {title}
+              </span>
+            </div>
+            {showPill ? (
+              <span className="flex-shrink-0 bg-[#FAEAE6] text-[#8A3A2B] text-[13px] font-semibold px-3.5 py-2 rounded">
+                na zmianie
+              </span>
+            ) : showBell && bloki.includes("WIADOMOSCI") ? (
+              <button
+                onClick={() => setScreen("WIADOMOSCI")}
+                className="relative border-2 border-[#B7B6AE] rounded w-11 h-11 flex items-center justify-center text-[#171714] flex-shrink-0"
+              >
+                <Bell size={19} />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-2 -right-2 bg-[#DE3A22] text-white font-['Archivo'] font-extrabold text-[11px] min-w-[18px] h-[18px] rounded flex items-center justify-center px-1">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+            ) : null}
+          </header>
+          {/* Na tablecie treść ma szerokość ekranu, ale nie rozlewa się na
+              całą: formularz albo przycisk "Rozpocznij zmianę" na 900 px
+              szerokości czyta się gorzej niż w kolumnie. Wewnętrzna kolumna
+              zostaje `flex-col`, bo ekrany spychają przyciski na dół
+              `flex-1`-owym odstępem. */}
+          <main className="flex-1 overflow-y-auto px-5 md:px-8 pt-6 pb-5 flex flex-col">
+            <div className="flex-1 flex flex-col w-full md:max-w-3xl md:mx-auto">{children}</div>
+          </main>
+          {footer}
+        </div>
       </div>
     </div>
   );

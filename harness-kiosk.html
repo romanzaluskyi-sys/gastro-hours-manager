@@ -1,4 +1,7 @@
 <meta charset="utf-8">
+<!-- Jak w public/index.html. Bez tego emulowany telefon renderuje stronę na
+     980 px i łapie układ TABLETU (md), więc podgląd telefonu kłamie. -->
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tablet Służbowy</title>
 <!-- Montuje KioskDashboard, czyli Tablet Służbowy: ekran wyboru osoby i to,
      co widać po jej wybraniu. Urządzenie stoi na sali otwarte cały dzień i
@@ -383,6 +386,16 @@ const poprzedniMiesiac = (h) => {
         await czekaj(500);
         sprawdz("lista osób się pokazała", widac("Dorota"));
 
+        // Układ tabletu (0.47.0): od 768 px osoby stoją po trzy w rzędzie.
+        // CI chodzi w oknie 1280 px, więc sprawdzamy wersję tabletową;
+        // telefon (poniżej 768 px) ma zostać jedną kolumną.
+        const siatka = [...document.querySelectorAll("#app .grid")]
+          .find((g) => g.textContent.includes("Dorota"));
+        const kolumn = siatka
+          ? getComputedStyle(siatka).gridTemplateColumns.split(" ").length : 0;
+        sprawdz(innerWidth >= 768 ? "tablet: osoby po trzy w rzędzie" : "telefon: osoby w jednej kolumnie",
+          kolumn === (innerWidth >= 768 ? 3 : 1), `kolumn ${kolumn} przy ${innerWidth} px`);
+
         klik("Dorota"); await czekaj(200);
         sprawdz("osoba z PIN-em prowadzi do klawiatury", widac("Ten profil jest zablokowany"));
 
@@ -454,6 +467,18 @@ const poprzedniMiesiac = (h) => {
         sprawdz("profil bez PIN-u wchodzi od razu bez pytania",
           !widac("Ten profil jest zablokowany"),
           (document.getElementById("app").innerText || "").slice(0, 120));
+
+        // Zakładki: na tablecie pasek po LEWEJ (jak panel kierownika), na
+        // telefonie na DOLE. Jeden element <nav>, przestawiany klasami.
+        {
+          const nav = document.querySelector("#app nav").getBoundingClientRect();
+          const tresc = document.querySelector("#app main").getBoundingClientRect();
+          sprawdz(innerWidth >= 768 ? "tablet: zakładki w pasku po lewej" : "telefon: zakładki na dole",
+            innerWidth >= 768
+              ? nav.right <= tresc.left + 1 && nav.height > nav.width
+              : nav.top >= tresc.bottom - 1,
+            `nav ${Math.round(nav.left)}–${Math.round(nav.right)} × ${Math.round(nav.top)}–${Math.round(nav.bottom)}, main od ${Math.round(tresc.left)}`);
+        }
 
         // --- okno tolerancji wpisu (0.45.0) ---
         //
