@@ -2407,14 +2407,16 @@ wpisu i to jest poprawne — dlatego na takim urządzeniu (`lokaleOptions.length
 na liście pokazuje jej lokal. Właściciel wziął to 25.09.2026 za pomieszanie
 ustawień.
 
-⚠️ **„Inna godzina" to WIDOCZNY przycisk i WIDOCZNE pole** (`innyStart`/
-`innyKoniec` w `employeeSessionShared.tsx`, 0.47.0). Nie wracaj do pola
-`type="time"` z `opacity-0` położonego na czymś innym — a już na pewno nie W
-ŚRODKU `<button>`: na iPadzie takie pole często się nie otwiera i ekran
-wyglądał, jakby innej godziny nie dało się wpisać. Samo wybranie godziny
-niczego nie zapisuje (kółko iPada potrafi wysłać zmianę w trakcie
-przewijania); zapisuje przycisk z godziną w nazwie. `null` = „teraz”, liczone
-w chwili NACIŚNIĘCIA, nie otwarcia formularza.
+⚠️ **Duża godzina startu/końca to WIDOCZNE pole `type="time"`**
+(`PoleGodziny` w `employeeSessionShared.tsx`, od 0.55.4; wcześniej osobny
+przycisk „Wybierz inną godzinę", 0.47.0). Dotknięcie od razu otwiera wybór
+godziny — prośba właściciela. Nie wracaj do pola z `opacity-0` położonego na
+czymś innym — a już na pewno nie W ŚRODKU `<button>`: na iPadzie takie pole
+często się nie otwiera. Samo wybranie godziny niczego nie zapisuje (kółko
+iPada potrafi wysłać zmianę w trakcie przewijania); zapisuje przycisk z
+godziną w nazwie. `null` (`innyStart`/`innyKoniec`) = „teraz”, liczone w
+chwili NACIŚNIĘCIA, nie otwarcia formularza; na czas wyboru pole zamraża
+godzinę, żeby tykający zegar nie przestawił kółka.
 
 ## Pracownik na próbę — dodane 2026-09-19 (0.40.0)
 

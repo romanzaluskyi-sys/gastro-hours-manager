@@ -5,6 +5,15 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.55.4 — 2026-09-26
+
+- **Rozpoczęcie i zakończenie zmiany (tablet i telefon pracownika)**: dużą
+  godzinę można od razu dotknąć i wybrać inną — bez przycisku „Wybierz inną
+  godzinę" i drugiego okienka. Domyślnie stoi „teraz", przycisk pod spodem
+  mówi „Rozpocznij / Zakończ zmianę o XX:XX" i dopiero on zapisuje. „Wróć do
+  „teraz"" przywraca bieżącą godzinę. To samo pole przy „Znam godzinę
+  zakończenia".
+
 ## 0.55.3 — 2026-09-26
 
 - **Grafik**: w wierszu „Razem" na dole siatki znowu stoi dzień tygodnia i

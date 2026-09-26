@@ -23,6 +23,11 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.55.4",
+    date: "2026-09-26",
+    items: ["Start i koniec zmiany: dotknij dużej godziny, wybierz inną, a przycisk „… o XX:XX” zapisze."],
+  },
+  {
     version: "0.55.3",
     date: "2026-09-26",
     items: ["Grafik: dzień i data powtórzone w wierszu „Razem” na dole siatki."],
