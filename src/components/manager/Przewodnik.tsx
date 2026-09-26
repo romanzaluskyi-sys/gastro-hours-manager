@@ -23,6 +23,14 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.55.2",
+    date: "2026-09-26",
+    items: [
+      "Przypisanie: osoby bez stanowiska zwinięte pod strzałką.",
+      "Godziny po zmianie doliczają się tylko wybranej osobie, nie wszystkim kandydatom.",
+    ],
+  },
+  {
     version: "0.55.1",
     date: "2026-09-26",
     items: [

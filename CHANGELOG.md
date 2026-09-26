@@ -5,6 +5,15 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.55.2 — 2026-09-26
+
+- **Przypisanie zmiany**: osoby bez wybranego stanowiska są zwinięte pod
+  strzałką („Bez stanowiska „Kierowca" · 3") i pokazują się dopiero po
+  kliknięciu. Wybrana z tej grupy osoba nie chowa się po zwinięciu.
+- **Godziny po zmianie liczą się tylko wybranej osobie.** Zaznaczanie kolejnych
+  dni doliczało godziny wszystkim kandydatom naraz; teraz pozostali pokazują
+  godziny, które już mają, a lista nie zmienia kolejności przy wyborze.
+
 ## 0.55.1 — 2026-09-26
 
 - **Grafik na telefonie**: pasek ma zawsze te same trzy rzędy — na górze

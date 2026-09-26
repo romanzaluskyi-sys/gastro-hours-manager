@@ -3428,8 +3428,12 @@ nie widać:
   (`godzinyZWymagan` + godziny luki), nie parami z wymagań — prośba
   właściciela z 0.55.1: przy 8:30–21:00 i 10:30–19:00 sensowna bywa 10:30–21:00.
 - **Osoby bez wybranego stanowiska są zawsze na liście** — na końcu, na
-  szaro (`data-bez-stanowiska`), a najniżej ci bez lokalu i stanowiska w
-  karcie. Po wyborze panel proponuje „Dopisz do karty" (`onAddStanowisko`).
+  szaro (`data-bez-stanowiska`), zwinięte pod strzałką (0.55.2), a najniżej
+  ci bez lokalu i stanowiska w karcie. Po wyborze panel proponuje „Dopisz do
+  karty" (`onAddStanowisko`).
+- **Godziny „po tej zmianie" pokazuje TYLKO wybrana osoba** (`godzinyGdyby`);
+  pozostali — to, co już mają (`godzinyTeraz`), i po tym też sortujemy, żeby
+  lista nie skakała. Uwagi („ponad normę") liczą się dalej z wariantu „gdyby".
 - **Telefon (0.55.1)**: pasek ma trzy stałe rzędy przez `order-*` — okres
   (krótka etykieta, `fmtZakres`), Podgląd/Edycja + Konfiguracja, Tydzień/
   Miesiąc. Przycisk „Dzień" jest `hidden md:inline-flex`.

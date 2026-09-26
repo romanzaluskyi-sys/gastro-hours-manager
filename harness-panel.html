@@ -1380,6 +1380,10 @@ const poprzedniMiesiac = (h) => {
             szybkie("poczatek").some((b) => b.textContent === odLuki.slice(0, 5)) &&
               szybkie("koniec").some((b) => b.textContent === doLuki.slice(0, 5)),
             szybkie("poczatek").map((b) => b.textContent).join(",") + " / " + szybkie("koniec").map((b) => b.textContent).join(","));
+          sprawdz("osoby bez stanowiska schowane pod strzałką, dopóki się nie kliknie",
+            !panel().querySelector("[data-bez-stanowiska]") && !!panel().querySelector("[data-rozwin-bez-stanowiska]"));
+          panel().querySelector("[data-rozwin-bez-stanowiska]").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          await czekaj(150);
           const szary = panel().querySelector("[data-bez-stanowiska]:not([disabled])");
           sprawdz("osoby bez tego stanowiska są na liście, na szaro, na końcu", !!szary &&
             [...panel().querySelectorAll("[data-kandydat]")].indexOf(szary) >
@@ -1391,6 +1395,22 @@ const poprzedniMiesiac = (h) => {
           panel().querySelector(`[data-kandydat="${kandydat.getAttribute("data-kandydat")}"]`)
             .dispatchEvent(new MouseEvent("click", { bubbles: true }));
           await czekaj(200);
+          // Dodatkowy dzień dolicza godziny TYLKO wybranej osobie.
+          const godzOsoby = (n) => panel().querySelector(`[data-kandydat="${n}"]`).lastElementChild.textContent;
+          const inny = [...panel().querySelectorAll("[data-kandydat]")]
+            .find((b) => b.getAttribute("data-kandydat") !== kandydat.getAttribute("data-kandydat"));
+          const nazwaWybranej = kandydat.getAttribute("data-kandydat");
+          const nazwaInnej = inny && inny.getAttribute("data-kandydat");
+          const przedW = godzOsoby(nazwaWybranej), przedI = nazwaInnej ? godzOsoby(nazwaInnej) : "";
+          const wolnyDzien = [...panel().querySelectorAll("[data-dzien-panelu]")].find((b) => !b.className.includes("bg-[#171714]"));
+          wolnyDzien.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          await czekaj(200);
+          sprawdz("zaznaczenie dnia dolicza godziny tylko wybranej osobie",
+            godzOsoby(nazwaWybranej) !== przedW && (!nazwaInnej || godzOsoby(nazwaInnej) === przedI),
+            `${przedW} → ${godzOsoby(nazwaWybranej)} / ${przedI} → ${nazwaInnej ? godzOsoby(nazwaInnej) : ""}`);
+          panel().querySelector(`[data-dzien-panelu="${wolnyDzien.getAttribute("data-dzien-panelu")}"]`)
+            .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          await czekaj(150);
           sprawdz("wybór osoby pokazuje skutek dla obsady i uwagi",
             /Pokryje/.test(panel().querySelector("[data-skutek]").textContent) && !!panel().querySelector("[data-uwagi-zmiany]"),
             panel().querySelector("[data-skutek]").textContent);

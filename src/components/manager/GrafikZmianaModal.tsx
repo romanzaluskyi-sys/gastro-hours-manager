@@ -18,7 +18,7 @@
 // Zapis idzie przez onSave/onDelete z GrafikTydzien — panel sam nie pisze do
 // bazy. Reguły (kolizje, godziny z wymagań, obsada) żyją w utils/grafik.ts.
 import React, { useState, useEffect } from "react";
-import { AlertTriangle, Check, Plus, X } from "lucide-react";
+import { AlertTriangle, Check, ChevronRight, Plus, X } from "lucide-react";
 import { stanowiskoShort, stanowiskoBadgeStyle } from "../../utils/stanowiska";
 import {
   trimTime,
@@ -123,6 +123,9 @@ export default function GrafikZmianaModal({
   const [wolneForm, setWolneForm] = useState(null);
   // Godziny ruszone ręcznie nie są nadpisywane przy zmianie stanowiska.
   const [godzinyRuszone, setGodzinyRuszone] = useState(edycja || !!ctx.luka);
+  // Osoby bez wybranego stanowiska są zwinięte pod strzałką — rzadko ich
+  // szukamy, a zajmowały pół panelu.
+  const [pokazBezStanowiska, setPokazBezStanowiska] = useState(false);
 
   const user = (users || []).find((u) => String(u.id) === String(userId)) || (userId ? ctx.user : null);
   const rulesForDay = getRulesForDate(
@@ -180,16 +183,22 @@ export default function GrafikZmianaModal({
 
   // Godziny w miesiącu PO tej zmianie. Przy edycji odejmujemy starą wersję,
   // o ile należała do tej samej osoby — inaczej policzylibyśmy ją dwa razy.
-  const godzinyPo = (u) => {
-    const baza = godzinyMiesiaca ? godzinyMiesiaca(u) : 0;
+  // Godziny w miesiącu TERAZ (to, co już stoi w grafiku) i GDYBY dostał(a)
+  // tę zmianę. Na liście pokazujemy "gdyby" WYŁĄCZNIE przy wybranej osobie —
+  // doliczanie zaznaczonych dni wszystkim kandydatom naraz sugerowało, że
+  // każdemu przybywa godzin (prośba właściciela, 0.55.2). "Gdyby" dla
+  // pozostałych liczy się dalej po cichu — do uwag ("ponad normę").
+  const godzinyTeraz = (u) => (godzinyMiesiaca ? godzinyMiesiaca(u) : 0);
+  const godzinyGdyby = (u) => {
     const stara =
       edycja && String(ctx.shift.user_id) === String(u.id) ? shiftLengthMin(ctx.shift) / 60 : 0;
-    return baza - stara + dodaneH;
+    return godzinyTeraz(u) - stara + dodaneH;
   };
+  const wybrany = (u) => String(u.id) === String(userId);
 
-  const opisNormy = (u) => {
+  const opisNormy = (u, { gdyby = wybrany(u) } = {}) => {
     const norma = normaMiesiaca(u, rok, mies);
-    const po = godzinyPo(u);
+    const po = gdyby ? godzinyGdyby(u) : godzinyTeraz(u);
     if (norma == null) return { norma: null, po, ponad: 0 };
     const r = Math.round((po - norma) * 10) / 10;
     return {
@@ -221,7 +230,7 @@ export default function GrafikZmianaModal({
           planShifts,
           absences,
           stanowisko,
-          ponadNorme: opisNormy(u).ponad,
+          ponadNorme: opisNormy(u, { gdyby: true }).ponad,
           pomijajId: ctx.shift?.id || null,
         });
 
@@ -234,7 +243,9 @@ export default function GrafikZmianaModal({
   const lista = aktywni.map((u) => ({
     u,
     przeszkoda: przeszkodaDla(u),
-    godziny: godzinyPo(u),
+    // Sortujemy po godzinach SPRZED zmiany — kolejność nie może skakać przy
+    // wyborze osoby albo dni.
+    godziny: godzinyTeraz(u),
   }));
   const sortuj = (a, b) => (a.przeszkoda ? 1 : 0) - (b.przeszkoda ? 1 : 0) || a.godziny - b.godziny;
   const lokalni = lista.filter((k) => zTegoLokalu(k.u) && (umie(k.u) || zawsze(k.u))).sort(sortuj);
@@ -592,10 +603,28 @@ export default function GrafikZmianaModal({
           )}
           {reszta.length > 0 && (
             <div className="flex flex-col gap-1.5" data-kandydaci-bez-stanowiska>
-              <span className={etykietaCls}>
-                {stanowisko ? `Bez stanowiska „${stanowisko}” · po wyborze dopiszesz je do karty` : "Pozostali"}
-              </span>
-              {reszta.map((k) => kandydatRzad(k))}
+              {(() => {
+                // Wybrana osoba z tej grupy nie może się schować po zwinięciu.
+                const otwarte = pokazBezStanowiska || reszta.some((k) => wybrany(k.u));
+                return (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setPokazBezStanowiska((v) => !v)}
+                      aria-expanded={otwarte}
+                      className={`${etykietaCls} flex items-center gap-1.5 text-left hover:text-[#171714]`}
+                      data-rozwin-bez-stanowiska
+                    >
+                      <ChevronRight size={16} className={`flex-shrink-0 transition-transform ${otwarte ? "rotate-90" : ""}`} />
+                      <span>
+                        {stanowisko ? `Bez stanowiska „${stanowisko}” · po wyborze dopiszesz je do karty` : "Pozostali"} ·{" "}
+                        {reszta.length}
+                      </span>
+                    </button>
+                    {otwarte && reszta.map((k) => kandydatRzad(k))}
+                  </>
+                );
+              })()}
             </div>
           )}
 
