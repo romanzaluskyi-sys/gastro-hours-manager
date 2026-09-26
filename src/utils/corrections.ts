@@ -161,6 +161,15 @@ export const resolveCorrection = async ({
   };
 };
 
+// Zamknięcie korekty BEZ zmiany godzin — dziś tylko dla duplikatu (ta sama
+// prośba wysłana dwa razy, zwykle podwójne dotknięcie na tablecie). Bez
+// powiadomienia: pracownik dostaje odpowiedź na pierwszą, identyczną prośbę,
+// a druga wiadomość o tym samym tylko by go myliła. Bez śladu w shift_edits,
+// bo niczego w godzinach nie zmieniamy.
+export const odrzucKorekte = async (issue) => {
+  await api.patch("issues", issue.id, { status: "rozwiazane" });
+};
+
 // "Zapytaj" — kierownik prosi pracownika o doprecyzowanie, bez rozwiązywania zgłoszenia.
 export const askAboutCorrection = async (issue, editorName) => {
   if (!issue.user_name) return;
@@ -171,4 +180,89 @@ export const askAboutCorrection = async (issue, editorName) => {
     }. Odpowiedz w Wiadomościach albo popraw zgłoszenie.`,
     "correction_query"
   );
+};
+
+// Propozycja pracownika w kształcie `finalValues` dla resolveCorrection —
+// "Zatwierdź" bez żadnej poprawki. Woła ją i "Do decyzji", i szybkie ✓ na
+// Pulpicie; oba mają zapisać dokładnie to samo.
+export const propozycjaKorekty = (issue) => ({
+  date: issue.proposed_date,
+  lokal: issue.proposed_lokal,
+  stanowisko: issue.proposed_stanowisko,
+  start: issue.proposed_start_time,
+  end: issue.proposed_end_time,
+});
+
+// Po resolveCorrection: zgłoszenie rozwiązane, zmiana podmieniona (albo
+// dopisana, gdy to "Zapomniałem odbić"), ślad w historii. `shiftEdit` bywa
+// pusty, gdy wiersz godzin już istniał i nie tworzyliśmy go drugi raz —
+// patrz znajdzKolizjeWBazie wyżej.
+export const wlozKorekteDoStanu = (issueId, { shift, shiftEdit }, { setIssues, setShifts, setShiftEdits }) => {
+  setIssues((prev) =>
+    prev.map((iss) => (iss.id === issueId ? { ...iss, status: "rozwiazane" } : iss))
+  );
+  setShifts((prev) => {
+    const exists = prev.some((s) => s.id === shift.id);
+    return exists ? prev.map((s) => (s.id === shift.id ? shift : s)) : [...prev, shift];
+  });
+  if (shiftEdit && setShiftEdits) setShiftEdits((prev) => [...prev, shiftEdit]);
+};
+
+// Ta sama prośba wysłana dwa razy (podwójne dotknięcie na tablecie, dwa
+// urządzenia). Zwraca id KOLEJNYCH kopii — pierwsza zostaje zwykłą korektą.
+// `issues` mają być posortowane od najstarszej, inaczej "pierwsza" znaczy
+// cokolwiek.
+export const duplikatyKorekt = (issues) => {
+  const odcisk = (iss) =>
+    [
+      iss.user_id,
+      iss.proposed_date,
+      iss.proposed_start_time,
+      iss.proposed_end_time || "",
+      iss.shift_id || "",
+    ].join("|");
+  const widziane = new Set();
+  const duplikaty = new Set();
+  for (const iss of issues || []) {
+    const k = odcisk(iss);
+    if (widziane.has(k)) duplikaty.add(iss.id);
+    widziane.add(k);
+  }
+  return duplikaty;
+};
+
+// Ślad RĘCZNEJ zmiany wpisu z Rejestru godzin (od 0.50.0): dodanie, edycja,
+// usunięcie. Do 0.49.0 w `shift_edits` lądowały tylko korekty zatwierdzone w
+// "Do decyzji", a kierownik poprawiający godziny wprost w Rejestrze nie
+// zostawiał żadnego śladu — "kto i dlaczego zmienił mi godziny" nie miało
+// odpowiedzi. `stara`/`nowa` to wiersze `shifts` (start_time/end_time jako
+// Date) albo null.
+//
+// ⚠️ NIE rzuca: godziny są już zapisane, a wyjątek pokazałby "Błąd zapisu"
+// po operacji, która się udała. Zwraca wiersz albo null.
+export const zapiszSladRecznejZmiany = async ({ stara, nowa, editorName, reason, source }) => {
+  const opis = (s, przedrostek) =>
+    s
+      ? {
+          [`${przedrostek}_date`]: toLocalYMD(s.start_time),
+          [`${przedrostek}_lokal`]: s.lokal,
+          [`${przedrostek}_stanowisko`]: s.stanowisko,
+          [`${przedrostek}_start_time`]: fmtHHMM(s.start_time),
+          [`${przedrostek}_end_time`]: s.end_time ? fmtHHMM(s.end_time) : null,
+        }
+      : {};
+  try {
+    return await api.post("shift_edits", {
+      shift_id: String((nowa || stara).id),
+      issue_id: null,
+      editor_name: editorName,
+      reason: reason || null,
+      ...opis(stara, "old"),
+      ...opis(nowa, "new"),
+      source,
+    });
+  } catch (e) {
+    console.error("Nie zapisano śladu zmiany:", e);
+    return null;
+  }
 };

@@ -1,104 +1,84 @@
 // @ts-nocheck
-// Dwa modale trybu Edycja w Grafiku:
-//  • GrafikZmianaModal — wpisanie/edycja jednej zmiany (klik w komórkę),
-//  • GrafikBlokadaModal — odmowa, gdy godziny kolidują albo pracownik ma
-//    zatwierdzone wolne.
-// Trzymane razem, bo jedno prowadzi do drugiego i dzielą ten sam kontekst.
+// Grafik → przypisanie zmiany w PANELU z boku (na telefonie arkusz od dołu),
+// zamiast modala — układ z makiety właściciela z 2026-09-25 (ScheduleAssign).
+// W tym samym pliku zostaje GrafikBlokadaModal (odmowa przy kolizji / wolnym).
 //
-// Zapis idzie przez onSave/onDelete z GrafikTydzien — modal sam nie pisze
-// do bazy. Reguły (kolizje, podpowiadane godziny) żyją w utils/grafik.ts.
+// Kolejność pytań jest kolejnością, w jakiej układa się grafik:
+//   1. stanowisko (w tym lokalu),
+//   2. godziny — z szybkimi przyciskami z wymagań obsady i z klikniętej luki,
+//   3. dni (przy nowej zmianie można zaznaczyć kilka — powstaje N osobnych
+//      wierszy, NIE reguła powtarzania),
+//   4. KTO — kandydaci z tego lokalu posortowani od najmniejszej liczby
+//      godzin w miesiącu, potem osoby z innych lokali, które mają to
+//      stanowisko. Zajęci / niedostępni stoją wyszarzeni z powodem.
+// Pod spodem skutek (ile luk zamyka, ile kosztuje) i pełna lista uwag
+// (`uwagiPrzypisania` w utils/kodeks.ts). ⚠️ Uwagi to sygnał, nie blokada —
+// przycisk zmienia się na "Przypisz mimo uwag".
+//
+// Zapis idzie przez onSave/onDelete z GrafikTydzien — panel sam nie pisze do
+// bazy. Reguły (kolizje, godziny z wymagań, obsada) żyją w utils/grafik.ts.
 import React, { useState, useEffect } from "react";
-import { AlertTriangle, Trash2, Plus } from "lucide-react";
-import { btnPrimaryCls, btnSecondaryCls, statLabelCls } from "./designTokens";
+import { AlertTriangle, Check, ChevronRight, Plus, X } from "lucide-react";
 import { stanowiskoShort, stanowiskoBadgeStyle } from "../../utils/stanowiska";
 import {
   trimTime,
+  timeToMin,
   defaultHoursForStanowisko,
+  godzinyZWymagan,
   getRulesForDate,
   knowsStanowisko,
-  findBlockingAbsence,
-  poOstatnimDniu,
-  allowedStanowiskaArr,
-  addDaysYMD,
-  godzinyZWymagan,
+  checkDayCoverage,
+  shiftLengthMin,
+  krotkaGodzina,
 } from "../../utils/grafik";
-import { ostrzezeniaKodeksu } from "../../utils/kodeks";
-import { naEtacie } from "../../utils/umowy";
+import { uwagiPrzypisania } from "../../utils/kodeks";
+import { naEtacie, normaMiesiaca } from "../../utils/umowy";
+import { kosztGodziny, zl } from "../../utils/budzet";
+import PoleCzasu from "./PoleCzasu";
 
-const DZIEN_PELNY = ["ND", "PON", "WT", "ŚR", "CZW", "PT", "SOB"];
-
-const fmtNaglowek = (dateStr) => {
-  const d = new Date(dateStr + "T00:00:00");
-  return `${DZIEN_PELNY[d.getDay()]} ${d.toLocaleDateString("pl-PL", {
-    day: "numeric",
-    month: "short",
-  })}`;
+const DNI = ["nd", "pn", "wt", "śr", "czw", "pt", "sob"];
+const dzienKrotko = (d) => {
+  const dt = new Date(d + "T00:00:00");
+  return `${DNI[dt.getDay()]} ${dt.toLocaleDateString("pl-PL", { day: "numeric", month: "short" })}`;
 };
+const hLiczba = (h) => String(Math.round((h || 0) * 10) / 10).replace(".", ",");
+const inicjaly = (n) =>
+  String(n || "?")
+    .split(/\s+/)
+    .map((x) => x[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
-// Ten sam słownik co w nagłówku siatki (GrafikTydzien) — świadomie
-// zduplikowany zamiast eksportowany, bo to trzy słowa, a nie logika.
-const DNI_SKROT = ["ND", "PON", "WT", "ŚR", "CZW", "PT", "SOB"];
-
-// Polska odmiana: 2–4 "powstaną N osobne zmiany", 5+ "powstanie N osobnych
-// zmian" (poza 12–14).
-const osobneZmiany = (n) => {
-  const ost = n % 10;
-  const dwie = n % 100;
-  return ost >= 2 && ost <= 4 && !(dwie >= 12 && dwie <= 14)
-    ? `Powstaną ${n} osobne zmiany`
-    : `Powstanie ${n} osobnych zmian`;
-};
-
-// Kafelek wyboru "stanowisko + lokal". Lokal dopisujemy tylko wtedy, gdy
-// jest inny niż tabela, z której otwarto modal — inaczej byłby szumem przy
-// każdym kafelku.
-function ParaKafelek({ para, wybrana, obcyLokal, activeStanowiska, onClick }) {
-  const style = stanowiskoBadgeStyle(activeStanowiska, para.lokal, para.stanowisko);
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`px-2 py-1.5 rounded border-[2px] flex items-center gap-1.5 ${
-        wybrana ? "border-[#171714] bg-[#F1F1EE]" : "border-[#B7B6AE] bg-white"
-      }`}
-    >
-      <span
-        className="px-1.5 py-0.5 rounded text-[11px] font-extrabold"
-        style={style || { backgroundColor: "#E7E7E2", color: "#171714" }}
-      >
-        {stanowiskoShort(activeStanowiska, para.lokal, para.stanowisko)}
-      </span>
-      <span className="text-[13px] font-bold">{para.stanowisko}</span>
-      {obcyLokal && (
-        <span className="text-[12px] font-normal text-[#8A3A2B]">· {para.lokal}</span>
-      )}
-    </button>
-  );
-}
+const etykietaCls = "text-[12px] leading-4 font-bold tracking-[0.06em] uppercase text-[#6E6E66]";
+const chipCls = (on) =>
+  `inline-flex items-center gap-1.5 h-9 px-3 rounded-full border-[1.5px] text-[13px] font-semibold whitespace-nowrap ${
+    on ? "bg-[#171714] border-[#171714] text-white" : "bg-white border-[#DEDCD4] text-[#171714] hover:border-[#171714]"
+  }`;
+const btnCls =
+  "inline-flex items-center justify-center gap-2 min-h-[48px] md:min-h-[44px] px-4 rounded-lg border-[2px] font-['Archivo'] font-bold text-[15px] whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed";
+const btnObrysCls = `${btnCls} border-[#171714] bg-white text-[#171714] enabled:hover:bg-[#F6F5F1]`;
+const btnGlownyCls = `${btnCls} border-[#DE3A22] bg-[#DE3A22] text-white enabled:hover:bg-[#B8321A]`;
 
 export function GrafikBlokadaModal({ powod, onClose, onNotify }) {
   if (!powod) return null;
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl border-[2px] border-[#DE3A22] w-full max-w-lg">
-        <div className="px-5 py-4 border-b-[2px] border-[#DE3A22] flex items-center justify-between">
-          <h3 className="font-['Archivo'] font-extrabold text-lg">
-            Nie można wpisać zmiany
-          </h3>
-          <button onClick={onClose} className={btnSecondaryCls}>
-            Zamknij
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[60]">
+      <div className="bg-white rounded-xl border-[2px] border-[#DE3A22] w-full max-w-lg" data-blokada-zmiany>
+        <div className="px-5 py-4 border-b-[2px] border-[#DE3A22] flex items-center justify-between gap-3">
+          <h3 className="font-['Archivo'] font-extrabold text-lg">Nie można wpisać zmiany</h3>
+          <button onClick={onClose} className="w-10 h-10 grid place-items-center rounded-lg hover:bg-[#F6F5F1]" aria-label="Zamknij">
+            <X size={18} />
           </button>
         </div>
         <div className="p-5 space-y-3">
           <p className="text-[15px]">{powod.tekst}</p>
-          {powod.podpowiedz && (
-            <p className="text-[13px] text-[#6E6E66]">{powod.podpowiedz}</p>
-          )}
-          <div className="flex gap-2 pt-1">
-            <button onClick={() => onNotify(powod)} className={btnSecondaryCls}>
+          {powod.podpowiedz && <p className="text-[13px] text-[#6E6E66]">{powod.podpowiedz}</p>}
+          <div className="flex gap-2 pt-1 flex-wrap">
+            <button onClick={() => onNotify(powod)} className={btnObrysCls}>
               Napisz do pracownika
             </button>
-            <button onClick={onClose} className={btnSecondaryCls}>
+            <button onClick={onClose} className={btnObrysCls}>
               Anuluj
             </button>
           </div>
@@ -113,196 +93,210 @@ export default function GrafikZmianaModal({
   users,
   activeStanowiska,
   lokaleNames,
+  lokale = [],
   absences,
   staffingRules,
   staffingRuleSets,
   grafikWyjatki,
   planShifts,
   weekDays,
+  przeszkodaDnia,
+  godzinyMiesiaca,
   onSave,
   onDelete,
   onAddStanowisko,
   onAddAbsence,
   onClose,
 }) {
-  // Otwarcie z nagłówka tabeli ("Dodaj pracownika") nie zna jeszcze dnia —
-  // wtedy modal pokazuje wybór dnia z bieżącego tygodnia. Z komórki dzień
-  // jest znany i pozostaje stały.
-  const [date, setDate] = useState(ctx.date);
-  const [userId, setUserId] = useState(ctx.user?.id || null);
-  // `ctx.stanowisko` przychodzi z siatki "wg stanowisk": tam kierownik klika
-  // konkretny wiersz, więc stanowisko jest już wybrane i wybór osoby nie ma
-  // prawa go nadpisać (stąd `stanowiskoRuszone` od razu na true niżej).
+  const edycja = !!ctx.shift;
+  const [lokal, setLokal] = useState(ctx.shift?.lokal || ctx.lokal);
+  const [dni, setDni] = useState([ctx.shift?.date || ctx.date]);
+  const date = dni[0];
+  const [userId, setUserId] = useState(ctx.shift?.user_id || ctx.user?.id || null);
   const [stanowisko, setStanowisko] = useState(
     ctx.shift?.stanowisko || ctx.stanowisko || ctx.user?.default_stanowisko || ""
   );
-  const [lokal, setLokal] = useState(ctx.shift?.lokal || ctx.lokal);
-  const [start, setStart] = useState(trimTime(ctx.shift?.start_time) || "");
-  const [end, setEnd] = useState(trimTime(ctx.shift?.end_time) || "");
+  const [start, setStart] = useState(trimTime(ctx.shift?.start_time) || ctx.luka?.from || "");
+  const [end, setEnd] = useState(trimTime(ctx.shift?.end_time) || ctx.luka?.to || "");
   const [saving, setSaving] = useState(false);
   const [dopisywanie, setDopisywanie] = useState(false);
-  // Czy kierownik sam wskazał stanowisko. Jeśli tak, wybór osoby go już nie
-  // nadpisuje — przy dobieraniu ludzi "po stanowisku" (osoba z innego lokalu
-  // na Barmana) nadpisywanie kasowałoby właśnie to, co się wybrało.
-  const [stanowiskoRuszone, setStanowiskoRuszone] = useState(!!ctx.stanowisko);
-  const [pokazPozostale, setPokazPozostale] = useState(false);
-  const [pokazWszystkich, setPokazWszystkich] = useState(false);
-  // Tryb "wolne" — zamiast wpisywać zmianę, kierownik zaznacza, że tej
-  // osoby nie ma. Potrzebne, gdy pracownik długo nie ma dostępu do Tabletu
-  // Służbowego, a grafik trzeba układać już teraz.
   const [wolneForm, setWolneForm] = useState(null);
-  const [zrodloGodzin, setZrodloGodzin] = useState(null);
-  // Dodatkowe dni tygodnia dla TEJ SAMEJ zmiany. Wtorek 10–18 na barze prawie
-  // zawsze znaczy też środę i czwartek, a wpisywanie tego trzy razy było
-  // najczęstszym klikaniem w całym module.
-  //
-  // ⚠️ To jest ZWIELOKROTNIONE TWORZENIE, nie reguła powtarzania: powstaje N
-  // niezależnych wierszy, między którymi nie ma żadnego powiązania. Gdyby
-  // istniało, każda późniejsza edycja jednej zmiany rodziłaby pytanie "czy
-  // zmieniam wszystkie?", na które nie ma dobrej odpowiedzi.
-  const [dniDodatkowe, setDniDodatkowe] = useState([]);
+  // Godziny ruszone ręcznie nie są nadpisywane przy zmianie stanowiska.
+  const [godzinyRuszone, setGodzinyRuszone] = useState(edycja || !!ctx.luka);
+  // Osoby bez wybranego stanowiska są zwinięte pod strzałką — rzadko ich
+  // szukamy, a zajmowały pół panelu.
+  const [pokazBezStanowiska, setPokazBezStanowiska] = useState(false);
 
-  const user = (users || []).find((u) => String(u.id) === String(userId)) || ctx.user;
+  const user = (users || []).find((u) => String(u.id) === String(userId)) || (userId ? ctx.user : null);
   const rulesForDay = getRulesForDate(
     { rules: staffingRules, ruleSets: staffingRuleSets, wyjatki: grafikWyjatki },
     lokal,
     date
   );
 
-  // Godziny podstawiamy ze standardu stanowiska, ale tylko dopóki kierownik
-  // ich sam nie ruszył i tylko przy nowej zmianie — nadpisywanie ręcznie
-  // wpisanych godzin przy każdej zmianie stanowiska byłoby wredne.
   useEffect(() => {
-    if (ctx.shift) return;
+    if (godzinyRuszone) return;
     const domyslne = defaultHoursForStanowisko(rulesForDay, stanowisko);
     if (domyslne) {
       setStart(domyslne.start);
       setEnd(domyslne.end);
-      setZrodloGodzin(`${stanowisko} (${domyslne.start}–${domyslne.end})`);
-    } else {
-      setZrodloGodzin(null);
     }
   }, [stanowisko, lokal, date]);
 
-  // Osoby wolne tego dnia w tym lokalu — plus ta, która jest już wpisana,
-  // żeby dało się edytować istniejącą zmianę bez znikania jej autora.
-  // Kto MOŻE tu pracować — decyduje stanowisko, nie lokal. Pokazujemy więc
-  // ludzi z całej sieci, ale wyłącznie tych, którzy mają w karcie choć jedno
-  // stanowisko istniejące w tym lokalu. Lista "wszystkich po kolei" była
-  // nieczytelna: większość nazwisk i tak nie wchodziła w grę.
-  const stanowiskaTegoLokalu = new Set(
-    (activeStanowiska || []).filter((s) => s.lokal_name === ctx.lokal).map((s) => s.name)
-  );
-  const aktywni = (users || []).filter(
-    (u) => !u.archived && u.active !== false && u.role !== "kiosk"
-  );
-  // Osoba, na której wierszu kliknięto, ZAWSZE zostaje na liście — bywa
-  // wpisana do lokalu, w którym nie ma żadnego ze swoich stanowisk (np.
-  // wypożyczona z innego lokalu), a mimo to trzeba móc dopisać jej kolejną
-  // zmianę. Odfiltrowanie jej odbierało jedyną drogę do tego.
-  const mozeTu = (u) =>
-    String(u.id) === String(ctx.user?.id) ||
-    allowedStanowiskaArr(u).some((n) => stanowiskaTegoLokalu.has(n));
-  const pasujacy = aktywni.filter(mozeTu);
-  // Bezpiecznik: gdy nikt nie pasuje (np. stanowiska nie są jeszcze
-  // poustawiane w kartach), nie zostawiamy kierownika ze ślepą listą.
-  const kandydaci = (pokazWszystkich || pasujacy.length === 0 ? aktywni : pasujacy).sort(
-    (a, b) => {
-      const swoj = (u) => (u.default_lokal === ctx.lokal ? 0 : 1);
-      if (swoj(a) !== swoj(b)) return swoj(a) - swoj(b);
-      return a.name.localeCompare(b.name, "pl");
-    }
-  );
-  const ukrytych = aktywni.length - pasujacy.length;
+  // Stanowiska lokalu, na który wpisujemy (edytowane stanowisko zostaje,
+  // nawet gdy zniknęło ze słownika — inaczej nie dałoby się go zapisać).
+  const stanowiskaLokalu = [
+    ...new Map(
+      (activeStanowiska || []).filter((s) => s.lokal_name === lokal).map((s) => [s.name, s])
+    ).values(),
+  ];
+  if (stanowisko && !stanowiskaLokalu.some((s) => s.name === stanowisko)) {
+    stanowiskaLokalu.push({ name: stanowisko, lokal_name: lokal });
+  }
 
-  // Kafelek wyboru to para STANOWISKO + LOKAL, nie samo stanowisko. Dzięki
-  // temu z grafiku lokalu 1 da się od razu oddać człowieka na jeden dzień do
-  // lokalu 2 — bez przechodzenia na drugą zakładkę i szukania go tam.
-  // Domyślnie pokazujemy WYŁĄCZNIE stanowiska z karty pracownika; resztę
-  // trzeba rozwinąć świadomie (i wtedy dojdzie ostrzeżenie + "Dopisz").
-  const znaneStanowiska = user ? allowedStanowiskaArr(user) : [];
-  const wszystkieParty = [];
-  (lokaleNames || []).forEach((l) => {
-    (activeStanowiska || [])
-      .filter((s) => s.lokal_name === l)
-      .forEach((s) => {
-        if (!wszystkieParty.some((p) => p.lokal === l && p.stanowisko === s.name)) {
-          wszystkieParty.push({ lokal: l, stanowisko: s.name, id: `${l}|${s.name}` });
-        }
-      });
-  });
-  const sortujPary = (a, b) => {
-    // Najpierw lokal, którego siatkę kierownik ma przed sobą — to tam
-    // najczęściej wpisuje zmianę; dopiero potem lokal macierzysty osoby.
-    const tutaj = (p) => (p.lokal === ctx.lokal ? 0 : 1);
-    if (tutaj(a) !== tutaj(b)) return tutaj(a) - tutaj(b);
-    const domowy = (p) => (p.lokal === (user?.default_lokal || ctx.lokal) ? 0 : 1);
-    if (domowy(a) !== domowy(b)) return domowy(a) - domowy(b);
-    const glowne = (p) => (p.stanowisko === user?.default_stanowisko ? 0 : 1);
-    if (glowne(a) !== glowne(b)) return glowne(a) - glowne(b);
-    if (a.lokal !== b.lokal) return a.lokal.localeCompare(b.lokal, "pl");
-    return a.stanowisko.localeCompare(b.stanowisko, "pl");
-  };
-  // Zasada: pokazujemy stanowiska z karty pracownika. Wyjątek — gdy w
-  // OGLĄDANYM lokalu nie ma ani jednego z nich, dokładamy stanowiska tego
-  // lokalu. Inaczej osoba wypożyczona z innego lokalu (np. Paulina wpisana
-  // do Marynaty) nie miała tu żadnego kafelka i nie dało się dopisać jej
-  // kolejnej zmiany — a to jest dokładnie ten przypadek, dla którego
-  // wypożyczanie w ogóle istnieje. Takie kafelki i tak pokażą ostrzeżenie
-  // "to nie jego stanowisko" plus przycisk dopisania do umiejętności.
-  const maTuCosZKarty = wszystkieParty.some(
-    (p) => p.lokal === ctx.lokal && znaneStanowiska.includes(p.stanowisko)
-  );
-  const wKarcie = (p) =>
-    znaneStanowiska.includes(p.stanowisko) ||
-    (!maTuCosZKarty && p.lokal === ctx.lokal);
-  const paryZKarty = wszystkieParty.filter(wKarcie).sort(sortujPary);
-  const paryPozostale = wszystkieParty.filter((p) => !wKarcie(p)).sort(sortujPary);
-  const obceStanowisko = user && stanowisko && !knowsStanowisko(user, stanowisko);
-  const wolneUzytkownika = user ? findBlockingAbsence(absences, user, date) : null;
-
-  // Godziny do kliknięcia obok pól — te, które dla tego stanowiska i dnia
-  // wynikają z wymagań obsady. Gdy wymagań nie ma, list nie ma i pola
-  // wyglądają jak wcześniej.
+  // Szybkie godziny OSOBNO dla początku i końca (prośba właściciela, tak jak
+  // przed 0.55.0): przy wymaganiach 08:30–21:00 i 10:30–19:00 da się kliknąć
+  // start 10:30 i koniec 21:00, bo te godziny się nie parują. Dochodzą godziny
+  // luki, z której otwarto panel.
   const propozycje = godzinyZWymagan(rulesForDay, stanowisko);
+  const posortuj = (lista) =>
+    [...new Set(lista.filter(Boolean))].sort((a, b) => (timeToMin(a) ?? 0) - (timeToMin(b) ?? 0));
+  const poczatki = posortuj([ctx.luka?.from, ...propozycje.poczatki]);
+  const konce = posortuj([ctx.luka?.to, ...propozycje.konce]);
 
-  const poOdejsciu = poOstatnimDniu(user, date);
+  const dlugoscMin =
+    start && end ? shiftLengthMin({ start_time: start, end_time: end }) : 0;
+  const dodaneH = (dni.length * dlugoscMin) / 60;
+  const [rok, mies] = (date || "").split("-").map(Number);
 
-  // Dni do zapisania: wybrany plus zaznaczone dodatkowe, bez duplikatu i
-  // rosnąco. Przy edycji istniejącej zmiany zawsze jeden — poprawiamy wtedy
-  // konkretny wiersz, nie tworzymy nowych.
-  const dniZapisu = ctx.shift
-    ? [date]
-    : [...new Set([date, ...dniDodatkowe])].sort();
-
-  // Ostrzeżenia o odpoczynku liczone dla grafiku Z TĄ ZMIANĄ — kierownik ma
-  // zobaczyć skutek tego, co właśnie zapisuje, a nie stan sprzed. Edytowaną
-  // zmianę wyjmujemy i wstawiamy w nowej wersji, żeby nie policzyć jej dwa razy.
-  const ostrzezeniaOdpoczynku = React.useMemo(() => {
-    if (!user || !start || !end) return [];
-    const bez = (planShifts || []).filter((s) => String(s.id) !== String(ctx.shift?.id));
-    const kandydaci = dniZapisu.map((d) => ({
+  const probne = (u) =>
+    dni.map((d) => ({
       id: `__kandydat-${d}`,
-      user_id: user.id,
-      user_name: user.name,
+      user_id: u.id,
+      user_name: u.name,
       lokal,
       stanowisko,
       date: d,
       start_time: start,
       end_time: end,
     }));
-    // Okno z zapasem: reguła tygodniowa potrzebuje sąsiednich dni, żeby
-    // odróżnić prawdziwy brak odpoczynku od krawędzi zakresu.
-    const od = addDaysYMD(dniZapisu[0], -7);
-    const doDnia = addDaysYMD(dniZapisu[dniZapisu.length - 1], 7);
-    return ostrzezeniaKodeksu({
-      planShifts: [...bez, ...kandydaci],
-      absences,
-      user,
-      od,
-      doDnia,
-    });
-  }, [user, start, end, lokal, stanowisko, dniZapisu.join(","), planShifts, absences]);
+
+  // Godziny w miesiącu PO tej zmianie. Przy edycji odejmujemy starą wersję,
+  // o ile należała do tej samej osoby — inaczej policzylibyśmy ją dwa razy.
+  // Godziny w miesiącu TERAZ (to, co już stoi w grafiku) i GDYBY dostał(a)
+  // tę zmianę. Na liście pokazujemy "gdyby" WYŁĄCZNIE przy wybranej osobie —
+  // doliczanie zaznaczonych dni wszystkim kandydatom naraz sugerowało, że
+  // każdemu przybywa godzin (prośba właściciela, 0.55.2). "Gdyby" dla
+  // pozostałych liczy się dalej po cichu — do uwag ("ponad normę").
+  const godzinyTeraz = (u) => (godzinyMiesiaca ? godzinyMiesiaca(u) : 0);
+  const godzinyGdyby = (u) => {
+    const stara =
+      edycja && String(ctx.shift.user_id) === String(u.id) ? shiftLengthMin(ctx.shift) / 60 : 0;
+    return godzinyTeraz(u) - stara + dodaneH;
+  };
+  const wybrany = (u) => String(u.id) === String(userId);
+
+  const opisNormy = (u, { gdyby = wybrany(u) } = {}) => {
+    const norma = normaMiesiaca(u, rok, mies);
+    const po = gdyby ? godzinyGdyby(u) : godzinyTeraz(u);
+    if (norma == null) return { norma: null, po, ponad: 0 };
+    const r = Math.round((po - norma) * 10) / 10;
+    return {
+      norma,
+      po,
+      ponad: r > 0 ? r : 0,
+      tekst: r > 0.05 ? `+${hLiczba(r)} h ponad normą` : r < -0.05 ? `do normy brakuje ${hLiczba(-r)} h` : "równo z normą",
+    };
+  };
+
+  const przeszkodaDla = (u) => {
+    if (!przeszkodaDnia || !start || !end) return null;
+    for (const d of dni) {
+      const b = przeszkodaDnia(
+        { id: ctx.shift?.id || null, user_id: u.id, user_name: u.name, start_time: start, end_time: end },
+        d
+      );
+      if (b) return `${b.krotko} · ${dzienKrotko(d)}`;
+    }
+    return null;
+  };
+
+  const uwagiDla = (u) =>
+    !start || !end
+      ? []
+      : uwagiPrzypisania({
+          user: u,
+          kandydaci: probne(u),
+          planShifts,
+          absences,
+          stanowisko,
+          ponadNorme: opisNormy(u, { gdyby: true }).ponad,
+          pomijajId: ctx.shift?.id || null,
+        });
+
+  // --- kandydaci ---
+  const aktywni = (users || []).filter((u) => !u.archived && u.active !== false && u.role !== "kiosk");
+  const zTegoLokalu = (u) =>
+    u.default_lokal === lokal || String(u.allowed_lokale || "").split(",").map((x) => x.trim()).includes(lokal);
+  const umie = (u) => !stanowisko || knowsStanowisko(u, stanowisko);
+  const zawsze = (u) => String(u.id) === String(ctx.user?.id) || String(u.id) === String(ctx.shift?.user_id);
+  const lista = aktywni.map((u) => ({
+    u,
+    przeszkoda: przeszkodaDla(u),
+    // Sortujemy po godzinach SPRZED zmiany — kolejność nie może skakać przy
+    // wyborze osoby albo dni.
+    godziny: godzinyTeraz(u),
+  }));
+  const sortuj = (a, b) => (a.przeszkoda ? 1 : 0) - (b.przeszkoda ? 1 : 0) || a.godziny - b.godziny;
+  const lokalni = lista.filter((k) => zTegoLokalu(k.u) && (umie(k.u) || zawsze(k.u))).sort(sortuj);
+  const obcy = lista.filter((k) => !zTegoLokalu(k.u) && umie(k.u) && !zawsze(k.u)).sort(sortuj);
+  // Osoby BEZ tego stanowiska też są na liście — na końcu i na szaro, a po
+  // wyborze panel proponuje dopisać stanowisko do karty. Na samym końcu ci,
+  // którzy nie mają w karcie ani lokalu, ani stanowiska (konto założone,
+  // karta nieuzupełniona).
+  const nieuzupelniona = (u) => (!u.default_lokal && !u.allowed_lokale ? 1 : 0) + (!u.default_stanowisko ? 1 : 0);
+  const reszta = lista
+    .filter((k) => !lokalni.includes(k) && !obcy.includes(k))
+    .sort(
+      (a, b) =>
+        (a.przeszkoda ? 1 : 0) - (b.przeszkoda ? 1 : 0) ||
+        nieuzupelniona(a.u) - nieuzupelniona(b.u) ||
+        a.godziny - b.godziny
+    );
+
+  // --- skutek ---
+  const planBez = (planShifts || []).filter((s) => String(s.id) !== String(ctx.shift?.id));
+  const lukiPrzed = dni.flatMap((d) =>
+    (checkDayCoverage(
+      { rules: staffingRules, ruleSets: staffingRuleSets, wyjatki: grafikWyjatki, planShifts: planBez },
+      lokal,
+      d
+    ).gaps || []).filter((g) => g.stanowisko === stanowisko)
+  );
+  const lukiPo =
+    user && start && end
+      ? dni.flatMap((d) =>
+          (checkDayCoverage(
+            {
+              rules: staffingRules,
+              ruleSets: staffingRuleSets,
+              wyjatki: grafikWyjatki,
+              planShifts: [...planBez, ...probne(user)],
+            },
+            lokal,
+            d
+          ).gaps || []).filter((g) => g.stanowisko === stanowisko)
+        )
+      : lukiPrzed;
+  // Brak liczymy w OSOBOGODZINACH, nie w odcinkach: przy luce na cztery osoby
+  // dopisanie jednej nie zmienia liczby odcinków, a jednak zmniejsza brak.
+  const minutyBraku = (luki) => luki.reduce((a, g) => a + (g.minutes || 0) * (g.missing || 0), 0);
+  const brakPrzed = minutyBraku(lukiPrzed);
+  const brakPo = minutyBraku(lukiPo);
+  const lokalRow = (lokale || []).find((l) => l.name === lokal) || null;
+  const stawkaH = user ? kosztGodziny(user, lokalRow, rok, mies) : null;
+  const uwagi = user ? uwagiDla(user) : [];
+  const maBad = uwagi.some((x) => x.ton === "bad");
 
   const zapisz = async (dodajNastepna) => {
     if (!user || !stanowisko || !start || !end) return;
@@ -314,384 +308,402 @@ export default function GrafikZmianaModal({
       user_name: user.name,
       stanowisko,
       date,
-      dni: dniZapisu,
+      dni,
       start_time: start,
       end_time: end,
       dodajNastepna,
     });
     setSaving(false);
-    if (ok && dodajNastepna) {
-      setUserId(null);
-      setStanowisko("");
-      setStart("");
-      setEnd("");
-      setDniDodatkowe([]);
-    }
+    if (ok && dodajNastepna) setUserId(null);
   };
 
+  // Funkcja, a nie komponent — zdefiniowany tu komponent byłby przy każdym
+  // renderze nowym typem i React montowałby listę od nowa (błąd #10).
+  const kandydatRzad = (k) => {
+    const { u, przeszkoda } = k;
+    const n = opisNormy(u);
+    const uw = przeszkoda ? [] : uwagiDla(u);
+    const bad = uw.some((x) => x.ton === "bad");
+    const on = String(u.id) === String(userId);
+    const bezStanowiska = !!stanowisko && !umie(u);
+    return (
+      <React.Fragment key={u.id}>
+      <button
+        type="button"
+        disabled={!!przeszkoda}
+        onClick={() => setUserId(u.id)}
+        className={`grid grid-cols-[36px_1fr_auto] gap-2.5 items-center px-2.5 py-2 rounded-lg border-[2px] text-left w-full ${
+          on
+            ? "bg-[#171714] border-[#171714] text-white"
+            : przeszkoda
+            ? "border-dashed border-[#DEDCD4] opacity-50 cursor-not-allowed"
+            : bezStanowiska
+            ? "border-dashed border-[#DEDCD4] bg-[#F6F5F1] opacity-60 hover:opacity-100 hover:border-[#171714]"
+            : "border-[#DEDCD4] bg-white hover:border-[#171714]"
+        }`}
+        data-kandydat={u.name}
+        data-bez-stanowiska={bezStanowiska ? "1" : undefined}
+        aria-pressed={on}
+      >
+        <span
+          className={`w-9 h-9 rounded-full grid place-items-center text-[13px] font-extrabold ${
+            on ? "bg-white/15" : "bg-[#ECEBE6] text-[#171714]"
+          }`}
+        >
+          {inicjaly(u.name)}
+        </span>
+        <span className="min-w-0">
+          <span className="block font-extrabold truncate">{u.name}</span>
+          <span className={`block text-[12px] leading-4 truncate ${on ? "text-white/80" : "text-[#6E6E66]"}`}>
+            {przeszkoda
+              ? przeszkoda
+              : bezStanowiska
+              ? `nie ma „${stanowisko}” w karcie${!u.default_lokal && !u.allowed_lokale ? " · bez lokalu" : ""}`
+              : `${!zTegoLokalu(u) ? `${u.default_lokal || "bez lokalu"} · ` : ""}${u.default_stanowisko || "bez stanowiska"}`}
+          </span>
+        </span>
+        <span className={`text-[12px] font-extrabold text-right tabular-nums ${!on && n.ponad > 0 ? "text-[#8A5300]" : ""}`}>
+          {n.norma != null ? `${hLiczba(n.po)}/${hLiczba(n.norma)} h` : `${hLiczba(n.po)} h`}
+          {n.norma != null && (
+            <span className={`block font-medium ${on ? "text-white/80" : "text-[#6E6E66]"}`}>{n.tekst}</span>
+          )}
+          {uw.length > 0 && (
+            <span
+              className={`inline-flex items-center gap-1 mt-0.5 text-[11px] ${
+                on ? "text-white" : bad ? "text-[#DE3A22]" : "text-[#8A5300]"
+              }`}
+            >
+              <AlertTriangle size={12} /> {uw.length} {uw.length === 1 ? "uwaga" : "uwagi"}
+            </span>
+          )}
+        </span>
+      </button>
+      {on && bezStanowiska && onAddStanowisko && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border-[2px] border-[#8A5300] bg-[#FDF0D8] px-3 py-2 text-[13px] text-[#8A5300] font-semibold" data-dopisz-stanowisko>
+          <AlertTriangle size={15} className="flex-shrink-0" />
+          <span className="flex-1 min-w-[160px]">
+            {u.name} nie ma w karcie stanowiska „{stanowisko}”. Możesz przypisać mimo to albo od razu je dopisać.
+          </span>
+          <button
+            type="button"
+            disabled={dopisywanie}
+            onClick={async () => {
+              setDopisywanie(true);
+              await onAddStanowisko(u, stanowisko);
+              setDopisywanie(false);
+            }}
+            className="inline-flex items-center gap-1 h-9 px-3 rounded-lg border-[2px] border-[#8A5300] bg-white font-bold disabled:opacity-50"
+          >
+            <Plus size={14} /> Dopisz do karty
+          </button>
+        </div>
+      )}
+      </React.Fragment>
+    );
+  };
+
+  const obcyLokal = lokal !== ctx.lokal;
+
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-      <div className="bg-white rounded-xl border-[2px] border-[#171714] w-full max-w-2xl my-8">
-        <div className="px-5 py-4 border-b-[2px] border-[#171714] flex items-start justify-between">
-          <div>
-            <div className={statLabelCls}>
-              {ctx.shift ? "Edytuj zmianę" : "Przypisz zmianę"}
-            </div>
-            <h3 className="font-['Archivo'] font-extrabold text-xl">
-              {fmtNaglowek(date)}
-              {user ? ` · ${user.name}` : " · wybierz osobę"}
+    <>
+      <div className="fixed inset-0 bg-black/40 z-50" onClick={onClose} />
+      <aside
+        role="dialog"
+        aria-label={edycja ? "Edytuj zmianę" : "Przypisz zmianę"}
+        className="fixed z-50 bg-white flex flex-col inset-x-0 bottom-0 top-12 rounded-t-2xl border-t-[2px] md:inset-y-0 md:right-0 md:left-auto md:top-0 md:w-[520px] md:rounded-none md:border-t-0 md:border-l-[2px] border-[#171714]"
+        data-panel-zmiany
+      >
+        <div className="flex items-start gap-3 px-4 md:px-5 py-4 border-b-[2px] border-[#171714]">
+          <div className="min-w-0">
+            <h3 className="m-0 font-['Archivo'] text-xl font-extrabold">
+              {edycja ? "Edytuj zmianę" : "Przypisz zmianę"}
             </h3>
+            <div className="text-sm text-[#6E6E66] truncate">
+              {lokal}
+              {edycja ? ` · ${ctx.shift.user_name} · ${dzienKrotko(ctx.shift.date)}` : ""}
+            </div>
           </div>
-          <button onClick={onClose} className={btnSecondaryCls}>
-            Zamknij
+          <button
+            type="button"
+            onClick={onClose}
+            className="ml-auto w-10 h-10 grid place-items-center rounded-lg hover:bg-[#F6F5F1] flex-shrink-0"
+            aria-label="Zamknij"
+          >
+            <X size={20} />
           </button>
         </div>
 
-        <div className="p-5 space-y-4">
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 md:px-5 py-4 flex flex-col gap-4">
           {ctx.oferta && (
-            <div className="flex items-start gap-2 p-3 rounded border-[2px] border-[#171714] bg-[#FDF3D4]">
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-[#E3EEFB] text-[#1D5FA8] text-[13px] font-semibold">
               <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
-              <p className="text-[13px]">
-                Ta zmiana jest <strong>na giełdzie</strong>
+              <span>
+                Ta zmiana jest na giełdzie
                 {ctx.oferta.taker_user_name
-                  ? ` — ${ctx.oferta.taker_user_name} chce ją przejąć i czeka na Twoją decyzję.`
-                  : " — nikt jeszcze się po nią nie zgłosił."}{" "}
-                Decyzję podejmiesz przyciskami ✓ / ✗ przy zmianie w siatce albo w
-                zakładce Zatwierdzanie zmian.
-              </p>
-            </div>
-          )}
-          {ctx.pickDate && (
-            <div>
-              <label className={statLabelCls}>Dzień</label>
-              <div className="flex flex-wrap gap-1.5 mt-1">
-                {(weekDays || []).map((d) => {
-                  const wybrany = d === date;
-                  return (
-                    <button
-                      key={d}
-                      type="button"
-                      onClick={() => setDate(d)}
-                      className={`px-2.5 py-1.5 rounded border-[2px] text-[13px] font-bold ${
-                        wybrany
-                          ? "bg-[#171714] text-white border-[#171714]"
-                          : "bg-white text-[#171714] border-[#B7B6AE] hover:border-[#171714]"
-                      }`}
-                    >
-                      {fmtNaglowek(d)}
-                    </button>
-                  );
-                })}
-              </div>
+                  ? ` — ${ctx.oferta.taker_user_name} chce ją przejąć. Zgoda albo odmowa: w pasku „Giełda zmian” nad siatką.`
+                  : " — nikt jeszcze się po nią nie zgłosił."}
+              </span>
             </div>
           )}
 
-          <div>
-            <label className={statLabelCls}>Pracownik</label>
-            <div className="flex flex-wrap gap-1.5 mt-1">
-              {kandydaci.map((u) => {
-                const zajety = findBlockingAbsence(absences, u, date);
-                const odchodzi = poOstatnimDniu(u, date);
-                const wybrany = String(u.id) === String(userId);
-                const umie = !stanowisko || knowsStanowisko(u, stanowisko);
+          {(lokaleNames || []).length > 1 && (
+            <label className="flex flex-col gap-1.5">
+              <span className={etykietaCls}>Lokal</span>
+              <select
+                value={lokal}
+                onChange={(e) => {
+                  setLokal(e.target.value);
+                  setStanowisko("");
+                }}
+                className="h-11 border-[2px] border-[#171714] rounded-md bg-white px-3 font-semibold"
+              >
+                {lokaleNames.map((l) => (
+                  <option key={l} value={l}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+              {obcyLokal && (
+                <span className="text-[13px] font-bold text-[#8A5300]">
+                  Ta zmiana trafi do lokalu {lokal}. W grafiku {ctx.lokal} pojawi się jako zmiana w innym lokalu.
+                </span>
+              )}
+            </label>
+          )}
+
+          <div className="flex flex-col gap-1.5">
+            <span className={etykietaCls}>Stanowisko</span>
+            <div className="flex gap-1.5 flex-wrap">
+              {stanowiskaLokalu.length === 0 && (
+                <span className="text-sm text-[#6E6E66]">
+                  Lokal {lokal} nie ma stanowisk — dodaje je właściciel w Ustawienia → Stanowiska.
+                </span>
+              )}
+              {stanowiskaLokalu.map((s) => {
+                const styl = stanowiskoBadgeStyle(activeStanowiska, lokal, s.name);
                 return (
                   <button
-                    key={u.id}
+                    key={s.name}
                     type="button"
-                    onClick={() => {
-                      setUserId(u.id);
-                      if (!ctx.shift && !stanowiskoRuszone) {
-                        if (u.default_stanowisko) setStanowisko(u.default_stanowisko);
-                        setLokal(ctx.lokal);
-                      }
-                    }}
-                    className={`px-2.5 py-1.5 rounded border-[2px] text-[13px] font-bold ${
-                      wybrany
-                        ? "bg-[#171714] text-white border-[#171714]"
-                        : "bg-white text-[#171714] border-[#B7B6AE] hover:border-[#171714]"
-                    } ${zajety || odchodzi || !umie ? "opacity-50" : ""}`}
-                    title={
-                      odchodzi
-                        ? `Ostatni dzień pracy: ${u.ostatni_dzien}`
-                        : zajety
-                        ? zajety.type === "urlop"
-                          ? "Ma urlop tego dnia"
-                          : "Zgłosił brak dostępności"
-                        : !umie
-                        ? `Nie ma zaznaczonego stanowiska ${stanowisko}`
-                        : ""
-                    }
+                    onClick={() => setStanowisko(s.name)}
+                    className={chipCls(stanowisko === s.name)}
+                    data-stanowisko-panelu={s.name}
                   >
-                    {u.name}
-                    {u.default_lokal && u.default_lokal !== ctx.lokal && (
-                      <span className="font-normal opacity-70"> · {u.default_lokal}</span>
-                    )}
-                    {zajety && (
-                      <span
-                        className={`ml-1.5 px-1 rounded text-[10px] font-extrabold ${
-                          zajety.type === "urlop"
-                            ? "bg-[#DE3A22] text-white"
-                            : "bg-[#E7E7E2] text-[#6E6E66]"
-                        }`}
-                      >
-                        {zajety.type === "urlop" ? "URP" : "NIE"}
-                      </span>
-                    )}
+                    <span
+                      className="px-1.5 rounded text-[11px] font-extrabold"
+                      style={styl || { backgroundColor: "#E7E7E2", color: "#171714" }}
+                    >
+                      {stanowiskoShort(activeStanowiska, lokal, s.name)}
+                    </span>
+                    {s.name}
                   </button>
                 );
               })}
             </div>
-            {ukrytych > 0 && pasujacy.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setPokazWszystkich((v) => !v)}
-                className="mt-1.5 text-[12px] font-bold underline text-[#6E6E66]"
-              >
-                {pokazWszystkich
-                  ? "Pokaż tylko pasujących"
-                  : `Pokaż wszystkich (${ukrytych} bez stanowiska z tego lokalu)`}
-              </button>
-            )}
           </div>
 
-          <div>
-            <label className={statLabelCls}>Stanowisko i lokal na tę zmianę</label>
-            <div className="flex flex-wrap gap-1.5 mt-1">
-              {paryZKarty.length === 0 && (
-                <p className="text-[13px] text-[#6E6E66]">
-                  {user
-                    ? `${user.name} nie ma jeszcze ustawionych stanowisk — rozwiń "Pozostałe stanowiska" poniżej.`
-                    : "Najpierw wybierz pracownika."}
-                </p>
-              )}
-              {paryZKarty.map((p) => (
-                <ParaKafelek
-                  key={p.id}
-                  para={p}
-                  wybrana={p.stanowisko === stanowisko && p.lokal === lokal}
-                  obcyLokal={p.lokal !== ctx.lokal}
-                  activeStanowiska={activeStanowiska}
-                  onClick={() => {
-                    setStanowisko(p.stanowisko);
-                    setLokal(p.lokal);
-                    setStanowiskoRuszone(true);
-                  }}
-                />
+          <div className="flex flex-col gap-1.5">
+            <span className={etykietaCls}>Godziny</span>
+            <div className="grid grid-cols-2 gap-2 items-start">
+              {[
+                ["Od", start, setStart, poczatki, "poczatek"],
+                ["Do", end, setEnd, konce, "koniec"],
+              ].map(([aria, wartosc, ustaw, opcje, klucz]) => (
+                <div key={klucz} className="flex flex-col gap-1.5">
+                  <PoleCzasu
+                    value={wartosc}
+                    onChange={(v) => {
+                      ustaw(v);
+                      setGodzinyRuszone(true);
+                    }}
+                    aria={aria}
+                    szerokie
+                  />
+                  {opcje.length > 0 && (
+                    <div className="flex gap-1.5 flex-wrap">
+                      {opcje.map((g) => (
+                        <button
+                          key={g}
+                          type="button"
+                          onClick={() => {
+                            ustaw(g);
+                            setGodzinyRuszone(true);
+                          }}
+                          className={`${chipCls(wartosc === g)} tabular-nums`}
+                          data-godzina-szybka={`${klucz}|${g}`}
+                          title={
+                            ctx.luka && g === (klucz === "poczatek" ? ctx.luka.from : ctx.luka.to)
+                              ? "Godzina luki, z której otwarto panel"
+                              : "Godzina z wymagań obsady na ten dzień"
+                          }
+                        >
+                          {g}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
+            <span className="text-[13px] text-[#6E6E66]">
+              {poczatki.length > 0
+                ? "Szybkie godziny pochodzą z wymagań obsady na ten dzień — początek i koniec wybierasz osobno."
+                : "Brak wymagań obsady dla tego stanowiska w tym dniu — wpisz godziny ręcznie."}
+              {start && end && timeToMin(end) <= timeToMin(start) ? " Koniec przed początkiem — zmiana przez północ." : ""}
+            </span>
+          </div>
 
-            {paryPozostale.length > 0 && (
-              <div className="mt-2">
-                <button
-                  type="button"
-                  onClick={() => setPokazPozostale((v) => !v)}
-                  className="text-[12px] font-bold underline text-[#6E6E66]"
-                >
-                  {pokazPozostale ? "Ukryj" : "Pozostałe stanowiska"} ({paryPozostale.length})
-                </button>
-                {pokazPozostale && (
-                  <div className="flex flex-wrap gap-1.5 mt-1.5 opacity-70">
-                    {paryPozostale.map((p) => (
-                      <ParaKafelek
-                        key={p.id}
-                        para={p}
-                        wybrana={p.stanowisko === stanowisko && p.lokal === lokal}
-                        obcyLokal={p.lokal !== ctx.lokal}
-                        activeStanowiska={activeStanowiska}
-                        onClick={() => {
-                          setStanowisko(p.stanowisko);
-                          setLokal(p.lokal);
-                          setStanowiskoRuszone(true);
-                        }}
-                      />
-                    ))}
-                  </div>
+          <div className="flex flex-col gap-1.5">
+            <span className={etykietaCls}>{edycja ? "Dzień" : "Dni · zaznacz kilka, żeby powtórzyć"}</span>
+            <div className="flex gap-1.5 flex-wrap">
+              {(weekDays || []).map((d) => {
+                const on = dni.includes(d);
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    disabled={edycja && !on}
+                    onClick={() => {
+                      if (edycja) return;
+                      if (on) {
+                        if (dni.length > 1) setDni(dni.filter((x) => x !== d));
+                      } else setDni([...dni, d].sort());
+                    }}
+                    className={`min-w-[48px] h-10 px-2 rounded-lg border-[2px] font-extrabold text-sm ${
+                      on ? "bg-[#171714] border-[#171714] text-white" : "bg-white border-[#DEDCD4] text-[#171714]"
+                    } disabled:opacity-35 disabled:line-through`}
+                    data-dzien-panelu={d}
+                    title={dzienKrotko(d)}
+                  >
+                    {DNI[new Date(d + "T00:00:00").getDay()]}
+                  </button>
+                );
+              })}
+            </div>
+            {!edycja && dni.length > 1 && (
+              <span className="text-[13px] text-[#6E6E66]">
+                Powstanie {dni.length} osobnych zmian. Dni z urlopem, kolizją albo po ostatnim dniu pracy zostaną
+                pominięte.
+              </span>
+            )}
+          </div>
+
+          {[
+            [lokalni, "Z tego lokalu · najmniej godzin na górze"],
+            [obcy, `Z innych lokali · ${stanowisko ? `mają „${stanowisko}”` : "pozostali"}`],
+          ].map(([l, tytul]) =>
+            l.length === 0 ? null : (
+              <div key={tytul} className="flex flex-col gap-1.5" data-kandydaci>
+                <span className={etykietaCls}>{tytul}</span>
+                <div className="flex flex-col gap-1.5">
+                  {l.map((k) => kandydatRzad(k))}
+                </div>
+              </div>
+            )
+          )}
+          {reszta.length > 0 && (
+            <div className="flex flex-col gap-1.5" data-kandydaci-bez-stanowiska>
+              {(() => {
+                // Wybrana osoba z tej grupy nie może się schować po zwinięciu.
+                const otwarte = pokazBezStanowiska || reszta.some((k) => wybrany(k.u));
+                return (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setPokazBezStanowiska((v) => !v)}
+                      aria-expanded={otwarte}
+                      className={`${etykietaCls} flex items-center gap-1.5 text-left hover:text-[#171714]`}
+                      data-rozwin-bez-stanowiska
+                    >
+                      <ChevronRight size={16} className={`flex-shrink-0 transition-transform ${otwarte ? "rotate-90" : ""}`} />
+                      <span>
+                        {stanowisko ? `Bez stanowiska „${stanowisko}” · po wyborze dopiszesz je do karty` : "Pozostali"} ·{" "}
+                        {reszta.length}
+                      </span>
+                    </button>
+                    {otwarte && reszta.map((k) => kandydatRzad(k))}
+                  </>
+                );
+              })()}
+            </div>
+          )}
+
+          <div className="rounded-lg px-3 py-2.5 text-sm flex flex-col gap-1 bg-[#F6F5F1]" data-skutek>
+            <span>
+              Razem <b className="tabular-nums">{hLiczba(dodaneH)} h</b>
+              {user && stawkaH != null && (
+                <>
+                  {" "}
+                  · ok. <b className="tabular-nums">{zl(stawkaH * dodaneH)}</b>
+                </>
+              )}
+              {user && stawkaH == null && <span className="text-[#6E6E66]"> · koszt nieznany (brak stawki w karcie)</span>}
+            </span>
+            {!user ? (
+              <span className="text-[#6E6E66]">Wybierz osobę</span>
+            ) : brakPo < brakPrzed ? (
+              <span className={`font-bold ${brakPo === 0 ? "text-[#1F7A4A]" : "text-[#8A5300]"}`} data-pokryje>
+                <Check size={14} className="inline -mt-0.5" />{" "}
+                {brakPo === 0
+                  ? `Pokryje brak obsady (${hLiczba((brakPrzed - brakPo) / 60)} h)`
+                  : `Pokryje ${hLiczba((brakPrzed - brakPo) / 60)} h z braków · nadal brak: ${lukiPo
+                      .map((g) => `${stanowiskoShort(activeStanowiska, lokal, g.stanowisko)} ${krotkaGodzina(g.from)}–${krotkaGodzina(g.to)}`)
+                      .join(", ")}`}
+              </span>
+            ) : lukiPo.length > 0 ? (
+              <span className="font-bold text-[#8A5300]">
+                Nadal brak:{" "}
+                {lukiPo.map((g) => `${stanowiskoShort(activeStanowiska, lokal, g.stanowisko)} ${krotkaGodzina(g.from)}–${krotkaGodzina(g.to)}`).join(", ")}
+              </span>
+            ) : rulesForDay.some((r) => r.stanowisko === stanowisko) ? (
+              <span className="font-bold text-[#1F7A4A]">Obsada bez braków</span>
+            ) : null}
+          </div>
+
+          {user && start && end && (
+            uwagi.length === 0 ? (
+              <div className="rounded-lg px-3 py-2.5 bg-[#E2F3E9] text-[#1F7A4A] font-bold text-sm flex items-center gap-1.5" data-uwagi-zmiany="0">
+                <Check size={16} /> Zgodne z limitami czasu pracy
+              </div>
+            ) : (
+              <div className="rounded-lg px-3 py-2.5 border-[2px] border-[#8A5300] bg-[#FDF0D8] text-sm" data-uwagi-zmiany={uwagi.length}>
+                <b className="flex items-center gap-1.5 text-[#8A5300]">
+                  <AlertTriangle size={16} /> Sprawdź przed przypisaniem
+                </b>
+                <ul className="mt-1.5 mb-1 pl-[18px] list-disc flex flex-col gap-1">
+                  {uwagi.map((x, i) => (
+                    <li key={i} className={x.ton === "bad" ? "text-[#DE3A22] font-bold" : "text-[#171714]"}>
+                      {x.tekst}
+                    </li>
+                  ))}
+                </ul>
+                {!naEtacie(user) && (
+                  <span className="text-[13px] text-[#6E6E66]">
+                    Umowa zlecenie: to nie są limity Kodeksu pracy, tylko zalecenia bezpieczeństwa.
+                  </span>
+                )}
+                {stanowisko && !knowsStanowisko(user, stanowisko) && onAddStanowisko && (
+                  <button
+                    type="button"
+                    disabled={dopisywanie}
+                    onClick={async () => {
+                      setDopisywanie(true);
+                      await onAddStanowisko(user, stanowisko);
+                      setDopisywanie(false);
+                    }}
+                    className="mt-2 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border-[2px] border-[#8A5300] text-[#8A5300] text-[13px] font-bold hover:bg-white disabled:opacity-50"
+                  >
+                    <Plus size={14} /> Dopisz „{stanowisko}” do karty: {user.name}
+                  </button>
                 )}
               </div>
-            )}
-
-            {lokal !== ctx.lokal && (
-              <p className="mt-2 text-[13px] font-bold text-[#8A3A2B] bg-[#FAEAE6] border-[2px] border-[#DE3A22] rounded px-3 py-2">
-                Ta zmiana trafi do lokalu <strong>{lokal}</strong>. W grafiku{" "}
-                {ctx.lokal} pojawi się jako "w {lokal}".
-              </p>
-            )}
-          </div>
-
-          {obceStanowisko && (
-            <div className="flex items-start gap-2 p-3 rounded border-[2px] border-[#DE3A22] bg-[#FAEAE6]">
-              <AlertTriangle size={16} className="text-[#8A3A2B] flex-shrink-0 mt-0.5" />
-              <div className="text-[13px] text-[#8A3A2B]">
-                <p>
-                  <strong>{user.name}</strong> nie ma zaznaczonego stanowiska{" "}
-                  <strong>{stanowisko}</strong> jako "umie pracować". Możesz wpisać tę
-                  zmianę mimo to — decyzja należy do Ciebie.
-                </p>
-                <button
-                  type="button"
-                  disabled={dopisywanie}
-                  onClick={async () => {
-                    setDopisywanie(true);
-                    await onAddStanowisko(user, stanowisko);
-                    setDopisywanie(false);
-                  }}
-                  className="mt-2 px-2.5 py-1.5 rounded border-[2px] border-[#8A3A2B] text-[#8A3A2B] text-[12px] font-bold hover:bg-white disabled:opacity-50"
-                >
-                  <Plus size={13} className="inline -mt-0.5 mr-1" />
-                  Dopisz {stanowisko} do umiejętności {user.name}
-                </button>
-              </div>
-            </div>
+            )
           )}
 
-          {/* Powtórzenie tej samej zmiany w innych dniach tygodnia — tylko
-              przy TWORZENIU. Przy edycji istniejącej zmiany blok się nie
-              pokazuje: poprawiamy wtedy jeden wiersz, a nie rozsiewamy nowe. */}
-          {!ctx.shift && (weekDays || []).length > 1 && (
-            <div>
-              <label className={statLabelCls}>Powtórz w dniach</label>
-              <div className="flex flex-wrap gap-1.5 mt-1">
-                {(weekDays || []).map((d) => {
-                  const wybranyDzien = d === date;
-                  const zaznaczony = wybranyDzien || dniDodatkowe.includes(d);
-                  return (
-                    <button
-                      key={d}
-                      type="button"
-                      disabled={wybranyDzien}
-                      onClick={() =>
-                        setDniDodatkowe(
-                          dniDodatkowe.includes(d)
-                            ? dniDodatkowe.filter((x) => x !== d)
-                            : [...dniDodatkowe, d]
-                        )
-                      }
-                      className={`px-2.5 py-1.5 rounded border-[2px] text-[13px] font-bold ${
-                        zaznaczony
-                          ? "bg-[#171714] text-white border-[#171714]"
-                          : "bg-white text-[#171714] border-[#B7B6AE] hover:border-[#171714]"
-                      } ${wybranyDzien ? "opacity-70 cursor-default" : ""}`}
-                      title={wybranyDzien ? "Dzień tej zmiany — zawsze zaznaczony" : ""}
-                    >
-                      {DNI_SKROT[new Date(d + "T00:00:00").getDay()]}
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="text-[12px] text-[#6E6E66] mt-1">
-                {dniZapisu.length > 1
-                  ? `${osobneZmiany(dniZapisu.length)} — te same godziny i stanowisko. Dni z urlopem, kolizją godzin albo po ostatnim dniu pracy zostaną pominięte.`
-                  : "Zaznacz kolejne dni, żeby wpisać tę samą zmianę od razu na kilka dni."}
-              </p>
-            </div>
-          )}
-
-          {/* ⚠️ Sygnał, nie blokada — przycisk zapisu zostaje aktywny. Kierownik
-              zna sytuacje, których system nie zna, a grafik, którego nie da się
-              zapisać, powstanie obok systemu, w zeszycie. */}
-          {ostrzezeniaOdpoczynku.length > 0 && (
-            <div className="flex items-start gap-2 p-3 rounded border-[2px] border-[#171714] bg-[#FDF3D4]">
-              <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
-              <div className="text-[13px]">
-                <p className="font-bold mb-0.5">
-                  {naEtacie(user) ? "Odpoczynek poniżej normy" : "Długa seria bez wolnego"}
-                </p>
-                {ostrzezeniaOdpoczynku.map((o, i) => (
-                  <p key={i}>{o.tekst}</p>
-                ))}
-                <p className="text-[#6E6E66] mt-1">
-                  Zapisać i tak można — to ostrzeżenie, nie blokada.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {wolneUzytkownika && (
-            <div className="flex items-start gap-2 p-3 rounded border-[2px] border-[#171714] bg-[#F1F1EE]">
-              <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
-              <p className="text-[13px]">
-                {wolneUzytkownika.type === "urlop"
-                  ? "Ta osoba ma tego dnia zatwierdzony urlop."
-                  : "Ta osoba zgłosiła na ten dzień brak dostępności."}{" "}
-                Zapis zostanie zablokowany.
-              </p>
-            </div>
-          )}
-
-          <div className="grid md:grid-cols-2 gap-3">
-            <div>
-              <label className={statLabelCls}>Od</label>
-              {/* Pole węższe, obok niego godziny wynikające z wymagań obsady na
-                  ten dzień i stanowisko. Sobota z wymaganiami 08:30–21:00 i
-                  dodatkowym 14:00–19:00 daje do kliknięcia 08:30 i 14:00 —
-                  kierownik i tak wystukiwał je ręcznie, choć system już je zna. */}
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <input
-                  type="time"
-                  value={start}
-                  onChange={(e) => {
-                    setStart(e.target.value);
-                    setZrodloGodzin(null);
-                  }}
-                  className="w-[110px] p-2 border-[2px] border-[#171714] rounded flex-shrink-0"
-                />
-                {propozycje.poczatki.map((g) => (
-                  <button
-                    key={g}
-                    type="button"
-                    onClick={() => {
-                      setStart(g);
-                      setZrodloGodzin(null);
-                    }}
-                    className={`px-2 py-1.5 rounded border-[2px] text-[13px] font-bold tabular-nums ${
-                      start === g
-                        ? "bg-[#171714] text-white border-[#171714]"
-                        : "bg-white text-[#171714] border-[#B7B6AE] hover:border-[#171714]"
-                    }`}
-                    title="Godzina z wymagań obsady na ten dzień"
-                  >
-                    {g}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <label className={statLabelCls}>Do</label>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <input
-                  type="time"
-                  value={end}
-                  onChange={(e) => {
-                    setEnd(e.target.value);
-                    setZrodloGodzin(null);
-                  }}
-                  className="w-[110px] p-2 border-[2px] border-[#171714] rounded flex-shrink-0"
-                />
-                {propozycje.konce.map((g) => (
-                  <button
-                    key={g}
-                    type="button"
-                    onClick={() => {
-                      setEnd(g);
-                      setZrodloGodzin(null);
-                    }}
-                    className={`px-2 py-1.5 rounded border-[2px] text-[13px] font-bold tabular-nums ${
-                      end === g
-                        ? "bg-[#171714] text-white border-[#171714]"
-                        : "bg-white text-[#171714] border-[#B7B6AE] hover:border-[#171714]"
-                    }`}
-                    title="Godzina z wymagań obsady na ten dzień"
-                  >
-                    {g}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {wolneForm && (
-            <div className="p-3 rounded border-[2px] border-[#171714] bg-[#F1F1EE] space-y-3">
-              <div className="flex gap-2">
+          {wolneForm && user && (
+            <div className="p-3 rounded-lg border-[2px] border-[#171714] bg-[#F6F5F1] flex flex-col gap-3" data-wolne-panelu>
+              <b className="font-['Archivo']">Wolne / urlop · {user.name}</b>
+              <div className="flex gap-1.5">
                 {[
                   { key: "urlop", label: "Urlop" },
                   { key: "niedostepnosc", label: "Niedostępność" },
@@ -700,140 +712,113 @@ export default function GrafikZmianaModal({
                     key={o.key}
                     type="button"
                     onClick={() => setWolneForm({ ...wolneForm, typ: o.key })}
-                    className={`px-3 py-1.5 rounded border-[2px] text-[13px] font-bold ${
-                      wolneForm.typ === o.key
-                        ? "bg-[#171714] text-white border-[#171714]"
-                        : "bg-white text-[#171714] border-[#B7B6AE]"
-                    }`}
+                    className={chipCls(wolneForm.typ === o.key)}
                   >
                     {o.label}
                   </button>
                 ))}
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={statLabelCls}>Od dnia</label>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="flex flex-col gap-1">
+                  <span className={etykietaCls}>Od dnia</span>
                   <input
                     type="date"
                     value={wolneForm.od}
                     onChange={(e) => setWolneForm({ ...wolneForm, od: e.target.value })}
-                    className="w-full p-2 border-[2px] border-[#171714] rounded"
+                    className="h-11 border-[2px] border-[#171714] rounded-md px-2 bg-white"
                   />
-                </div>
-                <div>
-                  <label className={statLabelCls}>Do dnia</label>
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className={etykietaCls}>Do dnia</span>
                   <input
                     type="date"
                     value={wolneForm.doDnia}
-                    onChange={(e) =>
-                      setWolneForm({ ...wolneForm, doDnia: e.target.value })
-                    }
-                    className="w-full p-2 border-[2px] border-[#171714] rounded"
+                    onChange={(e) => setWolneForm({ ...wolneForm, doDnia: e.target.value })}
+                    className="h-11 border-[2px] border-[#171714] rounded-md px-2 bg-white"
                   />
-                </div>
+                </label>
               </div>
               <input
                 type="text"
                 value={wolneForm.note}
                 onChange={(e) => setWolneForm({ ...wolneForm, note: e.target.value })}
                 placeholder="Notatka (opcjonalnie)"
-                className="w-full p-2 border-[2px] border-[#171714] rounded"
+                className="h-11 border-[2px] border-[#171714] rounded-md px-3 bg-white"
               />
-              <p className="text-[12px] text-[#6E6E66]">
+              <span className="text-[13px] text-[#6E6E66]">
                 {wolneForm.typ === "urlop"
                   ? "Urlop od razu zapisze się jako godziny (8 h za dzień roboczy), a pracownik dostanie powiadomienie."
                   : "Niedostępność nie generuje godzin — blokuje tylko wpisywanie zmian w te dni."}
-              </p>
+              </span>
+              <div className="flex gap-2">
+                <button type="button" className={btnObrysCls} onClick={() => setWolneForm(null)}>
+                  Wróć do zmiany
+                </button>
+                <button
+                  type="button"
+                  className={btnGlownyCls}
+                  disabled={saving || !wolneForm.od || !wolneForm.doDnia || wolneForm.doDnia < wolneForm.od}
+                  onClick={async () => {
+                    setSaving(true);
+                    await onAddAbsence({ user, ...wolneForm });
+                    setSaving(false);
+                  }}
+                >
+                  Zapisz wolne
+                </button>
+              </div>
             </div>
           )}
-
-          <p className="text-[12px] text-[#6E6E66]">
-            {/* ⚠️ "Brak wymagań" tylko wtedy, gdy ich naprawdę nie ma.
-                `zrodloGodzin` zeruje się przy każdej ręcznej zmianie godziny —
-                w tym przy kliknięciu podpowiedzi — więc oparcie na nim samym
-                kazało napisowi twierdzić, że wymagań nie ma, tuż pod przyciskami
-                z nich zrobionymi. */}
-            {zrodloGodzin
-              ? `Godziny podstawiono ze standardu stanowiska ${zrodloGodzin}. Możesz je nadpisać.`
-              : propozycje.poczatki.length > 0
-              ? "Godziny obok pól pochodzą z wymagań obsady na ten dzień."
-              : "Brak wymagań obsady dla tego stanowiska w tym dniu — wpisz godziny ręcznie."}
-            {end && start && end <= start
-              ? " Godzina końca jest wcześniejsza niż początku — zmiana przez północ."
-              : ""}
-          </p>
         </div>
 
-        <div className="px-5 py-4 border-t-[2px] border-[#171714] flex flex-wrap gap-2">
-          {wolneForm ? (
-            <>
-              <button
-                onClick={async () => {
-                  setSaving(true);
-                  await onAddAbsence({ user, ...wolneForm });
-                  setSaving(false);
-                }}
-                disabled={
-                  saving ||
-                  !user ||
-                  !wolneForm.od ||
-                  !wolneForm.doDnia ||
-                  wolneForm.doDnia < wolneForm.od
-                }
-                className={btnPrimaryCls}
-              >
-                Zapisz wolne
-              </button>
-              <button
-                type="button"
-                onClick={() => setWolneForm(null)}
-                className={btnSecondaryCls}
-              >
-                Wróć do zmiany
-              </button>
-            </>
-          ) : (
-            <>
-          <button
-            onClick={() => zapisz(false)}
-            disabled={saving || !user || !stanowisko || !start || !end}
-            className={btnPrimaryCls}
-          >
-            {ctx.shift ? "Zapisz zmianę" : "Przypisz zmianę"}
-          </button>
-          {!ctx.shift && (
-            <button
-              onClick={() => zapisz(true)}
-              disabled={saving || !user || !stanowisko || !start || !end}
-              className={btnSecondaryCls}
-            >
-              Przypisz i dodaj następną
-            </button>
-          )}
-          {ctx.shift && (
-            <button
-              onClick={() => onDelete(ctx.shift)}
-              disabled={saving}
-              className="ml-auto text-[#DE3A22] font-bold text-sm px-3 py-2.5 border-[2px] border-[#B7B6AE] rounded hover:border-[#DE3A22]"
-            >
-              <Trash2 size={15} className="inline -mt-0.5 mr-1" /> Usuń zmianę
-            </button>
-          )}
-          {user && (
+        <div className="flex flex-wrap items-center gap-2 px-4 md:px-5 py-3 border-t-[2px] border-[#171714] pb-[max(12px,env(safe-area-inset-bottom))]">
+          {edycja ? (
             <button
               type="button"
-              onClick={() =>
-                setWolneForm({ typ: "urlop", od: date, doDnia: date, note: "" })
-              }
-              className="w-full text-[13px] font-bold underline text-[#6E6E66] text-left"
+              onClick={() => onDelete(ctx.shift)}
+              disabled={saving}
+              className="text-[#DE3A22] font-bold text-sm underline underline-offset-[3px] w-full md:w-auto text-left"
+              data-usun-zmiane
             >
-              Zamiast zmiany wpisz wolne / urlop
+              Usuń zmianę
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={!user}
+              title={user ? "" : "Najpierw wybierz osobę"}
+              onClick={() => setWolneForm({ typ: "urlop", od: date, doDnia: date, note: "" })}
+              className="text-sm font-bold underline underline-offset-[3px] text-[#171714] disabled:opacity-40 w-full md:w-auto text-left"
+            >
+              Wolne / urlop
             </button>
           )}
-            </>
+          <span className="hidden md:block flex-1" />
+          <button type="button" onClick={onClose} className={`${btnObrysCls} flex-1 md:flex-none`}>
+            Anuluj
+          </button>
+          {!edycja && (
+            <button
+              type="button"
+              onClick={() => zapisz(true)}
+              disabled={saving || !user || !stanowisko || !start || !end}
+              className={`${btnObrysCls} flex-1 md:flex-none`}
+            >
+              + Następna
+            </button>
           )}
+          <button
+            type="button"
+            onClick={() => zapisz(false)}
+            disabled={saving || !user || !stanowisko || !start || !end}
+            className={`${btnGlownyCls} basis-full md:basis-auto order-last md:order-none`}
+            data-zapisz-zmiane
+          >
+            <Check size={18} />
+            {maBad ? (edycja ? "Zapisz mimo uwag" : "Przypisz mimo uwag") : edycja ? "Zapisz" : dni.length > 1 ? `Przypisz ×${dni.length}` : "Przypisz"}
+          </button>
         </div>
-      </div>
-    </div>
+      </aside>
+    </>
   );
 }

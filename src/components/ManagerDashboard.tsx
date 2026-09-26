@@ -4,9 +4,7 @@ import {
   Clock,
   Users,
   Plus,
-  X,
   Edit2,
-  Save,
   MapPin,
   Briefcase,
   Trash2,
@@ -19,14 +17,19 @@ import {
 import { api } from "../api/supabase";
 import { ustawHasloPracownika } from "../api/auth";
 import { sendToGoogleSheets } from "../api/googleSheets";
-import { getShort, getDayOfWeek, getMonthName, getAvailableYears } from "../utils/format";
+import {
+  getShort,
+  getDayOfWeek,
+  getMonthName,
+  getAvailableYears,
+  formatNotificationText,
+} from "../utils/format";
 import { findOverlappingShift, opisKolidujacej, znajdzKolizjeWBazie } from "../utils/shifts";
 import { zadaniaNaDzien, toLocalYMD } from "../utils/tasks";
 import { resolveAbsenceRequest, addUrlopDirectly, deleteAbsence } from "../utils/absences";
 import { zmianyPorzucone } from "../utils/porzucone";
 import { zmianyBezOdbicia } from "../utils/odbicia";
 import { probniDoDecyzji, czekaNaDecyzje } from "../utils/probni";
-import NotificationsPanel from "./NotificationsPanel";
 import ZatwierdzanieZmian from "./manager/ZatwierdzanieZmian";
 import ZadaniaISprzatanie from "./manager/ZadaniaISprzatanie";
 import Puls from "./manager/Puls";
@@ -35,8 +38,11 @@ import PulpitHome from "./manager/PulpitHome";
 import WBudowie from "./manager/WBudowie";
 import MojaPraca from "./manager/MojaPraca";
 import RejestrGodzin from "./manager/RejestrGodzin";
+import WpisGodzinModal from "./manager/WpisGodzinModal";
+import { useOdlozoneDecyzje, PasekCofnij } from "./manager/odlozoneDecyzje";
+import { zapiszSladRecznejZmiany } from "../utils/corrections";
 import Aktywni from "./manager/Aktywni";
-import Zgloszenia from "./manager/Zgloszenia";
+import Skrzynka, { zbierzSprawy } from "./manager/Skrzynka";
 import Pracownicy from "./manager/Pracownicy";
 import RaportyIKoszty from "./manager/RaportyIKoszty";
 import Przewodnik from "./manager/Przewodnik";
@@ -72,12 +78,13 @@ const TABY_Z_WLASNYM_WIDOKIEM = [
   "godziny",
   "zatwierdzanie",
   "aktywni",
-  "zgloszenia",
+  "skrzynka",
   "pracownicy",
   "raporty",
   "przewodnik",
-  "powiadomienia",
   "zadania",
+  // Do 0.53.0 brakowało tu Ustawień i pod nimi wisiał placeholder "W budowie".
+  "ustawienia",
 ];
 
 const ManagerDashboard = ({
@@ -130,7 +137,19 @@ const ManagerDashboard = ({
   setBudzetDni,
   showMsg,
 }) => {
-  const [tab, setTab] = useState("pulpit");
+  const [tab, setTabSurowy] = useState("pulpit");
+  // Zgłoszenia i Powiadomienia to od 0.51.0 jedna Skrzynka. Stare klucze
+  // przekierowujemy — dzwonek w górnym pasku otwiera ją na "Informacjach".
+  const [skrzynkaStart, setSkrzynkaStart] = useState("todo");
+  const setTab = (t) => {
+    if (t === "powiadomienia" || t === "zgloszenia") {
+      setSkrzynkaStart(t === "powiadomienia" ? "info" : "todo");
+      setTabSurowy("skrzynka");
+      return;
+    }
+    if (t === "skrzynka") setSkrzynkaStart("todo");
+    setTabSurowy(t);
+  };
   const [przewodnikTab, setPrzewodnikTab] = useState("pracownicy");
   const [selectedLokal, setSelectedLokal] = useState("ALL");
   const [reportUserId, setReportUserId] = useState(null);
@@ -194,11 +213,12 @@ const ManagerDashboard = ({
     oldStart,
     oldEnd,
     newStart,
-    newEnd
+    newEnd,
+    reason = ""
   ) => {
     try {
       const dateSrc = oldStart || newStart;
-      const created = await api.post("notifications", {
+      const pola = {
         user_name: shiftLike.user_name,
         lokal: shiftLike.lokal,
         actor_name: currentUser.name,
@@ -210,6 +230,16 @@ const ManagerDashboard = ({
         old_end: fmtTime(oldEnd),
         new_start: fmtTime(newStart),
         new_end: fmtTime(newEnd),
+      };
+      // Powód poprawki (Rejestr godzin, od 0.50.0) nie ma własnej kolumny —
+      // idzie w `message`, które formatNotificationText pokazuje zamiast
+      // tekstu składanego ze starych pól. Treść jest ta sama plus powód.
+      const message = reason
+        ? `${formatNotificationText({ ...pola, user_name: shiftLike.user_name }, false)}. Powód: „${reason}”.`
+        : undefined;
+      const created = await api.post("notifications", {
+        ...pola,
+        ...(message ? { message, type: "shift_edit" } : {}),
         is_read: false,
       });
       setNotifications((prev) => [...prev, created]);
@@ -376,25 +406,6 @@ const ManagerDashboard = ({
     }
   };
 
-  useEffect(() => {
-    if (tab !== "powiadomienia") return;
-    const unreadIds = managerNotifications
-      .filter((n) => !n.is_read)
-      .map((n) => n.id);
-    if (unreadIds.length === 0) return;
-    api
-      .patchByFilter("notifications", `id=in.(${unreadIds.join(",")})`, {
-        is_read: true,
-      })
-      .then(() => {
-        setNotifications((prev) =>
-          prev.map((n) =>
-            unreadIds.includes(n.id) ? { ...n, is_read: true } : n
-          )
-        );
-      })
-      .catch(() => {});
-  }, [tab]);
 
   const [fMonth, setFMonth] = useState(new Date().getMonth());
   const [fYear, setFYear] = useState(new Date().getFullYear());
@@ -407,14 +418,6 @@ const ManagerDashboard = ({
   const [editingUser, setEditingUser] = useState(null);
   const [editingDict, setEditingDict] = useState(null);
   const [editingShift, setEditingShift] = useState(null);
-  const [shiftForm, setShiftForm] = useState({
-    userId: "",
-    date: "",
-    start: "",
-    end: "",
-    lokal: "",
-    stanowisko: "",
-  });
 
   const handleNewUserClick = () =>
     setEditingUser({
@@ -524,6 +527,27 @@ const ManagerDashboard = ({
       terminPozycji(i) < nowTimeStr
   ).length;
 
+  // Skrzynka (0.51.0) zastąpiła Zgłoszenia i Powiadomienia. Znaczek liczy
+  // "Do zrobienia" tą samą funkcją co lista — przy "Cała sieć" liczby muszą
+  // się zgadzać (sprawdza harness-panel.html).
+  const zakresNazwa =
+    selectedLokal !== "ALL" ? selectedLokal : isLocalManager ? "Wszystkie moje" : "Cała sieć";
+  const daneSkrzynki = {
+    issues: widoczneZgloszenia,
+    users,
+    tasks,
+    absences,
+    notifications: managerNotifications,
+    shifts,
+    planShifts,
+    lokale,
+    dayLogs,
+    lokaleNames: availableLokaleForManager.map((l) => l.name),
+  };
+  const skrzynkaDoZrobienia = zbierzSprawy({ ...daneSkrzynki, lokalOk: hasAccessToLokal }).filter(
+    (s) => s.box === "todo"
+  ).length;
+
   const shellBadges = {
     zatwierdzanie:
       pendingCorrections.length +
@@ -532,7 +556,9 @@ const ManagerDashboard = ({
       porzuconeZmiany.length +
       probniOczekujacy.length +
       brakiOdbiciaDoDecyzji.length,
-    zgloszenia: widoczneZgloszenia.filter((i) => i.status === "nowe").length,
+    skrzynka: skrzynkaDoZrobienia,
+    // Dzwonek w górnym pasku — nieprzeczytane powiadomienia; prowadzi do
+    // zakładki "Informacje" w Skrzynce.
     powiadomienia: unreadManagerCount,
     pracownicy: pracownicyTerminyCount,
     zadania: zadaniaOverdueCount,
@@ -771,7 +797,10 @@ const ManagerDashboard = ({
         }
       }
 
-      setEditingUser(null);
+      // Karta zostaje otwarta z tym, co zapisano (0.52.0) — pasek "Zapisz"
+      // znika, bo nie ma już różnic, a kierownik widzi wynik zamiast pustego
+      // miejsca po karcie.
+      setEditingUser({ ...zapisany });
       if (ostrzezenie) showMsg(`Zapisano pracownika.${ostrzezenie}`, "error");
       else showMsg("Zapisano pracownika!");
     } catch (err) {
@@ -815,7 +844,9 @@ const ManagerDashboard = ({
     );
   };
 
-  const handleArchiveEntity = async (table, id, isArchiving) => {
+  // `potwierdzone` — ekran sam zapytał (karta pracownika ma krok "Tak,
+  // archiwizuj"), więc drugiego okna przeglądarki już nie pokazujemy.
+  const handleArchiveEntity = async (table, id, isArchiving, { potwierdzone = false } = {}) => {
     // Archiwizacja pracownika nie może po cichu zostawić jego zmian w
     // grafiku: liczyłyby się jako obsada, a nikt by na nie nie przyszedł.
     // Przy odejściu prawie zawsze ktoś wchodzi na to miejsce, więc zamiast
@@ -829,6 +860,7 @@ const ManagerDashboard = ({
       }
     }
     if (
+      !potwierdzone &&
       !window.confirm(
         isArchiving ? "Zarchiwizować ten element?" : "Przywrócić z archiwum?"
       )
@@ -928,7 +960,14 @@ const ManagerDashboard = ({
   // Puste pole liczbowe to null, nie 0 i nie "" — Postgres odrzuca pusty
   // string dla kolumny numeric, a zero znaczyłoby "zero procent narzutu"
   // zamiast "nie ustawiono".
-  const num = (v) => (v === "" || v == null || Number.isNaN(Number(v)) ? null : Number(v));
+  // Przecinek jak kropka: pola z jednostką w Ustawieniach (%, godz.) są
+  // tekstowe, a "20,5" przez samo Number() dawało NaN — czyli null w bazie,
+  // po cichu, zamiast wpisanego narzutu.
+  const num = (v) => {
+    if (v === "" || v == null) return null;
+    const n = Number(String(v).trim().replace(",", "."));
+    return Number.isNaN(n) ? null : n;
+  };
   // Kolumny `integer` — "1,5 min" wpisane w pole odrzuciłoby cały zapis lokalu.
   const minutyCale = (v) => (num(v) == null ? null : Math.max(0, Math.round(num(v))));
 
@@ -1003,14 +1042,11 @@ const ManagerDashboard = ({
     return zapisany;
   };
 
+  // Wołane ze Skrzynki po 6 s "Cofnij" — o decyzji mówi już pasek, więc bez
+  // komunikatu sukcesu. Błąd rzuca dalej, Skrzynka pokazuje go z imieniem.
   const resolveIssue = async (id) => {
-    try {
-      const i = await api.patch("issues", id, { status: "rozwiazane" });
-      setIssues(issues.map((iss) => (iss.id === i.id ? i : iss)));
-      showMsg("Zgłoszenie rozwiązane!");
-    } catch (err) {
-      showMsg("Błąd!", "error");
-    }
+    const i = await api.patch("issues", id, { status: "rozwiazane" });
+    setIssues((prev) => prev.map((iss) => (iss.id === i.id ? i : iss)));
   };
 
   // "Utwórz zadanie" w Zgłoszeniach — tworzy zadanie kierownika (for_manager)
@@ -1036,109 +1072,70 @@ const ManagerDashboard = ({
     }
   };
 
-  const openEditShift = (shift) => {
-    setEditingShift(shift);
-    setShiftForm({
-      userId: shift.user_id || "",
-      date: shift.start_time.toISOString().split("T")[0],
-      start: shift.start_time.toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      end: shift.end_time
-        ? shift.end_time.toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          })
-        : "",
-      lokal: shift.lokal,
-      stanowisko: shift.stanowisko,
-    });
-  };
-
-  // "+ Dodaj wpis" w Rejestr Godzin — ten sam modal co edycja, tylko
-  // editingShift.id === null włącza w JSX pole wyboru pracownika i w
-  // handleSaveShiftEdit gałąź api.post zamiast api.patch.
-  const openNewShift = () => {
-    const now = new Date();
-    setEditingShift({ id: null, user_id: "", user_name: "", start_time: now, end_time: null });
-    setShiftForm({
-      userId: "",
-      date: now.toISOString().split("T")[0],
-      start: now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      end: "",
-      lokal: availableLokaleForManager[0]?.name || "",
-      stanowisko: "",
-    });
-  };
-
-  const isNewShift = editingShift && editingShift.id === null;
+  // Okno wpisu godzin (manager/WpisGodzinModal.tsx) — formularz trzyma samo
+  // okno; tu zostaje zapis, bo potrzebuje kolizji w bazie, powiadomienia i
+  // arkusza Google.
+  const openEditShift = (shift) => setEditingShift(shift);
+  const openNewShift = () =>
+    setEditingShift({ id: null, user_id: "", user_name: "", start_time: new Date(), end_time: null });
 
   // --- OTO MAGIA GOOGLE SHEETS DLA EDYCJI (i tworzenia — "+ Dodaj wpis") ---
-  const handleSaveShiftEdit = async (e) => {
-    e.preventDefault();
+  // Zwraca true, gdy zapisano — okno zamyka się dopiero wtedy.
+  // `baza` — wiersz, który poprawiamy (id === null → nowy wpis). `cicho` —
+  // bez komunikatu sukcesu, gdy o decyzji mówi już pasek "Cofnij" (Aktywni).
+  const zapiszWpis = async (form, baza, { cicho = false } = {}) => {
+    const nowy = !baza?.id;
     try {
-      if (isNewShift && !shiftForm.userId) {
-        return showMsg("Wybierz pracownika!", "error");
-      }
-      const [year, month, day] = shiftForm.date.split("-").map(Number);
-      const [startH, startM] = shiftForm.start.split(":").map(Number);
+      const [year, month, day] = form.date.split("-").map(Number);
+      const [startH, startM] = form.start.split(":").map(Number);
       const startD = new Date(year, month - 1, day, startH, startM);
       let endD = null,
         hrs = null;
-      if (shiftForm.end) {
-        const [endH, endM] = shiftForm.end.split(":").map(Number);
+      if (form.end) {
+        const [endH, endM] = form.end.split(":").map(Number);
         endD = new Date(year, month - 1, day, endH, endM);
-        if (endD < startD) endD.setDate(endD.getDate() + 1);
+        if (endD <= startD) endD.setDate(endD.getDate() + 1);
         hrs = parseFloat(((endD - startD) / (1000 * 60 * 60)).toFixed(2));
       }
+      const userId = form.userId || baza.user_id;
 
-      // Kierownik może naprawiać już niespójne dane, więc tylko ostrzegamy
-      // (w przeciwieństwie do twardej blokady u pracownika w TimeEntryForm).
-      const overlapping = findOverlappingShift(
-        shifts,
-        shiftForm.userId || editingShift.user_id,
-        startD,
-        endD,
-        editingShift.id
-      );
       // Kierownik naprawia też niespójne dane, więc tu zostaje ostrzeżenie, nie
       // blokada — ale pytamy również BAZY, bo jego lista bywa równie
       // nieaktualna jak lista na tablecie.
       const kolizja =
-        overlapping ||
+        findOverlappingShift(shifts, userId, startD, endD, baza.id) ||
         (await znajdzKolizjeWBazie({
-          userId: shiftForm.userId || editingShift.user_id,
+          userId,
           start: startD,
           end: endD,
-          excludeId: editingShift.id,
+          excludeId: baza.id,
         }));
       if (kolizja) {
         const confirmed = window.confirm(
           `Ta zmiana nakłada się na inną zapisaną zmianę tego pracownika ` +
             `(${opisKolidujacej(kolizja)}). Zapisać mimo to?`
         );
-        if (!confirmed) return;
+        if (!confirmed) return false;
       }
 
       let updated;
-      if (isNewShift) {
-        const user = users.find((u) => u.id === shiftForm.userId);
+      if (nowy) {
+        const user = users.find((u) => u.id === userId);
         updated = await api.post("shifts", {
-          user_id: shiftForm.userId,
+          user_id: userId,
           user_name: user?.name || "",
           start_time: startD.toISOString(),
           end_time: endD ? endD.toISOString() : null,
-          lokal: shiftForm.lokal,
-          stanowisko: shiftForm.stanowisko,
+          lokal: form.lokal,
+          stanowisko: form.stanowisko,
           godzin: hrs,
         });
       } else {
-        updated = await api.patch("shifts", editingShift.id, {
+        updated = await api.patch("shifts", baza.id, {
           start_time: startD.toISOString(),
           end_time: endD ? endD.toISOString() : null,
-          lokal: shiftForm.lokal,
-          stanowisko: shiftForm.stanowisko,
+          lokal: form.lokal,
+          stanowisko: form.stanowisko,
           godzin: hrs,
         });
       }
@@ -1147,71 +1144,136 @@ const ManagerDashboard = ({
         start_time: new Date(updated.start_time),
         end_time: updated.end_time ? new Date(updated.end_time) : null,
       };
-      setShifts(
-        isNewShift
-          ? [...shifts, parsed]
-          : shifts.map((s) => (s.id === parsed.id ? parsed : s))
+      setShifts((prev) =>
+        nowy ? [...prev, parsed] : prev.map((s) => (s.id === parsed.id ? parsed : s))
       );
 
+      // Ślad: kto, kiedy, było → jest i dlaczego. Rejestr pokazuje go w
+      // historii wpisu i jako "Korekta · Imię".
+      const slad = await zapiszSladRecznejZmiany({
+        stara: nowy ? null : baza,
+        nowa: parsed,
+        editorName: currentUser.name,
+        reason: form.reason,
+        source: nowy ? "manual_add" : "manual_edit",
+      });
+      if (slad) setShiftEdits((prev) => [...prev, slad]);
+
       // Powiadomienie dla pracownika o edycji zmiany (nie dotyczy nowego wpisu)
-      if (!isNewShift) {
-        const oldStart = editingShift.start_time;
-        const oldEnd = editingShift.end_time;
+      if (!nowy) {
+        const oldStart = baza.start_time;
+        const oldEnd = baza.end_time;
         const changed =
           oldStart.getTime() !== startD.getTime() ||
           (oldEnd ? oldEnd.getTime() : null) !== (endD ? endD.getTime() : null);
         if (changed) {
-          notifyEmployee(parsed, "edit", oldStart, oldEnd, startD, endD);
+          notifyEmployee(parsed, "edit", oldStart, oldEnd, startD, endD, form.reason);
         }
       }
 
       // Automatyczna poprawka w Google Sheets — w tle, nie czekamy (Supabase
       // to źródło prawdy, Apps Script bywa wolny).
-      sendToGoogleSheets(parsed, isNewShift ? "ADD_SHIFT" : "EDIT_SHIFT");
+      sendToGoogleSheets(parsed, nowy ? "ADD_SHIFT" : "EDIT_SHIFT");
 
-      setEditingShift(null);
-      showMsg(isNewShift ? "Wpis dodany!" : "Zmiana zaktualizowana!");
+      if (!cicho) showMsg(nowy ? "Wpis dodany!" : "Zmiana zaktualizowana!");
+      return true;
     } catch (err) {
-      showMsg(
-        `Błąd zapisu: ${err.message || "nieznany błąd"}`,
-        "error"
-      );
+      showMsg(`Błąd zapisu: ${err.message || "nieznany błąd"}`, "error");
+      return false;
+    }
+  };
+
+  const zapiszWpisGodzin = (form) => zapiszWpis(form, editingShift);
+
+  // Aktywni: "Zakończ" z godziną i "Dopisz wejście" z grafiku — ta sama droga
+  // zapisu co okno wpisu (kolizje w bazie, ślad, powiadomienie, arkusz).
+  const hhmmLok = (d) =>
+    `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  const zakonczZmiane = (shift, godzina) =>
+    zapiszWpis(
+      {
+        userId: shift.user_id,
+        date: toLocalYMD(shift.start_time),
+        start: hhmmLok(shift.start_time),
+        end: godzina,
+        lokal: shift.lokal,
+        stanowisko: shift.stanowisko,
+        reason: "",
+      },
+      shift,
+      { cicho: true }
+    );
+  // `godzina` wybiera kierownik (wg grafiku albo teraz) — bez niej start z grafiku.
+  const dopiszWejscie = (plan, user, godzina) =>
+    zapiszWpis(
+      {
+        userId: user.id,
+        date: plan.date,
+        start: godzina || String(plan.start_time).slice(0, 5),
+        end: "",
+        lokal: plan.lokal,
+        stanowisko: plan.stanowisko,
+        reason: "Wejście dopisane przez kierownika",
+      },
+      { id: null, user_id: user.id, user_name: user.name },
+      { cicho: true }
+    );
+
+  // Skrzynka: przeczytane powiadomienia.
+  const oznaczPrzeczytane = async (ids) => {
+    if (!ids.length) return;
+    try {
+      await api.patchByFilter("notifications", `id=in.(${ids.join(",")})`, { is_read: true });
+      setNotifications((prev) => prev.map((n) => (ids.includes(n.id) ? { ...n, is_read: true } : n)));
+    } catch (e) {
+      showMsg("Nie udało się oznaczyć jako przeczytane.", "error");
     }
   };
 
   // --- OTO MAGIA GOOGLE SHEETS DLA USUWANIA ---
-  const handleDeleteShift = async () => {
-    if (
-      !window.confirm(
-        "Usunąć tę zmianę całkowicie? Zostanie również usunięta z Google Sheets."
-      )
-    )
-      return;
+  // Usunięcie idzie przez 6 s "Cofnij" (odlozoneDecyzje.tsx) zamiast
+  // window.confirm: wiersz znika z Rejestru od razu, a kasowanie w bazie
+  // rusza dopiero po czasie na rozmyślenie się.
+  const usunWpisGodzin = async (shift) => {
     try {
-      await api.delete("shifts", editingShift.id);
-      setShifts(shifts.filter((s) => s.id !== editingShift.id));
+      await api.delete("shifts", shift.id);
+      setShifts((prev) => prev.filter((s) => s.id !== shift.id));
+      const slad = await zapiszSladRecznejZmiany({
+        stara: shift,
+        nowa: null,
+        editorName: currentUser.name,
+        reason: "",
+        source: "manual_delete",
+      });
+      if (slad) setShiftEdits((prev) => [...prev, slad]);
 
       // Powiadomienie dla pracownika o usunięciu zmiany
-      notifyEmployee(
-        editingShift,
-        "delete",
-        editingShift.start_time,
-        editingShift.end_time,
-        null,
-        null
-      );
+      notifyEmployee(shift, "delete", shift.start_time, shift.end_time, null, null);
 
       // Automatyczne usunięcie z Google Sheets — w tle, patrz komentarz
-      // w handleSaveShiftEdit.
-      sendToGoogleSheets(editingShift, "DELETE_SHIFT");
-
-      setEditingShift(null);
-      showMsg("Zapis usunięty z Bazy.");
+      // w zapiszWpisGodzin.
+      sendToGoogleSheets(shift, "DELETE_SHIFT");
     } catch (err) {
       // Pokazujemy prawdziwą przyczynę — samo "Błąd usuwania." nie mówiło
       // ani co padło, ani czy zmiana została skasowana.
       showMsg(err.message || "Błąd usuwania.", "error");
     }
+  };
+  const {
+    odlozone: usuwaneWpisy,
+    toast: pasekUsuniecia,
+    decyduj: zlecUsuniecie,
+    cofnij: cofnijUsuniecie,
+  } = useOdlozoneDecyzje({ usunWpisGodzin });
+  const usunZCofnij = (shift) => {
+    setEditingShift(null);
+    const d = shift.start_time;
+    zlecUsuniecie(
+      [{ klucz: `usun:${shift.id}`, zadanie: ["usunWpisGodzin", [shift]] }],
+      `Usunięto wpis: ${shift.user_name} · ${String(d.getDate()).padStart(2, "0")}.${String(
+        d.getMonth() + 1
+      ).padStart(2, "0")}`
+    );
   };
 
   const filteredShifts = shifts
@@ -1278,166 +1340,40 @@ const ManagerDashboard = ({
     >
       <div className="relative">
         {editingShift && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white p-6 rounded-xl w-full max-w-md shadow-2xl">
-              <div className="flex justify-between items-center mb-4 border-b pb-2">
-                <h3 className="text-xl font-bold">
-                  {isNewShift ? "Nowy wpis" : `Edycja: ${editingShift.user_name}`}
-                </h3>
-                <button
-                  onClick={() => setEditingShift(null)}
-                  className="text-gray-500"
-                >
-                  <X size={24} />
-                </button>
-              </div>
-              <form onSubmit={handleSaveShiftEdit} className="space-y-4">
-                {isNewShift && (
-                  <div>
-                    <label className="block text-xs font-bold text-gray-600">
-                      Pracownik
-                    </label>
-                    <select
-                      value={shiftForm.userId}
-                      onChange={(e) =>
-                        setShiftForm({ ...shiftForm, userId: e.target.value })
-                      }
-                      className="w-full p-2 border rounded bg-gray-50"
-                      required
-                    >
-                      <option value="">-- Wybierz --</option>
-                      {visibleUsers
-                        .filter((u) => u.role !== "kiosk")
-                        .map((u) => (
-                          <option key={u.id} value={u.id}>
-                            {u.name}
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-                )}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-600">
-                      Lokal
-                    </label>
-                    <select
-                      value={shiftForm.lokal}
-                      onChange={(e) =>
-                        setShiftForm({ ...shiftForm, lokal: e.target.value })
-                      }
-                      className="w-full p-2 border rounded bg-gray-50"
-                    >
-                      {availableLokaleForManager.map((l) => (
-                        <option key={l.id} value={l.name}>
-                          {l.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-600">
-                      Stanowisko
-                    </label>
-                    <select
-                      value={shiftForm.stanowisko}
-                      onChange={(e) =>
-                        setShiftForm({
-                          ...shiftForm,
-                          stanowisko: e.target.value,
-                        })
-                      }
-                      className="w-full p-2 border rounded bg-gray-50"
-                    >
-                      {activeStanowiska
-                        .filter((s) => s.lokal_name === shiftForm.lokal)
-                        .map((s) => (
-                          <option key={s.id} value={s.name}>
-                            {s.name}
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-600">
-                    Data (YYYY-MM-DD)
-                  </label>
-                  <input
-                    type="date"
-                    value={shiftForm.date}
-                    onChange={(e) =>
-                      setShiftForm({ ...shiftForm, date: e.target.value })
-                    }
-                    className="w-full p-2 border rounded bg-gray-50"
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-600">
-                      Start
-                    </label>
-                    <input
-                      type="time"
-                      value={shiftForm.start}
-                      onChange={(e) =>
-                        setShiftForm({ ...shiftForm, start: e.target.value })
-                      }
-                      className="w-full p-2 border rounded font-mono"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-600">
-                      Koniec
-                    </label>
-                    <input
-                      type="time"
-                      value={shiftForm.end}
-                      onChange={(e) =>
-                        setShiftForm({ ...shiftForm, end: e.target.value })
-                      }
-                      className="w-full p-2 border rounded font-mono"
-                    />
-                  </div>
-                </div>
-                <div className="flex gap-2 mt-6 pt-4 border-t">
-                  {!isNewShift && (
-                    <button
-                      type="button"
-                      onClick={handleDeleteShift}
-                      className="flex-none p-2 bg-red-100 text-red-700 font-bold rounded flex hover:bg-red-200"
-                      title="Usuń zmianę z bazy"
-                    >
-                      <Trash2 size={20} />
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setEditingShift(null)}
-                    className="flex-1 p-2 bg-gray-200 font-bold rounded"
-                  >
-                    Anuluj
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 p-2 bg-blue-600 text-white font-bold rounded flex justify-center gap-2"
-                  >
-                    <Save size={18} />
-                    Zapisz
-                  </button>
-                </div>
-              </form>
-            </div>
+          <WpisGodzinModal
+            shift={editingShift}
+            users={visibleUsers}
+            lokale={availableLokaleForManager}
+            stanowiska={activeStanowiska}
+            planShifts={planShifts}
+            shiftEdits={shiftEdits}
+            onClose={() => setEditingShift(null)}
+            onSave={zapiszWpisGodzin}
+            onDelete={usunZCofnij}
+          />
+        )}
+        {pasekUsuniecia && (
+          <div className="fixed left-1/2 -translate-x-1/2 bottom-24 md:bottom-6 z-50 w-[calc(100%-32px)] max-w-[480px]">
+            <PasekCofnij opis={pasekUsuniecia.opis} onCofnij={cofnijUsuniecie} />
           </div>
         )}
 
         {tab === "pulpit" && (
           <PulpitHome
+            currentUser={currentUser}
             users={users}
             shifts={shifts}
+            setShifts={setShifts}
             issues={issues}
+            setIssues={setIssues}
+            setShiftEdits={setShiftEdits}
+            lokale={lokale}
+            hasAccessToLokal={hasAccessToLokal}
+            zakres={zakresNazwa}
+            setDayLogs={setDayLogs}
+            dayLogEntries={dayLogEntries}
+            dayLogTemplates={dayLogTemplates}
+            showMsg={showMsg}
             tasks={tasks}
             taskBlocks={taskBlocks}
             taskCompletions={taskCompletions}
@@ -1464,6 +1400,17 @@ const ManagerDashboard = ({
             setSelectedUserId={setReportUserId}
             skok={reportSkok}
             planShifts={planShifts}
+            shiftEdits={shiftEdits}
+            // Te same kolejki co znaczek "Zatwierdzanie zmian" — raport liczy
+            // z nich tylko sprawy z oglądanego miesiąca (Gotowość do rozliczenia).
+            doDecyzji={{
+              korekty: pendingCorrections,
+              braki: brakiOdbiciaDoDecyzji,
+              porzucone: porzuconeZmiany,
+            }}
+            onGoToApprovals={() => setTab("zatwierdzanie")}
+            onGoToRegister={() => setTab("godziny")}
+            onOpenEmployee={goToEmployeeCard}
           />
         )}
 
@@ -1479,6 +1426,7 @@ const ManagerDashboard = ({
             setEditingDict={setEditingDict}
             onSaveDict={handleSaveDict}
             onArchive={handleArchiveEntity}
+            onOpenEmployee={goToEmployeeCard}
           />
         )}
 
@@ -1836,6 +1784,8 @@ const ManagerDashboard = ({
             onNewShift={openNewShift}
             onNameClick={goToEmployeeReport}
             planShifts={planShifts}
+            onGoToApprovals={() => setTab("zatwierdzanie")}
+            ukryte={usuwaneWpisy}
           />
         )}
 
@@ -2039,8 +1989,13 @@ const ManagerDashboard = ({
             planShifts={planShifts}
             lokale={lokale}
             users={users}
+            absences={absences}
+            issues={issues}
             matchesFilter={matchesLokalFilter}
+            zakres={zakresNazwa}
             onEndShift={openEditShift}
+            onZakoncz={zakonczZmiane}
+            onDopiszWejscie={dopiszWejscie}
             onNameClick={goToEmployeeReport}
           />
         )}
@@ -2114,6 +2069,7 @@ const ManagerDashboard = ({
             pendingSwaps={pendingSwaps}
             planShifts={planShifts}
             onResolveSwap={handleResolveSwap}
+            zakres={isLocalManager ? "Twoje lokale" : "Cała sieć"}
             showMsg={showMsg}
             users={users}
             setUsers={setUsers}
@@ -2124,14 +2080,19 @@ const ManagerDashboard = ({
           />
         )}
 
-        {tab === "zgloszenia" && (
-          <Zgloszenia
-            issues={widoczneZgloszenia}
-            users={users}
-            onResolve={resolveIssue}
-            tasks={tasks}
+        {tab === "skrzynka" && (
+          <Skrzynka
+            dane={{ ...daneSkrzynki, lokalOk: matchesLokalFilter }}
+            key={skrzynkaStart}
+            startowaZakladka={skrzynkaStart}
+            onResolveAbsence={handleResolveAbsence}
+            onResolveIssue={resolveIssue}
             onCreateTaskFromIssue={handleCreateTaskFromIssue}
+            onMarkRead={oznaczPrzeczytane}
+            onOpenPuls={goToPuls}
+            onGoToApprovals={() => setTab("zatwierdzanie")}
             fallbackLokal={availableLokaleForManager[0]?.name}
+            showMsg={showMsg}
           />
         )}
 
@@ -2184,18 +2145,6 @@ const ManagerDashboard = ({
                   </div>
                 ))}
             </div>
-          </div>
-        )}
-
-        {tab === "powiadomienia" && (
-          <div className="max-w-4xl mx-auto">
-            <h2 className="font-['Archivo'] font-extrabold text-2xl text-[#171714] mb-6">
-              Powiadomienia
-            </h2>
-            <NotificationsPanel
-              items={managerNotifications}
-              showEmployeeName={false}
-            />
           </div>
         )}
 

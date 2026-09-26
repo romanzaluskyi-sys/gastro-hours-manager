@@ -22,7 +22,7 @@
 // standardem jest system równoważny (art. 135), w którym dobowy wymiar sięga
 // 12 h — ostrzeżenie przy każdej dwunastce byłoby alarmem o normalnej zmianie
 // i nauczyłoby ignorować całą resztę.
-import { planAbsRange, isSameUser, addDaysYMD, mondayOf } from "./grafik";
+import { planAbsRange, isSameUser, addDaysYMD, mondayOf, shiftLengthMin, knowsStanowisko } from "./grafik";
 import { naEtacie } from "./umowy";
 
 export const ODPOCZYNEK_DOBOWY_MIN = 11 * 60;
@@ -225,6 +225,83 @@ export const ostrzezeniaKodeksu = ({ planShifts, absences, user, od, doDnia }) =
   const out = [...naruszeniaDobowe(lista).filter((n) => n.date >= od && n.date <= doDnia)];
   for (let p = mondayOf(od); p <= doDnia; p = addDaysYMD(p, 7)) {
     out.push(...naruszeniaTygodniowe(planShifts, user, p));
+  }
+  return out;
+};
+
+// --- UWAGI PRZED PRZYPISANIEM (panel "Przypisz zmianę", 0.55.0) ----------
+// Pełna lista tego, co kierownik ma zobaczyć, ZANIM wpisze komuś zmianę —
+// makieta właściciela (ScheduleAssign). Zbiera istniejące ostrzeżenia
+// Kodeksu (`ostrzezeniaKodeksu`, z tym samym podziałem wg umowy) i dokłada
+// cztery rzeczy, których tamta funkcja nie liczy:
+//   • zmiana dłuższa niż 12 h (system równoważny dopuszcza 12 h — dopiero
+//     ponad nie jest sygnałem; 8 h dalej NIE jest, patrz nagłówek pliku),
+//   • ponad 48 h w tygodniu (art. 131),
+//   • godziny ponad normę miesiąca przy umowie o pracę,
+//   • stanowisko, którego nie ma w karcie pracownika.
+//
+// `ton`: "bad" przy umowie o pracę (Kodeks), "warn" przy pozostałych — tam to
+// zalecenia bezpieczeństwa, a nie przepis. ⚠️ Dalej SYGNAŁ, nie blokada:
+// przycisk zmienia się tylko na "Przypisz mimo uwag".
+// ⚠️ Bez słowa o dopłatach 50/100% — tych w aplikacji świadomie nie ma
+// (patrz "Umowa, norma i koszt" w CLAUDE.md).
+export const TYDZIEN_MAX_MIN = 48 * 60;
+export const ZMIANA_MAX_MIN = 12 * 60;
+
+export const uwagiPrzypisania = ({
+  user,
+  kandydaci,
+  planShifts,
+  absences,
+  stanowisko,
+  ponadNorme = 0,
+  pomijajId = null,
+}) => {
+  if (!user || !kandydaci || kandydaci.length === 0) return [];
+  const etat = naEtacie(user);
+  const ton = etat ? "bad" : "warn";
+  const out = [];
+  const bez = (planShifts || []).filter(
+    (s) => !s.deleted_at && (pomijajId == null || String(s.id) !== String(pomijajId))
+  );
+  const razem = [...bez, ...kandydaci];
+
+  const dlugosc = shiftLengthMin(kandydaci[0]);
+  if (dlugosc > ZMIANA_MAX_MIN) {
+    out.push({ ton, tekst: `Zmiana dłuższa niż 12 h (${hh(dlugosc)}).` });
+  }
+
+  const tygodnie = [...new Set(kandydaci.map((k) => mondayOf(k.date)))];
+  tygodnie.forEach((pon) => {
+    const nd = addDaysYMD(pon, 6);
+    const min = razem
+      .filter((s) => isSameUser(s, user) && s.date >= pon && s.date <= nd)
+      .reduce((a, s) => a + shiftLengthMin(s), 0);
+    if (min > TYDZIEN_MAX_MIN) {
+      out.push({
+        ton,
+        tekst: `W tygodniu od ${pon} ${hh(min)} — ponad 48 h${etat ? " (KP art. 131)" : ""}.`,
+      });
+    }
+  });
+
+  const daty = kandydaci.map((k) => k.date).sort();
+  ostrzezeniaKodeksu({
+    planShifts: razem,
+    absences,
+    user,
+    od: addDaysYMD(daty[0], -7),
+    doDnia: addDaysYMD(daty[daty.length - 1], 7),
+  }).forEach((o) => out.push({ ton, tekst: o.tekst }));
+
+  if (etat && ponadNorme > 0.05) {
+    out.push({
+      ton: "warn",
+      tekst: `Po tej zmianie ${Math.round(ponadNorme * 10) / 10} h ponad normę miesiąca.`,
+    });
+  }
+  if (stanowisko && !knowsStanowisko(user, stanowisko)) {
+    out.push({ ton: "warn", tekst: `Nie ma stanowiska „${stanowisko}” w karcie pracownika.` });
   }
   return out;
 };

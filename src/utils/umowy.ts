@@ -139,6 +139,40 @@ export const kosztMiesiaca = ({ user, godziny, lokalRow, rok, mies }) => {
   return st == null ? null : (godziny || 0) * st * narzut;
 };
 
+// Koszt miesiąca ZESPOŁU widocznego w zakresie — ta sama reguła co kafelek
+// "Koszt" w Raportach i kosztach (`agreguj` w RaportyIKoszty.tsx), żeby Pulpit
+// i Raporty nie podawały dwóch różnych kwot za ten sam miesiąc:
+//   - liczą się osoby z choć jedną zmianą w oglądanym zakresie (`lokalOk`),
+//     nikogo nie dopisujemy z listy pracowników;
+//   - ich godziny bierzemy ze WSZYSTKICH lokali kierownika (`widoczny`), bo
+//     koszt osoby to fakt płacowy, nie fakt lokalu.
+// `niepelny` = ktoś nie ma ani kwoty z umowy, ani stawki — jego koszt nie
+// wchodzi do sumy i trzeba to powiedzieć, zamiast liczyć go jako zero.
+export const kosztZespoluMiesiaca = ({ shifts, users, lokale, rok, mies, lokalOk, widoczny }) => {
+  const wMiesiacu = (s) =>
+    s.start_time.getFullYear() === rok && s.start_time.getMonth() === mies - 1;
+  const osoby = new Set(
+    (shifts || []).filter((s) => s.user_id && wMiesiacu(s) && lokalOk(s.lokal)).map((s) => s.user_id)
+  );
+  const godziny = {};
+  (shifts || []).forEach((s) => {
+    if (!s.user_id || !osoby.has(s.user_id) || !wMiesiacu(s) || !widoczny(s.lokal)) return;
+    const h = s.end_time ? (s.end_time - s.start_time) / 3600000 : 0;
+    godziny[s.user_id] = (godziny[s.user_id] || 0) + h;
+  });
+  let koszt = 0;
+  let niepelny = false;
+  osoby.forEach((uid) => {
+    const user = (users || []).find((u) => u.id === uid);
+    if (!user) return;
+    const lokalRow = (lokale || []).find((l) => l.name === user.default_lokal) || null;
+    const k = kosztMiesiaca({ user, godziny: godziny[uid] || 0, lokalRow, rok, mies });
+    if (k == null) niepelny = true;
+    else koszt += k;
+  });
+  return { koszt, niepelny };
+};
+
 // Ile godzin ponad normę ma ta osoba w danym miesiącu — i ile lokal za nie
 // dopłaca. Zwraca null dla każdego, kto normy nie ma (zlecenie, brak wymiaru
 // etatu): tam pojęcie nadwyżki nie istnieje, a zero wyglądałoby jak odpowiedź.
