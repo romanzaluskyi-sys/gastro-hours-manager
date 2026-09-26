@@ -1324,6 +1324,117 @@ const poprzedniMiesiac = (h) => {
         if (e !== null) sprawdz("Raporty i koszty: przebieg bez wyjątku", false, e.message);
       }
 
+      // ----------------------------------------------------------------
+      // Grafik według makiety (0.55.0): pasek szkicu, etykiety obsady nad
+      // dniem jako przyciski, panel przypisania z kandydatami i uwagami,
+      // usuwanie z "Cofnij", szkic z "Cofnij" przy wierszu.
+      // ----------------------------------------------------------------
+      try {
+        if (new URLSearchParams(location.search).get("rola") !== "manager") {
+          const G = () => document.querySelector("#app [data-grafik]");
+          const menuG = [...document.querySelectorAll("#app aside button")]
+            .find((x) => x.textContent.replace(/▪/g, "").replace(/\d+$/, "").trim() === "Grafik");
+          menuG.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          await czekaj(400);
+          const liczbaPublikacji = () => Number((/Opublikuj · (\d+)/.exec(G().querySelector("[data-opublikuj]").textContent) || [])[1] || 0);
+          const dzis = ymd(new Date());
+          const oczekiwaneProsby = [dniTygodnia[2], dniTygodnia[3]].filter((d) => d >= dzis).length;
+          sprawdz("pasek „Giełda zmian” pokazuje prośby czekające na zgodę",
+            G().querySelectorAll("[data-prosba-gieldy]").length === oczekiwaneProsby,
+            `jest ${G().querySelectorAll("[data-prosba-gieldy]").length}, oczekiwano ${oczekiwaneProsby}`);
+          sprawdz("pasek szkicu i „Opublikuj · N” przy niewysłanych zmianach",
+            !!G().querySelector("[data-pasek-szkicu]") && liczbaPublikacji() >= 1, String(liczbaPublikacji()));
+
+          [...document.querySelectorAll("#app header button")].find((x) => x.textContent.trim() === "Ceglana")
+            .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          await czekaj(300);
+          G().querySelector('[data-tryb-grafiku="edycja"]').dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          await czekaj(300);
+          const sekcja = () => G().querySelector('[data-lokal-grafiku="Ceglana"]');
+          const kafelekBrakow = Number(sekcja().querySelector("[data-kafelek-braki]").getAttribute("data-kafelek-braki"));
+          sprawdz("kafelek „Braki obsady” = liczba czerwonych etykiet nad dniami",
+            kafelekBrakow === sekcja().querySelectorAll("[data-obsada-dnia] [data-luka]").length && kafelekBrakow > 0,
+            `kafelek ${kafelekBrakow}, etykiet ${sekcja().querySelectorAll("[data-obsada-dnia] [data-luka]").length}`);
+          sprawdz("zmiana usunięta po wysłaniu stoi przekreślona do publikacji",
+            !!sekcja().querySelector('[data-zmiana-usunieta="g10"]'));
+
+          const przedLuka = liczbaPublikacji();
+          // Publikacja obejmuje dni od dziś — luka z przeszłości dałaby zmianę,
+          // której licznik z założenia nie liczy.
+          const luki = [...sekcja().querySelectorAll("[data-obsada-dnia] [data-luka]")];
+          const dzienLuki = (l) => l.closest("[data-naglowek-dnia]").getAttribute("data-naglowek-dnia");
+          const luka = luki.find((l) => dzienLuki(l) >= dzis) || luki[0];
+          const lukaWPrzyszlosci = dzienLuki(luka) >= dzis;
+          const [stLuki, odLuki, doLuki] = luka.getAttribute("data-luka").split("|");
+          luka.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          await czekaj(300);
+          const panel = () => document.querySelector("#app [data-panel-zmiany]");
+          sprawdz("klik w lukę otwiera panel z jej godzinami i stanowiskiem",
+            !!panel() && /Brak · /.test(panel().textContent) &&
+              panel().querySelector(`[data-stanowisko-panelu="${stLuki}"]`).className.includes("bg-[#171714]"),
+            panel() ? panel().textContent.slice(0, 160) : "brak panelu");
+          const kandydat = [...panel().querySelectorAll("[data-kandydat]")].find((b) => !b.disabled);
+          sprawdz("panel pokazuje kandydatów z godzinami w miesiącu", !!kandydat && /h/.test(kandydat.textContent));
+          kandydat.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          await czekaj(200);
+          sprawdz("wybór osoby pokazuje skutek dla obsady i uwagi",
+            /Pokryje/.test(panel().querySelector("[data-skutek]").textContent) && !!panel().querySelector("[data-uwagi-zmiany]"),
+            panel().querySelector("[data-skutek]").textContent);
+          const przedZapisem = window.__zapisy.length;
+          panel().querySelector("[data-zapisz-zmiane]").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          await czekaj(400);
+          const zapis = window.__zapisy.slice(przedZapisem).find((z) => z[0] === "grafik_shifts");
+          const dz = zapis && (zapis[2] || zapis[1]);
+          sprawdz("„Przypisz” zapisuje zmianę w godzinach luki",
+            !!dz && dz.start_time === odLuki.slice(0, 5) && dz.end_time === doLuki.slice(0, 5) && dz.stanowisko === stLuki,
+            JSON.stringify(dz));
+          sprawdz("nowa zmiana w szkicu: przerywana ramka i +1 przy „Opublikuj”",
+            !panel() && liczbaPublikacji() === przedLuka + (lukaWPrzyszlosci ? 1 : 0) && !!sekcja().querySelector('[data-stan="nowa"]'),
+            `${przedLuka} → ${liczbaPublikacji()}`);
+          sprawdz("zapis nie gubi zmian usuniętych w szkicu (stan, nie widok)",
+            !!sekcja().querySelector('[data-zmiana-usunieta="g10"]'));
+
+          sekcja().querySelector('[data-zmiana-grafiku="g8"]').dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          await czekaj(300);
+          sprawdz("zmiana z odpoczynkiem poniżej 11 h: uwagi i „Zapisz mimo uwag”",
+            !!panel() && Number(panel().querySelector("[data-uwagi-zmiany]").getAttribute("data-uwagi-zmiany")) > 0 &&
+              /mimo uwag/.test(panel().querySelector("[data-zapisz-zmiane]").textContent),
+            panel() ? panel().querySelector("[data-zapisz-zmiane]").textContent : "");
+          panel().querySelector('button[aria-label="Zamknij"]').dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          await czekaj(200);
+
+          const przedUsun = window.__zapisy.length;
+          sekcja().querySelector('[data-zmiana-grafiku="g4"]').dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          await czekaj(200);
+          panel().querySelector("[data-usun-zmiane]").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          await czekaj(200);
+          sprawdz("usunięcie chowa zmianę i daje 6 s „Cofnij”, bez zapisu od razu",
+            !sekcja().querySelector('[data-zmiana-grafiku="g4"]') && !!G().querySelector("[data-pasek-cofnij]") &&
+              window.__zapisy.length === przedUsun);
+          [...G().querySelectorAll("[data-pasek-cofnij] button")][0].dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          await czekaj(200);
+          sprawdz("„Cofnij” przywraca zmianę", !!sekcja().querySelector('[data-zmiana-grafiku="g4"]'));
+
+          G().querySelector("[data-zobacz-szkic]").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          await czekaj(200);
+          const szkic = document.querySelector("#app [data-szkic-grafiku]");
+          sprawdz("szkic dzieli zmiany na dodane i usunięte, z listą osób do powiadomienia",
+            !!szkic && szkic.querySelectorAll('[data-wiersz-szkicu="nowa"]').length >= 1 &&
+              szkic.querySelectorAll('[data-wiersz-szkicu="usunieta"]').length === 1 && /powiadomienie dostanie/.test(szkic.textContent));
+          const przedCofnij = window.__zapisy.length;
+          szkic.querySelector('[data-wiersz-szkicu="usunieta"] [data-cofnij-szkic]').dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          await czekaj(300);
+          const przywr = window.__zapisy.slice(przedCofnij).find((z) => z[0] === "grafik_shifts");
+          sprawdz("„Cofnij” przy usuniętej przywraca ją (deleted_at = null)",
+            !!przywr && JSON.stringify(przywr).includes('"deleted_at":null'), JSON.stringify(przywr));
+          const zamknijSzkic = document.querySelector('#app [data-szkic-grafiku] button[aria-label="Zamknij"]');
+          if (zamknijSzkic) zamknijSzkic.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          await czekaj(100);
+        }
+      } catch (e) {
+        if (e !== null) sprawdz("Grafik: przebieg bez wyjątku", false, e.message);
+      }
+
       if (status.className !== "zle") {
         status.textContent =
           `panel zamontowany — sprawdziany ${zdanych}/${zdanych + oblanych}`;

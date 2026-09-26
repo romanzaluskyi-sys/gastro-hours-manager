@@ -450,3 +450,18 @@ dowolnym lokalu. Stąd:
 - Wyjątki dat (święta / niedziela handlowa) — UI dopiero po etapie 2.
 - Ustawienia konfigurowalne przez kierownika/admina (polityka giełdy itd.).
 - Dwa warianty druku miesiąca — odłożone.
+
+
+## Runda 6 (2026-09-26) — układ z makiety "Shiftro" (0.55.0)
+
+Makiety ScheduleWeek / ScheduleAssign / ScheduleBudget / ScheduleDraft /
+ScheduleMobile z design systemu właściciela. Pełny opis decyzji i odstępstw:
+CLAUDE.md, sekcja "5g. Grafik — układ z makiety właściciela". Skrót odstępstw:
+
+- "Cofnij" w szkicu tylko przy dodanej i usuniętej zmianie; brak "Odrzuć cały
+  szkic" — baza nie trzyma poprzedniej wersji zmienionej zmiany.
+- Zgoda na prośbę z giełdy przepisuje zmianę od razu (jak dotąd), a nie przez
+  szkic.
+- Uwagi przed przypisaniem: reguły odpoczynku dla zlecenia zostają takie jak
+  były (seria ponad 40 h bez wolnego) — makieta pokazywała im też 11 h.
+- Pole godziny przesuwa o ±15 min (jak w całej aplikacji), nie ±30.

@@ -5,6 +5,46 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.55.0 — 2026-09-26
+
+- **Nowy wygląd Grafiku** według makiety:
+  - **jeden pasek**: Tydzień / Dzień / Miesiąc, tydzień ‹ › i „Dziś",
+    przełącznik **Podgląd / Edycja**, Konfiguracja i **„Opublikuj · N"** —
+    N to liczba zmian, których pracownicy jeszcze nie widzą;
+  - **pasek szkicu** („Szkic: 3 zmiany — pracownicy ich jeszcze nie widzą")
+    z przyciskami „Zobacz szkic" i „Opublikuj"; szkic w panelu z boku dzieli
+    zmiany na dodane, zmienione i usunięte, przy dodanej i usuniętej jest
+    „Cofnij", na dole — kto dostanie powiadomienie;
+  - **cztery kafelki**: koszt pracy tygodnia, koszt wobec prognozy utargu,
+    braki obsady i nadmiar;
+  - **nagłówek dnia**: osoby · godziny, koszt i procent prognozy (bursztynowy
+    ponad cel), a pod spodem etykiety obsady — **czerwona „−1 KUCH 14–19" to
+    przycisk**, który w Edycji otwiera przypisanie od razu z tą luką;
+  - **kolumna osoby**: godziny w tygodniu i w miesiącu, przy umowie o pracę
+    „do normy brakuje X h" / „+X h ponad normą" z paskiem, przy zleceniu
+    koszt; „2 lokale", gdy ktoś pracuje też gdzie indziej;
+  - **kratki**: znacznik stanowiska w jego kolorze, godziny i czas trwania;
+    **nowa zmiana** z przerywaną czerwoną ramką, **zmieniona** na
+    bursztynowo, **usunięta** przekreślona do publikacji (kliknięcie w
+    Edycji przywraca); zmiana w innym lokalu jako kreskowany „duch";
+  - **pasek „Giełda zmian"** nad siatką z prośbami do zgody (oddanie osobie,
+    oddanie każdemu, zamiana) i „Zgoda / Odrzuć"; to samo w kratce zmiany.
+- **Przypisanie zmiany w panelu z boku** (na telefonie arkusz od dołu):
+  stanowisko, godziny z szybkimi przyciskami z wymagań i z klikniętej luki,
+  dni do powtórzenia, a potem **kandydaci** — z tego lokalu od najmniejszej
+  liczby godzin w miesiącu, potem osoby z innych lokali z tym stanowiskiem;
+  zajęci wyszarzeni z powodem. Przy każdym godziny po tej zmianie wobec normy
+  i liczba uwag. Pod spodem: ile braków obsady pokryje i ile to kosztuje, oraz
+  **uwagi przed przypisaniem** (ponad 12 h, mniej niż 11 h odpoczynku, ponad
+  48 h w tygodniu, brak dnia wolnego, ponad normę, stanowisko spoza karty) —
+  przycisk zmienia się wtedy na „Przypisz mimo uwag".
+- **Usunięcie zmiany** idzie z 6 s „Cofnij" zamiast okna „Na pewno?".
+- **Telefon**: pasek siedmiu dni z kropkami (czerwona = brak, bursztynowa =
+  nadmiar), obsada i koszt dnia, luki jako duże przyciski, prośby z giełdy,
+  lista zmian dnia, przycisk „Dodaj zmianę" i ciemny pasek szkicu.
+- Poprawione: dodanie albo edycja zmiany w Grafiku gubiło do odświeżenia
+  strony zmiany usunięte po wysłaniu — szkic pokazywał wtedy za mało.
+
 ## 0.54.0 — 2026-09-25
 
 - **Nowy wygląd Ustawień** według makiety, z oznaczeniem „Widzi tylko

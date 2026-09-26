@@ -23,6 +23,16 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.55.0",
+    date: "2026-09-26",
+    items: [
+      "Grafik: pasek szkicu i „Opublikuj · N”, kafelki kosztu i obsady, czerwona etykieta braku otwiera przypisanie z tą luką.",
+      "Przypisanie w panelu z boku: kandydaci od najmniej godzin, norma po zmianie, uwagi Kodeksu przed zapisem.",
+      "Nowa zmiana przerywaną ramką, zmieniona na bursztynowo, usunięta przekreślona; giełda zmian nad siatką.",
+      "Na telefonie: pasek dni z kropkami, widok jednego dnia i „Dodaj zmianę”.",
+    ],
+  },
+  {
     version: "0.54.0",
     date: "2026-09-25",
     items: [

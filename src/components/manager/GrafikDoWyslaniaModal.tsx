@@ -1,153 +1,133 @@
 // @ts-nocheck
-// "Co czeka na wysłanie" — pełna lista niewysłanych zmian, zanim kierownik
-// kliknie "Wyślij grafik".
+// "Szkic grafiku" — wszystko, co czeka na publikację, w panelu z boku (na
+// telefonie arkusz od dołu). Układ z makiety właściciela (ScheduleDraft).
 //
 // Po co: publikacja obejmuje WSZYSTKO od dziś w przód, ze wszystkich lokali
-// kierownika (patrz publishGrafik w utils/grafik.ts) — także zmiany wpisane
-// trzy tygodnie naprzód i te wpisane z siatki jednego lokalu do drugiego.
-// Kropka przy kafelku i licznik przy nazwie lokalu mówią, ŻE coś czeka, ale
-// nie mówią CO — a licznik "37" nad przyciskiem, który wyśle ludziom
-// powiadomienia, jest dokładnie tą sytuacją, w której chce się najpierw
-// zobaczyć listę.
+// kierownika (publishGrafik w utils/grafik.ts) — także zmiany wpisane trzy
+// tygodnie naprzód i te wpisane z siatki jednego lokalu do drugiego. Licznik
+// "Opublikuj · 37" nad przyciskiem, który wyśle ludziom powiadomienia, jest
+// dokładnie tą chwilą, w której chce się najpierw zobaczyć listę.
 //
-// ⚠️ Modal niczego nie zmienia. Wysyła dopiero "Wyślij grafik" w pasku — jedno
-// miejsce publikacji zostaje jedno.
+// Trzy rodzaje wierszy (wynikają z published_at / updated_at / deleted_at):
+//   Dodana    — nigdy niewysłana. "Cofnij" kasuje ją od razu.
+//   Zmieniona — wysłana i poprawiona po wysłaniu. ⚠️ BEZ "Cofnij": baza nie
+//               trzyma poprzedniej wersji, więc cofnięcie musiałoby zgadywać.
+//   Usunięta  — wysłana i zdjęta. "Cofnij" przywraca (jako zmienioną).
+// ⚠️ "Odrzuć cały szkic" z makiety świadomie nie istnieje — z tego samego
+// powodu co brak "Cofnij" przy zmienionej.
 import React from "react";
-import { X, Send, Trash2 } from "lucide-react";
-import { btnPrimaryCls, btnSecondaryCls, statLabelCls } from "./designTokens";
-import { trimTime, shiftHours } from "../../utils/grafik";
+import { Send, X } from "lucide-react";
+import { trimTime, isUnpublished } from "../../utils/grafik";
 
-const DZIEN = ["niedziela", "poniedziałek", "wtorek", "środa", "czwartek", "piątek", "sobota"];
-
-const dataLabel = (d) => {
+const DNI = ["nd", "pn", "wt", "śr", "czw", "pt", "sob"];
+const dzien = (d) => {
   const dt = new Date(d + "T00:00:00");
-  return `${dt.toLocaleDateString("pl-PL", { day: "numeric", month: "long" })}, ${DZIEN[dt.getDay()]}`;
+  return `${DNI[dt.getDay()]} ${dt.toLocaleDateString("pl-PL", { day: "numeric", month: "short" })}`;
+};
+export const rodzajSzkicu = (s) => (s.deleted_at ? "usunieta" : !s.published_at ? "nowa" : isUnpublished(s) ? "zmieniona" : null);
+const ETYKIETY = {
+  nowa: ["Dodana", "text-[#1F7A4A]"],
+  zmieniona: ["Zmieniona", "text-[#8A5300]"],
+  usunieta: ["Usunięta", "text-[#DE3A22]"],
 };
 
-const hLiczba = (h) => Math.round((h || 0) * 10) / 10;
-
-export default function GrafikDoWyslaniaModal({ zmiany, onClose, onPublish, publishing }) {
+export default function GrafikDoWyslaniaModal({ zmiany, onClose, onPublish, publishing, onCofnij }) {
   const lista = [...(zmiany || [])].sort((a, b) =>
-    a.date === b.date
-      ? a.lokal === b.lokal
-        ? trimTime(a.start_time).localeCompare(trimTime(b.start_time))
-        : a.lokal.localeCompare(b.lokal, "pl")
-      : a.date.localeCompare(b.date)
+    a.date === b.date ? trimTime(a.start_time).localeCompare(trimTime(b.start_time)) : a.date.localeCompare(b.date)
   );
-
-  // Grupujemy po DNIU, nie po lokalu ani osobie: pracownik dostanie
-  // powiadomienie o swoich dniach, a kierownik przegląda to jako kalendarz.
-  const dni = [];
-  lista.forEach((s) => {
-    const ostatni = dni[dni.length - 1];
-    if (ostatni && ostatni.date === s.date) ostatni.zmiany.push(s);
-    else dni.push({ date: s.date, zmiany: [s] });
-  });
-
-  // Do usunięcia to osobna kategoria: wiersz zniknął już z siatki, ale skasuje
-  // się dopiero przy publikacji, która powie o tym pracownikowi. Bez tego
-  // podpisu lista pokazywałaby zmiany, których kierownik u siebie nie widzi.
-  const doUsuniecia = lista.filter((s) => s.deleted_at).length;
-  const osoby = new Set(lista.map((s) => s.user_name)).size;
-  const godziny = lista
-    .filter((s) => !s.deleted_at)
-    .reduce((sum, s) => sum + shiftHours(s), 0);
+  const kto = [...new Set(lista.map((s) => s.user_name).filter(Boolean))];
 
   return (
-    <div
-      className="fixed inset-0 bg-black/40 z-50 flex items-start md:items-center justify-center p-3 overflow-y-auto"
-      onClick={onClose}
-    >
-      <div
-        className="bg-[#FAFAF7] border-[2.5px] border-[#171714] rounded-xl w-full max-w-3xl my-4 overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
+    <>
+      <div className="fixed inset-0 bg-black/40 z-50" onClick={onClose} />
+      <aside
+        role="dialog"
+        aria-label="Szkic grafiku"
+        className="fixed z-50 bg-white flex flex-col inset-x-0 bottom-0 top-12 rounded-t-2xl border-t-[2px] md:inset-y-0 md:right-0 md:left-auto md:top-0 md:w-[520px] md:rounded-none md:border-t-0 md:border-l-[2px] border-[#171714]"
+        data-szkic-grafiku
       >
-        <div className="px-4 py-3 border-b-[2px] border-[#171714] flex items-center gap-3">
-          <h3 className="font-['Archivo'] font-extrabold text-[17px]">
-            Do wysłania: {lista.length}
-          </h3>
-          <span className="text-[13px] text-[#6E6E66]">
-            {osoby} {osoby === 1 ? "osoba" : "osób"} · {hLiczba(godziny)} h
-            {doUsuniecia > 0 ? ` · ${doUsuniecia} do usunięcia` : ""}
-          </span>
-          <button onClick={onClose} className="ml-auto text-[#6E6E66] hover:text-[#171714]">
+        <div className="flex items-start gap-3 px-4 md:px-5 py-4 border-b-[2px] border-[#171714]">
+          <div>
+            <h3 className="m-0 font-['Archivo'] text-xl font-extrabold">Szkic grafiku</h3>
+            <div className="text-sm text-[#6E6E66]">
+              {lista.length} {lista.length === 1 ? "zmiana" : lista.length < 5 ? "zmiany" : "zmian"} · pracownicy ich jeszcze nie
+              widzą
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="ml-auto w-10 h-10 grid place-items-center rounded-lg hover:bg-[#F6F5F1]"
+            aria-label="Zamknij"
+          >
             <X size={20} />
           </button>
         </div>
-
-        <div className="max-h-[60vh] overflow-y-auto">
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 md:px-5 py-3 flex flex-col gap-3">
           {lista.length === 0 ? (
-            <p className="px-4 py-8 text-center text-[#6E6E66] text-sm">
-              Wszystko wysłane — nic nie czeka w wersji roboczej.
-            </p>
+            <p className="text-sm text-[#6E6E66] py-3">Szkic jest pusty — wszystko opublikowane.</p>
           ) : (
-            dni.map((d) => (
-              <div key={d.date} className="border-b-[2px] border-[#E7E7E2] last:border-b-0">
-                <div className="px-4 py-2 bg-[#F1F1EE] flex items-baseline gap-2">
-                  <span className="font-['Archivo'] font-bold text-[14px]">
-                    {dataLabel(d.date)}
-                  </span>
-                  <span className="text-[12px] text-[#6E6E66]">
-                    {d.zmiany.length} {d.zmiany.length === 1 ? "zmiana" : "zmian"}
-                  </span>
-                </div>
-                {d.zmiany.map((s) => (
+            <div>
+              {lista.map((s) => {
+                const r = rodzajSzkicu(s) || "zmieniona";
+                const [etykieta, kolor] = ETYKIETY[r];
+                return (
                   <div
                     key={s.id}
-                    className="px-4 py-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 border-t border-[#EFEFEA]"
+                    className="grid grid-cols-[88px_1fr_auto] gap-2.5 items-center py-2.5 border-t-[1.5px] border-[#DEDCD4] first:border-t-0 text-sm"
+                    data-wiersz-szkicu={r}
                   >
-                    <span
-                      className={`font-bold text-[14px] ${
-                        s.deleted_at ? "line-through text-[#8F8E86]" : ""
-                      }`}
-                    >
-                      {s.user_name}
+                    <span className={`text-[12px] font-extrabold uppercase tracking-[0.05em] ${kolor}`}>{etykieta}</span>
+                    <span className={`min-w-0 ${r === "usunieta" ? "line-through text-[#6E6E66]" : ""}`}>
+                      <b>{s.user_name}</b> · {dzien(s.date)} · {s.stanowisko || "—"} {trimTime(s.start_time)}–
+                      {trimTime(s.end_time)}
+                      <span className="block text-[12px] text-[#6E6E66]">{s.lokal}</span>
                     </span>
-                    <span className="text-[13px] text-[#6E6E66]">
-                      {trimTime(s.start_time)}–{trimTime(s.end_time)}
-                    </span>
-                    <span className="text-[13px] text-[#6E6E66]">
-                      {s.stanowisko || "bez stanowiska"} · {s.lokal}
-                    </span>
-                    {s.deleted_at ? (
-                      <span
-                        className="ml-auto text-[11px] font-extrabold text-[#8A3A2B] bg-[#FAEAE6] rounded px-1.5 py-0.5 flex items-center gap-1"
-                        title="Zmiana zdjęta z grafiku — skasuje się przy wysyłce, a pracownik dostanie o tym wiadomość"
-                      >
-                        <Trash2 size={11} /> do usunięcia
+                    {r === "zmieniona" ? (
+                      <span className="text-[12px] text-[#6E6E66] max-w-[90px] text-right" title="Poprzednia wersja nie jest zapisana — popraw zmianę w siatce">
+                        popraw w siatce
                       </span>
                     ) : (
-                      <span
-                        className="ml-auto text-[11px] font-extrabold text-[#DE3A22]"
-                        title="Nowa albo zmieniona po ostatniej wysyłce"
+                      <button
+                        type="button"
+                        onClick={() => onCofnij(s)}
+                        className="h-9 px-3 rounded-lg font-bold text-[#6E6E66] hover:bg-[#F6F5F1] hover:text-[#171714]"
+                        data-cofnij-szkic
                       >
-                        {s.published_at ? "zmieniona" : "nowa"}
-                      </span>
+                        Cofnij
+                      </button>
                     )}
                   </div>
-                ))}
-              </div>
-            ))
+                );
+              })}
+            </div>
+          )}
+          {kto.length > 0 && (
+            <div className="rounded-lg px-3 py-2.5 text-sm bg-[#F6F5F1]">
+              Po publikacji powiadomienie dostanie: <b>{kto.join(", ")}</b>
+            </div>
           )}
         </div>
-
-        <div className="px-4 py-3 border-t-[2px] border-[#171714] flex flex-wrap items-center gap-3">
-          <button onClick={onClose} className={btnSecondaryCls}>
+        <div className="flex items-center gap-2 px-4 md:px-5 py-3 border-t-[2px] border-[#171714] pb-[max(12px,env(safe-area-inset-bottom))]">
+          <span className="flex-1" />
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex items-center justify-center min-h-[48px] md:min-h-[44px] px-4 rounded-lg border-[2px] border-[#171714] bg-white font-['Archivo'] font-bold text-[15px]"
+          >
             Zamknij
           </button>
           <button
+            type="button"
             onClick={onPublish}
             disabled={publishing || lista.length === 0}
-            className={btnPrimaryCls}
+            className="inline-flex items-center justify-center gap-2 min-h-[48px] md:min-h-[44px] px-4 rounded-lg border-[2px] border-[#DE3A22] bg-[#DE3A22] text-white font-['Archivo'] font-bold text-[15px] disabled:opacity-40"
+            data-opublikuj-szkic
           >
-            <Send size={15} className="inline -mt-0.5 mr-1" /> Wyślij grafik
+            <Send size={17} /> Opublikuj · {lista.length}
           </button>
-          <span className={`${statLabelCls} flex-1 min-w-[220px] normal-case tracking-normal`}>
-            Wysyłamy wszystko od dziś w przód, ze wszystkich Twoich lokali. Każda
-            osoba dostanie jedno powiadomienie.
-          </span>
         </div>
-      </div>
-    </div>
+      </aside>
+    </>
   );
 }

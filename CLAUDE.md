@@ -704,7 +704,8 @@ src/
                                     i ekranu kierownika zmiany, NIE duplikuj
       PrzepiszZmianyModal.tsx       co ze zmianami odchodzącego pracownika:
                                     przepisać na następcę albo zdjąć
-      GrafikZmianaModal.tsx         modal przypisania zmiany + modal blokady
+      GrafikZmianaModal.tsx         PANEL przypisania zmiany (kandydaci, uwagi) +
+                                    modal blokady — patrz 5g
       GrafikWymagania.tsx           wymagania obsady, godziny otwarcia, wyjątki,
                                     budżet (czwarty podwidok)
       GrafikBudzet.tsx              trzy karty nad siatką + wiersze układu
@@ -713,9 +714,9 @@ src/
                                     dla wszystkich trzech układów
       GrafikBudzetKonfiguracja.tsx  cel finansowy na dzień tygodnia i wyjątki
                                     na konkretne daty
-      GrafikDoWyslaniaModal.tsx     podgląd wszystkiego, co czeka w wersji
-                                    roboczej — NIE publikuje, publikacja
-                                    zostaje przy "Wyślij grafik"
+      GrafikDoWyslaniaModal.tsx     panel "Szkic grafiku" — dodane / zmienione /
+                                    usunięte, "Cofnij" przy dodanej i usuniętej,
+                                    "Opublikuj · N" — patrz 5g
       PulpitHome.tsx, RejestrGodzin.tsx, ZatwierdzanieZmian.tsx,
       Aktywni.tsx, Skrzynka.tsx, Pracownicy.tsx, RaportyIKoszty.tsx,
       Przewodnik.tsx, MojaPraca.tsx
@@ -3397,6 +3398,54 @@ Trzy decyzje, których nie zmieniaj bez rozmowy z właścicielem:
     każdym innym lokalem na tę samą literę.
   - `isSameUser` i `absenceOn` przeniesione z `GrafikTydzien.tsx` do
     `utils/grafik.ts` — używają ich teraz oba widoki.
+
+### 5g. Grafik — układ z makiety właściciela (0.55.0)
+
+ScheduleWeek / ScheduleAssign / ScheduleBudget / ScheduleDraft /
+ScheduleMobile. Pliki: `Grafik.tsx` (pasek, szkic), `GrafikTydzien.tsx`
+(siatka, giełda, telefon), `GrafikZmianaModal.tsx` (panel przypisania — nazwa
+pliku została), `GrafikDoWyslaniaModal.tsx` (panel szkicu). Rzeczy, których
+nie widać:
+- ⚠️ **„Szkic" to NIE nowy stan.** To dokładnie to, co było „niewysłane":
+  bez `published_at` = dodana, `updated_at > published_at` = zmieniona,
+  `deleted_at` = usunięta. Publikacja dalej tylko przez `publishGrafik`, od
+  dziś w przód, ze wszystkich lokali kierownika.
+- ⚠️ **„Cofnij" w szkicu jest tylko przy dodanej i usuniętej.** Baza nie
+  trzyma poprzedniej wersji zmienionej zmiany, więc jej cofnięcie musiałoby
+  zgadywać; z tego samego powodu nie ma „Odrzuć cały szkic" z makiety.
+  Przywrócona usunięta zostaje „zmieniona" (`updated_at` = teraz), bo nie
+  wiemy, czy ktoś jej nie poprawił przed usunięciem.
+- ⚠️ **Siatka dostaje zmiany BEZ usuniętych (`zywePlanShifts`) + osobno
+  `usuniete`**, a WSZYSTKIE zapisy w Grafiku robią `setPlanShifts((prev) =>
+  …)`. Do 0.54.0 zapis budował nową listę z tej przefiltrowanej — każde
+  dodanie gubiło ze stanu zmiany usunięte po wysłaniu i szkic pokazywał za
+  mało do odświeżenia strony. Zwracany wiersz scalamy z istniejącym
+  (`{ ...s, ...zapisana }`).
+- **Etykieta braku nad dniem to przycisk**: w Edycji otwiera panel ze
+  stanowiskiem i godzinami luki (`ctx.luka`), w Podglądzie mówi, żeby włączyć
+  Edycję. Kafelek „Braki obsady" liczy te same odcinki (`problemyObsady`).
+- **Panel przypisania — kandydaci**: z tego lokalu (`default_lokal` albo
+  `allowed_lokale`) i znający stanowisko, od najmniejszej liczby godzin w
+  miesiącu; potem inni lokale z tym stanowiskiem; reszta pod „Pokaż
+  pozostałych". Zajęty = `przeszkodaDnia` (ta sama funkcja co przy zapisie).
+  Skutek dla obsady liczony w OSOBOGODZINACH (`minutes × missing`) — przy
+  luce na cztery osoby jedna dopisana nie zmienia liczby odcinków.
+- **Uwagi przed przypisaniem**: `uwagiPrzypisania` w `utils/kodeks.ts` —
+  istniejące `ostrzezeniaKodeksu` (bez zmian w regułach, dalej wg umowy)
+  plus: ponad 12 h, ponad 48 h w tygodniu, ponad normę (etat), stanowisko
+  spoza karty. Etat = czerwone, reszta = bursztynowe z dopiskiem „zalecenia
+  bezpieczeństwa". Dalej SYGNAŁ: przycisk to „Przypisz mimo uwag".
+- **Usunięcie = 6 s „Cofnij"** (`useOdlozoneDecyzje` w GrafikTydzien,
+  klucz `del:<id>`), bez `window.confirm`. Kopiowanie tygodnia i „Wyczyść
+  tydzień" dalej pytają — to operacje hurtowe.
+- **Giełda zmian nad siatką** pokazuje prośby `przyjeta` z dziś i później;
+  decyzja przez `onResolveSwap` (tak jak w Zatwierdzaniu) — działa też w
+  Podglądzie, bo to nie jest edycja siatki. Makieta wrzucała zgodę do
+  szkicu; u nas zgoda przepisuje zmianę od razu i powiadamia (jak dotąd).
+- **Telefon**: siatka tygodnia `hidden md:block`, zamiast niej pasek dni i
+  widok jednego dnia z tej samej arytmetyki (`mobilnyDzien` w LokalSection).
+- Kolor znacznika stanowiska to PEŁNY `stanowiska.kolor` z białym tekstem —
+  pierwsze miejsce, które go używa (reszta aplikacji: jasny odcień).
 
 ### 5d. Grafik — świadomie NIE zrobione
 - Potwierdzenia odczytu grafiku przez pracownika ("przeczytało 12 z 14").
