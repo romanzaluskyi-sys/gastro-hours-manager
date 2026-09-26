@@ -1047,7 +1047,20 @@ function LokalSection({
                   <b className="block text-[15px] tabular-nums">{fmtH(weekHours)}</b>
                 </td>
                 {dayStats.map((stat, i) => (
-                  <td key={stat.date} className="p-2 border-t-[1.5px] border-l-[1.5px] border-[#DEDCD4] text-[13px] tabular-nums">
+                  <td
+                    key={stat.date}
+                    className={`p-2 border-t-[1.5px] border-l-[1.5px] border-[#DEDCD4] text-[13px] tabular-nums ${
+                      stat.date === dzisYMD ? "bg-[#FFF3EF]" : ""
+                    }`}
+                    data-stopka-dnia={stat.date}
+                  >
+                    {/* Dzień i data powtórzone na dole: przy kilkunastu osobach
+                        nagłówek jest już poza ekranem i bez tego nie wiadomo,
+                        którego dnia dotyczy suma. */}
+                    <div className="flex justify-between items-baseline gap-1 mb-0.5">
+                      <b className="text-[13px] font-extrabold uppercase">{DNI[new Date(stat.date + "T00:00:00").getDay()]}</b>
+                      <span className="text-[12px] font-bold text-[#6E6E66] whitespace-nowrap">{fmtDay(stat.date)}</span>
+                    </div>
                     <b className="text-[15px]">{fmtH(stat.hours)}</b>
                     <span className="block text-[#6E6E66]">{dniBudzetu[i].koszt > 0 ? zl(dniBudzetu[i].koszt) : "—"}</span>
                   </td>

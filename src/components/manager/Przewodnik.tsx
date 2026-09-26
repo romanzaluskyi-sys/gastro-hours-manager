@@ -23,6 +23,11 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.55.3",
+    date: "2026-09-26",
+    items: ["Grafik: dzień i data powtórzone w wierszu „Razem” na dole siatki."],
+  },
+  {
     version: "0.55.2",
     date: "2026-09-26",
     items: [

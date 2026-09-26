@@ -5,6 +5,11 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.55.3 — 2026-09-26
+
+- **Grafik**: w wierszu „Razem" na dole siatki znowu stoi dzień tygodnia i
+  data — przy dłuższej liście osób nagłówek jest już poza ekranem.
+
 ## 0.55.2 — 2026-09-26
 
 - **Przypisanie zmiany**: osoby bez wybranego stanowiska są zwinięte pod

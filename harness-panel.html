@@ -1355,6 +1355,9 @@ const poprzedniMiesiac = (h) => {
           sprawdz("kafelek „Braki obsady” = liczba czerwonych etykiet nad dniami",
             kafelekBrakow === sekcja().querySelectorAll("[data-obsada-dnia] [data-luka]").length && kafelekBrakow > 0,
             `kafelek ${kafelekBrakow}, etykiet ${sekcja().querySelectorAll("[data-obsada-dnia] [data-luka]").length}`);
+          sprawdz("stopka powtarza dzień i datę z nagłówka",
+            sekcja().querySelectorAll("[data-stopka-dnia]").length === 7 &&
+              /pn/.test(sekcja().querySelector("[data-stopka-dnia]").textContent));
           sprawdz("zmiana usunięta po wysłaniu stoi przekreślona do publikacji",
             !!sekcja().querySelector('[data-zmiana-usunieta="g10"]'));
 
