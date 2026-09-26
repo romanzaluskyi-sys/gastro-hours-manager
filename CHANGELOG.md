@@ -5,6 +5,262 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.55.2 — 2026-09-26
+
+- **Przypisanie zmiany**: osoby bez wybranego stanowiska są zwinięte pod
+  strzałką („Bez stanowiska „Kierowca" · 3") i pokazują się dopiero po
+  kliknięciu. Wybrana z tej grupy osoba nie chowa się po zwinięciu.
+- **Godziny po zmianie liczą się tylko wybranej osobie.** Zaznaczanie kolejnych
+  dni doliczało godziny wszystkim kandydatom naraz; teraz pozostali pokazują
+  godziny, które już mają, a lista nie zmienia kolejności przy wyborze.
+
+## 0.55.1 — 2026-09-26
+
+- **Grafik na telefonie**: pasek ma zawsze te same trzy rzędy — na górze
+  wybór tygodnia (krótko, np. „21–27 wrz"), pod nim Podgląd / Edycja i
+  Konfiguracja, niżej Tydzień / Miesiąc. Wcześniej przełącznik trybu raz był
+  widać, a raz spadał niżej, zależnie od tygodnia. Widoku „Dzień" na telefonie
+  już nie ma — tydzień i tak pokazuje jeden dzień naraz.
+- **Przypisanie zmiany**: szybkie godziny znowu osobno dla początku i końca —
+  przy wymaganiach 8:30–21:00 i 10:30–19:00 można kliknąć start 10:30 i koniec
+  21:00.
+- **Osoby bez wybranego stanowiska** są na liście kandydatów zawsze — na
+  końcu i na szaro (osoby bez lokalu i stanowiska w karcie na samym dole). Po
+  wyborze panel ostrzega i proponuje „Dopisz do karty".
+- Pod nazwiskiem w siatce nie ma już „Etat / Zlecenie" ani „bez normy".
+
+## 0.55.0 — 2026-09-26
+
+- **Nowy wygląd Grafiku** według makiety:
+  - **jeden pasek**: Tydzień / Dzień / Miesiąc, tydzień ‹ › i „Dziś",
+    przełącznik **Podgląd / Edycja**, Konfiguracja i **„Opublikuj · N"** —
+    N to liczba zmian, których pracownicy jeszcze nie widzą;
+  - **pasek szkicu** („Szkic: 3 zmiany — pracownicy ich jeszcze nie widzą")
+    z przyciskami „Zobacz szkic" i „Opublikuj"; szkic w panelu z boku dzieli
+    zmiany na dodane, zmienione i usunięte, przy dodanej i usuniętej jest
+    „Cofnij", na dole — kto dostanie powiadomienie;
+  - **cztery kafelki**: koszt pracy tygodnia, koszt wobec prognozy utargu,
+    braki obsady i nadmiar;
+  - **nagłówek dnia**: osoby · godziny, koszt i procent prognozy (bursztynowy
+    ponad cel), a pod spodem etykiety obsady — **czerwona „−1 KUCH 14–19" to
+    przycisk**, który w Edycji otwiera przypisanie od razu z tą luką;
+  - **kolumna osoby**: godziny w tygodniu i w miesiącu, przy umowie o pracę
+    „do normy brakuje X h" / „+X h ponad normą" z paskiem, przy zleceniu
+    koszt; „2 lokale", gdy ktoś pracuje też gdzie indziej;
+  - **kratki**: znacznik stanowiska w jego kolorze, godziny i czas trwania;
+    **nowa zmiana** z przerywaną czerwoną ramką, **zmieniona** na
+    bursztynowo, **usunięta** przekreślona do publikacji (kliknięcie w
+    Edycji przywraca); zmiana w innym lokalu jako kreskowany „duch";
+  - **pasek „Giełda zmian"** nad siatką z prośbami do zgody (oddanie osobie,
+    oddanie każdemu, zamiana) i „Zgoda / Odrzuć"; to samo w kratce zmiany.
+- **Przypisanie zmiany w panelu z boku** (na telefonie arkusz od dołu):
+  stanowisko, godziny z szybkimi przyciskami z wymagań i z klikniętej luki,
+  dni do powtórzenia, a potem **kandydaci** — z tego lokalu od najmniejszej
+  liczby godzin w miesiącu, potem osoby z innych lokali z tym stanowiskiem;
+  zajęci wyszarzeni z powodem. Przy każdym godziny po tej zmianie wobec normy
+  i liczba uwag. Pod spodem: ile braków obsady pokryje i ile to kosztuje, oraz
+  **uwagi przed przypisaniem** (ponad 12 h, mniej niż 11 h odpoczynku, ponad
+  48 h w tygodniu, brak dnia wolnego, ponad normę, stanowisko spoza karty) —
+  przycisk zmienia się wtedy na „Przypisz mimo uwag".
+- **Usunięcie zmiany** idzie z 6 s „Cofnij" zamiast okna „Na pewno?".
+- **Telefon**: pasek siedmiu dni z kropkami (czerwona = brak, bursztynowa =
+  nadmiar), obsada i koszt dnia, luki jako duże przyciski, prośby z giełdy,
+  lista zmian dnia, przycisk „Dodaj zmianę" i ciemny pasek szkicu.
+- Poprawione: dodanie albo edycja zmiany w Grafiku gubiło do odświeżenia
+  strony zmiany usunięte po wysłaniu — szkic pokazywał wtedy za mało.
+
+## 0.54.0 — 2026-09-25
+
+- **Nowy wygląd Ustawień** według makiety, z oznaczeniem „Widzi tylko
+  właściciel":
+  - **lista lokali** z miastem, liczbą stanowisk i „telefon 5/7";
+  - **karta lokalu** w czterech rozwijanych sekcjach, które zawsze mówią w
+    nagłówku, co jest ustawione: Podstawowe (dzień wypłaty z listy i datą
+    najbliższej wypłaty), Telefon pracownika (bloki jako przełączniki z
+    opisem, ostrzeżenie bez „Wpisów"), Płace i koszty (narzuty z „%",
+    ostrzeżenie przy 0% i przykład kosztu), Rejestracja godzin (sposób wpisu
+    jako karty wyboru, szybkie wartości „bez limitu / tylko teraz / 15 / 30 /
+    60" i **oś czasu z przykładem**, do kiedy zmianę da się zamknąć samemu);
+  - pasek **„Niezapisane zmiany"** tylko po zmianie, karta po zapisie zostaje
+    otwarta;
+  - **archiwizacja lokalu** w osobnej sekcji, z potwierdzeniem na miejscu —
+    bez drugiego okna przeglądarki;
+  - **stanowiska** edytowane w miejscu (nazwa, skrót, lokal, kolor z palety
+    dwunastu), archiwizacja z 6 s „Cofnij"; stanowiska lokalu z archiwum są
+    oznaczone;
+  - **Firma**: przycisk „Otwórz moją kartę"; **Subskrypcja**: plan „Wkrótce" i
+    wykorzystanie (lokale, pracownicy, tablety).
+- Narzut wpisany z przecinkiem („20,5") zapisuje się poprawnie.
+- Pod Ustawieniami nie wisi już pusty placeholder „W budowie".
+
+## 0.53.0 — 2026-09-25
+
+- **Nowy wygląd Raportów i kosztów** według makiety — najpierw wnioski,
+  potem tabele:
+  - **kafelki**: „Koszt pracy" jako główny (na czarno), z uczciwym dopiskiem
+    „Zaniżony", gdy komuś brakuje wynagrodzenia w karcie; **średni koszt
+    godziny** liczony zamiast „—"; godziny z podziałem praca / urlop;
+    „Plan vs fakt" z liczbą godzin bez grafiku; porównanie z poprzednim
+    miesiącem bez zieleni i czerwieni — w trwającym miesiącu z tym samym
+    kawałkiem poprzedniego (1–25 do 1–25), nie z całym;
+  - **„Na co zwrócić uwagę"**: osoba wyraźnie ponad pełny etat, godziny bez
+    grafiku, lokal, który bierze większość kosztów (i najdroższa / najtańsza
+    godzina), podejrzanie krótkie wpisy — każdy z przyciskiem, który prowadzi
+    do sprawy;
+  - **„Gotowość do rozliczenia"**: co blokuje (miesiąc jeszcze trwa, brak
+    wynagrodzenia, sprawy do decyzji z tego miesiąca), a co jest tylko
+    ostrzeżeniem (dni różne od grafiku, krótkie wpisy);
+  - **„Struktura kosztów"**: pasek udziałów po lokalach, tabela z udziałem,
+    godzinami, kosztem i zł/h; lokal i stanowisko rozwijają się do osób;
+  - **pracownicy**: sortowanie po koszcie / godzinach / zł/h, szczegóły z
+    czterema liczbami (godziny, koszt, grafik, zł/h) i listą zmian — urlop
+    sklejony w jeden wiersz, „poza grafikiem" zaznaczone, kliknięcie zmiany
+    otwiera okno wpisu.
+- Na telefonie pierwszy kafelek w karuzeli (Pulpit, Rejestr, Raporty) nie
+  przykleja się już do krawędzi ekranu.
+
+## 0.52.0 — 2026-09-25
+
+- **Nowy wygląd Pracowników** według makiety — wszystkie pola zostały, zmienił
+  się układ:
+  - **lista**: inicjały, stanowisko · lokal i krótkie znaczniki braków
+    („brak: sanepid", „brak: umowa", „brak: stawka"); filtr **„Braki w
+    danych"**, wyszukiwanie; Tablety Służbowe w osobnej grupie
+    **„Urządzenia"**;
+  - **nagłówek karty**: „Konto aktywne" jako przełącznik i jedno zdanie o tym,
+    czego brakuje, z przyciskiem **„Uzupełnij"**, który przenosi do pola;
+  - **skróty do sekcji** (Dane, Logowanie, Miejsce pracy, Umowa, Dokumenty,
+    Urlopy, Koniec i notatki) przyklejone u góry;
+  - **PIN ukryty** do „Pokaż" i ostrzeżenie o łatwym PIN-ie (123456, 111111…);
+  - dodatkowe stanowiska: główne na czerwono z gwiazdką, zaznaczone na
+    czarno;
+  - przy umowie o pracę widać **stawkę w tym miesiącu** i normę; „Ten
+    miesiąc" z paskiem wykorzystania normy;
+  - brakujące terminy są bursztynowe z dopiskiem „przypomnienia wyłączone";
+  - urlopy: podgląd „= 5 dni roboczych · 40 h" przed dodaniem, daty po
+    ludzku, **usunięcie z 6 s na „Cofnij"**;
+  - archiwizacja w osobnej sekcji, z potwierdzeniem na miejscu.
+- **Pasek „Niezapisane zmiany · Anuluj · Zapisz zmiany"** pojawia się tylko
+  po zmianie i trzyma się dołu ekranu; przejście do innej osoby z
+  niezapisanymi zmianami najpierw pyta. Po zapisie karta zostaje otwarta.
+
+## 0.51.1 — 2026-09-25
+
+- **Puls bez natarczywej czerwieni**: licznik przy „Zamknij wczoraj" na
+  Pulpicie jest szary, a niezamknięty Puls w Skrzynce stoi w „Informacjach"
+  ze zwykłym przyciskiem — nie podbija czerwonego znaczka w menu. Widać go
+  dalej, „Zamknij Puls" dalej działa.
+- **Aktywni — „Dopisz wejście" pyta o godzinę**: wg grafiku albo teraz,
+  ±5 minut, dopiero potem zapis (z 6 sekundami na „Cofnij").
+- **Aktywni — pasek u góry filtruje listę**: „na zmianie", „po czasie",
+  „bez wejścia" i każdy lokal; drugie kliknięcie albo „Wszyscy" wraca do
+  całości.
+
+## 0.51.0 — 2026-09-25
+
+- **Nowa strona Aktywni** według makiety:
+  - u góry pasek: ilu na zmianie, ilu po czasie, ilu bez wejścia, ilu w
+    każdym lokalu;
+  - **„Wymaga uwagi"** na samej górze: kto jest w grafiku, a nie odbił
+    wejścia (**Zadzwoń**, gdy w karcie jest telefon, i **Dopisz wejście** z
+    godziną z grafiku), oraz kto pracuje dłużej, niż stało w grafiku;
+  - dalej lokale: każda osoba z **paskiem postępu zmiany**, „w pracy …" i
+    „zostało …" albo „po czasie +…";
+  - **„Zakończ" pyta o godzinę**: teraz albo koniec z grafiku, ±5 minut, a
+    na przycisku od razu wynik w godzinach; 6 sekund na „Cofnij";
+  - zmiany bez zakończenia zostają w osobnej liście na dole.
+- **Skrzynka zamiast Zgłoszeń i Powiadomień** — jedna pozycja w menu (po
+  Aktywnych) i jeden licznik:
+  - **Do zrobienia**: wnioski o wolne (Zatwierdź / Odrzuć), zgłoszenia
+    pracowników (Rozwiązane / Utwórz zadanie), niezamknięty Puls (Zamknij
+    Puls), zmiany bez odbitego końca i bez odbicia (Rozstrzygnij);
+  - **Informacje**: powiadomienia; te same przypomnienia łączą się w jedną
+    pozycję z „×N";
+  - **Archiwum**: rozwiązane zgłoszenia, rozstrzygnięte wnioski i starsze
+    powiadomienia;
+  - sprawy rozwiązane gdzie indziej znikają same; zgłoszenie anonimowe ma
+    treść ukrytą do „Pokaż"; daty po ludzku („1–6 lis 2026", „3 h temu");
+  - decyzje w Skrzynce też można cofnąć przez 6 sekund.
+- Dzwonek w górnym pasku otwiera Skrzynkę na Informacjach.
+
+## 0.50.0 — 2026-09-25
+
+- **Nowy Rejestr godzin** według makiety:
+  - przełącznik miesiąca ‹ Wrzesień 2026 › i przycisk **„Bieżący miesiąc"**,
+    gdy oglądasz inny;
+  - cztery liczby: **przepracowane** (urlop osobno), **vs grafik** — osobno
+    godziny ponad plan i poniżej planu, żeby się nie znosiły, **poza
+    grafikiem** i **korekty ręczne**;
+  - każdy wiersz pokazuje **Grafik obok Faktu**; różnica pojawia się od
+    15 minut, poniżej stoi „≈"; wpis bez zmiany w grafiku to „Poza grafikiem";
+  - grupowanie **po dniu** (suma dnia) albo **po pracowniku** (dni, różnica i
+    suma do wypłaty);
+  - filtry: Różnice > 15 min, Poza grafikiem, Korekty ręczne, Do decyzji;
+  - status pokazuje tylko wyjątki: trwa teraz, bez końca, do decyzji, poza
+    grafikiem, korekta · kto;
+  - pasek „N wpisów czeka na decyzję" z przejściem do Zatwierdzania;
+  - na telefonie liczby przewija się w bok, a „Dodaj wpis" jest pod kciukiem.
+- **Nowe okno wpisu godzin** — na komputerze na środku ekranu i ograniczone
+  rozmiarem, na telefonie od dołu:
+  - przy nowym wpisie wybór osoby podstawia jej lokal, stanowisko i godziny z
+    grafiku; godziny zmienione względem grafiku są bursztynowe;
+  - godziny przyciskami −/+ o 15 minut, „Razem" liczy się na żywo;
+  - **powód jest wymagany**, gdy zmieniasz zapisane godziny — pracownik widzi
+    go w powiadomieniu;
+  - **historia wpisu**: kto, kiedy, było → jest i dlaczego;
+  - „Usuń wpis" z **6 sekundami na „Cofnij"** zamiast okna potwierdzenia.
+- Ręczne dodanie, poprawka i usunięcie wpisu zostawiają teraz ślad (wcześniej
+  tylko zatwierdzone prośby pracowników).
+
+## 0.49.0 — 2026-09-25
+
+- **Nowy Pulpit** według makiety — najpierw to, co trzeba zrobić, potem liczby:
+  - **„Do zrobienia teraz"**: zamknięcie wczorajszego dnia w każdym lokalu
+    (widać, czego brakuje — utarg, wpisy dziennika) i sprawy do decyzji;
+  - lokal z uzupełnionym utargiem i wpisami **zamyka się jednym przyciskiem
+    „Zamknij"** (albo „Zamknij wszystkie"), pozostałe mają „Uzupełnij", który
+    otwiera kartę dnia;
+  - **prostą korektę godzin** (ta sama zmiana, zmieniają się tylko godziny)
+    zatwierdzasz ✓ prosto z Pulpitu; wszystko inne prowadzi do „Do decyzji";
+  - zamknięcie dnia i ✓ też można **cofnąć przez 6 sekund**;
+  - **„Liczby"**: dziś, ten tydzień (słupki dni, dalsze dni z grafiku),
+    wczoraj plan vs fakt i miesiąc z kosztem — porównania uczciwe: pn–pt z
+    pn–pt poprzedniego tygodnia, 1–25 z 1–25 poprzedniego miesiąca;
+  - na telefonie liczby przewija się w bok;
+  - **„Teraz na zmianie"** zaczyna od osób, które są w grafiku, a jeszcze nie
+    odbiły, potem reszta pogrupowana po lokalach z czasem od startu;
+  - **„Terminy i dokumenty"** osobno pokazuje brakujące daty (jedno
+    „Uzupełnij daty") i prawdziwe terminy z najbliższych 30 dni;
+  - **„Zadania dziś"** jako paski postępu per lokal.
+- Kafelek „Do decyzji" zniknął — tę liczbę mówi karta „Wymaga decyzji" i
+  znaczek w menu.
+- **Koszt miesiąca na Pulpicie liczy się jak w Raportach i kosztach** — z
+  umowy, nie ze stawki godzinowej. Wcześniej etatowcy bez stawki wypadali z
+  kosztu. Umowa bezterminowa nie liczy się już jako brak terminu.
+
+## 0.48.0 — 2026-09-25
+
+- **Nowy wygląd „Do decyzji" (Zatwierdzanie zmian)** według makiety:
+  - u góry liczba spraw i to, ile czeka najstarsza; pod spodem **filtry po
+    typie** (Brak odbicia, Wolne, Korekty…), każdy z liczbą;
+  - każda sprawa w tej samej siatce: zaznaczenie · kto · szczegóły ·
+    przyciski, główny przycisk zawsze po prawej i mówi, co się stanie —
+    **„Dopisz 10 h"** liczy się na żywo, gdy poprawiasz godziny;
+  - godziny wpisuje się z klawiatury albo **przyciskami −/+ o 15 minut**;
+    zmieniona godzina robi się bursztynowa;
+  - korekta pokazuje **różnicę**: „Zapisane 08:00–16:00 → Zgłoszone
+    07:30–16:00 · +30 min", zmieniona godzina na czerwono;
+  - **„Popraw" otwiera się w karcie** (na telefonie jako arkusz od dołu):
+    szybkie godziny „Jak w grafiku / Jak zapisane / Jak zgłoszone", gotowe
+    powody jednym dotknięciem i „Do wypłaty: 9,25 h";
+  - **zaznacz kilka spraw → „Zatwierdź N"** w pasku na dole; „Zaznacz
+    wszystkie" przy każdej grupie;
+  - **każdą decyzję można cofnąć przez 6 sekund** — dopiero potem trafia do
+    bazy;
+  - sprawy czekające tydzień i dłużej mają podpis „Czeka N dni", a ta sama
+    korekta wysłana dwa razy — „Takie samo jak wyżej" i przycisk „Odrzuć
+    duplikat".
+
 ## 0.47.0 — 2026-09-25
 
 - **Tablet Służbowy wypełnia cały ekran tabletu.** Dotąd układ był robiony

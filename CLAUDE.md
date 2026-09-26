@@ -587,6 +587,11 @@ src/
     swaps.ts                    giełda zmian — jedyne miejsce piszące do
                                   shift_swaps i przepisujące zmianę na
                                   innego pracownika (resolveSwap)
+    czas.ts                     godziny, różnice ("+30 min"), krótkie daty
+                                  ("ndz 13.09"), "czeka N dni" i odmiana
+                                  liczebników — wspólne dla "Do decyzji" i
+                                  Pulpitu, żeby ta sama sprawa wyglądała tak
+                                  samo w obu miejscach
     wpisy.ts                    jak w lokalu wolno wpisywać godziny: sposób
                                   wpisu i okna tolerancji (regulyWpisu,
                                   sprawdzGodzine, czekaNaKoniecOdKierownika) —
@@ -699,7 +704,8 @@ src/
                                     i ekranu kierownika zmiany, NIE duplikuj
       PrzepiszZmianyModal.tsx       co ze zmianami odchodzącego pracownika:
                                     przepisać na następcę albo zdjąć
-      GrafikZmianaModal.tsx         modal przypisania zmiany + modal blokady
+      GrafikZmianaModal.tsx         PANEL przypisania zmiany (kandydaci, uwagi) +
+                                    modal blokady — patrz 5g
       GrafikWymagania.tsx           wymagania obsady, godziny otwarcia, wyjątki,
                                     budżet (czwarty podwidok)
       GrafikBudzet.tsx              trzy karty nad siatką + wiersze układu
@@ -708,14 +714,20 @@ src/
                                     dla wszystkich trzech układów
       GrafikBudzetKonfiguracja.tsx  cel finansowy na dzień tygodnia i wyjątki
                                     na konkretne daty
-      GrafikDoWyslaniaModal.tsx     podgląd wszystkiego, co czeka w wersji
-                                    roboczej — NIE publikuje, publikacja
-                                    zostaje przy "Wyślij grafik"
+      GrafikDoWyslaniaModal.tsx     panel "Szkic grafiku" — dodane / zmienione /
+                                    usunięte, "Cofnij" przy dodanej i usuniętej,
+                                    "Opublikuj · N" — patrz 5g
       PulpitHome.tsx, RejestrGodzin.tsx, ZatwierdzanieZmian.tsx,
-      Aktywni.tsx, Zgloszenia.tsx, Pracownicy.tsx, RaportyIKoszty.tsx,
+      Aktywni.tsx, Skrzynka.tsx, Pracownicy.tsx, RaportyIKoszty.tsx,
       Przewodnik.tsx, MojaPraca.tsx
                                     — po jednej zakładce Panelu Kierownika
                                     każdy, patrz "Panel kierownika" niżej
+      WpisGodzinModal.tsx           okno dodania/edycji wpisu godzin (Rejestr,
+                                    Aktywni, Raporty) — patrz "Rejestr godzin"
+      PoleCzasu.tsx                 pole godziny ±15 min (TimeField z makiety)
+      odlozoneDecyzje.tsx           decyzje odłożone o 6 s z "Cofnij"
+                                    (`useOdlozoneDecyzje`, `PasekCofnij`) —
+                                    jeden mechanizm dla "Do decyzji" i Pulpitu
       Ustawienia.tsx                zakładka TYLKO dla właściciela (`admin`):
                                     Lokale, Stanowiska, Firma, Subskrypcja —
                                     patrz "Ustawienia właściciela" niżej
@@ -883,21 +895,20 @@ przestaje się scrollować w ogóle zamiast scrollować tylko `<main>`.
 dolnym pasku mobile (`MOBILE_PRIMARY_KEYS`) są ustaleniem właściciela z
 0.32.0, ułożonym wg tego, jak często się tam wchodzi: Pulpit, Zatwierdzanie
 zmian, Grafik, Zadania, Puls, a dalej reszta. Nie przestawiaj ich "logicznie"
-przy okazji innych zmian. Sidebar jest od 0.32.0 JASNY (`#E4E4DE`,
+przy okazji innych zmian. ⚠️ Skrzynka (0.51.0) stoi TAM, gdzie stały
+Zgłoszenia — zaraz po Aktywnych; makieta stawiała ją przed Grafikiem, a
+właściciel kazał zostawić ją na miejscu. Sidebar jest od 0.32.0 JASNY (`#E4E4DE`,
 `shellSidebarCls`) — o ton ciemniejszy od tła strony, nie czarny.
 
-**Zakładki** (kolejność z `NAV_ITEMS`): **Pulpit** (`PulpitHome.tsx`, "Dziś
-w liczbach" — godziny dziś/tydzień z porównaniem do poprzedniego tygodnia,
-koszt miesiąca z `users.stawka`, podgląd "Wymaga Twojej decyzji"/"Teraz na
-zmianie"/"Terminy i dokumenty"), **Zatwierdzanie zmian**
+**Zakładki** (kolejność z `NAV_ITEMS`): **Pulpit** (`PulpitHome.tsx`, patrz
+"Pulpit" niżej), **Zatwierdzanie zmian**
 (`ZatwierdzanieZmian.tsx`, patrz niżej), **Rejestr Godzin**
-(`RejestrGodzin.tsx` — grupowanie po stanowisku, jeden pasek wyszukiwania,
-"+ Dodaj wpis", CSV, "Historia" per wiersz), **Aktywni** (`Aktywni.tsx` —
-żywy licznik czasu trwania zmiany, "Zakończ zmianę"), **Zadania**
+(`RejestrGodzin.tsx`, patrz "Rejestr godzin" niżej), **Aktywni** (`Aktywni.tsx`, patrz
+"Aktywni" niżej), **Zadania**
 (`ZadaniaISprzatanie.tsx` + `ZadaniaKonfiguracja.tsx` — checklisty w blokach,
-patrz niżej), **Grafik**, **Zgłoszenia**
-(`Zgloszenia.tsx`, tylko `type !== "correction"`), **Powiadomienia** (patrz
-niżej, bez zmian w logice), **Pracownicy** (`Pracownicy.tsx`, patrz niżej),
+patrz niżej), **Grafik**, **Skrzynka**
+(`Skrzynka.tsx` — Zgłoszenia i Powiadomienia w jednym od 0.51.0, patrz
+"Skrzynka" niżej), **Pracownicy** (`Pracownicy.tsx`, patrz niżej),
 **Raporty i koszty** (`RaportyIKoszty.tsx`, patrz niżej), **Przewodnik**
 (`Przewodnik.tsx` — statyczna mini-instrukcja + "Historia wersji"),
 **Moja Praca** (`MojaPraca.tsx` — kierownik jest też pracownikiem;
@@ -908,13 +919,164 @@ Klik na imię pracownika w Rejestr Godzin i Aktywni woła
 `reportUserId` i przełącza `tab` na `"raporty"`, gdzie `RaportyIKoszty.tsx`
 od razu pokazuje kartę tej osoby.
 
-⚠️ **Zatwierdzanie zmian ma JEDEN układ karty** (0.46.0, rząd od 0.47.0):
-`Sekcja` + `KartaDecyzji` na poziomie modułu w `ZatwierdzanieZmian.tsx` —
-treść po lewej, przyciski W RZĘDZIE po prawej (`data-przyciski`; na telefonie
-pod treścią), równej wysokości, pierwszy zawsze „na tak". Dokładając nowy typ
-decyzji, użyj tych dwóch komponentów zamiast własnej karty. Nagłówek strony
-„Do decyzji · N" i znaczek `zatwierdzanie` w `shellBadges` muszą liczyć te
-same kolejki (sprawdza to `harness-panel.html`).
+⚠️ **„Do decyzji" (Zatwierdzanie zmian) — układ z makiety właściciela
+(0.48.0, design system „Shiftro" w artefaktach).** Każda sprawa to jeden
+obiekt `{ klucz, typ, kto, wiek, tak, karta }` w tablicy `sprawy`, rysowany
+komponentem `Karta` (siatka: zaznaczenie · kto · szczegóły · akcje; główny
+przycisk NAJBARDZIEJ Z PRAWEJ). Dokładając nowy typ decyzji, dopisz grupę do
+`GRUPY` i sprawę do `sprawy` — nie własną kartę. Nagłówek „Do decyzji · N" i
+znaczek `zatwierdzanie` w `shellBadges` muszą liczyć te same kolejki
+(sprawdza `harness-panel.html`).
+
+⚠️ **Decyzje są ODŁOŻONE o 6 s** (`useOdlozoneDecyzje` w
+`manager/odlozoneDecyzje.tsx`, `CZAS_NA_COFNIECIE_MS` — ten sam mechanizm
+działa na Pulpicie). Karta znika od razu, zapis rusza po 6 s; „Cofnij"
+anuluje go bez żadnego odkręcania w bazie. Trzy rzeczy, których nie widać:
+1. Zapis woła funkcję z NAJNOWSZEGO renderu (`akcjeRef`), nie z chwili
+   kliknięcia — w ciągu 6 s poll podmienia `shifts`.
+2. Argumenty (godziny, poprawione wartości, powód) są zamrożone w chwili
+   decyzji — panel „Popraw" jest już wtedy zamknięty.
+3. Wyjście z zakładki zapisuje wszystko, co czeka (cleanup efektu), a
+   zamknięcie karty przeglądarki pyta o potwierdzenie (`beforeunload`).
+   Najgorszy przypadek zostawia sprawę w kolejce — nigdy zapisu bez decyzji.
+Hurtem („Zatwierdź N") tylko zatwierdzamy; odrzucenie zostaje decyzją
+podejmowaną karta po karcie.
+
+⚠️ **Korekta pokazuje „Zapisane → Zgłoszone"**, nie „Grafik → Zgłoszone":
+po lewej stoi odbicie z Rejestru godzin. Grafik tego dnia jest pod szybką
+godziną „Jak w grafiku" w panelu „Popraw". Duplikat (ta sama osoba, dzień,
+godziny i zmiana) dostaje „Odrzuć duplikat" (`odrzucKorekte` w
+`utils/corrections.ts` — bez powiadomienia i bez śladu w `shift_edits`).
+
+⚠️ **Pulpit — układ z makiety właściciela (0.49.0, DashboardDesktop /
+DashboardMobile).** Kolejność = co zrobić najpierw: „Do zrobienia teraz"
+(zamknij wczoraj per lokal + „Wymaga decyzji"), „Liczby" (cztery kafelki, na
+telefonie karuzela), panele (Teraz na zmianie, Terminy i dokumenty, Zadania
+dziś). Rzeczy, których nie widać:
+- **„Wymaga decyzji" liczy TE SAME kolejki co „Do decyzji"**, zawężone do
+  lokalu z paska. Przy „Cała sieć" liczba = znaczek w menu (sprawdza
+  `harness-panel.html`). Dokładając typ decyzji, dopisz go w trzech
+  miejscach: `sprawy` w ZatwierdzanieZmian, `shellBadges`, `sprawy` w
+  PulpitHome.
+- **✓ na Pulpicie tylko przy PROSTEJ korekcie**: zamknięta zmiana, ten sam
+  dzień, lokal i stanowisko, zmieniają się same godziny, nie duplikat.
+  Zapis przez `resolveCorrection` + `propozycjaKorekty` + `wlozKorekteDoStanu`
+  (`utils/corrections.ts`) — dokładnie to, co „Zatwierdź" w „Do decyzji".
+- ⚠️ **„Zamknij" dzień pokazuje się TYLKO przy lokalu z utargiem i kompletem
+  wymaganych wpisów.** Reszta ma „Uzupełnij" → karta dnia w Pulsie.
+  Zamkniętego dnia nie da się otworzyć, więc zamknięcie jednym dotknięciem z
+  pustym utargiem zostawiłoby fałszywy koszt pracy na zawsze. Makieta miała
+  „Zamknij" przy każdym lokalu — to jest świadome odstępstwo.
+- **Porównania tylko like-for-like**: tydzień pn–dziś z pn–ten sam dzień
+  poprzedniego tygodnia DO TEJ SAMEJ GODZINY, miesiąc 1–N z 1–N. Jedna reguła
+  `godzinyDo(zmiana, granica)` liczy obie strony. Trend bez koloru.
+- **Koszt miesiąca = `kosztZespoluMiesiaca` (utils/umowy.ts)** — ta sama
+  reguła co kafelek w Raportach i kosztach. Do 0.48.0 Pulpit liczył goły
+  `users.stawka` i etatowcy wypadali z kosztu.
+- **„Teraz na zmianie" liczy tylko zmiany, które TRWAJĄ** (`zmianaTrwa` i bez
+  czekających na koniec od kierownika) — porzucone nie są „na zmianie".
+  Ostrzeżenie „w grafiku, jeszcze bez odbicia" dopiero 10 min po planowanym
+  starcie, najwyżej trzy na raz.
+
+⚠️ **Rejestr godzin — układ z makiety właściciela (0.50.0, RegisterDesktop /
+RegisterMobile / RegisterEntryPanel).** Rzeczy, których nie widać:
+- **Grafik obok Faktu, parowany per (osoba, dzień) kolejnością godzin** —
+  i-ta zmiana dnia z i-tym wpisem grafiku, z KAŻDEGO lokalu. Różnica od
+  15 min (`PROG_MIN`), poniżej „≈". Fakt bez pary to „Poza grafikiem".
+  ⚠️ To świadoma zmiana względem "5b. Plan vs fakt" ("nie wykrywamy pracy
+  poza grafikiem") — decyzja właściciela z makiety. Znacznik jest neutralny,
+  nie ostrzegawczy.
+- **„vs grafik" to DWIE liczby** (ponad plan / poniżej planu) — suma netto
+  ukrywała rozjazdy, które się znoszą.
+- **Okno wpisu (`WpisGodzinModal.tsx`) jest NA ŚRODKU i ma ograniczony
+  rozmiar** (max 560 px, max 90vh, przewijana treść, stała stopka) — makieta
+  miała panel z prawej na całą wysokość, właściciel poprosił o okno. Na
+  telefonie arkusz od dołu. Formularz trzyma okno; zapis zostaje w
+  `zapiszWpisGodzin` w ManagerDashboard (kolizje w bazie, powiadomienie,
+  arkusz Google).
+- **Powód wymagany, gdy zmienia się coś, co było zapisane** (dzień, lokal,
+  stanowisko, start, istniejący koniec). Dopisanie brakującego wyjścia
+  („Zakończ zmianę" w Aktywnych) powodu nie wymaga. Powód idzie do
+  pracownika w `notifications.message` (bez nowej kolumny).
+- ⚠️ **`shift_edits` dostaje od 0.50.0 także ręczne zmiany**: `source`
+  `manual_add` / `manual_edit` / `manual_delete`, przez
+  `zapiszSladRecznejZmiany` w `utils/corrections.ts`. To dalej JEDYNY plik,
+  który pisze do tej tabeli. Do 0.49.0 ręczna poprawka w Rejestrze nie
+  zostawiała śladu.
+- **Usunięcie wpisu = 6 s „Cofnij"** (`useOdlozoneDecyzje` w
+  ManagerDashboard, pasek na dole ekranu), bez `window.confirm`. Rejestr
+  chowa wiersz od razu przez prop `ukryte`.
+- Data w oknie liczy się LOKALNIE (`toLocalYMD`). Stary modal brał
+  `toISOString()` — zmiana zaczęta przed 2:00 w nocy pokazywała się z datą
+  poprzedniego dnia.
+
+⚠️ **Aktywni — układ z makiety właściciela (0.51.0, ActiveDesktop /
+ActiveMobile).** Pasek podsumowania, „Wymaga uwagi" (bez wejścia: w
+OPUBLIKOWANYM grafiku, 10 min po planowanym starcie, bez nieobecności i bez
+odbicia tego dnia; po czasie: po planowanym końcu), potem lokale z paskiem
+postępu zmiany. Rzeczy, których nie widać:
+- **Zmiana ↔ grafik: ten sam lokal, potem start NAJBLIŻEJ odbicia.** Przy
+  zmianie dzielonej pierwsza z brzegu dawała zły koniec (złapał to harness).
+- **„Zakończ" i „Dopisz wejście" najpierw pytają o godzinę** (`WyborGodziny`:
+  teraz albo z grafiku, ±5 min) — nic nie zapisuje się jednym kliknięciem.
+- **Pasek podsumowania to filtr** (na zmianie / po czasie / bez wejścia /
+  lokal); drugie kliknięcie albo „Wszyscy" zdejmuje filtr.
+- **„Zakończ" i „Dopisz wejście" idą przez `zapiszWpis`** w ManagerDashboard
+  — tę samą drogę co okno wpisu (kolizje w bazie, ślad w `shift_edits`,
+  powiadomienie, arkusz) — i przez 6 s „Cofnij". Dopisanie końca do trwającej
+  zmiany nie wymaga powodu; dopisane wejście dostaje powód „Dopisane wejście
+  z grafiku".
+- **„Zadzwoń" tylko, gdy w karcie jest telefon** (`users_widok.telefon`,
+  widoczny kierownikowi). Przycisk bez numeru nie miałby dokąd dzwonić.
+- Liczniki mówią „bez wejścia", nie „nie odbiła się" — bez zgadywania rodzaju.
+- Zmiany bez zakończenia zostają OSOBNĄ listą na dole (patrz "Zmiany bez
+  zakończenia").
+
+⚠️ **Skrzynka — Zgłoszenia + Powiadomienia (0.51.0, InboxDesktop /
+InboxMobile).** `manager/Skrzynka.tsx`, trzy zakładki: Do zrobienia /
+Informacje / Archiwum, filtr typu Wnioski / Zgłoszenia / System.
+- ⚠️ **„Do zrobienia" jest LICZONE z danych** (`zbierzSprawy`), nie z
+  powiadomień: wnioski o wolne `pending`, zgłoszenia `nowe`, niezamknięty
+  zmiany bez końca, zmiany bez odbicia (jedną pozycją).
+- ⚠️ **Niezamknięty Puls stoi w INFORMACJACH, nie w Do zrobienia** (0.51.1,
+  prośba właściciela: czerwony znaczek przy każdym wejściu był natarczywy).
+  Liczony z kart dni (7 dni wstecz, tylko dni z odbiciami), zwykły przycisk
+  „Zamknij Puls", przypomnienia crona dają mu „×N" zamiast osobnych pozycji.
+  Licznik „Zamknij wczoraj" na Pulpicie jest z tego samego powodu SZARY. Dlatego sprawa rozstrzygnięta
+  gdzie indziej znika sama. Ta sama funkcja daje znaczek w menu — nowy rodzaj
+  sprawy dopisz TYLKO w `zbierzSprawy`.
+- **Wnioski o wolne są w DWÓCH miejscach** — tu i w Zatwierdzaniu (makieta).
+  Oba liczą je z tych samych `absences`, więc decyzja w jednym znika z
+  drugiego; znaczki obu zakładek je liczą.
+- **Informacje = powiadomienia z 14 dni**, te same (typ, lokal, treść)
+  sklejone w jedną pozycję z „×N"; starsze idą do Archiwum. Archiwum ma też
+  rozwiązane zgłoszenia i wnioski rozstrzygnięte w ostatnich 60 dniach.
+- **Zgłoszenie anonimowe ma treść ukrytą do „Pokaż"** — bywa o innej osobie.
+- Stare klucze `zgloszenia`/`powiadomienia` przekierowuje `setTab` w
+  ManagerDashboard (dzwonek → Skrzynka na Informacjach). `Zgloszenia.tsx`
+  i powiązany blok zostały w repo nieużywane — do usunięcia po okresie
+  próbnym, jak inne stare wersje.
+
+⚠️ **Pracownicy — układ z makiety właściciela (0.52.0, PeopleDesktop /
+PeopleMobile).** Wszystkie pola karty zostały — zmieniła się kolejność,
+grupowanie i stany. Rzeczy, których nie widać:
+- **Braki liczy JEDNA funkcja `brakiOsoby`** (sanepid, termin umowy bez
+  „bezterminowa", stawka / wynagrodzenie) — znacznik na liście, filtr „Braki w
+  danych" i pasek w nagłówku karty. Tablet i osoba na próbę braków nie mają.
+- **Pasek „Zapisz zmiany" pokazuje się tylko przy różnicy** (`rozniSie`,
+  normalizacja: tablica = tekst po przecinku, null = "" = false; pomija
+  `ma_kiosk_pin` i ślad notatek). Zmiana osoby, zakładki Aktywni/Archiwum albo
+  „Dodaj pracownika" przy różnicy pyta o porzucenie zmian.
+- ⚠️ **Po zapisie karta zostaje otwarta** (`handleSaveUser` ustawia
+  `editingUser` na zapisany wiersz, nie na null).
+- **PIN: `type="password"` + `autoComplete="new-password"`** — ukryty do
+  „Pokaż" i bez propozycji zapisania go jako hasła kierownika. `maxLength` 6
+  zostaje (harness szuka formularza po nim). Ostrzeżenie `slabyPin`: jedna
+  cyfra, ciąg ±1, powtarzany wzór.
+- **Archiwizacja pyta raz**: krok „Tak, archiwizuj" w karcie woła
+  `handleArchiveEntity(..., { potwierdzone: true })`, które wtedy pomija
+  `window.confirm`. Zmiany w grafiku dalej idą przez PrzepiszZmianyModal.
+- **Usunięcie urlopu = 6 s „Cofnij"**, bez `window.confirm`.
 
 ⚠️ **Pracownicy idą za `selectedLokal` z górnego paska** (`wybranyLokal` w
 `Pracownicy.tsx`). Do lokalu należy osoba z `default_lokal` ALBO z
@@ -958,6 +1120,26 @@ dziś są w zakładce **Ustawienia** (patrz niżej).
 
 ### Ustawienia właściciela (`manager/Ustawienia.tsx`) — od 0.44.0
 
+⚠️ **Układ z makiety właściciela (0.54.0, SettingsDesktop / SettingsMobile /
+SettingsPositions).** Rzeczy, których nie widać:
+- **Podsumowanie sekcji karty lokalu stoi w nagłówku ZAWSZE** (też
+  rozwiniętej) — harness sprawdza je na zwiniętych sekcjach.
+- **Pasek „Niezapisane zmiany" porównuje z WŁASNĄ kopią** (`oryginal`,
+  ustawianą przy otwarciu i po zapisie), nie z wierszem z `lokale` — świeżo
+  dodany lokal trafia do listy dopiero z opóźnieniem. `rozniSieLokal` bierze
+  `POLA_LOKALU` (ta sama lista co payload w `handleSaveDict`) i porównuje
+  bloki przez `blokiLokalu`, bo NULL i pełna lista znaczą to samo.
+- **Pola z jednostką (%, min, godz.) są tekstowe**, więc `num()` w
+  ManagerDashboard przyjmuje przecinek. Do 0.53.0 `Number("20,5")` dawało
+  NaN, czyli po cichu `null`.
+- **Archiwizacja lokalu i stanowiska idzie z `{ potwierdzone: true }`** —
+  potwierdzenie jest w samym ekranie (krok „Tak, do archiwum" / 6 s
+  „Cofnij" przez `useOdlozoneDecyzje`), bez `window.confirm`.
+- **Kolor stanowiska z palety 12 kolorów** (`PALETA`); kolor spoza palety,
+  ustawiony wcześniej pipetą, zostaje jako dodatkowa próbka.
+- ⚠️ Do 0.53.0 `ustawienia` nie było w `TABY_Z_WLASNYM_WIDOKIEM` i pod
+  zakładką wisiał placeholder „W budowie". Dokładając zakładkę, dopisz ją tam.
+
 Zakładka na końcu `NAV_ITEMS` z flagą `tylkoWlasciciel`: widzi ją WYŁĄCZNIE
 właściciel (decyzja właściciela, 2026-09-24), czyli rola `admin` ALBO stara
 rola `manager` — `manager_lokalu` nie. ⚠️ `manager` nie da się już nadać z
@@ -993,15 +1175,14 @@ PIN-u już istnieje** (od 2026-09-02, `Pracownicy.tsx` — pole widoczne
 tylko dla `role === "open"`) — wcześniejsza notatka o ręcznym wpisywaniu w
 Supabase Table Editor jest nieaktualna.
 
-Zakładka **Powiadomienia** (`ManagerDashboard`, tab `"powiadomienia"`,
-NIE ma jeszcze własnego komponentu w `manager/` — nadal renderowana wprost
-w `ManagerDashboard.tsx`, reużywa `NotificationsPanel`) — analogiczna do
-`NotificationsPanel` u pracownika. Pokazuje wiersze z tabeli `notifications`
-gdzie `audience === "manager"`, przefiltrowane przez `hasAccessToLokal(n.lokal)`
+**Powiadomienia kierownika** (od 0.51.0 zakładka "Informacje" w
+**Skrzynce**, patrz niżej; wcześniej osobna zakładka "Powiadomienia" z
+`NotificationsPanel`) — wiersze z tabeli `notifications` gdzie
+`audience === "manager"`, przefiltrowane przez `hasAccessToLokal(n.lokal)`
 — `manager_lokalu` widzi tylko swoje `allowed_lokale`, `admin` widzi
-wszystko. Znaczek z liczbą nieprzeczytanych jak w wersji dla pracowników;
-oznaczanie jako przeczytane też działa tak samo (patch przy wejściu na
-zakładkę). Tworzenie takich powiadomień idzie przez ogólną funkcję
+wszystko. ⚠️ Od 0.51.0 NIE oznaczamy ich jako przeczytane przy wejściu —
+jest przycisk "Oznacz wszystko jako przeczytane"; znaczek przy dzwonku dalej
+liczy nieprzeczytane. Tworzenie takich powiadomień idzie przez ogólną funkcję
 `createManagerNotification(lokal, message, type)` w
 [`api/notifications.ts`](src/api/notifications.ts) — analogiczna
 `createEmployeeNotification(userName, message, type)` robi to samo dla
@@ -1527,7 +1708,7 @@ Supabase" niżej.
 | 2 | Zbliża się/minął termin sanepid albo umowy | cron `check-document-terms.js` → kierownik LOKALU i sam pracownik | `notifications`, `audience='manager'` i `audience='employee'` (`message`/`type`) | ZROBIONE |
 | 3 | Ogólne info dla kierowników lokalu (przyszłe moduły) | dowolna funkcja przez `createManagerNotification` → kierownik | `notifications`, `audience='manager'` | infrastruktura gotowa, czeka na kolejnych konsumentów (Zadania itd.) |
 | 4 | **Zgłoś → "Popraw zmianę"**: pracownik proponuje inne dane konkretnej zmiany (data/lokal/stanowisko/godziny) albo zgłasza całkiem brakującą zmianę | pracownik → kierownik | `issues`, `type='correction'` + `proposed_date`/`proposed_lokal`/`proposed_stanowisko`/`proposed_start_time`/`proposed_end_time` (patrz niżej) | **ZROBIONE** (2026-09-02) |
-| 5 | **Zgłoś → "Zgłoś problem"**: dowolna uwaga, opcjonalnie anonimowo | pracownik → kierownik | `issues`, `type='problem'` (to jest dotychczasowe "Zgłoś", tylko nazwane) | ZROBIONE |
+| 5 | **Zgłoś → "Zgłoś problem"**: dowolna uwaga, opcjonalnie anonimowo | pracownik → kierownik | `issues`, `type='problem'` (to jest dotychczasowe "Zgłoś", tylko nazwane) | ZROBIONE — od 0.51.0 w Skrzynce |
 | 6 | Odpowiedź kierownika na zgłoszenie typu "Popraw zmianę" (Zatwierdź/Popraw/Zapytaj) | kierownik → pracownik | `createEmployeeNotification` z `utils/corrections.ts` (`resolveCorrection`/`askAboutCorrection`), imię konkretnego kierownika w treści | **ZROBIONE** (2026-09-02) |
 | 7 | Kolejka korekt w panelu kierownika, zakładka **Zatwierdzanie zmian** (`manager/ZatwierdzanieZmian.tsx`) | — | `issues` (`type='correction'`) | **ZROBIONE** — osobna zakładka, nie miesza się z p. 5 (Zgłoszenia pokazuje tylko `type !== "correction"`) |
 | 8 | Zmiana zaczęta i niezakończona (bez odbitego końca) | cron `check-porzucone.js` → pracownik i kierownik LOKALU; decyzja kierownika → pracownik | `notifications`, `type='porzucona'` | **ZROBIONE** (0.40.0) — patrz "Zmiany bez zakończenia" |
@@ -1677,7 +1858,9 @@ zakresem — wymaga Grafiku, którego nie ma.
   `buildLocalDate()` w `utils/corrections.ts`). Gdy `is_anonymous`,
   `user_id`/`user_name` są `null` (tylko dla `type='problem'` — korekty
   są zawsze z imieniem).
-- **shift_edits** — NOWA tabela (2026-09-02), audit trail korekt zmian:
+- **shift_edits** — NOWA tabela (2026-09-02), audit trail korekt zmian
+  (od 0.50.0 także ręcznych: `source` `manual_add`/`manual_edit`/
+  `manual_delete`, `issue_id` wtedy pusty):
   `id (bigint identity), shift_id (text), issue_id (text), editor_name,
   reason, old_date/old_lokal/old_stanowisko/old_start_time/old_end_time,
   new_date/new_lokal/new_stanowisko/new_start_time/new_end_time, source
@@ -1690,8 +1873,8 @@ zakresem — wymaga Grafiku, którego nie ma.
   `issues.shift_id` MA prawdziwy FK do `shifts(id)` (patrz `issues` wyżej i
   błąd #17 niżej) — to jedyny w całym projekcie. RLS: otwarta polityka jak reszta. Czytane przez "Historia" w Rejestr
   Godzin i licznik "Korekty" w Raporty i koszty; zapisywane WYŁĄCZNIE przez
-  `resolveCorrection()` w `utils/corrections.ts` — nie pisz do tej tabeli
-  z innego miejsca.
+  `utils/corrections.ts` (`resolveCorrection()` i od 0.50.0
+  `zapiszSladRecznejZmiany()`) — nie pisz do tej tabeli z innego miejsca.
 - **notifications** — dwa "typy" wierszy we wspólnej tabeli, odróżnione
   polem `audience`:
   - `audience = 'employee'` (domyślne, dla starych wierszy sprzed tej
@@ -1909,7 +2092,9 @@ stała godzina — liczy się tylko różnica 8h), `is_urlop=true`,
 godzin i kosztów (Rejestr Godzin, Raporty i koszty, Pulpit kierownika,
 Moja Praca, Raport pracownika) bez dopisywania osobnej logiki agregującej
 w każdym z tych miejsc — dokładnie to, o co prosił właściciel ("dodają się
-do wszystkich list i podliczeń"). Miejsca renderujące pojedynczy wiersz
+do wszystkich list i podliczeń"). (Akapit o Pulpicie niżej opisuje stan
+sprzed 0.49.0 — dziś wnioski o wolne są jedną z kolejek karty „Wymaga
+decyzji", a kafelka „Do decyzji" nie ma.) Miejsca renderujące pojedynczy wiersz
 zmiany rozpoznają `s.is_urlop` i pokazują słowo "Urlop" zamiast zakresu
 godzin (`RejestrGodzin.tsx`, `MojaPraca.tsx`,
 `employeeSessionShared.tsx` Raport). **Pulpit kierownika** ("Wymaga
@@ -2277,6 +2462,35 @@ wtedy, gdy nie ma kogo zapytać o zgodę.
 
 ## Raporty i koszty — przebudowa 2026-09-20 (0.40.0)
 
+⚠️ **Układ z makiety właściciela (0.53.0, ReportsDesktop / ReportsMobile).**
+Kolejność = wnioski przed tabelami: kafelki („Koszt pracy" na czarno jako
+główny), „Na co zwrócić uwagę", „Gotowość do rozliczenia", „Struktura
+kosztów". Rzeczy, których nie widać:
+- **Średni koszt godziny dzieli koszt przez godziny osób Z KOSZTEM**
+  (`hoursZKosztem`), nie przez wszystkie — inaczej każda godzina kogoś bez
+  wynagrodzenia zaniżałaby średnią. To samo `hoursKoszt` przy zł/h grupy.
+- **Porównanie z poprzednim miesiącem jest like-for-like**: w trwającym
+  miesiącu `agreguj(..., doDnia)` bierze z poprzedniego tylko dni 1–N. Ta sama
+  zasada co na Pulpicie. Pasek porównania zniknął — trend stoi w kafelkach.
+- **Wnioski są LICZONE, nie przechowywane**: przeciążenie (praca bez urlopu
+  > 1,25 × norma pełnego etatu z `wymiarCzasuPracy`), godziny bez grafiku
+  (≥ 5% faktu), koncentracja kosztu w lokalu (od dwóch lokali), wpisy krótsze
+  niż 30 min (`KROTKI_WPIS_H`). Każdy ma akcję — wniosek bez akcji tylko
+  straszy.
+- **„Gotowość do rozliczenia" blokuje trzema rzeczami**: miesiąc jeszcze
+  trwa, ktoś bez wynagrodzenia, sprawy do decyzji Z TEGO MIESIĄCA (te same
+  kolejki co znaczek „Zatwierdzanie zmian", podane przez `doDecyzji` z
+  ManagerDashboard). Makieta blokowała tylko brakiem wynagrodzenia —
+  rozliczenie z nierozstrzygniętą korektą albo w trakcie miesiąca rozlicza
+  liczby, które się zmienią. Różnice z grafikiem i krótkie wpisy to tylko
+  ostrzeżenia. **Wysyłki do księgowej nie ma** — przycisk stoi wyłączony z
+  powodem.
+- **Kolor lokalu w pasku udziałów bierze się z pozycji w słowniku `lokale`**,
+  nie z rankingu — inaczej ten sam lokal zmieniałby kolor co miesiąc.
+  Stanowisko bierze `stanowiska.kolor`, gdy jest.
+- **Urlop w szczegółach osoby to jeden wiersz na ciąg dni** („17–28.08 · 10
+  dni urlopu"); cały wiersz zmiany otwiera `WpisGodzinModal`.
+
 ⚠️ **Koszt liczy `kosztMiesiaca()` z `utils/umowy.ts`, NIE `godziny × users.stawka`.**
 Do 0.40.0 stała tam goła `users.stawka`, więc KAŻDY pracownik na umowie o pracę
 miał koszt `null`, wypadał z kafelka „Koszt" i cały miesiąc świecił „dane
@@ -2310,7 +2524,8 @@ stawki godzinowej, to jest ten sam błąd.
 - **Zero godzin przy istniejącej zmianie znaczy jedno**: nikt nie odbił jej
   końca (`bezKonca > 0` → „zmiana bez zakończenia", patrz sekcja wyżej).
   Człowiek był, godziny czekają na decyzję.
-- **Porównanie z poprzednim miesiącem jest BEZ zieleni i czerwieni.** Wyższy
+- **Porównanie z poprzednim miesiącem jest BEZ zieleni i czerwieni** (od
+  0.53.0 neutralny znaczek ze strzałką w kafelkach). Wyższy
   koszt przy wyższym utargu nie jest porażką, a więcej godzin nie jest ani dobre,
   ani złe samo z siebie. Koszt porównujemy tylko wtedy, gdy OBA miesiące są
   policzone do końca — inaczej spadek znaczyłby tylko tyle, że komuś nie wpisano
@@ -3183,6 +3398,67 @@ Trzy decyzje, których nie zmieniaj bez rozmowy z właścicielem:
     każdym innym lokalem na tę samą literę.
   - `isSameUser` i `absenceOn` przeniesione z `GrafikTydzien.tsx` do
     `utils/grafik.ts` — używają ich teraz oba widoki.
+
+### 5g. Grafik — układ z makiety właściciela (0.55.0)
+
+ScheduleWeek / ScheduleAssign / ScheduleBudget / ScheduleDraft /
+ScheduleMobile. Pliki: `Grafik.tsx` (pasek, szkic), `GrafikTydzien.tsx`
+(siatka, giełda, telefon), `GrafikZmianaModal.tsx` (panel przypisania — nazwa
+pliku została), `GrafikDoWyslaniaModal.tsx` (panel szkicu). Rzeczy, których
+nie widać:
+- ⚠️ **„Szkic" to NIE nowy stan.** To dokładnie to, co było „niewysłane":
+  bez `published_at` = dodana, `updated_at > published_at` = zmieniona,
+  `deleted_at` = usunięta. Publikacja dalej tylko przez `publishGrafik`, od
+  dziś w przód, ze wszystkich lokali kierownika.
+- ⚠️ **„Cofnij" w szkicu jest tylko przy dodanej i usuniętej.** Baza nie
+  trzyma poprzedniej wersji zmienionej zmiany, więc jej cofnięcie musiałoby
+  zgadywać; z tego samego powodu nie ma „Odrzuć cały szkic" z makiety.
+  Przywrócona usunięta zostaje „zmieniona" (`updated_at` = teraz), bo nie
+  wiemy, czy ktoś jej nie poprawił przed usunięciem.
+- ⚠️ **Siatka dostaje zmiany BEZ usuniętych (`zywePlanShifts`) + osobno
+  `usuniete`**, a WSZYSTKIE zapisy w Grafiku robią `setPlanShifts((prev) =>
+  …)`. Do 0.54.0 zapis budował nową listę z tej przefiltrowanej — każde
+  dodanie gubiło ze stanu zmiany usunięte po wysłaniu i szkic pokazywał za
+  mało do odświeżenia strony. Zwracany wiersz scalamy z istniejącym
+  (`{ ...s, ...zapisana }`).
+- **Etykieta braku nad dniem to przycisk**: w Edycji otwiera panel ze
+  stanowiskiem i godzinami luki (`ctx.luka`), w Podglądzie mówi, żeby włączyć
+  Edycję. Kafelek „Braki obsady" liczy te same odcinki (`problemyObsady`).
+- **Szybkie godziny w panelu są OSOBNO dla początku i końca**
+  (`godzinyZWymagan` + godziny luki), nie parami z wymagań — prośba
+  właściciela z 0.55.1: przy 8:30–21:00 i 10:30–19:00 sensowna bywa 10:30–21:00.
+- **Osoby bez wybranego stanowiska są zawsze na liście** — na końcu, na
+  szaro (`data-bez-stanowiska`), zwinięte pod strzałką (0.55.2), a najniżej
+  ci bez lokalu i stanowiska w karcie. Po wyborze panel proponuje „Dopisz do
+  karty" (`onAddStanowisko`).
+- **Godziny „po tej zmianie" pokazuje TYLKO wybrana osoba** (`godzinyGdyby`);
+  pozostali — to, co już mają (`godzinyTeraz`), i po tym też sortujemy, żeby
+  lista nie skakała. Uwagi („ponad normę") liczą się dalej z wariantu „gdyby".
+- **Telefon (0.55.1)**: pasek ma trzy stałe rzędy przez `order-*` — okres
+  (krótka etykieta, `fmtZakres`), Podgląd/Edycja + Konfiguracja, Tydzień/
+  Miesiąc. Przycisk „Dzień" jest `hidden md:inline-flex`.
+- **Panel przypisania — kandydaci**: z tego lokalu (`default_lokal` albo
+  `allowed_lokale`) i znający stanowisko, od najmniejszej liczby godzin w
+  miesiącu; potem inni lokale z tym stanowiskiem; reszta pod „Pokaż
+  pozostałych". Zajęty = `przeszkodaDnia` (ta sama funkcja co przy zapisie).
+  Skutek dla obsady liczony w OSOBOGODZINACH (`minutes × missing`) — przy
+  luce na cztery osoby jedna dopisana nie zmienia liczby odcinków.
+- **Uwagi przed przypisaniem**: `uwagiPrzypisania` w `utils/kodeks.ts` —
+  istniejące `ostrzezeniaKodeksu` (bez zmian w regułach, dalej wg umowy)
+  plus: ponad 12 h, ponad 48 h w tygodniu, ponad normę (etat), stanowisko
+  spoza karty. Etat = czerwone, reszta = bursztynowe z dopiskiem „zalecenia
+  bezpieczeństwa". Dalej SYGNAŁ: przycisk to „Przypisz mimo uwag".
+- **Usunięcie = 6 s „Cofnij"** (`useOdlozoneDecyzje` w GrafikTydzien,
+  klucz `del:<id>`), bez `window.confirm`. Kopiowanie tygodnia i „Wyczyść
+  tydzień" dalej pytają — to operacje hurtowe.
+- **Giełda zmian nad siatką** pokazuje prośby `przyjeta` z dziś i później;
+  decyzja przez `onResolveSwap` (tak jak w Zatwierdzaniu) — działa też w
+  Podglądzie, bo to nie jest edycja siatki. Makieta wrzucała zgodę do
+  szkicu; u nas zgoda przepisuje zmianę od razu i powiadamia (jak dotąd).
+- **Telefon**: siatka tygodnia `hidden md:block`, zamiast niej pasek dni i
+  widok jednego dnia z tej samej arytmetyki (`mobilnyDzien` w LokalSection).
+- Kolor znacznika stanowiska to PEŁNY `stanowiska.kolor` z białym tekstem —
+  pierwsze miejsce, które go używa (reszta aplikacji: jasny odcień).
 
 ### 5d. Grafik — świadomie NIE zrobione
 - Potwierdzenia odczytu grafiku przez pracownika ("przeczytało 12 z 14").

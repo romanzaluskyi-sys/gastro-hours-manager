@@ -23,6 +23,112 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.55.2",
+    date: "2026-09-26",
+    items: [
+      "Przypisanie: osoby bez stanowiska zwinięte pod strzałką.",
+      "Godziny po zmianie doliczają się tylko wybranej osobie, nie wszystkim kandydatom.",
+    ],
+  },
+  {
+    version: "0.55.1",
+    date: "2026-09-26",
+    items: [
+      "Grafik na telefonie: stały układ paska (tydzień na górze, pod nim Podgląd / Edycja), bez widoku Dzień.",
+      "Przypisanie: godziny początku i końca do kliknięcia osobno; osoby bez stanowiska na szaro z „Dopisz do karty”.",
+    ],
+  },
+  {
+    version: "0.55.0",
+    date: "2026-09-26",
+    items: [
+      "Grafik: pasek szkicu i „Opublikuj · N”, kafelki kosztu i obsady, czerwona etykieta braku otwiera przypisanie z tą luką.",
+      "Przypisanie w panelu z boku: kandydaci od najmniej godzin, norma po zmianie, uwagi Kodeksu przed zapisem.",
+      "Nowa zmiana przerywaną ramką, zmieniona na bursztynowo, usunięta przekreślona; giełda zmian nad siatką.",
+      "Na telefonie: pasek dni z kropkami, widok jednego dnia i „Dodaj zmianę”.",
+    ],
+  },
+  {
+    version: "0.54.0",
+    date: "2026-09-25",
+    items: [
+      "Ustawienia: karta lokalu w sekcjach z podsumowaniem, bloki telefonu jako przełączniki, oś czasu przy regułach wpisu.",
+      "Pasek „Zapisz” tylko po zmianie; archiwizacja lokalu z potwierdzeniem na miejscu.",
+      "Stanowiska edytowane w miejscu, kolor z palety, archiwizacja z „Cofnij”.",
+    ],
+  },
+  {
+    version: "0.53.0",
+    date: "2026-09-25",
+    items: [
+      "Raporty i koszty: najpierw wnioski — kto pracuje ponad miarę, ile godzin bez grafiku, podejrzanie krótkie wpisy.",
+      "„Gotowość do rozliczenia” mówi, co blokuje wysyłkę (brak wynagrodzenia, sprawy do decyzji), a co jest ostrzeżeniem.",
+      "Struktura kosztów: pasek udziałów lokali, zł/h przy lokalu, stanowisku i osobie; urlop w szczegółach jednym wierszem.",
+    ],
+  },
+  {
+    version: "0.52.0",
+    date: "2026-09-25",
+    items: [
+      "Pracownicy: nowy układ — braki w danych widać na liście (filtr „Braki w danych”), tablety osobno.",
+      "Karta: „Uzupełnij” przenosi do brakującego pola, skróty do sekcji przyklejone u góry.",
+      "PIN ukryty do „Pokaż”, ostrzeżenie o łatwym PIN-ie; stawka w tym miesiącu przy umowie o pracę.",
+      "Pasek „Zapisz zmiany” pojawia się tylko po zmianie; urlop można usunąć z „Cofnij”.",
+    ],
+  },
+  {
+    version: "0.51.1",
+    date: "2026-09-25",
+    items: [
+      "Puls bez czerwonego licznika — w Skrzynce stoi w Informacjach, na Pulpicie licznik jest szary.",
+      "Aktywni: „Dopisz wejście” najpierw pyta o godzinę (wg grafiku albo teraz).",
+      "Aktywni: pasek u góry (na zmianie, po czasie, bez wejścia, lokale) filtruje listę.",
+    ],
+  },
+  {
+    version: "0.51.0",
+    date: "2026-09-25",
+    items: [
+      "Aktywni: najpierw „Wymaga uwagi” (bez wejścia, po czasie), potem lokale z paskiem postępu zmiany.",
+      "„Zakończ” pyta o godzinę (teraz albo wg grafiku) i można go cofnąć przez 6 sekund; „Dopisz wejście” z grafiku.",
+      "Skrzynka zamiast Zgłoszeń i Powiadomień: Do zrobienia / Informacje / Archiwum, akcja przy każdej pozycji.",
+      "Powtarzające się przypomnienia łączą się w jedną pozycję (×N); treść zgłoszeń anonimowych ukryta do „Pokaż”.",
+    ],
+  },
+  {
+    version: "0.50.0",
+    date: "2026-09-25",
+    items: [
+      "Rejestr godzin: Grafik obok Faktu w każdym wierszu, różnica od 15 minut, „Poza grafikiem” zamiast różnicy równej całej zmianie.",
+      "Liczby: godziny ponad plan i poniżej planu osobno; grupowanie po dniu albo po pracowniku.",
+      "Przycisk „Bieżący miesiąc”, gdy oglądasz inny.",
+      "Okno wpisu na środku ekranu: godziny z grafiku, −/+ 15 minut, historia wpisu.",
+      "Powód wymagany przy poprawce godzin (widzi go pracownik); usunięcie można cofnąć przez 6 sekund.",
+    ],
+  },
+  {
+    version: "0.49.0",
+    date: "2026-09-25",
+    items: [
+      "Nowy Pulpit: najpierw „Do zrobienia teraz” — zamknięcie wczorajszego dnia i sprawy do decyzji.",
+      "Uzupełniony dzień zamyka się jednym „Zamknij”; prostą korektę godzin zatwierdzasz ✓ z Pulpitu. Obie rzeczy można cofnąć przez 6 sekund.",
+      "Liczby z uczciwym porównaniem: pn–pt z pn–pt, 1–25 z 1–25.",
+      "Teraz na zmianie zaczyna od osób z grafiku, które jeszcze nie odbiły.",
+      "Koszt miesiąca liczy się jak w Raportach i kosztach (z umowy).",
+    ],
+  },
+  {
+    version: "0.48.0",
+    date: "2026-09-25",
+    items: [
+      "Do decyzji: nowy wygląd — filtry po typie, jedna karta dla każdej sprawy, różnica godzin zamiast dwóch tabel.",
+      "Godziny przyciskami −/+ o 15 minut; „Dopisz 10 h” liczy się na żywo.",
+      "„Popraw” w karcie (na telefonie od dołu), z szybkimi godzinami i gotowymi powodami.",
+      "Zaznacz kilka → „Zatwierdź N”. Każdą decyzję można cofnąć przez 6 sekund.",
+      "Podpis „Czeka N dni” i wykrywanie zdublowanych korekt.",
+    ],
+  },
+  {
     version: "0.47.0",
     date: "2026-09-25",
     items: [
