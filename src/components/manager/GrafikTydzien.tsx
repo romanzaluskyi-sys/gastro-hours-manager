@@ -590,7 +590,7 @@ function LokalSection({
         {meta.norma != null ? (
           <>
             <span className="text-[12px] leading-4 text-[#6E6E66] tabular-nums">
-              Etat · tydz. <b className="text-[#171714]">{fmtH(meta.weekHours)}</b> · mies. {hLiczba(meta.hours)}/{hLiczba(meta.norma)} h
+              tydz. <b className="text-[#171714]">{fmtH(meta.weekHours)}</b> · mies. {hLiczba(meta.hours)}/{hLiczba(meta.norma)} h
             </span>
             <span className={`text-[12px] font-extrabold ${ponad ? "text-[#8A5300]" : "text-[#171714]"}`} data-norma-osoby>
               {ponad ? `+${hLiczba(r)} h ponad normą` : r < -0.05 ? `do normy brakuje ${hLiczba(-r)} h` : "równo z normą"}
@@ -605,11 +605,9 @@ function LokalSection({
         ) : (
           <>
             <span className="text-[12px] leading-4 text-[#6E6E66] tabular-nums">
-              {u.typ_umowy === "b2b" ? "B2B" : "Zlecenie"} · tydz. <b className="text-[#171714]">{fmtH(meta.weekHours)}</b> · mies. {hLiczba(meta.hours)} h
+              tydz. <b className="text-[#171714]">{fmtH(meta.weekHours)}</b> · mies. {hLiczba(meta.hours)} h
             </span>
-            <span className="text-[12px] leading-4 text-[#6E6E66]">
-              {meta.koszt != null ? `${zl(meta.koszt)} · ` : ""}bez normy
-            </span>
+            {meta.koszt != null && <span className="text-[12px] leading-4 text-[#6E6E66]">{zl(meta.koszt)}</span>}
           </>
         )}
         {Math.abs(meta.swapDelta) > 0.01 && (

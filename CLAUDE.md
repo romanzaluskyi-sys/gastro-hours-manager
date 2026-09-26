@@ -3424,6 +3424,15 @@ nie widać:
 - **Etykieta braku nad dniem to przycisk**: w Edycji otwiera panel ze
   stanowiskiem i godzinami luki (`ctx.luka`), w Podglądzie mówi, żeby włączyć
   Edycję. Kafelek „Braki obsady" liczy te same odcinki (`problemyObsady`).
+- **Szybkie godziny w panelu są OSOBNO dla początku i końca**
+  (`godzinyZWymagan` + godziny luki), nie parami z wymagań — prośba
+  właściciela z 0.55.1: przy 8:30–21:00 i 10:30–19:00 sensowna bywa 10:30–21:00.
+- **Osoby bez wybranego stanowiska są zawsze na liście** — na końcu, na
+  szaro (`data-bez-stanowiska`), a najniżej ci bez lokalu i stanowiska w
+  karcie. Po wyborze panel proponuje „Dopisz do karty" (`onAddStanowisko`).
+- **Telefon (0.55.1)**: pasek ma trzy stałe rzędy przez `order-*` — okres
+  (krótka etykieta, `fmtZakres`), Podgląd/Edycja + Konfiguracja, Tydzień/
+  Miesiąc. Przycisk „Dzień" jest `hidden md:inline-flex`.
 - **Panel przypisania — kandydaci**: z tego lokalu (`default_lokal` albo
   `allowed_lokale`) i znający stanowisko, od najmniejszej liczby godzin w
   miesiącu; potem inni lokale z tym stanowiskiem; reszta pod „Pokaż

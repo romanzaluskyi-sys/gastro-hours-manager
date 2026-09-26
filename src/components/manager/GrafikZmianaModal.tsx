@@ -24,6 +24,7 @@ import {
   trimTime,
   timeToMin,
   defaultHoursForStanowisko,
+  godzinyZWymagan,
   getRulesForDate,
   knowsStanowisko,
   checkDayCoverage,
@@ -119,7 +120,6 @@ export default function GrafikZmianaModal({
   const [end, setEnd] = useState(trimTime(ctx.shift?.end_time) || ctx.luka?.to || "");
   const [saving, setSaving] = useState(false);
   const [dopisywanie, setDopisywanie] = useState(false);
-  const [pokazWszystkich, setPokazWszystkich] = useState(false);
   const [wolneForm, setWolneForm] = useState(null);
   // Godziny ruszone ręcznie nie są nadpisywane przy zmianie stanowiska.
   const [godzinyRuszone, setGodzinyRuszone] = useState(edycja || !!ctx.luka);
@@ -151,16 +151,15 @@ export default function GrafikZmianaModal({
     stanowiskaLokalu.push({ name: stanowisko, lokal_name: lokal });
   }
 
-  // Szybkie godziny: pary z wymagań obsady tego stanowiska, a na początku
-  // luka, z której otwarto panel ("Brak · 14:00–19:00").
-  const presety = [];
-  if (ctx.luka) presety.push({ from: ctx.luka.from, to: ctx.luka.to, luka: true });
-  (rulesForDay || [])
-    .filter((r) => r.stanowisko === stanowisko)
-    .forEach((r) => {
-      const p = { from: trimTime(r.start_time), to: trimTime(r.end_time) };
-      if (!presety.some((x) => x.from === p.from && x.to === p.to)) presety.push(p);
-    });
+  // Szybkie godziny OSOBNO dla początku i końca (prośba właściciela, tak jak
+  // przed 0.55.0): przy wymaganiach 08:30–21:00 i 10:30–19:00 da się kliknąć
+  // start 10:30 i koniec 21:00, bo te godziny się nie parują. Dochodzą godziny
+  // luki, z której otwarto panel.
+  const propozycje = godzinyZWymagan(rulesForDay, stanowisko);
+  const posortuj = (lista) =>
+    [...new Set(lista.filter(Boolean))].sort((a, b) => (timeToMin(a) ?? 0) - (timeToMin(b) ?? 0));
+  const poczatki = posortuj([ctx.luka?.from, ...propozycje.poczatki]);
+  const konce = posortuj([ctx.luka?.to, ...propozycje.konce]);
 
   const dlugoscMin =
     start && end ? shiftLengthMin({ start_time: start, end_time: end }) : 0;
@@ -240,7 +239,19 @@ export default function GrafikZmianaModal({
   const sortuj = (a, b) => (a.przeszkoda ? 1 : 0) - (b.przeszkoda ? 1 : 0) || a.godziny - b.godziny;
   const lokalni = lista.filter((k) => zTegoLokalu(k.u) && (umie(k.u) || zawsze(k.u))).sort(sortuj);
   const obcy = lista.filter((k) => !zTegoLokalu(k.u) && umie(k.u) && !zawsze(k.u)).sort(sortuj);
-  const reszta = lista.filter((k) => !lokalni.includes(k) && !obcy.includes(k)).sort(sortuj);
+  // Osoby BEZ tego stanowiska też są na liście — na końcu i na szaro, a po
+  // wyborze panel proponuje dopisać stanowisko do karty. Na samym końcu ci,
+  // którzy nie mają w karcie ani lokalu, ani stanowiska (konto założone,
+  // karta nieuzupełniona).
+  const nieuzupelniona = (u) => (!u.default_lokal && !u.allowed_lokale ? 1 : 0) + (!u.default_stanowisko ? 1 : 0);
+  const reszta = lista
+    .filter((k) => !lokalni.includes(k) && !obcy.includes(k))
+    .sort(
+      (a, b) =>
+        (a.przeszkoda ? 1 : 0) - (b.przeszkoda ? 1 : 0) ||
+        nieuzupelniona(a.u) - nieuzupelniona(b.u) ||
+        a.godziny - b.godziny
+    );
 
   // --- skutek ---
   const planBez = (planShifts || []).filter((s) => String(s.id) !== String(ctx.shift?.id));
@@ -303,9 +314,10 @@ export default function GrafikZmianaModal({
     const uw = przeszkoda ? [] : uwagiDla(u);
     const bad = uw.some((x) => x.ton === "bad");
     const on = String(u.id) === String(userId);
+    const bezStanowiska = !!stanowisko && !umie(u);
     return (
+      <React.Fragment key={u.id}>
       <button
-        key={u.id}
         type="button"
         disabled={!!przeszkoda}
         onClick={() => setUserId(u.id)}
@@ -314,9 +326,12 @@ export default function GrafikZmianaModal({
             ? "bg-[#171714] border-[#171714] text-white"
             : przeszkoda
             ? "border-dashed border-[#DEDCD4] opacity-50 cursor-not-allowed"
+            : bezStanowiska
+            ? "border-dashed border-[#DEDCD4] bg-[#F6F5F1] opacity-60 hover:opacity-100 hover:border-[#171714]"
             : "border-[#DEDCD4] bg-white hover:border-[#171714]"
         }`}
         data-kandydat={u.name}
+        data-bez-stanowiska={bezStanowiska ? "1" : undefined}
         aria-pressed={on}
       >
         <span
@@ -331,16 +346,16 @@ export default function GrafikZmianaModal({
           <span className={`block text-[12px] leading-4 truncate ${on ? "text-white/80" : "text-[#6E6E66]"}`}>
             {przeszkoda
               ? przeszkoda
-              : `${!zTegoLokalu(u) ? `${u.default_lokal || "inny lokal"} · ` : ""}${
-                  umie(u) ? u.default_stanowisko || "bez stanowiska" : `nie ma „${stanowisko}”`
-                }`}
+              : bezStanowiska
+              ? `nie ma „${stanowisko}” w karcie${!u.default_lokal && !u.allowed_lokale ? " · bez lokalu" : ""}`
+              : `${!zTegoLokalu(u) ? `${u.default_lokal || "bez lokalu"} · ` : ""}${u.default_stanowisko || "bez stanowiska"}`}
           </span>
         </span>
         <span className={`text-[12px] font-extrabold text-right tabular-nums ${!on && n.ponad > 0 ? "text-[#8A5300]" : ""}`}>
           {n.norma != null ? `${hLiczba(n.po)}/${hLiczba(n.norma)} h` : `${hLiczba(n.po)} h`}
-          <span className={`block font-medium ${on ? "text-white/80" : "text-[#6E6E66]"}`}>
-            {n.norma != null ? n.tekst : "zlecenie · bez normy"}
-          </span>
+          {n.norma != null && (
+            <span className={`block font-medium ${on ? "text-white/80" : "text-[#6E6E66]"}`}>{n.tekst}</span>
+          )}
           {uw.length > 0 && (
             <span
               className={`inline-flex items-center gap-1 mt-0.5 text-[11px] ${
@@ -352,6 +367,27 @@ export default function GrafikZmianaModal({
           )}
         </span>
       </button>
+      {on && bezStanowiska && onAddStanowisko && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border-[2px] border-[#8A5300] bg-[#FDF0D8] px-3 py-2 text-[13px] text-[#8A5300] font-semibold" data-dopisz-stanowisko>
+          <AlertTriangle size={15} className="flex-shrink-0" />
+          <span className="flex-1 min-w-[160px]">
+            {u.name} nie ma w karcie stanowiska „{stanowisko}”. Możesz przypisać mimo to albo od razu je dopisać.
+          </span>
+          <button
+            type="button"
+            disabled={dopisywanie}
+            onClick={async () => {
+              setDopisywanie(true);
+              await onAddStanowisko(u, stanowisko);
+              setDopisywanie(false);
+            }}
+            className="inline-flex items-center gap-1 h-9 px-3 rounded-lg border-[2px] border-[#8A5300] bg-white font-bold disabled:opacity-50"
+          >
+            <Plus size={14} /> Dopisz do karty
+          </button>
+        </div>
+      )}
+      </React.Fragment>
     );
   };
 
@@ -457,49 +493,50 @@ export default function GrafikZmianaModal({
 
           <div className="flex flex-col gap-1.5">
             <span className={etykietaCls}>Godziny</span>
-            <div className="grid grid-cols-2 gap-2">
-              <PoleCzasu
-                value={start}
-                onChange={(v) => {
-                  setStart(v);
-                  setGodzinyRuszone(true);
-                }}
-                aria="Od"
-                szerokie
-              />
-              <PoleCzasu
-                value={end}
-                onChange={(v) => {
-                  setEnd(v);
-                  setGodzinyRuszone(true);
-                }}
-                aria="Do"
-                szerokie
-              />
-            </div>
-            {presety.length > 0 && (
-              <div className="flex gap-1.5 flex-wrap">
-                {presety.map((p) => (
-                  <button
-                    key={`${p.from}-${p.to}-${p.luka ? "l" : ""}`}
-                    type="button"
-                    onClick={() => {
-                      setStart(p.from);
-                      setEnd(p.to);
+            <div className="grid grid-cols-2 gap-2 items-start">
+              {[
+                ["Od", start, setStart, poczatki, "poczatek"],
+                ["Do", end, setEnd, konce, "koniec"],
+              ].map(([aria, wartosc, ustaw, opcje, klucz]) => (
+                <div key={klucz} className="flex flex-col gap-1.5">
+                  <PoleCzasu
+                    value={wartosc}
+                    onChange={(v) => {
+                      ustaw(v);
                       setGodzinyRuszone(true);
                     }}
-                    className={chipCls(start === p.from && end === p.to)}
-                    data-preset-godzin
-                  >
-                    {p.luka ? "Brak · " : ""}
-                    {p.from}–{p.to}
-                  </button>
-                ))}
-              </div>
-            )}
+                    aria={aria}
+                    szerokie
+                  />
+                  {opcje.length > 0 && (
+                    <div className="flex gap-1.5 flex-wrap">
+                      {opcje.map((g) => (
+                        <button
+                          key={g}
+                          type="button"
+                          onClick={() => {
+                            ustaw(g);
+                            setGodzinyRuszone(true);
+                          }}
+                          className={`${chipCls(wartosc === g)} tabular-nums`}
+                          data-godzina-szybka={`${klucz}|${g}`}
+                          title={
+                            ctx.luka && g === (klucz === "poczatek" ? ctx.luka.from : ctx.luka.to)
+                              ? "Godzina luki, z której otwarto panel"
+                              : "Godzina z wymagań obsady na ten dzień"
+                          }
+                        >
+                          {g}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
             <span className="text-[13px] text-[#6E6E66]">
-              {presety.length > 0
-                ? "Szybkie godziny pochodzą z wymagań obsady na ten dzień."
+              {poczatki.length > 0
+                ? "Szybkie godziny pochodzą z wymagań obsady na ten dzień — początek i koniec wybierasz osobno."
                 : "Brak wymagań obsady dla tego stanowiska w tym dniu — wpisz godziny ręcznie."}
               {start && end && timeToMin(end) <= timeToMin(start) ? " Koniec przed początkiem — zmiana przez północ." : ""}
             </span>
@@ -554,15 +591,11 @@ export default function GrafikZmianaModal({
             )
           )}
           {reszta.length > 0 && (
-            <div className="flex flex-col gap-1.5">
-              <button
-                type="button"
-                onClick={() => setPokazWszystkich((v) => !v)}
-                className="self-start text-sm font-bold underline underline-offset-[3px] text-[#6E6E66] hover:text-[#171714]"
-              >
-                {pokazWszystkich ? "Ukryj pozostałych" : `Pokaż pozostałych (${reszta.length}) — bez tego stanowiska`}
-              </button>
-              {pokazWszystkich && reszta.map((k) => kandydatRzad(k))}
+            <div className="flex flex-col gap-1.5" data-kandydaci-bez-stanowiska>
+              <span className={etykietaCls}>
+                {stanowisko ? `Bez stanowiska „${stanowisko}” · po wyborze dopiszesz je do karty` : "Pozostali"}
+              </span>
+              {reszta.map((k) => kandydatRzad(k))}
             </div>
           )}
 

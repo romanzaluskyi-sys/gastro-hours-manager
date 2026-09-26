@@ -23,6 +23,14 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.55.1",
+    date: "2026-09-26",
+    items: [
+      "Grafik na telefonie: stały układ paska (tydzień na górze, pod nim Podgląd / Edycja), bez widoku Dzień.",
+      "Przypisanie: godziny początku i końca do kliknięcia osobno; osoby bez stanowiska na szaro z „Dopisz do karty”.",
+    ],
+  },
+  {
     version: "0.55.0",
     date: "2026-09-26",
     items: [

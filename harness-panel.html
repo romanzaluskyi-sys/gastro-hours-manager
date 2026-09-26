@@ -1370,12 +1370,26 @@ const poprzedniMiesiac = (h) => {
           await czekaj(300);
           const panel = () => document.querySelector("#app [data-panel-zmiany]");
           sprawdz("klik w lukę otwiera panel z jej godzinami i stanowiskiem",
-            !!panel() && /Brak · /.test(panel().textContent) &&
+            !!panel() && !!panel().querySelector(`[data-godzina-szybka="poczatek|${odLuki.slice(0, 5)}"]`) &&
               panel().querySelector(`[data-stanowisko-panelu="${stLuki}"]`).className.includes("bg-[#171714]"),
             panel() ? panel().textContent.slice(0, 160) : "brak panelu");
-          const kandydat = [...panel().querySelectorAll("[data-kandydat]")].find((b) => !b.disabled);
+          const kandydat = [...panel().querySelectorAll("[data-kandydat]")].find((b) => !b.disabled && !b.hasAttribute("data-bez-stanowiska"));
           sprawdz("panel pokazuje kandydatów z godzinami w miesiącu", !!kandydat && /h/.test(kandydat.textContent));
-          kandydat.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          const szybkie = (k) => [...panel().querySelectorAll(`[data-godzina-szybka^="${k}|"]`)];
+          sprawdz("szybkie godziny osobno dla początku i końca (z luką)",
+            szybkie("poczatek").some((b) => b.textContent === odLuki.slice(0, 5)) &&
+              szybkie("koniec").some((b) => b.textContent === doLuki.slice(0, 5)),
+            szybkie("poczatek").map((b) => b.textContent).join(",") + " / " + szybkie("koniec").map((b) => b.textContent).join(","));
+          const szary = panel().querySelector("[data-bez-stanowiska]:not([disabled])");
+          sprawdz("osoby bez tego stanowiska są na liście, na szaro, na końcu", !!szary &&
+            [...panel().querySelectorAll("[data-kandydat]")].indexOf(szary) >
+              [...panel().querySelectorAll("[data-kandydat]")].indexOf(kandydat));
+          szary.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          await czekaj(200);
+          sprawdz("wybór osoby bez stanowiska proponuje dopisanie go do karty",
+            !!panel().querySelector("[data-dopisz-stanowisko]"));
+          panel().querySelector(`[data-kandydat="${kandydat.getAttribute("data-kandydat")}"]`)
+            .dispatchEvent(new MouseEvent("click", { bubbles: true }));
           await czekaj(200);
           sprawdz("wybór osoby pokazuje skutek dla obsady i uwagi",
             /Pokryje/.test(panel().querySelector("[data-skutek]").textContent) && !!panel().querySelector("[data-uwagi-zmiany]"),

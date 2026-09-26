@@ -28,11 +28,16 @@ const segCls = (on) =>
   `inline-flex items-center gap-1.5 h-full px-3.5 font-bold text-[15px] ${on ? "bg-[#171714] text-white" : "bg-white text-[#171714] hover:bg-[#F6F5F1]"}`;
 const zmianOdm = (n) => (n === 1 ? "zmiana" : n % 10 >= 2 && n % 10 <= 4 && !(n % 100 >= 12 && n % 100 <= 14) ? "zmiany" : "zmian");
 
+// Krótko ("21–27 wrz", "29 wrz – 5 paź"), żeby wybór tygodnia miał stałą
+// szerokość i na telefonie nie przeskakiwał do drugiej linii zależnie od
+// tego, jak długo nazywają się miesiące.
+const MIES_KR = ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"];
 const fmtZakres = (od, doDnia) => {
   const a = new Date(od + "T00:00:00");
   const b = new Date(doDnia + "T00:00:00");
-  const o = { day: "numeric", month: "short" };
-  return `${a.toLocaleDateString("pl-PL", o)} – ${b.toLocaleDateString("pl-PL", o)}`;
+  return a.getMonth() === b.getMonth()
+    ? `${a.getDate()}–${b.getDate()} ${MIES_KR[b.getMonth()]}`
+    : `${a.getDate()} ${MIES_KR[a.getMonth()]} – ${b.getDate()} ${MIES_KR[b.getMonth()]}`;
 };
 
 export default function Grafik({
@@ -158,7 +163,9 @@ export default function Grafik({
   const ustawKotwice = view === "dzien" ? setDayStart : setWeekStart;
   const etykietaOkresu =
     view === "dzien"
-      ? new Date(dayStart + "T00:00:00").toLocaleDateString("pl-PL", { weekday: "short", day: "numeric", month: "long" })
+      ? `${["nd", "pn", "wt", "śr", "czw", "pt", "sob"][new Date(dayStart + "T00:00:00").getDay()]} ${Number(dayStart.slice(8))} ${
+          MIES_KR[Number(dayStart.slice(5, 7)) - 1]
+        }`
       : fmtZakres(weekStart, weekEnd);
 
   if (!lokalKonfiguracji) {
@@ -171,16 +178,20 @@ export default function Grafik({
 
   return (
     <div className="flex flex-col gap-3.5 max-w-[1600px] mx-auto" data-grafik>
-      {/* Rząd 1: widok, okres, tryb, konfiguracja, publikacja */}
+      {/* Rząd 1: widok, okres, tryb, konfiguracja, publikacja. Na telefonie
+          trzy STAŁE rzędy (kolejność przez `order-*`): okres na górze, pod nim
+          Podgląd/Edycja z Konfiguracją, na końcu Tydzień/Miesiąc — przy
+          jednym zawijanym rzędzie przełącznik trybu raz był widać, a raz
+          spadał poza ekran, zależnie od długości nazwy tygodnia. */}
       <div className="flex flex-wrap items-center gap-2.5">
         <h2 className="hidden md:block m-0 mr-1.5 font-['Archivo'] text-[30px] leading-9 font-extrabold text-[#171714]">Grafik</h2>
-        <div className="inline-flex h-11 border-[2px] border-[#171714] rounded-lg overflow-hidden">
+        <div className="order-3 md:order-none w-full md:w-auto inline-flex h-11 border-[2px] border-[#171714] rounded-lg overflow-hidden [&>button]:flex-1 [&>button]:justify-center md:[&>button]:flex-none">
           <button type="button" className={segCls(view === "tydzien")} onClick={() => setView("tydzien")} data-widok-grafiku="tydzien">
             Tydzień
           </button>
           <button
             type="button"
-            className={segCls(view === "dzien")}
+            className={`${segCls(view === "dzien")} !hidden md:!inline-flex`}
             onClick={() => {
               if (view === "tydzien" && (dayStart < weekStart || dayStart > weekEnd)) setDayStart(weekStart);
               setView("dzien");
@@ -202,8 +213,8 @@ export default function Grafik({
           </button>
         </div>
         {siatka && (
-          <div className="flex items-center gap-2">
-            <div className="inline-flex items-center h-11 border-[2px] border-[#171714] rounded-lg bg-white">
+          <div className="order-1 md:order-none w-full md:w-auto flex items-center gap-2">
+            <div className="flex-1 md:flex-none inline-flex items-center h-11 border-[2px] border-[#171714] rounded-lg bg-white">
               <button
                 type="button"
                 onClick={() => ustawKotwice(addDaysYMD(kotwica, -krok))}
@@ -212,7 +223,7 @@ export default function Grafik({
               >
                 <ChevronLeft size={18} />
               </button>
-              <span className="px-2 min-w-[140px] md:min-w-[150px] text-center font-extrabold text-[15px]" data-okres-grafiku>
+              <span className="flex-1 md:flex-none px-2 md:min-w-[150px] text-center font-extrabold text-[15px] whitespace-nowrap" data-okres-grafiku>
                 {etykietaOkresu}
               </span>
               <button
@@ -227,7 +238,7 @@ export default function Grafik({
             <button
               type="button"
               onClick={() => (view === "dzien" ? setDayStart(dzisYMD) : setWeekStart(mondayOf(dzisYMD)))}
-              className="text-sm font-bold underline underline-offset-[3px] hover:text-[#DE3A22]"
+              className="px-1 text-sm font-bold underline underline-offset-[3px] hover:text-[#DE3A22]"
             >
               Dziś
             </button>
@@ -235,7 +246,7 @@ export default function Grafik({
         )}
         <span className="hidden md:block flex-1" />
         {siatka && (
-          <div className="inline-flex h-11 border-[2px] border-[#171714] rounded-lg overflow-hidden flex-1 md:flex-none">
+          <div className="order-2 md:order-none inline-flex h-11 border-[2px] border-[#171714] rounded-lg overflow-hidden flex-1 md:flex-none">
             <button
               type="button"
               className={`${segCls(mode === "podglad")} flex-1 justify-center`}
@@ -257,7 +268,7 @@ export default function Grafik({
         <button
           type="button"
           onClick={() => setView(view === "konfiguracja" ? "tydzien" : "konfiguracja")}
-          className={`${btnObrysCls} ${view === "konfiguracja" ? "!bg-[#171714] !text-white" : ""}`}
+          className={`order-2 md:order-none ${btnObrysCls} ${view === "konfiguracja" ? "!bg-[#171714] !text-white" : ""}`}
           title="Konfiguracja: wymagania obsady, godziny otwarcia, wyjątki, budżet"
         >
           <SlidersHorizontal size={17} /> <span className="hidden 2xl:inline">Konfiguracja</span>
@@ -277,7 +288,7 @@ export default function Grafik({
           <select
             value={lokalKonfiguracji}
             onChange={(e) => setLokalOverride(e.target.value)}
-            className="h-11 px-3 border-[2px] border-[#171714] rounded-lg bg-white font-bold text-sm"
+            className="order-2 md:order-none flex-1 md:flex-none h-11 px-3 border-[2px] border-[#171714] rounded-lg bg-white font-bold text-sm"
           >
             {lokaleNames.map((name) => (
               <option key={name} value={name}>

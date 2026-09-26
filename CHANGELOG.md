@@ -5,6 +5,21 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.55.1 — 2026-09-26
+
+- **Grafik na telefonie**: pasek ma zawsze te same trzy rzędy — na górze
+  wybór tygodnia (krótko, np. „21–27 wrz"), pod nim Podgląd / Edycja i
+  Konfiguracja, niżej Tydzień / Miesiąc. Wcześniej przełącznik trybu raz był
+  widać, a raz spadał niżej, zależnie od tygodnia. Widoku „Dzień" na telefonie
+  już nie ma — tydzień i tak pokazuje jeden dzień naraz.
+- **Przypisanie zmiany**: szybkie godziny znowu osobno dla początku i końca —
+  przy wymaganiach 8:30–21:00 i 10:30–19:00 można kliknąć start 10:30 i koniec
+  21:00.
+- **Osoby bez wybranego stanowiska** są na liście kandydatów zawsze — na
+  końcu i na szaro (osoby bez lokalu i stanowiska w karcie na samym dole). Po
+  wyborze panel ostrzega i proponuje „Dopisz do karty".
+- Pod nazwiskiem w siatce nie ma już „Etat / Zlecenie" ani „bez normy".
+
 ## 0.55.0 — 2026-09-26
 
 - **Nowy wygląd Grafiku** według makiety:
