@@ -64,6 +64,7 @@ wykonalne.
 | `0035` | AWARIA: polityka wołała funkcję raz na wiersz — timeout na `notifications`, puste wiadomości na tablecie | nowe |
 | `0036` | rejestracja godzin na lokalu: `tryb_wpisu`, `start_wstecz_min`, `koniec_wstecz_min` — PRZED deployem 0.45.0 | nowe |
 | `0037` | tablet widzi korekty godzin swoich ludzi (`issues`, rola `kiosk`, tylko `type='correction'`) | nowe |
+| `0038` | „Moje zadania" kierownika (`zadania_moje`, tylko kierownik i tylko swoje) + przeniesienie zadań ze zgłoszeń z `tasks` — PRZED deployem 0.56.0 | nowe |
 
 ⚠️ Numer `0036` należał wcześniej do migracji "InitPlan" (ponowne zawężenie
 `notifications` i 15 innych tabel). Nigdy nie weszła na żadną bazę — padła

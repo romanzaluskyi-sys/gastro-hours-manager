@@ -35,6 +35,7 @@ import { zmianyBezOdbicia } from "../../utils/odbicia";
 import { czekaNaKoniecOdKierownika } from "../../utils/wpisy";
 import { pad, odmiana } from "../../utils/czas";
 import { useOdlozoneDecyzje, PasekCofnij } from "./odlozoneDecyzje";
+import { maZadanieZe } from "../../utils/mojeZadania";
 
 // Powiadomienia starsze niż tyle dni idą z Informacji do Archiwum.
 const DNI_W_INFORMACJACH = 14;
@@ -96,6 +97,7 @@ export const zbierzSprawy = ({
   issues = [],
   users = [],
   tasks = [],
+  zadaniaMoje = [],
   absences = [],
   notifications = [],
   shifts = [],
@@ -159,7 +161,7 @@ export const zbierzSprawy = ({
       // Anonimowe nie mają lokalu — widzi je każdy kierownik (CLAUDE.md, 0033).
       if (i.user_id && !lokalOk(lokal)) return;
       const anonim = i.is_anonymous || !i.user_id;
-      const zadanie = tasks.some((t) => t.source_issue_id === i.id);
+      const zadanie = maZadanieZe(zadaniaMoje, tasks, i.id);
       const otwarte = i.status === "nowe";
       sprawy.push({
         klucz: `zgl:${i.id}`,

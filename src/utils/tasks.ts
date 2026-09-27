@@ -276,6 +276,19 @@ export const toggleTaskCompletion = async ({
   return { created };
 };
 
+// "Cofnij" po odznaczeniu (panel kierownika, 0.56.0) — ten sam wiersz wraca z
+// tym samym autorem i godziną. Tylko dla wykonań BEZ pomiaru; tych z pomiarem
+// i tak nie da się odznaczyć.
+export const przywrocWykonanie = (completion) =>
+  api.post("task_completions", {
+    task_id: completion.task_id,
+    date: completion.date,
+    user_id: completion.user_id || null,
+    user_name: completion.user_name || null,
+    shift_id: completion.shift_id || null,
+    completed_at: completion.completed_at || new Date().toISOString(),
+  });
+
 // Zadanie z polami: najpierw wpis do dziennika, POTEM wykonanie. Kolejność jest
 // celowa — gdyby wpis padł po odhaczeniu, zostałaby galka "zrobione" bez
 // pomiaru, czyli dokładnie to, przed czym ten moduł ma chronić.

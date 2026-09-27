@@ -614,6 +614,10 @@ src/
                                   duplikuj jej w ZadaniaISprzatanie.tsx,
                                   ZadaniaKonfiguracja.tsx ani w
                                   employeeSessionShared.tsx.
+    mojeZadania.ts              "Moje zadania" kierownika (tabela
+                                  zadania_moje, migracja 0038) — JEDYNE
+                                  miejsce, które do niej pisze (Zadania,
+                                  Skrzynka, Puls)
     pola.ts                     definicja PÓL do wpisania (parsePola,
                                   polaSzablonu, pozaNormaPola, opisNormy,
                                   slugKlucza) — wspólna dla dziennika i dla
@@ -688,13 +692,12 @@ src/
                                     kierownika" niżej po szczegóły nawigacji
       WBudowie.tsx                  wspólny placeholder dla zakładek bez
                                     jeszcze własnej treści (obecnie: Grafik)
-      ZadaniaISprzatanie.tsx        zakładka Zadania, widok dnia: karty
-                                    bloków z obsadą z grafiku, postępem i
-                                    pomiarami — patrz "Zadania — bloki i
+      ZadaniaISprzatanie.tsx        zakładka Zadania (0.56.0): "Dziś w
+                                    lokalach", "Moje zadania", "Bloki i
+                                    zadania" — patrz "Zadania — bloki i
                                     pomiary" niżej
-      ZadaniaKonfiguracja.tsx       ustawienia bloków i zadań (przycisk
-                                    "Konfiguracja", ten sam układ co
-                                    Konfiguracja w Grafiku i w Pulsie)
+      ZadaniaKonfiguracja.tsx       "Bloki i zadania": mapa tygodnia, karty
+                                    bloków, edycja w panelu z boku
       Grafik.tsx                    host zakładki Grafik: tydzień/miesiąc/
                                     konfiguracja, tryb Podgląd/Edycja,
                                     przycisk publikacji
@@ -1619,13 +1622,51 @@ Podział ról: **Zadania = zbieranie w ciągu zmiany. Puls = zapis dnia.**
 
 ### Panel kierownika
 
-**Widok dnia** (`ZadaniaISprzatanie.tsx`) — kafelki (wykonane / bloki / po
-terminie / pomiary poza normą), pigułki pory + przełącznik „Zadania kierownika",
-a pod nimi karty bloków: nazwa, pora, dni, lokal, stanowiska, obsada z grafiku,
-pasek postępu i pozycje z wartościami pomiaru oraz „Popraw".
+⚠️ **Układ z makiety właściciela (0.56.0, TasksToday / TasksLocation /
+TasksMine / TasksConfig / TasksMobile).** Trzy widoki pod pigułkami: „Dziś w
+lokalach", „Moje zadania", „Bloki i zadania" (ta ostatnia tylko od `md` —
+makieta zostawia konfigurację na desktopie). Rzeczy, których nie widać:
+- **Lokal wybiera górny pasek** (`selectedLokal`). Przy „Cała sieć" — karta na
+  lokal; kliknięcie karty woła `onWybierzLokal` (= `setSelectedLokal`), więc
+  pasek i widok nie rozjeżdżają się. Kierownik jednego lokalu widzi od razu
+  checklisty.
+- **Blok kierownika jest widoczny zawsze** (`forManager: null`) i ma własny
+  filtr „Kierownika". Do 0.55 był domyślnie ukryty za przełącznikiem.
+- **„Po terminie" tylko dla dziś i dni minionych.** Do 0.55 przyszły dzień też
+  świecił na czerwono (`!isToday || …`).
+- **Odhaczenie za zespół zapisuje OD RAZU** i daje 6 s „Cofnij" (kasuje świeży
+  wiersz; po odznaczeniu `przywrocWykonanie` w utils/tasks.ts przywraca ten
+  sam wiersz z autorem i godziną). Świadomie NIE `useOdlozoneDecyzje`: postęp
+  bloku ma się zmienić w chwili dotknięcia.
+- **Pomiar wpisuje się W WIERSZU** (pole z jednostką, Enter zapisuje), przecinek
+  zamieniany na kropkę. Poprawka dalej przez `ModalWpisu` z powodem.
+- **„Do moich zadań"** przy pomiarze poza normą zakłada sprawę `zrodlo='puls'`,
+  `zrodlo_id` = id wpisu — po tym przycisk zmienia się w „w Moich zadaniach".
+- **Archiwizacja bloku / zadania = 6 s „Cofnij"** (`useOdlozoneDecyzje`, klucze
+  `blok:<id>` / `zad:<id>`), bez `window.confirm`.
+- **„Kiedy" zadania to jedna z trzech dróg**: jak blok / wybrane dni / co N
+  dni. Zadanie z dniami I cyklem (baza pozwala) otwiera się jako „Co N dni" z
+  podpisem, że zapis zostawi sam cykl.
 
-**Konfiguracja** (`ZadaniaKonfiguracja.tsx`, przycisk „Konfiguracja" — ten sam
-układ co Konfiguracja w Grafiku i w Pulsie) — bloki z zadaniami, kolejność
+**„Moje zadania" (`utils/mojeZadania.ts`, tabela `zadania_moje`, 0038)** —
+lista spraw kierownika, NIE checklista: jednorazowa, z terminem, zrobiona albo
+nie. Źródło: `wlasne` / `zgloszenie` (Skrzynka, „Utwórz zadanie") / `puls`.
+- ⚠️ **Osobna tabela, bo `tasks` czyta tablet** (`pracuje_w_lokalu`). Polityka:
+  tylko kierownik i tylko swoje (`wlasciciel_id`) albo wspólne (NULL).
+- ⚠️ **Czyta ją ManagerDashboard** (useEffect), nie App — błąd odczytu (baza
+  bez 0038) daje `mojeBlad` i komunikat w zakładce, reszta działa.
+- „Utwórz zadanie" do 0.55 zakładało wiersz w `tasks` bez bloku, który wracał
+  CODZIENNIE jako „Bez bloku". 0038 przenosi takie wiersze i archiwizuje je w
+  `tasks`. Skrzynka pyta `maZadanieZe` (nowa tabela + stare `source_issue_id`).
+
+**Widok lokalu** (`ZadaniaISprzatanie.tsx`) — kafelki (wykonane / bloki
+zamknięte / po terminie / pomiary poza normą), pigułki pory (tylko niepuste,
+z „Cykliczne" i „Kierownika"), a pod nimi zwijane bloki: nazwa, pora, termin,
+stanowiska, obsada z grafiku, pasek postępu i pozycje z wartościami pomiaru
+oraz „Popraw".
+
+**Bloki i zadania** (`ZadaniaKonfiguracja.tsx`) — mapa tygodnia, bloki z
+zadaniami, edycja w panelu z boku, kolejność
 strzałkami (w projekcie nie ma biblioteki drag-and-drop i nie dokładaj jej),
 archiwizacja zamiast kasowania. Formularz zadania: tytuł, opis/procedura,
 priorytet, termin, własny cykl, dni tygodnia (z wyłączonymi dniami spoza bloku)
@@ -1941,6 +1982,12 @@ zakresem — wymaga Grafiku, którego nie ma.
   karta dnia nie prosi o nią drugi raz)`.
   ⚠️ `schedule_type`, `day_of_week`, `stanowisko`, `for_manager`, `scope`,
   `owner_label` — kolumny z danymi, których kod NIE czyta. RLS: otwarta polityka, jak reszta.
+- **zadania_moje** — „Moje zadania" kierownika (migracja `0038`, 0.56.0), patrz
+  "Zadania — bloki i pomiary". `id (uuid), wlasciciel_id (uuid, NULL = wspólne),
+  wlasciciel_name, lokal (NULL = cała sieć), tytul, termin (date, NULL = bez
+  terminu), zrodlo ('wlasne'|'zgloszenie'|'puls'), zrodlo_id (text), zrodlo_opis
+  (gotowy podpis), zrobione_at, zrobione_przez, archived, created_at`. RLS:
+  tylko kierownik i tylko swoje/wspólne. Pisze WYŁĄCZNIE `utils/mojeZadania.ts`.
 - **task_completions** — log wykonań zadań, patrz "Zadania — bloki i pomiary"
   wyżej. `id (bigint identity), task_id (text — luźne odwołanie do
   tasks.id, bez FK, ten sam wzorzec co shift_edits), date (date), user_id

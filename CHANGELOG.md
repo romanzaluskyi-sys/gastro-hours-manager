@@ -5,6 +5,31 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.56.0 — 2026-09-27
+
+- **Zadania — nowy wygląd według makiety.** Trzy widoki zamiast listy i osobnej
+  konfiguracji:
+  - **Dziś w lokalach**: przy „Cała sieć" karta na każdy lokal — postęp, stan
+    każdego bloku („2 po terminie", „4/4") i pomiary poza normą. Kliknięcie
+    karty (albo lokalu w górnym pasku) otwiera jego checklisty. Bloki zrobione
+    są zwinięte, filtr pory pokazuje tylko pory, w których coś jest, a blok po
+    terminie ma czerwony pasek.
+  - Kierownik **odhacza za zespół** jednym dotknięciem, z 6 s „Cofnij".
+    **Pomiar wpisuje się w wierszu**, bez okienka; wynik poza normą jest
+    czerwony i ma przycisk „Do moich zadań".
+  - **Moje zadania** — nowa lista spraw kierownika: szybkie dodanie (lokal,
+    dziś / jutro / w tym tygodniu), grupy Zaległe · Dziś · Później, „Na jutro"
+    jednym kliknięciem, zrobione schowane. Trafiają tu też sprawy ze Skrzynki
+    („Utwórz zadanie" przy zgłoszeniu) i pomiary poza normą — każda z podpisem,
+    skąd przyszła.
+  - **Bloki i zadania**: mapa tygodnia (ile zadań każdego dnia), edycja bloku i
+    zadania w panelu z boku, „Kiedy": jak blok / wybrane dni / co N dni, podgląd
+    „Pracownik zobaczy", archiwizacja z „Cofnij".
+- Zadania utworzone wcześniej ze zgłoszeń przechodzą do „Moich zadań" i nie
+  wracają już codziennie jako pozycja checklisty.
+- ⚠️ Wymaga migracji `0038` (tabela `zadania_moje`) — bez niej „Moje zadania"
+  mówią, czego brakuje, a reszta Zadań działa.
+
 ## 0.55.4 — 2026-09-26
 
 - **Rozpoczęcie i zakończenie zmiany (tablet i telefon pracownika)**: dużą

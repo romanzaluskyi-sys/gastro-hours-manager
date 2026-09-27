@@ -102,13 +102,19 @@ export function PasekCofnij({ opis, onCofnij }) {
         <Check size={15} strokeWidth={3} />
       </span>
       <span className="min-w-0">{opis}</span>
-      <button
-        type="button"
-        onClick={onCofnij}
-        className="ml-auto px-2.5 py-2 font-extrabold underline underline-offset-[3px]"
-      >
-        Cofnij
-      </button>
+      {/* Bez onCofnij sam komunikat ("Zapisano pomiar") — przycisk, który
+          niczego nie cofa, uczyłby, że "Cofnij" nie działa. */}
+      {onCofnij ? (
+        <button
+          type="button"
+          onClick={onCofnij}
+          className="ml-auto px-2.5 py-2 font-extrabold underline underline-offset-[3px]"
+        >
+          Cofnij
+        </button>
+      ) : (
+        <span className="ml-auto w-2" />
+      )}
     </div>
   );
 }
