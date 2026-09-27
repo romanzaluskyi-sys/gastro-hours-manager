@@ -1507,6 +1507,8 @@ const ManagerDashboard = ({
             showMsg={showMsg}
             initialLokal={pulsCel && pulsCel.lokal}
             initialDate={pulsCel && pulsCel.date}
+            zadaniaMoje={zadaniaMoje}
+            setZadaniaMoje={setZadaniaMoje}
           />
         )}
 

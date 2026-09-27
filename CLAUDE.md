@@ -705,6 +705,8 @@ src/
       GrafikMiesiac.tsx             kalendarz miesiąca + druk A4 poziomo
       ModalWpisu.tsx                jeden wpis dziennika — wspólny dla karty dnia
                                     i ekranu kierownika zmiany, NIE duplikuj
+      pulsWspolne.tsx               klocki zakładki Puls (0.57.0): kafelek, panel
+                                    z krokiem, chip, panel boczny, formaty kwot
       PrzepiszZmianyModal.tsx       co ze zmianami odchodzącego pracownika:
                                     przepisać na następcę albo zdjąć
       GrafikZmianaModal.tsx         PANEL przypisania zmiany (kandydaci, uwagi) +
@@ -1305,6 +1307,36 @@ Zakładka **Puls** w Panelu Kierownika (klucz `tab === "puls"`) — host
 `PulsTydzien.tsx` (raport tygodnia), `PulsSzablony.tsx` (konfiguracja wpisów).
 Cała arytmetyka w [`utils/dziennik.ts`](src/utils/dziennik.ts) — komponenty
 tylko rysują, nie licz nic w JSX.
+
+⚠️ **Układ z makiety właściciela (0.57.0, PulseCard / PulseClosed / PulseDays /
+PulseAnalytics / PulseConfig / PulseMobile).** Zakładki Karta dnia · Dni ·
+Analityka · Konfiguracja (ta ostatnia od `md`). Rzeczy, których nie widać:
+- **Karta dnia to trzy kroki** (utarg → wpisy w wierszu → notatka i tagi), z
+  boku zdarzenia i zespół (grafik vs fakt, `zespolDnia`). **Utarg, paragony,
+  powód, notatka i tagi zapisują się SAME** (po opuszczeniu pola / kliknięciu)
+  i idą KOLEJKĄ (`kolejka` w KartaDnia) — pierwszy zapis zakłada kartę, dwa
+  równoległe założyłyby dwie. Przycisku „Zapisz" nie ma.
+- **„Zamknij dzień" wymaga utargu (0 też jest utargiem) i pyta drugi raz.**
+  Pasek mówi, czego brakuje: utarg i OBOWIĄZKOWE wpisy (`wymagany !== false`).
+- **Odniesieniem utargu jest PLAN z Grafiku** (`celDnia`), a gdy go nie ma —
+  „zwykle" (`prognozaUtargu`). Powody pojawiają się od 10% odchylenia.
+- **Dzień zamknięty = tylko odczyt.** Każda wartość ma „Poprawka" → panel
+  (było / powinno być / powód: chip albo ≥ 3 znaki) → `poprawZamknietyDzien`.
+  Wpis HACCP poprawia się `poprawWpis` z powodem — także w dniu zamkniętym.
+- **Dzień startowy**: wczoraj, jeśli wczoraj coś się działo i nie jest
+  zamknięty; inaczej dziś (makieta zamyka dzień wieczorem, „do 23:59").
+- **Do Moich zadań** (`dodajDoMoich` w Puls.tsx → utils/mojeZadania.ts): pomiar
+  poza normą (zrodlo_id = id wpisu), notatka (`handover:<lokal>:<data>`),
+  zdarzenie z „wymaga prowadzenia".
+- **Dni i Analityka liczą się z `wierszDnia`** — tej samej funkcji. Sygnały,
+  zdarzenia tygodnia, ludzie tygodnia i późne zamknięcie (od 23:00) —
+  `sygnalyDnia`, `zdarzeniaTygodnia`, `ludzieTygodnia`, `pozneZamkniecie` w
+  utils/dziennik.ts. Porównanie z poprzednim tygodniem: te same dni tygodnia.
+- **Formularz zdarzenia to panel boczny**, ale kształt zapisu się nie zmienił —
+  używa go też PulsZmiany na Tablecie.
+- **„Kto zamyka dzień"**: „Na tydzień" = do niedzieli. Kierownicy nie stoją na
+  liście — mogą zawsze.
+- Trafność prognozy pogody przeniesiona z karty dnia na dół Analityki.
 
 **Puls.tsx jest właścicielem danych dziennika** i jedynym miejscem, które je
 odświeża (`odswiez`). Widoki dostają gotowe listy i settery lokalne przez

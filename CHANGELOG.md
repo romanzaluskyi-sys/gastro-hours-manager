@@ -5,6 +5,32 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.57.0 — 2026-09-27
+
+- **Puls — nowy wygląd według makiety.** Zakładki Karta dnia · Dni · Analityka ·
+  Konfiguracja.
+  - **Karta dnia w trzech krokach (~90 s)**: (1) utarg i paragony z od razu
+    policzonym odchyleniem od planu, kosztem pracy i zapasem do celu — przy
+    odchyleniu od 10% pojawiają się powody; (2) **wpisy dnia wpisywane w
+    wierszu**, bez okienka na każdą lodówkę, pogrupowane po porze; (3) notatka
+    dla następnej zmiany i tagi dnia. Utarg, notatka i tagi zapisują się same —
+    przycisku „Zapisz" nie ma.
+  - Z boku **zdarzenia dnia** (formularz w panelu, nie blokuje zamknięcia) i
+    **zespół dnia**: grafik obok faktu, spóźnienia i praca po grafiku.
+  - Pasek na dole mówi, czego brakuje do zamknięcia; **„Zamknij dzień" pyta
+    drugi raz**. Dzień zamknięty jest tylko do odczytu — przy każdej wartości
+    „Poprawka" z powodem, historia poprawek obok.
+  - Pomiar poza normą, notatka i zdarzenie „wymaga prowadzenia" jednym
+    kliknięciem trafiają do **Moich zadań**.
+  - **Dni**: tabela z godziną i osobą zamknięcia, utargiem vs plan, kosztem,
+    godzinami, zadaniami i sygnałami (zdarzenia, poprawki, pomiary, tagi).
+  - **Analityka**: utarg vs plan i te same dni tydzień wcześniej, koszt pracy %,
+    godziny, średni paragon, wykres dzień po dniu, wnioski z akcjami,
+    dyscyplina zamykania, „Co się działo", ludzie (grafik vs fakt), poprzednie
+    tygodnie.
+  - **Konfiguracja**: wpisy dnia pogrupowane po porze z edycją w panelu z boku;
+    „Kto zamyka dzień" — prawo na dziś albo na tydzień, wygasa samo.
+
 ## 0.56.0 — 2026-09-27
 
 - **Zadania — nowy wygląd według makiety.** Trzy widoki zamiast listy i osobnej

@@ -35,7 +35,7 @@ const pokazBlad = (e) => {
 window.addEventListener("error", (ev) => pokazBlad(ev.error || ev.message));
 window.addEventListener("unhandledrejection", (ev) => pokazBlad(ev.reason));
 
-const IKONY = ["Activity", "Repeat", "Coins", "Smartphone", "PieChart", "Search", "EyeOff", "Star", "Tablet", "Inbox", "Square", "Phone", "AlertCircle", "AlertTriangle", "Archive", "ArchiveRestore", "ArrowLeft", "ArrowLeftRight", "ArrowRight", "BarChart3", "Bell", "BookOpen", "Briefcase", "Calendar", "CalendarCheck", "CalendarDays", "CalendarRange", "Check", "CheckCircle", "CheckCircle2", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "ClipboardCheck", "ClipboardList", "ClipboardPlus", "Clock", "Cloud", "Construction", "Copy", "CopyPlus", "Delete", "Download", "Edit2", "Eye", "FileText", "Flag", "HelpCircle", "History", "Home", "Hourglass", "Info", "ListChecks", "Lock", "LogIn", "LogOut", "Mail", "MapPin", "MoreHorizontal", "Palmtree", "Pencil", "Plus", "Printer", "RefreshCw", "RotateCcw", "Save", "Send", "Settings", "SlidersHorizontal", "Thermometer", "Trash2", "User", "UserPlus", "Users", "Wallet", "WifiOff", "X"];
+const IKONY = ["Sparkles", "Tag", "Truck", "Activity", "Repeat", "Coins", "Smartphone", "PieChart", "Search", "EyeOff", "Star", "Tablet", "Inbox", "Square", "Phone", "AlertCircle", "AlertTriangle", "Archive", "ArchiveRestore", "ArrowLeft", "ArrowLeftRight", "ArrowRight", "BarChart3", "Bell", "BookOpen", "Briefcase", "Calendar", "CalendarCheck", "CalendarDays", "CalendarRange", "Check", "CheckCircle", "CheckCircle2", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "ClipboardCheck", "ClipboardList", "ClipboardPlus", "Clock", "Cloud", "Construction", "Copy", "CopyPlus", "Delete", "Download", "Edit2", "Eye", "FileText", "Flag", "HelpCircle", "History", "Home", "Hourglass", "Info", "ListChecks", "Lock", "LogIn", "LogOut", "Mail", "MapPin", "MoreHorizontal", "Palmtree", "Pencil", "Plus", "Printer", "RefreshCw", "RotateCcw", "Save", "Send", "Settings", "SlidersHorizontal", "Thermometer", "Trash2", "User", "UserPlus", "Users", "Wallet", "WifiOff", "X"];
 const stub = (kod) => URL.createObjectURL(new Blob([kod], { type: "text/javascript" }));
 
 // Atrapa Supabase — nic nie leci do sieci, każdy zapis wraca z wymyślonym id.
@@ -276,6 +276,12 @@ const szablonyStartowe = [
   { id: "sz1", lokal: "Bułka i Jacek", klucz: "lodowka", nazwa: "Lodówka kuchnia",
     typ: "temperatura", pora: "poranne", wymagany: true, kolejnosc: 0, archived: false,
     pola: [{ klucz: "temp", label: "Temperatura", typ: "number", jednostka: "°C", min: 0, max: 5 }] },
+  // Nieobowiązkowa pozycja bez wpisu — na niej karta dnia (0.57.0) sprawdza
+  // wpis w wierszu. `wymagany: false`, więc Pulpit ("komplet wymaganych
+  // wpisów") jej nie liczy.
+  { id: "sz2", lokal: "Bułka i Jacek", klucz: "dostawa", nazwa: "Przyjęcie dostawy",
+    typ: "dostawa", pora: "ogolne", wymagany: false, kolejnosc: 1, archived: false,
+    pola: [{ klucz: "dostawca", label: "Dostawca", typ: "text" }] },
 ];
 // Pomiar już zapisany i POZA NORMĄ — sprawdza czerwony alert w wierszu zadania,
 // przycisk "Popraw" i sekcję "Z checklisty" na karcie dnia.
@@ -343,6 +349,12 @@ const poprzedniMiesiac = (h) => {
     // kierownika), którego lista nie może pokazać.
     {
       const d = new Date(), y = (x) => { const k = new Date(d); k.setDate(k.getDate() + x); return ymd(k); };
+      // Puls po każdym zapisie czyta dziennik z bazy (odswiez) — atrapa musi
+      // mieć w sobie to samo, co stan startowy, inaczej po pierwszym zapisie
+      // znikałyby szablony i wpisy.
+      window.__tabele.day_log_templates = szablonyStartowe.slice();
+      window.__tabele.day_log_entries = wpisyStartowe.slice();
+      window.__tabele.day_logs = [];
       window.__tabele.zadania_moje = [
         { id: "mz1", tytul: "Uzupełnić daty umów", lokal: null, termin: y(-2), zrodlo: "wlasne",
           wlasciciel_id: "u0", archived: false, created_at: new Date().toISOString() },
@@ -1656,6 +1668,144 @@ const poprzedniMiesiac = (h) => {
           !!Z().querySelector('[data-blok-cfg="Mycie okapu"]') && zapisyOd(n0, "task_blocks").length === 0 && zapisyOd(n0, "tasks").length === 0);
       } catch (e) {
         if (e !== null) sprawdz("Zadania: przebieg bez wyjątku", false, e.message + " " + (e.stack || "").split("\n")[1]);
+      }
+
+      // ----------------------------------------------------------------
+      // Puls według makiety (0.57.0): karta dnia w trzech krokach (utarg i
+      // tagi zapisują się same, kolejką), wpis w wierszu, zamknięcie z
+      // potwierdzeniem, dzień zamknięty tylko do odczytu + poprawka,
+      // lista dni, analityka, konfiguracja (prawo zamykania).
+      // ----------------------------------------------------------------
+      try {
+        const P = () => document.querySelector("#app [data-puls-widok]");
+        const kl = (el) => el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        const wpisz = (el, v) => {
+          const proto = el.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+          Object.getOwnPropertyDescriptor(proto, "value").set.call(el, v);
+          el.dispatchEvent(new Event("input", { bubbles: true }));
+        };
+        const opusc = (el) => el.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+        const zapisyOd = (n, tabela) => window.__zapisy.slice(n).filter((z) => z[0] === tabela);
+        const menuP = [...document.querySelectorAll("#app aside button")]
+          .find((x) => x.textContent.replace(/▪/g, "").replace(/\d+$/, "").trim() === "Puls");
+        kl(menuP);
+        await czekaj(300);
+        const bulka = [...document.querySelectorAll("#app header button")].find((b) => b.textContent.trim() === "Bułka i Jacek");
+        if (bulka) kl(bulka);
+        await czekaj(250);
+        // Na dziś: następny dzień aż do blokady.
+        for (let i = 0; i < 3; i++) {
+          const dalej = P().querySelector('button[aria-label="Następny dzień"]');
+          if (!dalej || dalej.disabled) break;
+          kl(dalej);
+          await czekaj(150);
+        }
+        const K = () => P().querySelector("[data-karta-dnia]");
+        sprawdz("Puls: karta dnia otwarta, cztery liczby nad krokami",
+          !!K() && K().getAttribute("data-karta-dnia") === "otwarta" && K().querySelectorAll("[data-kafelek-pulsu]").length === 4,
+          K() ? K().getAttribute("data-karta-dnia") : "brak karty");
+        sprawdz("„Zamknij dzień” zablokowane bez utargu", !!K().querySelector("[data-zamknij-dzien]") && K().querySelector("[data-zamknij-dzien]").disabled);
+        const lod = K().querySelector('[data-wpis-dnia="lodowka"]');
+        sprawdz("wpis poza normą czerwony; sprawa z Zadań widoczna jako „w Moich zadaniach”",
+          !!lod && lod.getAttribute("data-stan") === "poza" && (/w Moich zadaniach/.test(lod.textContent) || !!lod.querySelector("[data-do-zadan]")),
+          lod ? lod.textContent.slice(0, 120) : "brak wiersza");
+
+        // Wpis w wierszu.
+        let n0 = window.__zapisy.length;
+        const dost = () => K().querySelector('[data-wpis-dnia="dostawa"]');
+        wpisz(dost().querySelector('[data-pole-wpisu="dostawca"]'), "Makro");
+        await czekaj(80);
+        kl(dost().querySelector("[data-zapisz-wpis]"));
+        await czekaj(400);
+        const wpisDost = zapisyOd(n0, "day_log_entries")[0];
+        sprawdz("wpis dnia w wierszu zapisuje się od razu (bez okienka)",
+          !!wpisDost && wpisDost[1].template_key === "dostawa" && wpisDost[1].payload.dostawca === "Makro" && dost().getAttribute("data-stan") === "ok",
+          JSON.stringify(wpisDost));
+
+        // Utarg i paragony — zapis po opuszczeniu pola, drugi zapis to PATCH.
+        n0 = window.__zapisy.length;
+        const obrot = K().querySelector('[data-pole-karty="obrot"]');
+        wpisz(obrot, "5 480");
+        await czekaj(60);
+        opusc(K().querySelector('[data-pole-karty="obrot"]'));
+        await czekaj(80);
+        const par = K().querySelector('[data-pole-karty="liczba_paragonow"]');
+        wpisz(par, "131");
+        await czekaj(60);
+        opusc(K().querySelector('[data-pole-karty="liczba_paragonow"]'));
+        await czekaj(400);
+        const karty1 = zapisyOd(n0, "day_logs");
+        sprawdz("utarg zapisuje się sam: pierwszy zapis zakłada kartę, drugi ją poprawia (bez drugiej karty)",
+          karty1.length === 2 && karty1[0].length === 2 && karty1[0][1].obrot === 5480 && karty1[1].length === 3 && karty1[1][2].liczba_paragonow === 131,
+          JSON.stringify(karty1));
+        sprawdz("po utargu: wyliczenie (koszt pracy) i odblokowane zamknięcie",
+          !!K().querySelector("[data-wyliczenie-utargu]") && !K().querySelector("[data-zamknij-dzien]").disabled);
+        n0 = window.__zapisy.length;
+        kl(K().querySelector('[data-tag-dnia="deszcz"]'));
+        await czekaj(300);
+        const tagZ = zapisyOd(n0, "day_logs")[0];
+        sprawdz("tag dnia zapisuje się kliknięciem", !!tagZ && tagZ[2] && tagZ[2].tagi === "deszcz", JSON.stringify(tagZ));
+
+        // Zamknięcie z potwierdzeniem.
+        kl(K().querySelector("[data-zamknij-dzien]"));
+        await czekaj(150);
+        sprawdz("„Zamknij dzień” pyta drugi raz", !!K().querySelector("[data-potwierdz-zamkniecie]"));
+        n0 = window.__zapisy.length;
+        kl(K().querySelector("[data-potwierdz-zamkniecie]"));
+        await czekaj(500);
+        const zamk = zapisyOd(n0, "day_logs")[0];
+        sprawdz("zamknięcie zapisuje status, kto i utarg",
+          !!zamk && zamk[2].status === "zamkniety" && zamk[2].closed_by === "Roman" && zamk[2].obrot === 5480, JSON.stringify(zamk));
+        sprawdz("dzień zamknięty: tylko do odczytu", !!K() && K().getAttribute("data-karta-dnia") === "zamknieta" && !!K().querySelector("[data-tylko-odczyt]"));
+
+        // Poprawka: ślad PIERWSZY, potem liczba.
+        kl(K().querySelector('[data-poprawka="obrot"]'));
+        await czekaj(200);
+        const panelP = () => document.querySelector('#app [data-panel-boczny="poprawka"]');
+        sprawdz("„Poprawka” otwiera panel z „Było” i powodem", !!panelP() && /5\s?480/.test(panelP().textContent));
+        wpisz(panelP().querySelector("[data-nowa-wartosc]"), "5 600");
+        await czekaj(60);
+        kl(panelP().querySelector('[data-powod-poprawki="terminal doliczył później"]'));
+        await czekaj(60);
+        n0 = window.__zapisy.length;
+        kl(panelP().querySelector("[data-wyslij-poprawke]"));
+        await czekaj(500);
+        const kol = window.__zapisy.slice(n0).filter((z) => z[0] === "day_log_entries" || z[0] === "day_logs");
+        sprawdz("poprawka: najpierw ślad (korekta 5480 → 5600 z powodem), potem zmiana liczby",
+          kol.length >= 2 && kol[0][0] === "day_log_entries" && kol[0][1].typ === "korekta" && kol[0][1].payload.stare === 5480 &&
+            kol[0][1].payload.nowe === 5600 && /terminal/.test(kol[0][1].payload.powod) && kol[1][0] === "day_logs" && kol[1][2].obrot === 5600,
+          JSON.stringify(kol));
+        sprawdz("poprawka widoczna przy dniu (lista Poprawki + „poprawione”)",
+          !!K().querySelector("[data-korekta-dnia]") && /poprawione/.test(K().querySelector('[data-pole-ro="obrot"]').textContent));
+
+        // Dni, Analityka.
+        kl(P().querySelector('[data-zakladka-pulsu="dni"]'));
+        await czekaj(300);
+        const dzisW = P().querySelector(`[data-wiersz-dnia="${ymd(new Date())}"]`);
+        sprawdz("Dni: dzisiejszy wiersz zamknięty, z tagiem i poprawką",
+          !!dzisW && dzisW.getAttribute("data-zamkniety") === "tak" && /deszcz/.test(dzisW.textContent) && /poprawka/.test(dzisW.textContent),
+          dzisW ? dzisW.textContent.slice(0, 160) : "brak");
+        kl(P().querySelector('[data-zakladka-pulsu="tydzien"]'));
+        await czekaj(400);
+        sprawdz("Analityka: siedem słupków i kafelki tygodnia",
+          P().querySelectorAll("[data-slupek-dnia]").length === 7 && P().querySelectorAll("[data-kafelek-pulsu]").length === 4);
+
+        // Konfiguracja: wpisy i prawo zamykania.
+        kl(P().querySelector('[data-zakladka-pulsu="konfiguracja"]'));
+        await czekaj(300);
+        sprawdz("Konfiguracja: wpisy pogrupowane po porze", !!P().querySelector('[data-szablon-cfg="lodowka"]') && !!P().querySelector('[data-szablon-cfg="dostawa"]'));
+        kl(P().querySelector('[data-zakladka-cfg-pulsu="kto"]'));
+        await czekaj(200);
+        const ala = P().querySelector('[data-bez-prawa="Ala"]');
+        sprawdz("„Kto zamyka dzień”: osoba z lokalu z przyciskami Na dziś / Na tydzień", !!ala && !!ala.querySelector("[data-nadaj-tydzien]"));
+        n0 = window.__zapisy.length;
+        if (ala) kl(ala.querySelector("[data-nadaj-dzis]"));
+        await czekaj(300);
+        const prawo = zapisyOd(n0, "users")[0];
+        sprawdz("„Na dziś” zapisuje puls_do = dziś i przenosi osobę do „Mogą zamykać”",
+          !!prawo && prawo[2].puls_do === ymd(new Date()) && !!P().querySelector('[data-prawo-zamykania="Ala"]'), JSON.stringify(prawo));
+      } catch (e) {
+        if (e !== null) sprawdz("Puls: przebieg bez wyjątku", false, e.message + " " + (e.stack || "").split("\n")[1]);
       }
 
       if (status.className !== "zle") {

@@ -1,44 +1,44 @@
 // @ts-nocheck
-// Karta jednego dnia — zamknięcie dnia przez kierownika.
+// Karta jednego dnia — zamknięcie dnia przez kierownika. Układ z makiety
+// właściciela (0.57.0, PulseCard / PulseClosed / PulseMobile).
 //
-// Ekran jest tak ułożony, żeby dało się go domknąć w 60–90 sekund: najpierw
-// pasek liczb, których NIE trzeba wpisywać, potem obok siebie dwa bloki tego,
-// co trzeba — utarg i wpisy. Jeśli wypełnianie zacznie zajmować więcej, ludzie
-// zaczną klikać karty wstecz i zmyślać, a analityka stanie na wymyślonych
-// danych.
+// Zamknięcie ma zająć ~90 sekund, więc karta to TRZY KROKI: (1) utarg i
+// paragony, (2) wpisy dnia wpisywane w wierszu — bez okienka na każdą lodówkę,
+// (3) notatka dla następnej zmiany i tagi. Zdarzenia stoją osobno, z boku, i
+// nie blokują zamknięcia. Nad krokami cztery liczby, których NIE trzeba
+// wpisywać (utarg vs plan, koszt pracy %, godziny vs plan, zadania · pogoda).
 //
-// Każdy blok zapisuje się osobno i BEZ zamykania dnia: kierownik wpisuje utarg
-// rano, wpisy w ciągu dnia, a zamyka wieczorem. Zamknięcie to osobna decyzja —
-// i da się ją cofnąć.
+// ⚠️ Utarg, paragony, notatka i tagi zapisują się SAME (po opuszczeniu pola /
+// kliknięciu tagu) — przycisku "Zapisz" nie ma. Zapisy idą KOLEJKĄ
+// (`kolejka`), bo pierwszy zapis zakłada kartę, a dwa równoległe założyłyby
+// dwie (unikalność `(lokal, date)` odrzuciłaby drugi).
+// ⚠️ "Zamknij dzień" wymaga utargu (może być 0) i pyta drugi raz — po
+// zamknięciu danych nie da się edytować, tylko poprawić (`poprawZamknietyDzien`,
+// ślad w day_log_entries). Zamkniętego dnia nie otwieramy z powrotem.
+// ⚠️ Wpis HACCP poprawia się NOWYM wierszem z powodem (`poprawWpis`) — także
+// w dniu zamkniętym.
 //
-// Dane i ich odświeżanie należą do Puls.tsx. Tutaj tylko rysowanie i zapisy.
-import React, { useMemo, useState } from "react";
+// Dane i ich odświeżanie należą do Puls.tsx. Tutaj rysowanie i zapisy.
+import React, { useMemo, useRef, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
   Lock,
-  CheckCircle2,
+  Check,
   AlertTriangle,
   Plus,
+  Thermometer,
+  Truck,
+  Sparkles,
+  FileText,
+  Flag,
   Users,
-  Save,
+  History,
+  Coins,
+  ListChecks,
   Pencil,
-  Cloud,
 } from "lucide-react";
-import {
-  cardCls,
-  statTileCls,
-  statLabelCls,
-  statValueCls,
-  statSubCls,
-  sectionCardCls,
-  sectionHeaderCls,
-  btnPrimaryCls,
-  btnSecondaryCls,
-  COLORS,
-} from "./designTokens";
 import { describeWeatherCode } from "../../utils/weather";
-import { getDayOfWeek } from "../../utils/format";
 import {
   autoPodsumowanie,
   znajdzKarte,
@@ -53,31 +53,59 @@ import {
   zapiszKarte,
   zamknijDzien,
   zapiszWpis,
-  trafnoscPrognozy,
+  poprawWpis,
   prognozaNaDzien,
   wartoscPola,
   opisPoprawki,
   przesun,
+  PORY,
   POWODY_UTARGU,
   POLA_KOREKTY,
   KATEGORIE_ZDARZENIA,
   korektyDnia,
   poprawZamknietyDzien,
+  zespolDnia,
+  czyZdarzenie,
+  listaTagow,
+  tagiTekst,
+  TAGI_PODPOWIEDZI,
 } from "../../utils/dziennik";
 import { kontekstDnia, kontekstKrotko } from "../../utils/kalendarz";
-import { celDnia, zapiszNadpisanieDnia, zl as zlBudzet, pct0 } from "../../utils/budzet";
+import { celDnia, zapiszNadpisanieDnia } from "../../utils/budzet";
 import { czyWpisZadania, zadanieWpisu, polaZadania } from "../../utils/tasks";
 import { pozaNormaPola } from "../../utils/pola";
+import { maZadanieZe } from "../../utils/mojeZadania";
 import ZdarzenieModal from "./ZdarzenieModal";
 import ModalWpisu from "./ModalWpisu";
 import SladPoprawki from "./SladPoprawki";
+import {
+  inputCls,
+  podpowiedzCls,
+  btnObrysCls,
+  btnGlownyCls,
+  btnMalyCls,
+  btnMalyGlownyCls,
+  btnDuchCls,
+  linkCls,
+  zl,
+  f1,
+  pctTxt,
+  znak,
+  liczbaZ,
+  dzienTxt,
+  godzTxt,
+  Kafelek,
+  Kafelki,
+  Panel,
+  Chip,
+  MiniTag,
+  Pole,
+  PanelBoczny,
+} from "./pulsWspolne";
 
-const inputCls =
-  "w-full border-[2px] border-[#171714] rounded px-3 py-2 text-[15px] bg-white disabled:bg-[#F1F1EE] disabled:text-[#6E6E66]";
-const labelCls = "text-[11px] font-bold tracking-wider uppercase text-[#8F8E86] mb-1 block";
-const zl = (n) => (n == null ? "—" : `${Math.round(n).toLocaleString("pl-PL")} zł`);
-const znak = (n, j = "") =>
-  n == null ? "" : `${n > 0 ? "+" : n < 0 ? "−" : ""}${Math.abs(Math.round(n * 10) / 10)}${j}`;
+const IKONA_TYPU = { temperatura: Thermometer, dostawa: Truck, sprzatanie: Sparkles };
+const POWODY_POPRAWKI = ["pomyłka przy wpisie", "terminal doliczył później", "zwrot / storno", "inne"];
+const PROG_ODCHYLENIA_PCT = 10;
 
 export default function KartaDnia({
   currentUser, lokal, lokalRow, miasto, dzis,
@@ -86,93 +114,160 @@ export default function KartaDnia({
   karty, wpisy: wszystkieWpisy, szablony: wszystkieSzablony, weatherForecasts,
   budzetCele, budzetDni, setBudzetDni,
   setKarty, setWpisy, odswiez, showMsg,
+  zadaniaMoje, dodajDoMoich,
   data, setData,
 }) {
-  const [zapisuje, setZapisuje] = useState(false);
-  const [pokazTrafnosc, setPokazTrafnosc] = useState(false);
-  const [nowyWpis, setNowyWpis] = useState(null); // { szablon }
+  const [busy, setBusy] = useState(false);
+  const [potwierdz, setPotwierdz] = useState(false);
   const [zdarzenie, setZdarzenie] = useState(false);
-  const [korekta, setKorekta] = useState(null); // { pole }
-  // Plan finansowy dnia trzymamy w osobnym stanie od reszty karty, bo idzie do
-  // INNEJ tabeli (grafik_budzet_dni) i zapisuje się od razu, a nie przyciskiem
-  // "Zapisz" karty. Jedno pole naraz — dwa otwarte dałyby dwa zapisy do tej
-  // samej daty i drugi skasowałby pierwszy.
-  const [planEdycja, setPlanEdycja] = useState(null); // { pole, wartosc }
-  const [planZapis, setPlanZapis] = useState(false);
+  const [korekta, setKorekta] = useState(null); // { pole, nowa, powod, chip }
+  const [poprawkaWpisu, setPoprawkaWpisu] = useState(null); // { wpis, szablon: {nazwa, typ, klucz, pola} }
+  const [wartosciWpisu, setWartosciWpisu] = useState({}); // { klucz_szablonu: { pole: wartosc } }
+  const [planEdycja, setPlanEdycja] = useState(null); // { utarg, pct }
+  const [nowyTag, setNowyTag] = useState("");
 
   const karta = znajdzKarte(karty, lokal, data);
-  const zamkniety = karta && karta.status === "zamkniety";
+  const zamkniety = !!karta && karta.status === "zamkniety";
 
-  // Pola formularza trzymamy lokalnie, żeby wpisywanie nie strzelało zapisem
-  // po każdej literze; do bazy idzie jedno kliknięcie.
+  // Pola formularza trzymamy lokalnie — zapis idzie po opuszczeniu pola.
   const [form, setForm] = useState({});
   const kluczForm = `${lokal}|${data}`;
   const [kluczOstatni, setKluczOstatni] = useState(kluczForm);
   if (kluczOstatni !== kluczForm) {
     setKluczOstatni(kluczForm);
     setForm({});
+    setWartosciWpisu({});
+    setPotwierdz(false);
+    setPlanEdycja(null);
   }
-  const pole = (k) =>
-    form[k] !== undefined ? form[k] : karta && karta[k] != null ? karta[k] : "";
-  const ustaw = (k, v) => setForm({ ...form, [k]: v });
+  const pole = (k) => (form[k] !== undefined ? form[k] : karta && karta[k] != null ? String(karta[k]) : "");
+  const ustaw = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  // Kolejka zapisów karty — patrz nagłówek pliku.
+  const kartaRef = useRef(karta);
+  const kartyRef = useRef(karty);
+  kartyRef.current = karty;
+  if (!kartaRef.current || (karta && kartaRef.current.id === karta.id) || kartaRef.current.date !== data || kartaRef.current.lokal !== lokal)
+    kartaRef.current = karta;
+  const kolejka = useRef(Promise.resolve());
 
   const auto = useMemo(
     () =>
       autoPodsumowanie({
         shifts, planShifts, users, lokalRow, tasks, taskBlocks, taskCompletions,
-        staffingRules, staffingRuleSets, grafikWyjatki,
-        lokal, dateStr: data,
+        staffingRules, staffingRuleSets, grafikWyjatki, lokal, dateStr: data,
       }),
     [shifts, planShifts, users, lokalRow, tasks, taskBlocks, taskCompletions, staffingRules, staffingRuleSets, grafikWyjatki, lokal, data]
   );
+  const zespol = useMemo(() => zespolDnia({ shifts, planShifts, lokal, dateStr: data }), [shifts, planShifts, lokal, data]);
 
   const fakt = prognozaNaDzien(weatherForecasts, miasto, data, 0);
-  const trafnosc = useMemo(
-    () => trafnoscPrognozy(weatherForecasts, miasto, przesun(dzis, -90)),
-    [weatherForecasts, miasto, dzis]
-  );
-
+  const pogodaTydzien = prognozaNaDzien(weatherForecasts, miasto, przesun(data, -7), 0);
   const szablony = szablonyNaDzien(wszystkieSzablony, lokal, data);
   const wpisy = wpisyDlaDnia(wszystkieWpisy, lokal, data);
   const wpisDlaSzablonu = (klucz) => wpisy.find((w) => w.template_key === klucz);
+  const wpisyZadan = wpisy.filter((w) => czyWpisZadania(w));
+  const zdarzenia = wpisy.filter(czyZdarzenie);
+  const korekty = korektyDnia(wszystkieWpisy, lokal, data);
 
-  const czek = sredniCzek(pole("obrot"), pole("liczba_paragonow"));
-  const lcPct = labourCostPct(auto.koszt, pole("obrot"));
-  const prognoza = prognozaUtargu(karty, lokal, data);
-  // ⚠️ To są DWIE różne liczby i nie wolno ich zlepić. `prognoza` to średnia z
-  // czterech ostatnich takich dni tygodnia — co zwykle wychodzi. `cel` to plan
-  // wpisany przez kierownika w Grafik → Konfiguracja → Budżet — czego oczekuje.
-  // Jedno jest obserwacją, drugie decyzją; dzień, w którym się rozjeżdżają,
-  // jest właśnie tym, o którym warto porozmawiać.
+  // ⚠️ DWIE różne liczby: `cel.utarg` to plan wpisany w Grafiku (decyzja),
+  // `prognoza` to średnia z czterech takich dni tygodnia (obserwacja).
+  // Odniesieniem utargu jest plan; gdy go nie ma — "zwykle".
   const cel = celDnia({ cele: budzetCele, budzetDni }, lokal, data);
   const celPct = cel && cel.pct != null ? cel.pct : null;
+  const prognoza = prognozaUtargu(karty, lokal, data);
+  const odniesienie = cel && cel.utarg != null ? { kwota: cel.utarg, nazwa: "plan" } : prognoza ? { kwota: prognoza.kwota, nazwa: "zwykle" } : null;
 
-  // Zapis planu idzie do tej samej tabeli i tą samą funkcją co ołówek w siatce
-  // Grafiku — to jedna rzecz wpisywana z dwóch miejsc, nie dwie kopie.
+  const obrot = liczbaZ(pole("obrot"));
+  const paragony = liczbaZ(pole("liczba_paragonow"));
+  const czek = sredniCzek(obrot, paragony);
+  const lcPct = labourCostPct(auto.koszt, obrot);
+  const odchylenie = obrot != null && odniesienie && odniesienie.kwota ? ((obrot - odniesienie.kwota) / odniesienie.kwota) * 100 : null;
+  const tagi = listaTagow(pole("tagi"));
+
+  const polaDoZapisu = () => ({
+    obrot: liczbaZ(pole("obrot")),
+    liczba_paragonow: liczbaZ(pole("liczba_paragonow")),
+    obrot_powod: pole("obrot_powod") || null,
+    obrot_komentarz: pole("obrot_komentarz") || null,
+    handover: pole("handover") || null,
+    tagi: pole("tagi") || null,
+    // Migawka pogody: raport sprzed pół roku ma pokazywać to, co było wtedy.
+    pogoda_temp: fakt ? fakt.temp_max : karta ? karta.pogoda_temp : null,
+    pogoda_kod: fakt ? fakt.kod : karta ? karta.pogoda_kod : null,
+  });
+
+  const zapiszWKolejce = (zmiany) => {
+    kolejka.current = kolejka.current
+      .then(async () => {
+        const zapisana = await zapiszKarte({
+          karta: kartaRef.current,
+          lokal,
+          dateStr: data,
+          pola: {
+            ...zmiany,
+            pogoda_temp: fakt ? fakt.temp_max : kartaRef.current ? kartaRef.current.pogoda_temp : null,
+            pogoda_kod: fakt ? fakt.kod : kartaRef.current ? kartaRef.current.pogoda_kod : null,
+          },
+          dayLogs: kartyRef.current,
+          setDayLogs: (lista) => {
+            kartyRef.current = lista;
+            setKarty(lista);
+          },
+        });
+        kartaRef.current = zapisana;
+      })
+      .catch((e) => showMsg(e.message || "Błąd zapisu karty dnia", "error"));
+    return kolejka.current;
+  };
+
+  const NUMERYCZNE = ["obrot", "liczba_paragonow"];
+  const zapiszPole = (k, wartosc) => {
+    if (zamkniety) return;
+    const v = wartosc !== undefined ? wartosc : pole(k);
+    const nowa = NUMERYCZNE.includes(k) ? liczbaZ(v) : v || null;
+    const stara = karta ? karta[k] ?? null : null;
+    if (String(nowa ?? "") === String(stara ?? "")) return;
+    zapiszWKolejce({ [k]: nowa });
+  };
+
+  const zamknij = async () => {
+    setBusy(true);
+    try {
+      await kolejka.current;
+      await zamknijDzien({
+        karta: kartaRef.current,
+        lokal,
+        dateStr: data,
+        pola: polaDoZapisu(),
+        kto: currentUser.name,
+        dayLogs: kartyRef.current,
+        setDayLogs: setKarty,
+      });
+      await odswiez();
+      setForm({});
+      setPotwierdz(false);
+      showMsg("Dzień zamknięty", "success");
+    } catch (e) {
+      showMsg(e.message || "Błąd zamknięcia dnia", "error");
+    }
+    setBusy(false);
+  };
+
+  // --- plan dnia (grafik_budzet_dni — ta sama tabela co w Grafiku) --------
   const zapiszPlan = async () => {
-    if (!planEdycja || planZapis) return;
-    const { pole: ktore, wartosc } = planEdycja;
-    const liczba = (() => {
-      const t = String(wartosc || "").replace(/\s/g, "").replace(",", ".");
-      if (t === "") return null;
-      const n = Number(t);
-      return Number.isNaN(n) ? null : n;
-    })();
-    const nadpis = cel && cel.nadpisRow ? cel.nadpisRow : null;
     const baza = cel ? cel.baza : { utarg: null, pct: null };
-    const bazowa = ktore === "utarg" ? baza.utarg : baza.pct;
-    // Wartość równa tej z zestawu nie jest nadpisaniem — inaczej dzień
-    // dostawałby podpis "zmienione na ten dzień" mimo że nic się nie zmieniło.
-    const rowna = liczba != null && bazowa != null && Math.abs(liczba - bazowa) < 0.0001;
-    setPlanZapis(true);
+    const u = liczbaZ(planEdycja.utarg);
+    const p = liczbaZ(planEdycja.pct);
+    // Wartość równa tej z zestawu nie jest nadpisaniem.
+    const rowna = (a, b) => a != null && b != null && Math.abs(a - b) < 0.0001;
+    setBusy(true);
     try {
       await zapiszNadpisanieDnia({
         lokal,
         dateStr: data,
-        oczekiwany_utarg:
-          ktore === "utarg" ? (rowna ? null : liczba) : nadpis ? nadpis.oczekiwany_utarg : null,
-        cel_koszt_pct:
-          ktore === "pct" ? (rowna ? null : liczba) : nadpis ? nadpis.cel_koszt_pct : null,
+        oczekiwany_utarg: rowna(u, baza.utarg) ? null : u,
+        cel_koszt_pct: rowna(p, baza.pct) ? null : p,
         autor: currentUser?.name,
         budzetDni,
         setBudzetDni,
@@ -181,793 +276,893 @@ export default function KartaDnia({
     } catch (err) {
       showMsg(`Błąd zapisu planu dnia: ${err.message || "nieznany błąd"}`, "error");
     }
-    setPlanZapis(false);
-  };
-  const obrotLiczba = pole("obrot") === "" ? null : Number(pole("obrot"));
-
-  const polaDoZapisu = () => ({
-    obrot: pole("obrot") === "" ? null : Number(pole("obrot")),
-    liczba_paragonow:
-      pole("liczba_paragonow") === "" ? null : Number(pole("liczba_paragonow")),
-    obrot_powod: pole("obrot_powod") || null,
-    obrot_komentarz: pole("obrot_komentarz") || null,
-    notatka: pole("notatka") || null,
-    handover: pole("handover") || null,
-    tagi: pole("tagi") || null,
-    cos_nadzwyczajnego: pole("cos_nadzwyczajnego") === true,
-    // Migawka pogody: raport sprzed pół roku ma pokazywać to, co było wtedy,
-    // a nie to, co dziś zwróci API.
-    pogoda_temp: fakt ? fakt.temp_max : karta ? karta.pogoda_temp : null,
-    pogoda_kod: fakt ? fakt.kod : karta ? karta.pogoda_kod : null,
-  });
-
-  const zapisz = async (zamykamy) => {
-    setZapisuje(true);
-    try {
-      const wspolne = {
-        karta, lokal, dateStr: data, pola: polaDoZapisu(),
-        dayLogs: karty, setDayLogs: setKarty,
-      };
-      if (zamykamy) await zamknijDzien({ ...wspolne, kto: currentUser.name });
-      else await zapiszKarte(wspolne);
-      await odswiez();
-      setForm({});
-      showMsg(zamykamy ? "Dzień zamknięty" : "Zapisano", "success");
-    } catch (e) {
-      showMsg(e.message || "Błąd zapisu karty dnia", "error");
-    }
-    setZapisuje(false);
+    setBusy(false);
   };
 
+  // --- wpisy -----------------------------------------------------------
   const dodajWpis = async (typ, templateKey, payload) => {
+    setBusy(true);
     try {
-      await zapiszWpis({
-        lokal, dateStr: data, karta, typ, templateKey, payload,
+      const w = await zapiszWpis({
+        lokal, dateStr: data, karta: kartaRef.current, typ, templateKey, payload,
         kto: currentUser.name, entries: wszystkieWpisy, setEntries: setWpisy,
       });
       await odswiez();
-      setNowyWpis(null);
-      showMsg("Zapisano wpis", "success");
+      return w;
     } catch (e) {
       showMsg(e.message || "Błąd zapisu wpisu", "error");
+      return null;
+    } finally {
+      setBusy(false);
     }
   };
 
-  const kontekst = kontekstDnia(data, { dzienWyplaty: lokalRow && lokalRow.dzien_wyplaty });
-  const kontekstTekst = kontekstKrotko(kontekst);
-  const korekty = korektyDnia(wszystkieWpisy, lokal, data);
-  const pogodaOpis = fakt ? describeWeatherCode(fakt.kod) : null;
+  const brakujacePola = (s) =>
+    polaSzablonu(s).filter((p) => p.typ !== "bool" && !String((wartosciWpisu[s.klucz] || {})[p.klucz] ?? "").trim());
 
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <button className={btnSecondaryCls} onClick={() => setData(przesun(data, -1))}>
-          <ChevronLeft size={16} />
+  const zapiszWpisInline = async (s) => {
+    if (brakujacePola(s).length) return;
+    const wart = wartosciWpisu[s.klucz] || {};
+    const payload = {};
+    polaSzablonu(s).forEach((p) => {
+      const v = wart[p.klucz];
+      payload[p.klucz] = p.typ === "bool" ? v === true : p.typ === "number" ? String(v).replace(",", ".").trim() : v;
+    });
+    const w = await dodajWpis(s.typ, s.klucz, payload);
+    if (w) setWartosciWpisu((x) => ({ ...x, [s.klucz]: {} }));
+  };
+
+  const zapiszPoprawkeWpisu = async (typ, klucz, payload, powod) => {
+    setBusy(true);
+    try {
+      await poprawWpis({ stary: poprawkaWpisu.wpis, payload, powod, kto: currentUser.name, entries: wszystkieWpisy, setEntries: setWpisy });
+      await odswiez();
+      setPoprawkaWpisu(null);
+      showMsg("Poprawka zapisana — stara wartość została w dzienniku.", "success");
+    } catch (e) {
+      showMsg(e.message || "Błąd zapisu poprawki", "error");
+    }
+    setBusy(false);
+  };
+
+  const doMoich = async (tytul, zrodloId, zrodloOpis) => {
+    setBusy(true);
+    try {
+      await dodajDoMoich({ tytul, lokal, zrodloId, zrodloOpis });
+      showMsg("Dodano do Moich zadań", "success");
+    } catch (e) {
+      showMsg(e.message || "Nie udało się dodać zadania.", "error");
+    }
+    setBusy(false);
+  };
+
+  const zapiszKorekte = async () => {
+    const def = POLA_KOREKTY.find((p) => p.klucz === korekta.pole) || POLA_KOREKTY[0];
+    const powod = [korekta.chip, korekta.powod.trim()].filter(Boolean).join(" — ");
+    setBusy(true);
+    try {
+      await poprawZamknietyDzien({
+        karta,
+        pole: korekta.pole,
+        nowaWartosc: def.typ === "number" ? liczbaZ(korekta.nowa) : korekta.nowa,
+        powod,
+        kto: currentUser.name,
+        dayLogs: karty,
+        setDayLogs: setKarty,
+        entries: wszystkieWpisy,
+        setEntries: setWpisy,
+      });
+      await odswiez();
+      setKorekta(null);
+      showMsg("Poprawka zapisana — oryginał został w historii.", "success");
+    } catch (e) {
+      showMsg(e.message || "Błąd zapisu poprawki", "error");
+    }
+    setBusy(false);
+  };
+
+  // --- wspólne: nawigacja dnia i kafelki -------------------------------
+  const kontekst = kontekstKrotko(kontekstDnia(data, { dzienWyplaty: lokalRow && lokalRow.dzien_wyplaty }));
+  const pogoda = fakt ? describeWeatherCode(fakt.kod) : null;
+
+  const nawigacja = (
+    <div className="flex flex-wrap items-center gap-2 md:gap-3 mb-3">
+      <div className="flex items-center gap-1 flex-1 md:flex-none">
+        <button type="button" className="w-10 h-10 rounded-lg grid place-items-center hover:bg-[#ECEBE6]" onClick={() => setData(przesun(data, -1))} aria-label="Poprzedni dzień">
+          <ChevronLeft size={18} />
         </button>
-        <div className="text-center min-w-[180px]">
-          <div className="font-['Archivo'] font-extrabold text-[17px]">
-            {data.split("-").reverse().join(".")}
-          </div>
-          <div className="text-[12px] text-[#6E6E66]">
-            {getDayOfWeek(new Date(data + "T00:00:00"))}
-            {data === dzis && " · dziś"}
-          </div>
-        </div>
+        <span className="flex-1 md:flex-none md:min-w-[150px] text-center font-['Archivo'] font-extrabold text-[16px]" data-dzien-karty>
+          {dzienTxt(data)}
+          {data === dzis ? " · dziś" : ""}
+        </span>
         <button
-          className={btnSecondaryCls}
+          type="button"
+          className="w-10 h-10 rounded-lg grid place-items-center hover:bg-[#ECEBE6] disabled:opacity-30"
           disabled={data >= dzis}
           onClick={() => setData(przesun(data, 1))}
+          aria-label="Następny dzień"
         >
-          <ChevronRight size={16} />
+          <ChevronRight size={18} />
         </button>
-        <button className={btnSecondaryCls} onClick={() => setData(przesun(dzis, -1))}>
-          Wczoraj
-        </button>
-        {zamkniety && (
-          <div className="flex flex-wrap items-center gap-3 ml-auto text-[13px]">
-            <span className="flex items-center gap-1.5">
-              <Lock size={14} />
-              Zamknięty przez {karta.closed_by} ·{" "}
-              {new Date(karta.closed_at).toLocaleString("pl-PL")}
-            </span>
-            {/* Zamkniętego dnia nie otwieramy z powrotem. Otwarcie kasowałoby
-                sens zamknięcia: dałoby się zmienić liczby tak, jakby nigdy nie
-                były inne. Jedyna droga to poprawka, która zostawia ślad. */}
-            <button className={btnSecondaryCls} onClick={() => setKorekta({ pole: "obrot" })}>
-              <Pencil size={13} className="inline -mt-0.5 mr-1" />
-              Popraw dane
-            </button>
-          </div>
-        )}
       </div>
-
-      {kontekstTekst && (
-        <div className="text-[13px] text-[#6E6E66] -mt-1">
-          <span className="font-bold text-[#171714]">{kontekstTekst}</span> — warto o tym
-          pamiętać przy porównywaniu tego dnia z innymi.
-        </div>
+      {zamkniety ? (
+        <span className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-[#E2F3E9] text-[#1F7A4A] text-[13px] font-bold" data-status-karty="zamkniety">
+          <Lock size={13} /> Zamknięty {godzTxt(karta.closed_at)} · {karta.closed_by}
+        </span>
+      ) : (
+        <span className="inline-flex items-center h-8 px-3 rounded-full bg-[#FDF0D8] text-[#8A5300] text-[13px] font-bold" data-status-karty="otwarty">
+          Otwarty{data === dzis ? " · zamknij do 23:59" : " · do zamknięcia"}
+        </span>
       )}
+      {kontekst && <span className="text-[13px] font-bold text-[#8A3A2B]">{kontekst}</span>}
+    </div>
+  );
 
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
-        <div className={statTileCls}>
-          <div className={statLabelCls}>Godziny</div>
-          <div className={statValueCls}>{auto.godzinyFakt}</div>
-          <div
-            className={statSubCls}
-            style={{
-              color:
-                auto.godzinyPlan && Math.abs(auto.godzinyFakt - auto.godzinyPlan) >= 0.5
-                  ? COLORS.accent
-                  : COLORS.muted,
-            }}
-          >
-            {auto.godzinyPlan
-              ? `plan ${auto.godzinyPlan} · ${znak(auto.godzinyFakt - auto.godzinyPlan, " h")}`
-              : "brak grafiku"}
-            {` · ${auto.osoby.length} os.`}
-          </div>
-        </div>
-        <div className={statTileCls}>
-          <div className={statLabelCls}>Koszt pracy</div>
-          <div className={statValueCls}>{zl(auto.koszt)}</div>
-          <div
-            className={statSubCls}
-            // Czerwone znaczy "przekroczyliśmy plan", a nie "planu nie ma" —
-            // bez grafiku nie ma czego przekroczyć.
-            style={{
-              color:
-                auto.kosztPlan && auto.koszt > auto.kosztPlan ? COLORS.accent : COLORS.muted,
-            }}
-          >
-            {/* Od 0.39.0 koszt liczy się też z kwoty z umowy, więc na tej
-                liście zostają wyłącznie osoby bez JAKICHKOLWIEK danych o
-                wynagrodzeniu — "bez stawki" mówiłoby o nich nieprawdę. */}
-            {auto.bezStawki.length
-              ? `bez danych o wynagrodzeniu: ${auto.bezStawki.join(", ")}`
-              : auto.kosztPlan
-              ? `plan ${zl(auto.kosztPlan)} · ${znak(auto.koszt - auto.kosztPlan, " zł")}`
-              : "brak grafiku"}
-          </div>
-        </div>
-        {/* Kontrolę obsady świadomie tu usunięto: dla dnia, który już był, nie
-            zmienia niczyjej decyzji. Jej miejsce zajmuje liczba, która zmienia. */}
-        <div className={statTileCls}>
-          <div className={statLabelCls}>Koszt pracy / utarg</div>
-          {/* Próg bierzemy z celu tego lokalu i tego dnia tygodnia (Grafik →
-              Konfiguracja → Budżet), a nie ze sztywnych 35% — lokal, który
-              założył sobie 28% w sobotę, nie ma się dowiadywać od systemu, że
-              33% jest w porządku. Bez wpisanego celu zostaje dotychczasowy,
-              ogólny zakres: lepiej podać orientacyjny, niż nie podać żadnego. */}
-          <div
-            className={statValueCls}
-            style={{
-              color:
-                lcPct != null && lcPct > (celPct != null ? celPct : 35)
-                  ? COLORS.accent
-                  : COLORS.ink,
-            }}
-          >
-            {lcPct != null ? `${lcPct}%` : "—"}
-          </div>
-          <div className={statSubCls}>
-            {lcPct == null
-              ? "wpisz utarg, policzę"
-              : celPct != null
-              ? `cel ${pct0(celPct)} — z konfiguracji Grafiku`
-              : "zdrowy zakres 25–35%"}
-          </div>
-        </div>
-        <div className={statTileCls}>
-          <div className={statLabelCls}>Zadania</div>
-          <div className={statValueCls}>
-            {auto.zadaniaZrobione}/{auto.zadaniaRazem}
-          </div>
-          <div className={statSubCls}>
-            {auto.otwarcie ? `otwarcie ${auto.otwarcie}` : "nikt nie odbił"}
-            {auto.zamkniecie ? ` · zamknięcie ${auto.zamkniecie}` : ""}
-          </div>
-        </div>
-        <div className={statTileCls}>
-          <div className={statLabelCls}>Pogoda</div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-[20px]">{pogodaOpis ? pogodaOpis.icon : "—"}</span>
-            <span className={statValueCls}>
-              {fakt && fakt.temp_max != null ? `${Math.round(fakt.temp_max)}°` : "—"}
-            </span>
-          </div>
-          {/* Horyzont 14 dni zbieramy dalej (cron), ale w karcie go nie ma:
-              przy tej trafności to szum, a miejsce w kafelku jest drogie. */}
-          <div className={statSubCls}>
-            {[3, 7]
-              .map((h) => {
-                const pr = prognozaNaDzien(weatherForecasts, miasto, data, h);
-                if (!pr || pr.temp_max == null || !fakt || fakt.temp_max == null) return null;
-                return `${h} dni: ${znak(Number(pr.temp_max) - Number(fakt.temp_max), "°")}`;
-              })
-              .filter(Boolean)
-              .join(" · ") || (miasto ? "brak prognoz" : "brak miasta")}
-          </div>
-          {trafnosc.length > 0 && (
-            <button
-              className="text-[12px] underline text-[#6E6E66] mt-1"
-              onClick={() => setPokazTrafnosc(!pokazTrafnosc)}
-            >
-              {pokazTrafnosc ? "Ukryj trafność" : "Ile warta jest prognoza?"}
-            </button>
-          )}
-        </div>
-      </div>
+  const kafelki = (
+    <Kafelki>
+      <Kafelek
+        id="utarg"
+        etykieta="Utarg"
+        duza={obrot != null ? zl(obrot) : "—"}
+        pod={
+          odniesienie
+            ? `${odniesienie.nazwa} ${zl(odniesienie.kwota)}${odchylenie != null ? ` · ${znak(odchylenie, "%")}` : ""}`
+            : "brak planu w Grafiku"
+        }
+      />
+      <Kafelek
+        id="koszt"
+        etykieta="Koszt pracy · % utargu"
+        duza={lcPct != null ? pctTxt(lcPct) : zl(auto.koszt)}
+        ton={lcPct != null && lcPct > (celPct != null ? celPct : 35) ? "warn" : null}
+        pod={
+          auto.bezStawki.length
+            ? `bez danych o wynagrodzeniu: ${auto.bezStawki.join(", ")}`
+            : lcPct != null
+            ? `${zl(auto.koszt)} · cel ${celPct != null ? pctTxt(celPct) : "25–35%"}`
+            : "wpisz utarg, policzę %"
+        }
+      />
+      <Kafelek
+        id="godziny"
+        etykieta="Godziny"
+        duza={f1(auto.godzinyFakt)}
+        maly=" h"
+        pod={`${auto.godzinyPlan ? `plan ${f1(auto.godzinyPlan)} h · ${znak(auto.godzinyFakt - auto.godzinyPlan, "h")}` : "brak grafiku"} · ${auto.osoby.length} os.`}
+      />
+      <Kafelek
+        id="zadania"
+        etykieta="Zadania · pogoda"
+        duza={auto.zadaniaZrobione}
+        maly={`/${auto.zadaniaRazem}`}
+        pod={
+          fakt && fakt.temp_max != null
+            ? `${pogoda ? pogoda.icon + " " : ""}${Math.round(fakt.temp_max)}°${
+                pogodaTydzien && pogodaTydzien.temp_max != null ? ` · tydzień temu ${Math.round(pogodaTydzien.temp_max)}°` : ""
+              }`
+            : auto.otwarcie
+            ? `otwarcie ${auto.otwarcie}${auto.zamkniecie ? ` · zamknięcie ${auto.zamkniecie}` : ""}`
+            : miasto
+            ? "brak pogody"
+            : "brak miasta lokalu"
+        }
+      />
+    </Kafelki>
+  );
 
-      {pokazTrafnosc && trafnosc.length > 0 && (
-        <div className={cardCls}>
-          <div className="overflow-x-auto">
-            <table className="w-full text-[13px] min-w-[420px]">
-              <thead>
-                <tr className="text-left text-[10px] uppercase tracking-wider text-[#8F8E86]">
-                  <th className="pb-1.5">Wyprzedzenie</th>
-                  <th className="pb-1.5">Błąd temp.</th>
-                  <th className="pb-1.5">Deszcz trafiony</th>
-                  <th className="pb-1.5">Fałszywy alarm</th>
-                </tr>
-              </thead>
-              <tbody>
-                {trafnosc.map((tr) => (
-                  <tr key={tr.horyzont} className="border-t border-[#E7E7E2]">
-                    <td className="py-1.5 font-bold">{tr.horyzont} dni</td>
-                    <td>{tr.bladTemp != null ? `${tr.bladTemp} °C` : "—"}</td>
-                    <td>{tr.deszczTrafiony != null ? `${tr.deszczTrafiony}%` : "—"}</td>
-                    <td>{tr.falszywyAlarm != null ? `${tr.falszywyAlarm}%` : "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="text-[12px] text-[#6E6E66] mt-2">
-            Ostatnie 90 dni, {miasto}. Im dalej w prawo, tym mniej sensu ma układanie
-            obsady „bo zapowiadali deszcz”.
-          </p>
+  // --- wiersz wpisu ----------------------------------------------------
+  const wierszWpisu = (s) => {
+    const wpis = wpisDlaSzablonu(s.klucz);
+    const pola = polaSzablonu(s);
+    const alarm = wpis && pozaNorma(s, wpis.payload);
+    const Ikona = IKONA_TYPU[s.typ] || FileText;
+    const poprawka = wpis ? opisPoprawki(wpis, wszystkieWpisy, pola) : null;
+    const wart = wartosciWpisu[s.klucz] || {};
+    const juzWMoich = wpis && maZadanieZe(zadaniaMoje, [], wpis.id);
+    return (
+      <div
+        key={s.id || s.klucz}
+        className={`grid grid-cols-[32px_1fr] md:grid-cols-[32px_minmax(0,1fr)_auto_auto] gap-x-3 gap-y-2 items-center px-4 md:px-[18px] py-3 border-t-[1.5px] border-[#DEDCD4] ${
+          alarm ? "bg-[#FFF3EF]" : ""
+        }`}
+        data-wpis-dnia={s.klucz}
+        data-stan={wpis ? (alarm ? "poza" : "ok") : "pusty"}
+      >
+        <span className={`w-8 h-8 rounded-lg grid place-items-center ${wpis ? (alarm ? "bg-[#FAEAE6] text-[#DE3A22]" : "bg-[#E2F3E9] text-[#1F7A4A]") : "bg-[#ECEBE6]"}`}>
+          <Ikona size={16} />
+        </span>
+        <div className="min-w-0">
+          <b className="block text-[15px]">{s.nazwa}</b>
+          <span className="block text-[12px] text-[#6E6E66]">
+            {pola.map((p) => [p.label !== s.nazwa ? p.label : "", opisNormy(p) ? `norma ${opisNormy(p)}` : ""].filter(Boolean).join(" ")).filter(Boolean).join(" · ") || "wpis dnia"}
+          </span>
         </div>
-      )}
-
-      <div className="grid xl:grid-cols-2 gap-4 items-start">
-        <div className={sectionCardCls}>
-          <div className={sectionHeaderCls}>
-            <span>Utarg i notatki</span>
-            {zamkniety ? (
-              <button
-                className="text-[13px] font-normal underline text-[#6E6E66]"
-                onClick={() => setKorekta({ pole: "obrot" })}
-              >
-                <Pencil size={13} className="inline -mt-0.5 mr-1" />
-                Popraw dane
-              </button>
-            ) : (
-              <button
-                className="text-[13px] font-normal underline text-[#6E6E66] disabled:opacity-40"
-                disabled={zapisuje}
-                onClick={() => zapisz(false)}
-              >
-                <Save size={13} className="inline -mt-0.5 mr-1" />
-                Zapisz
-              </button>
-            )}
-          </div>
-          {/* Plan finansowy dnia — TA SAMA tabela, którą wypełnia Grafik →
-              Konfiguracja → Budżet (utils/budzet.ts). Wpisane tu widać w
-              siatce Grafiku i odwrotnie; drugiej kopii tych liczb nie ma.
-              Osobna ramka, bo te dwa pola zapisują się od razu, a nie
-              przyciskiem "Zapisz" karty — różne zachowanie ma być widoczne,
-              zanim ktoś kliknie. */}
-          <div className="mx-4 mt-4 border-[2px] border-[#B7B6AE] rounded-xl bg-[#F1F1EE]">
-            <div className="px-3 py-2 flex flex-wrap items-baseline gap-x-2 border-b-[2px] border-[#B7B6AE]">
-              <span className="font-['Archivo'] font-bold text-[13px]">Plan finansowy dnia</span>
-              <span className="text-[11px] text-[#6E6E66]">
-                {cel && cel.zestawOd
-                  ? `z konfiguracji Grafiku (zestaw od ${cel.zestawOd.slice(0, 7)})`
-                  : "brak celu — wpisz go w Grafik → Konfiguracja → Budżet"}
+        {wpis ? (
+          <>
+            <div className="col-start-2 md:col-start-auto flex flex-wrap items-center gap-2 md:justify-end">
+              <b className={`font-['Archivo'] text-[16px] tabular-nums ${alarm ? "text-[#DE3A22]" : ""}`}>
+                {pola.map((p) => wartoscPola(p, wpis.payload)).join(" / ")}
+              </b>
+              {alarm && (
+                <span className="inline-flex items-center gap-1 text-[12px] font-bold text-[#DE3A22]">
+                  <AlertTriangle size={13} /> poza normą
+                </span>
+              )}
+              <span className="text-[12px] text-[#6E6E66]">
+                {wpis.recorded_by} · {godzTxt(wpis.recorded_at || wpis.created_at)}
               </span>
-              {!zamkniety && (
-                <span className="text-[11px] text-[#8F8E86] ml-auto">zapisuje się od razu</span>
+              {poprawka && <SladPoprawki opis={poprawka} />}
+            </div>
+            <div className="col-start-2 md:col-start-auto flex gap-1.5 md:justify-end">
+              {alarm && !juzWMoich && (
+                <button
+                  type="button"
+                  className={btnMalyCls}
+                  disabled={busy}
+                  onClick={() =>
+                    doMoich(
+                      `${s.nazwa} · ${pola.map((p) => wartoscPola(p, wpis.payload)).join(" / ")} — sprawdzić`,
+                      wpis.id,
+                      `Pomiar poza normą · ${wpis.recorded_by || "?"} ${godzTxt(wpis.recorded_at || wpis.created_at)}`
+                    )
+                  }
+                  data-do-zadan
+                >
+                  <Plus size={15} /> Do zadań
+                </button>
+              )}
+              {alarm && juzWMoich && (
+                <span className="text-[13px] font-bold text-[#1F7A4A] inline-flex items-center gap-1">
+                  <Check size={13} /> w Moich zadaniach
+                </span>
+              )}
+              <button
+                type="button"
+                className={btnDuchCls}
+                disabled={busy}
+                onClick={() => setPoprawkaWpisu({ wpis, szablon: { nazwa: s.nazwa, typ: s.typ, klucz: s.klucz, pola: s.pola } })}
+              >
+                Popraw
+              </button>
+            </div>
+          </>
+        ) : zamkniety ? (
+          <span className="col-start-2 md:col-start-auto md:col-span-2 text-[13px] text-[#6E6E66] md:text-right">nie wpisano</span>
+        ) : (
+          <>
+            <div className="col-start-2 md:col-start-auto flex flex-wrap items-center gap-2 md:justify-end">
+              {pola.map((p) =>
+                p.typ === "bool" ? (
+                  <span key={p.klucz} className="flex items-center gap-1.5">
+                    {pola.length > 1 && <span className="text-[12px] font-bold">{p.label}</span>}
+                    {[
+                      [true, "Tak"],
+                      [false, "Nie"],
+                    ].map(([v, l]) => (
+                      <button
+                        key={l}
+                        type="button"
+                        onClick={() => setWartosciWpisu((x) => ({ ...x, [s.klucz]: { ...(x[s.klucz] || {}), [p.klucz]: v } }))}
+                        className={`h-10 px-3 rounded-md border-[2px] font-bold text-[14px] ${
+                          (wart[p.klucz] === true) === v ? "bg-[#171714] text-white border-[#171714]" : "bg-white border-[#171714]"
+                        }`}
+                      >
+                        {l}
+                      </button>
+                    ))}
+                  </span>
+                ) : (
+                  <span key={p.klucz} className={`relative inline-block ${p.typ === "number" ? "w-[124px]" : "w-[170px]"}`}>
+                    <input
+                      className={`${inputCls} h-10 md:h-10 tabular-nums ${p.jednostka ? "pr-10" : ""}`}
+                      inputMode={p.typ === "number" ? "decimal" : "text"}
+                      placeholder={p.typ === "number" ? opisNormy(p) || p.label : p.label}
+                      aria-label={p.label}
+                      value={wart[p.klucz] ?? ""}
+                      onChange={(e) => setWartosciWpisu((x) => ({ ...x, [s.klucz]: { ...(x[s.klucz] || {}), [p.klucz]: e.target.value } }))}
+                      onKeyDown={(e) => e.key === "Enter" && zapiszWpisInline(s)}
+                      data-pole-wpisu={p.klucz}
+                    />
+                    {p.jednostka && (
+                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#6E6E66] font-bold pointer-events-none text-[13px]">{p.jednostka}</span>
+                    )}
+                  </span>
+                )
               )}
             </div>
-            <div className="p-3 grid md:grid-cols-2 gap-3">
-              {[
-                {
-                  pole: "utarg",
-                  label: "Prognozowany utarg (zł)",
-                  wartosc: cel ? cel.utarg : null,
-                  tekst: cel && cel.utarg != null ? zlBudzet(cel.utarg) : "—",
-                  nadpisane: cel && cel.nadpisane.utarg,
-                  baza: cel && cel.baza.utarg,
-                  jednostka: "zł",
-                },
-                {
-                  pole: "pct",
-                  label: "Docelowy % kosztu pracy",
-                  wartosc: celPct,
-                  tekst: celPct != null ? pct0(celPct) : "—",
-                  nadpisane: cel && cel.nadpisane.pct,
-                  baza: cel && cel.baza.pct,
-                  jednostka: "%",
-                },
-              ].map((f) => (
-                <div key={f.pole}>
-                  <label className={labelCls}>{f.label}</label>
-                  {planEdycja && planEdycja.pole === f.pole ? (
+            <div className="col-start-2 md:col-start-auto flex md:justify-end">
+              <button
+                type="button"
+                className={btnMalyCls}
+                disabled={busy || brakujacePola(s).length > 0}
+                onClick={() => zapiszWpisInline(s)}
+                aria-label={`Zapisz: ${s.nazwa}`}
+                data-zapisz-wpis
+              >
+                <Check size={15} />
+                {pola.every((p) => p.typ === "bool") ? "Zrobione" : ""}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  };
+
+  const wierszZadania = (w) => {
+    const zad = zadanieWpisu(w, tasks);
+    const pola = zad ? polaZadania(zad, wszystkieSzablony) : [];
+    const alarm = pozaNormaPola(pola, w.payload || {});
+    const poprawka = opisPoprawki(w, wszystkieWpisy, pola);
+    const juzWMoich = maZadanieZe(zadaniaMoje, [], w.id);
+    return (
+      <div key={w.id} className={`flex flex-wrap items-center gap-x-3 gap-y-1 px-4 md:px-[18px] py-3 border-t-[1.5px] border-[#DEDCD4] ${alarm ? "bg-[#FFF3EF]" : ""}`}>
+        <ListChecks size={16} className="text-[#6E6E66]" />
+        <span className="font-bold text-[15px]">{zad ? zad.title : "Pomiar z zadania"}</span>
+        <b className={`tabular-nums ${alarm ? "text-[#DE3A22]" : ""}`}>{pola.length ? pola.map((p) => wartoscPola(p, w.payload || {})).join(" · ") : "—"}</b>
+        {alarm && <MiniTag ton="bad">poza normą</MiniTag>}
+        <span className="text-[12px] text-[#6E6E66] ml-auto">
+          {w.recorded_by || "?"} · {godzTxt(w.recorded_at || w.created_at)}
+        </span>
+        {alarm && !zamkniety && !juzWMoich && (
+          <button
+            type="button"
+            className={btnMalyCls}
+            disabled={busy}
+            onClick={() => doMoich(`${zad ? zad.title : "Pomiar"} · ${pola.map((p) => wartoscPola(p, w.payload || {})).join(" / ")} — sprawdzić`, w.id, `Pomiar poza normą · ${w.recorded_by || "?"} ${godzTxt(w.recorded_at)}`)}
+          >
+            <Plus size={15} /> Do zadań
+          </button>
+        )}
+        {poprawka && <SladPoprawki opis={poprawka} />}
+      </div>
+    );
+  };
+
+  const listaWpisow = (
+    <>
+      {!szablony.length && (
+        <p className={`${podpowiedzCls} m-0 px-4 md:px-[18px] py-3`}>
+          Ten lokal nie ma jeszcze zdefiniowanych wpisów — dodasz je w Konfiguracji (sześć typowych pozycji jednym kliknięciem).
+        </p>
+      )}
+      {PORY.map((p) => {
+        const lista = szablony.filter((s) => (s.pora || "ogolne") === p.key);
+        if (!lista.length) return null;
+        return (
+          <div key={p.key}>
+            <div className="px-4 md:px-[18px] pt-3 pb-1 text-[12px] font-bold uppercase tracking-[0.06em] text-[#6E6E66]">{p.label}</div>
+            {lista.map(wierszWpisu)}
+          </div>
+        );
+      })}
+      {wpisyZadan.length > 0 && (
+        <div>
+          <div className="px-4 md:px-[18px] pt-3 pb-1 text-[12px] font-bold uppercase tracking-[0.06em] text-[#6E6E66]">Z checklisty</div>
+          {wpisyZadan.map(wierszZadania)}
+        </div>
+      )}
+    </>
+  );
+
+  const panelZdarzen = (
+    <Panel id="zdarzenia" ikona={Flag} tytul="Zdarzenia dnia" prawo={zdarzenia.length}>
+      {zdarzenia.length ? (
+        zdarzenia.map((w) => {
+          const pl = w.payload || {};
+          const kat = (KATEGORIE_ZDARZENIA.find((k) => k.key === pl.kategoria) || {}).label || "Zdarzenie";
+          return (
+            <div key={w.id} className="flex gap-3 px-4 md:px-[18px] py-3 border-t-[1.5px] border-[#DEDCD4] first:border-t-0" data-zdarzenie-dnia>
+              <span className="w-8 h-8 rounded-lg bg-[#FDF0D8] text-[#8A5300] grid place-items-center flex-shrink-0">
+                <Flag size={15} />
+              </span>
+              <div className="min-w-0 text-[14px]">
+                <b>
+                  {kat}
+                  {pl.czas ? ` · ${pl.czas}` : ""}
+                  {pl.miejsce ? ` · ${pl.miejsce}` : ""}
+                </b>
+                <div>{pl.opis || "(bez opisu)"}</div>
+                {pl.dzialania && <div className="text-[13px] text-[#6E6E66]">Zrobiono: {pl.dzialania}</div>}
+                {(pl.wplyw_kwota != null || pl.status === "eskalacja" || pl.wymaga_prowadzenia) && (
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    {pl.wplyw_kwota != null && <MiniTag>skutek {zl(-Math.abs(pl.wplyw_kwota))}</MiniTag>}
+                    {pl.status === "eskalacja" && <MiniTag ton="bad">do eskalacji</MiniTag>}
+                    {pl.wymaga_prowadzenia && <MiniTag ton="warn">w toku</MiniTag>}
+                  </div>
+                )}
+                <div className="text-[12px] text-[#6E6E66] mt-0.5">
+                  {w.recorded_by} · {godzTxt(w.recorded_at)}
+                </div>
+              </div>
+            </div>
+          );
+        })
+      ) : (
+        <p className={`${podpowiedzCls} m-0 px-4 md:px-[18px] py-3`}>
+          Brak zdarzeń. Reklamacja, awaria, wypadek, kradzież — opisz osobno, nie w notatce.
+        </p>
+      )}
+      {!zamkniety && (
+        <div className="flex flex-wrap items-center gap-2.5 px-4 md:px-[18px] py-3 border-t-[1.5px] border-[#DEDCD4]">
+          <button type="button" className={btnMalyCls} onClick={() => setZdarzenie(true)} data-zglos-zdarzenie>
+            <Plus size={15} /> Zgłoś zdarzenie
+          </button>
+          <span className={podpowiedzCls}>nie blokuje zamknięcia</span>
+        </div>
+      )}
+    </Panel>
+  );
+
+  const panelZespolu = (
+    <Panel
+      id="zespol"
+      ikona={Users}
+      tytul={data === dzis ? "Zespół dziś" : "Zespół tego dnia"}
+      prawo={`${zespol.filter((z) => z.fakt).length} os. · ${f1(auto.godzinyFakt)} h`}
+    >
+      {zespol.length === 0 ? (
+        <p className={`${podpowiedzCls} m-0 px-4 md:px-[18px] py-3`}>Nikt nie był w grafiku ani nie odbił zmiany.</p>
+      ) : (
+        zespol.map((z) => (
+          <div key={z.name} className="flex items-start gap-3 px-4 md:px-[18px] py-2.5 border-t-[1.5px] border-[#DEDCD4] first:border-t-0" data-osoba-dnia={z.name}>
+            <div className="min-w-0 flex-1">
+              <b className="block text-[15px]">{z.name}</b>
+              <span className="block text-[12px] text-[#6E6E66]">
+                {z.plan ? `grafik ${z.plan}` : "poza grafikiem"}
+                {z.fakt ? ` · fakt ${z.fakt}` : ""}
+              </span>
+            </div>
+            <div className="text-right">
+              <b className="block tabular-nums">{z.fakt ? `${f1(z.godziny)} h` : "—"}</b>
+              <small
+                className={`block text-[12px] ${z.spoznienie || z.poGrafiku || z.bezOdbicia ? "text-[#8A5300] font-bold" : "text-[#6E6E66]"}`}
+              >
+                {z.bezOdbicia
+                  ? "bez odbicia"
+                  : [z.spoznienie ? `spóźnienie ${z.spoznienie} min` : "", z.poGrafiku ? `+${z.poGrafiku} min po grafiku` : ""].filter(Boolean).join(" · ") ||
+                    (z.pozaGrafikiem ? "bez grafiku" : "zgodnie z grafikiem")}
+              </small>
+            </div>
+          </div>
+        ))
+      )}
+      <div className="px-4 md:px-[18px] py-2.5 border-t-[1.5px] border-[#DEDCD4] text-[12px] text-[#6E6E66]">
+        Pracownik widzi tylko swoje dane. Pełny obraz zespołu — tylko kierownik.
+      </div>
+    </Panel>
+  );
+
+  const planTekst =
+    cel && (cel.utarg != null || celPct != null)
+      ? `Plan dnia: ${cel.utarg != null ? zl(cel.utarg) : "—"} · cel kosztu ${celPct != null ? pctTxt(celPct) : "—"}${
+          cel.nadpisane && (cel.nadpisane.utarg || cel.nadpisane.pct) ? " (zmienione na ten dzień)" : ""
+        }`
+      : "Brak planu dnia — cel wpisuje się w Grafik → Konfiguracja → Budżet";
+
+  // =====================================================================
+  // DZIEŃ ZAMKNIĘTY — tylko odczyt + poprawka
+  // =====================================================================
+  if (zamkniety) {
+    const poprawione = new Set(korekty.map((k) => k.payload?.pole));
+    const wierszRo = (klucz, etykieta, wartosc, bezPoprawki) => (
+      <div key={klucz} className="grid grid-cols-[1fr_auto_auto] gap-3 items-center px-4 md:px-[18px] py-3 border-t-[1.5px] border-[#DEDCD4] first:border-t-0" data-pole-ro={klucz}>
+        <span className="text-[14px] text-[#6E6E66]">{etykieta}</span>
+        <b className="text-right tabular-nums">
+          {wartosc}
+          {poprawione.has(klucz) && (
+            <span className="ml-1.5 align-middle">
+              <MiniTag ton="warn">poprawione</MiniTag>
+            </span>
+          )}
+        </b>
+        {bezPoprawki ? (
+          <span />
+        ) : (
+          <button
+            type="button"
+            className={linkCls}
+            onClick={() => setKorekta({ pole: klucz, nowa: karta[klucz] == null ? "" : String(karta[klucz]), powod: "", chip: "" })}
+            data-poprawka={klucz}
+          >
+            Poprawka
+          </button>
+        )}
+      </div>
+    );
+    const powodLabel = (POWODY_UTARGU.find((x) => x.key === karta.obrot_powod) || {}).label;
+    return (
+      <div className="flex flex-col" data-karta-dnia="zamknieta">
+        {nawigacja}
+        {kafelki}
+        <div className="flex items-start gap-3 rounded-xl bg-[#F6F5F1] border-[2px] border-[#DEDCD4] px-4 py-3 my-4 text-[14px]" data-tylko-odczyt>
+          <Lock size={17} className="mt-0.5 flex-shrink-0" />
+          <span>
+            <b>Tylko do odczytu.</b> Zamknięte przez {karta.closed_by} o {godzTxt(karta.closed_at)}. Zmiana = poprawka z powodem — oryginał zostaje w historii.
+          </span>
+        </div>
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] items-start">
+          <div className="flex flex-col gap-4 min-w-0">
+            <Panel id="utarg-ro" ikona={Coins} tytul="Utarg">
+              {wierszRo("obrot", "Utarg brutto", karta.obrot != null ? zl(Number(karta.obrot)) : "—")}
+              {wierszRo("liczba_paragonow", "Liczba paragonów", karta.liczba_paragonow ?? "—")}
+              {wierszRo("sredni", "Średni paragon", czek != null ? `${String(czek).replace(".", ",")} zł` : "—", true)}
+              {(karta.obrot_powod || karta.obrot_komentarz) && wierszRo("obrot_powod", "Powód odchylenia", powodLabel || "—")}
+              {karta.obrot_komentarz && wierszRo("obrot_komentarz", "Komentarz do utargu", karta.obrot_komentarz)}
+              <div className="px-4 md:px-[18px] py-2.5 border-t-[1.5px] border-[#DEDCD4] text-[12px] text-[#6E6E66]">{planTekst}</div>
+            </Panel>
+            <Panel id="wpisy-ro" ikona={Thermometer} tytul="Wpisy dnia" prawo={`${szablony.filter((s) => wpisDlaSzablonu(s.klucz)).length}/${szablony.length}`}>
+              {listaWpisow}
+            </Panel>
+            <Panel id="notatka-ro" ikona={FileText} tytul="Notatka i tagi">
+              {wierszRo("handover", "Dla następnej zmiany", karta.handover || "—")}
+              {wierszRo("tagi", "Tagi dnia", tagi.length ? tagi.join(", ") : "—")}
+              {karta.notatka && wierszRo("notatka", "Opis zdarzenia (stary zapis)", karta.notatka)}
+            </Panel>
+          </div>
+          <div className="flex flex-col gap-4 min-w-0">
+            <Panel id="poprawki" ikona={History} tytul="Poprawki" prawo={korekty.length}>
+              {korekty.length ? (
+                korekty.map((k) => (
+                  <div key={k.id} className="flex gap-3 px-4 md:px-[18px] py-3 border-t-[1.5px] border-[#DEDCD4] first:border-t-0 text-[14px]" data-korekta-dnia>
+                    <History size={16} className="mt-0.5 flex-shrink-0 text-[#6E6E66]" />
+                    <div className="min-w-0">
+                      <b>
+                        {k.payload?.label}: <s className="text-[#6E6E66] font-semibold">{String(k.payload?.stare ?? "—")}</s> → {String(k.payload?.nowe ?? "—")}
+                      </b>
+                      <div className="text-[13px] text-[#6E6E66]">
+                        „{k.payload?.powod}” · {k.recorded_by} · {new Date(k.recorded_at).toLocaleString("pl-PL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className={`${podpowiedzCls} m-0 px-4 md:px-[18px] py-3`}>Brak poprawek — dane jak przy zamknięciu.</p>
+              )}
+            </Panel>
+            {panelZdarzen}
+            {panelZespolu}
+          </div>
+        </div>
+
+        {korekta && (() => {
+          const def = POLA_KOREKTY.find((p) => p.klucz === korekta.pole) || POLA_KOREKTY[0];
+          const stare = karta[korekta.pole];
+          const staryTekst =
+            korekta.pole === "obrot" && stare != null
+              ? zl(Number(stare))
+              : korekta.pole === "obrot_powod"
+              ? (POWODY_UTARGU.find((x) => x.key === stare) || {}).label || "—"
+              : stare == null || stare === ""
+              ? "—"
+              : String(stare);
+          const kompletny = String(korekta.nowa).trim() !== "" && (korekta.chip || korekta.powod.trim().length >= 3);
+          return (
+            <PanelBoczny
+              id="poprawka"
+              tytul="Wyślij poprawkę"
+              podtytul={`${dzienTxt(data)} · dzień zamknięty`}
+              onClose={() => setKorekta(null)}
+              stopka={
+                <>
+                  <span className="flex-1" />
+                  <button type="button" className={btnObrysCls} onClick={() => setKorekta(null)}>
+                    Anuluj
+                  </button>
+                  <button type="button" className={btnGlownyCls} disabled={busy || !kompletny} onClick={zapiszKorekte} data-wyslij-poprawke>
+                    <History size={17} /> Wyślij poprawkę
+                  </button>
+                </>
+              }
+            >
+              <Pole etykieta="Co poprawiasz">
+                <select
+                  className={`${inputCls} font-semibold`}
+                  value={korekta.pole}
+                  onChange={(e) => setKorekta({ ...korekta, pole: e.target.value, nowa: karta[e.target.value] == null ? "" : String(karta[e.target.value]) })}
+                >
+                  {POLA_KOREKTY.filter((p) => p.klucz !== "notatka" || karta.notatka).map((p) => (
+                    <option key={p.klucz} value={p.klucz}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
+              </Pole>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Pole etykieta="Było">
+                  <div className="h-12 md:h-11 rounded-md border-[2px] border-[#DEDCD4] bg-[#F6F5F1] px-3 flex items-center text-[#6E6E66]">
+                    <s>{staryTekst}</s>
+                  </div>
+                </Pole>
+                <Pole etykieta="Powinno być">
+                  {korekta.pole === "obrot_powod" ? (
+                    <select className={`${inputCls} font-semibold`} value={korekta.nowa} onChange={(e) => setKorekta({ ...korekta, nowa: e.target.value })}>
+                      <option value="">— wybierz —</option>
+                      {POWODY_UTARGU.map((x) => (
+                        <option key={x.key} value={x.key}>
+                          {x.label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
                     <input
-                      autoFocus
-                      className={inputCls}
-                      inputMode="decimal"
-                      value={planEdycja.wartosc}
-                      onChange={(e) => setPlanEdycja({ ...planEdycja, wartosc: e.target.value })}
-                      onBlur={zapiszPlan}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") zapiszPlan();
-                        if (e.key === "Escape") setPlanEdycja(null);
-                      }}
+                      className={`${inputCls} ${def.typ === "number" ? "tabular-nums" : ""}`}
+                      inputMode={def.typ === "number" ? "decimal" : "text"}
+                      value={korekta.nowa}
+                      onChange={(e) => setKorekta({ ...korekta, nowa: e.target.value })}
+                      data-nowa-wartosc
                     />
+                  )}
+                </Pole>
+              </div>
+              <Pole etykieta="Powód · wymagany">
+                <div className="flex gap-1.5 flex-wrap">
+                  {POWODY_POPRAWKI.map((c) => (
+                    <Chip key={c} wlaczony={korekta.chip === c} onClick={() => setKorekta({ ...korekta, chip: korekta.chip === c ? "" : c })} data-powod-poprawki={c}>
+                      {c}
+                    </Chip>
+                  ))}
+                </div>
+                <input className={inputCls} placeholder="co konkretnie (opcjonalnie przy wybranym powodzie)" value={korekta.powod} onChange={(e) => setKorekta({ ...korekta, powod: e.target.value })} />
+              </Pole>
+              <div className="rounded-lg bg-[#F6F5F1] px-3.5 py-3 text-[13px] flex gap-2">
+                <History size={15} className="mt-0.5 flex-shrink-0" />
+                Oryginał zostaje w historii. Poprawka pojawi się przy dniu z Twoim imieniem, datą i powodem, a raporty przeliczą się od nowa.
+              </div>
+            </PanelBoczny>
+          );
+        })()}
+
+        {poprawkaWpisu && (
+          <ModalWpisu
+            szablon={poprawkaWpisu.szablon}
+            wartosciStartowe={{ ...(poprawkaWpisu.wpis.payload || {}) }}
+            powodWymagany
+            onClose={() => setPoprawkaWpisu(null)}
+            onSave={zapiszPoprawkeWpisu}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // =====================================================================
+  // DZIEŃ OTWARTY — trzy kroki i zamknięcie
+  // =====================================================================
+  const wymaganeBrak = szablony.filter((s) => s.wymagany !== false && !wpisDlaSzablonu(s.klucz)).length;
+  const brakuje = [obrot == null ? "utarg" : null, wymaganeBrak ? `${wymaganeBrak} ${wymaganeBrak === 1 ? "wpis" : wymaganeBrak < 5 ? "wpisy" : "wpisów"}` : null].filter(Boolean);
+  const wpisyZrobione = szablony.filter((s) => wpisDlaSzablonu(s.klucz)).length;
+
+  return (
+    <div className="flex flex-col" data-karta-dnia="otwarta">
+      {nawigacja}
+      {kafelki}
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] items-start mt-4">
+        <div className="flex flex-col gap-4 min-w-0">
+          <Panel id="krok-utarg" krok={1} zrobiony={obrot != null} tytul="Utarg" prawo="~20 s">
+            <div className="px-4 md:px-[18px] py-4 flex flex-col gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Pole etykieta="Utarg brutto" podpowiedz={odniesienie ? `${odniesienie.nazwa === "plan" ? "plan z Grafiku" : "zwykle w ten dzień"} ${zl(odniesienie.kwota)}` : "brak planu w Grafiku"}>
+                  <div className="relative">
+                    <input
+                      className={`${inputCls} !h-14 !text-[22px] font-['Archivo'] font-extrabold tabular-nums pr-12`}
+                      inputMode="decimal"
+                      placeholder={odniesienie ? String(Math.round(odniesienie.kwota)) : "0"}
+                      value={pole("obrot")}
+                      onChange={(e) => ustaw("obrot", e.target.value)}
+                      onBlur={() => zapiszPole("obrot")}
+                      data-pole-karty="obrot"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6E6E66] font-bold pointer-events-none">zł</span>
+                  </div>
+                </Pole>
+                <Pole etykieta="Liczba paragonów" podpowiedz={czek != null ? `średni paragon ${String(czek).replace(".", ",")} zł` : "średni paragon policzę sam"}>
+                  <input
+                    className={`${inputCls} !h-14 !text-[22px] font-['Archivo'] font-extrabold tabular-nums`}
+                    inputMode="numeric"
+                    value={pole("liczba_paragonow")}
+                    onChange={(e) => ustaw("liczba_paragonow", e.target.value)}
+                    onBlur={() => zapiszPole("liczba_paragonow")}
+                    data-pole-karty="liczba_paragonow"
+                  />
+                </Pole>
+              </div>
+              {obrot != null && (
+                <div className="flex flex-wrap gap-x-5 gap-y-1 rounded-lg bg-[#F6F5F1] px-3.5 py-2.5 text-[14px]" data-wyliczenie-utargu>
+                  {odchylenie != null && (
+                    <span>
+                      vs {odniesienie.nazwa} <b className={odchylenie <= -PROG_ODCHYLENIA_PCT ? "text-[#DE3A22]" : ""}>{znak(odchylenie, "%")}</b>
+                    </span>
+                  )}
+                  {lcPct != null && (
+                    <span>
+                      koszt pracy{" "}
+                      <b className={lcPct > (celPct != null ? celPct : 35) ? "text-[#8A5300]" : "text-[#1F7A4A]"}>{pctTxt(lcPct)}</b>
+                      {celPct != null ? ` (cel ${pctTxt(celPct)})` : ""}
+                    </span>
+                  )}
+                  {celPct != null && (
+                    <span>
+                      zapas do celu <b>{zl((obrot * celPct) / 100 - auto.koszt)}</b>
+                    </span>
+                  )}
+                </div>
+              )}
+              {odchylenie != null && Math.abs(odchylenie) >= PROG_ODCHYLENIA_PCT && (
+                <Pole etykieta={`Dlaczego ${odchylenie < 0 ? "mniej" : "więcej"} niż ${odniesienie.nazwa}? · pomaga czytać liczby w Analityce`}>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {POWODY_UTARGU.map((x) => (
+                      <Chip
+                        key={x.key}
+                        wlaczony={pole("obrot_powod") === x.key}
+                        onClick={() => {
+                          const v = pole("obrot_powod") === x.key ? "" : x.key;
+                          ustaw("obrot_powod", v);
+                          zapiszPole("obrot_powod", v);
+                        }}
+                        data-powod-utargu={x.key}
+                      >
+                        {x.label}
+                      </Chip>
+                    ))}
+                  </div>
+                  <input
+                    className={inputCls}
+                    placeholder="co konkretnie się stało (opcjonalnie)"
+                    value={pole("obrot_komentarz")}
+                    onChange={(e) => ustaw("obrot_komentarz", e.target.value)}
+                    onBlur={() => zapiszPole("obrot_komentarz")}
+                  />
+                </Pole>
+              )}
+              {planEdycja ? (
+                <div className="flex flex-wrap items-end gap-2 rounded-lg border-[2px] border-[#DEDCD4] px-3.5 py-3" data-plan-dnia>
+                  <Pole etykieta="Plan utargu na ten dzień">
+                    <input className={`${inputCls} w-[150px] tabular-nums`} inputMode="decimal" value={planEdycja.utarg} onChange={(e) => setPlanEdycja({ ...planEdycja, utarg: e.target.value })} />
+                  </Pole>
+                  <Pole etykieta="Cel kosztu pracy %">
+                    <input className={`${inputCls} w-[110px] tabular-nums`} inputMode="decimal" value={planEdycja.pct} onChange={(e) => setPlanEdycja({ ...planEdycja, pct: e.target.value })} />
+                  </Pole>
+                  <button type="button" className={btnMalyGlownyCls} disabled={busy} onClick={zapiszPlan}>
+                    <Check size={15} /> Zapisz
+                  </button>
+                  <button type="button" className={btnMalyCls} onClick={() => setPlanEdycja(null)}>
+                    Anuluj
+                  </button>
+                  <span className={`${podpowiedzCls} w-full`}>Zmiana tylko na ten dzień — ta sama liczba co w siatce Grafiku (Wg budżetu).</span>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2 text-[13px] text-[#6E6E66]">
+                  <span>{planTekst}</span>
+                  <button
+                    type="button"
+                    className={`${linkCls} !text-[13px] inline-flex items-center gap-1`}
+                    onClick={() => setPlanEdycja({ utarg: cel && cel.utarg != null ? String(cel.utarg) : "", pct: celPct != null ? String(celPct) : "" })}
+                  >
+                    <Pencil size={12} /> Zmień na ten dzień
+                  </button>
+                </div>
+              )}
+            </div>
+          </Panel>
+
+          <Panel id="krok-wpisy" krok={2} zrobiony={szablony.length > 0 && wpisyZrobione === szablony.length} tytul="Wpisy dnia" prawo={`${wpisyZrobione}/${szablony.length} · zapisują się od razu`}>
+            {listaWpisow}
+          </Panel>
+
+          <Panel id="krok-notatka" krok={3} zrobiony={!!pole("handover")} tytul="Notatka i tagi" prawo="opcjonalnie">
+            <div className="px-4 md:px-[18px] py-4 flex flex-col gap-4">
+              <Pole etykieta="Dla następnej zmiany">
+                <textarea
+                  className={`${inputCls} h-20 py-2`}
+                  placeholder="Co jutrzejsza zmiana musi wiedzieć"
+                  value={pole("handover")}
+                  onChange={(e) => ustaw("handover", e.target.value)}
+                  onBlur={() => zapiszPole("handover")}
+                  data-pole-karty="handover"
+                />
+                {pole("handover") &&
+                  (maZadanieZe(zadaniaMoje, [], `handover:${lokal}:${data}`) ? (
+                    <span className="text-[13px] font-bold text-[#1F7A4A] inline-flex items-center gap-1">
+                      <Check size={13} /> w Moich zadaniach
+                    </span>
                   ) : (
                     <button
                       type="button"
-                      disabled={zamkniety}
-                      onClick={() =>
-                        setPlanEdycja({
-                          pole: f.pole,
-                          wartosc: f.wartosc == null ? "" : String(f.wartosc),
-                        })
-                      }
-                      className="w-full text-left"
-                      title={
-                        zamkniety
-                          ? "Dzień jest zamknięty — planu nie zmieniamy po fakcie"
-                          : "Kliknij, aby zmienić tę wartość tylko na ten dzień"
-                      }
+                      className={`${linkCls} self-start inline-flex items-center gap-1`}
+                      onClick={() => {
+                        const t = pole("handover").trim();
+                        doMoich(t.length > 90 ? `${t.slice(0, 87)}…` : t, `handover:${lokal}:${data}`, `Karta dnia ${data.slice(8, 10)}.${data.slice(5, 7)}`);
+                      }}
+                      data-notatka-do-zadan
                     >
-                      <span
-                        className={`font-['Archivo'] font-extrabold text-[20px] ${
-                          f.nadpisane ? "text-[#DE3A22]" : "text-[#171714]"
-                        } ${zamkniety ? "" : "border-b-[2px] border-dashed border-[#B7B6AE]"}`}
-                      >
-                        {f.tekst}
-                      </span>
-                      {!zamkniety && (
-                        <Pencil size={12} className="inline -mt-0.5 ml-1.5 text-[#B7B6AE]" />
-                      )}
+                      <Plus size={14} /> Zrób z tego zadanie
                     </button>
-                  )}
-                  {f.nadpisane && (
-                    <div className="text-[11px] text-[#DE3A22] leading-tight mt-0.5">
-                      zmienione na ten dzień
-                      {f.baza != null &&
-                        ` — w zestawie ${
-                          f.pole === "utarg" ? zlBudzet(f.baza) : pct0(f.baza)
-                        }`}
-                    </div>
-                  )}
+                  ))}
+              </Pole>
+              <Pole etykieta="Tagi dnia · wyjaśniają liczby w Analityce">
+                <div className="flex gap-1.5 flex-wrap">
+                  {[...new Set([...TAGI_PODPOWIEDZI, ...tagi])].map((t) => (
+                    <Chip
+                      key={t}
+                      wlaczony={tagi.includes(t)}
+                      onClick={() => {
+                        const v = tagiTekst(tagi.includes(t) ? tagi.filter((x) => x !== t) : [...tagi, t]);
+                        ustaw("tagi", v);
+                        zapiszPole("tagi", v);
+                      }}
+                      data-tag-dnia={t}
+                    >
+                      {t}
+                    </Chip>
+                  ))}
+                  <input
+                    className="h-[34px] w-[150px] rounded-full border-[1.5px] border-dashed border-[#B7B6AE] px-3 text-[13px]"
+                    placeholder="+ własny tag"
+                    value={nowyTag}
+                    onChange={(e) => setNowyTag(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key !== "Enter" || !nowyTag.trim()) return;
+                      const v = tagiTekst([...tagi, nowyTag.trim()]);
+                      ustaw("tagi", v);
+                      zapiszPole("tagi", v);
+                      setNowyTag("");
+                    }}
+                  />
                 </div>
-              ))}
-              {/* Do czego to prowadzi: limit kosztu pracy na ten dzień i to, czy
-                  faktyczny koszt się w nim zmieścił. Bez tej linijki kierownik
-                  musiałby mnożyć w pamięci, a wtedy nikt nie mnoży. */}
-              {cel && cel.utarg != null && celPct != null && (
-                <div className="md:col-span-2 text-[12px] text-[#6E6E66] leading-snug">
-                  Cel kosztu pracy na ten dzień:{" "}
-                  <strong className="text-[#171714]">
-                    {zlBudzet((cel.utarg * celPct) / 100)}
-                  </strong>
-                  {auto.koszt > 0 && (
-                    <>
-                      {" · "}
-                      <strong
-                        style={{
-                          color:
-                            auto.koszt > (cel.utarg * celPct) / 100 ? COLORS.accent : "#2F7A2A",
-                        }}
-                      >
-                        {auto.koszt > (cel.utarg * celPct) / 100 ? "przekroczony o " : "zapas "}
-                        {zlBudzet(Math.abs((cel.utarg * celPct) / 100 - auto.koszt))}
-                      </strong>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="p-4 grid md:grid-cols-2 gap-4">
-            <div>
-              <label className={labelCls}>Utarg brutto (zł)</label>
-              <input
-                type="number"
-                className={inputCls}
-                disabled={zamkniety}
-                value={pole("obrot")}
-                onChange={(e) => ustaw("obrot", e.target.value)}
-              />
-              {/* Dwie linijki, bo to dwie różne rzeczy: "zwykle" to obserwacja
-                  z ostatnich czterech takich dni tygodnia, "plan" to liczba,
-                  którą kierownik sam wpisał w Grafiku. Zlepienie ich w jedną
-                  wartość ukryłoby dokładnie ten dzień, o którym warto
-                  porozmawiać — ten, w którym się rozjeżdżają. */}
-              {prognoza && (
-                <div
-                  className="text-[12px] mt-1"
-                  style={{
-                    color:
-                      obrotLiczba != null && obrotLiczba < prognoza.kwota
-                        ? COLORS.accent
-                        : COLORS.muted,
-                  }}
-                >
-                  zwykle {zl(prognoza.kwota)}
-                  {obrotLiczba != null && ` · ${znak(obrotLiczba - prognoza.kwota, " zł")}`}
-                </div>
-              )}
-              {cel && cel.utarg != null && (
-                <div
-                  className="text-[12px] leading-tight"
-                  style={{
-                    color:
-                      obrotLiczba != null && obrotLiczba < cel.utarg
-                        ? COLORS.accent
-                        : COLORS.muted,
-                  }}
-                >
-                  plan {zlBudzet(cel.utarg)}
-                  {obrotLiczba != null && ` · ${znak(obrotLiczba - cel.utarg, " zł")}`}
+              </Pole>
+              {karta && karta.notatka && (
+                <div className="text-[13px] text-[#6E6E66]">
+                  <b className="text-[#171714]">Opis zdarzenia (stary zapis):</b> {karta.notatka}
                 </div>
               )}
             </div>
-            <div>
-              <label className={labelCls}>Liczba paragonów</label>
-              <input
-                type="number"
-                className={inputCls}
-                disabled={zamkniety}
-                value={pole("liczba_paragonow")}
-                onChange={(e) => ustaw("liczba_paragonow", e.target.value)}
-              />
-              <div className="text-[12px] text-[#6E6E66] mt-1">
-                {czek != null ? `średni paragon ${czek} zł` : "średni paragon policzy się sam"}
-              </div>
-            </div>
-            {/* Powód pytamy zawsze, ale podpowiadamy dopiero przy odchyleniu —
-                przy zwykłym dniu nie ma czego tłumaczyć i pole tylko przeszkadza. */}
-            <div>
-              <label className={labelCls}>Powód odchylenia</label>
-              <select
-                className={inputCls}
-                disabled={zamkniety}
-                value={pole("obrot_powod")}
-                onChange={(e) => ustaw("obrot_powod", e.target.value)}
-              >
-                <option value="">— nie dotyczy —</option>
-                {POWODY_UTARGU.map((x) => (
-                  <option key={x.key} value={x.key}>
-                    {x.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className={labelCls}>Komentarz do utargu</label>
-              <input
-                className={inputCls}
-                disabled={zamkniety}
-                placeholder="co konkretnie się stało"
-                value={pole("obrot_komentarz")}
-                onChange={(e) => ustaw("obrot_komentarz", e.target.value)}
-              />
-            </div>
-            <div className="md:col-span-2">
-              <label className={labelCls}>Notatka dla następnej zmiany</label>
-              <textarea
-                rows={2}
-                className={inputCls}
-                disabled={zamkniety}
-                placeholder="Co następna zmiana musi wiedzieć"
-                value={pole("handover")}
-                onChange={(e) => ustaw("handover", e.target.value)}
-              />
-            </div>
-            <div className="md:col-span-2">
-              <label className={labelCls}>Tagi dnia</label>
-              <input
-                className={inputCls}
-                disabled={zamkniety}
-                placeholder="autobus turystów, awaria frytkownicy"
-                value={pole("tagi")}
-                onChange={(e) => ustaw("tagi", e.target.value)}
-              />
-            </div>
-            <div className="md:col-span-2">
-              <label className="flex items-center gap-2 text-[15px]">
-                <input
-                  type="checkbox"
-                  className="w-5 h-5"
-                  disabled={zamkniety}
-                  checked={pole("cos_nadzwyczajnego") === true}
-                  onChange={(e) => ustaw("cos_nadzwyczajnego", e.target.checked)}
-                />
-                wydarzyło się coś nadzwyczajnego
-              </label>
-              {pole("cos_nadzwyczajnego") === true && (
-                <textarea
-                  rows={2}
-                  className={inputCls + " mt-2"}
-                  disabled={zamkniety}
-                  value={pole("notatka")}
-                  onChange={(e) => ustaw("notatka", e.target.value)}
-                />
-              )}
-            </div>
-          </div>
+          </Panel>
         </div>
+        <div className="flex flex-col gap-4 min-w-0">
+          {panelZdarzen}
+          {panelZespolu}
+        </div>
+      </div>
 
-        <div className={sectionCardCls}>
-          <div className={sectionHeaderCls}>
-            <span>Wpisy dnia</span>
-            <span className="text-[12px] font-normal text-[#6E6E66]">
-              {szablony.filter((s) => wpisDlaSzablonu(s.klucz)).length}/{szablony.length} ·
-              zapisują się osobno
-            </span>
-          </div>
-          {!szablony.length && (
-            <div className="p-4 text-[14px] text-[#6E6E66]">
-              Ten lokal nie ma jeszcze zdefiniowanych wpisów. Dodasz je w Konfiguracji —
-              sześć typowych pozycji wchodzi jednym kliknięciem.
-            </div>
+      <div
+        className="sticky bottom-0 z-20 mt-4 -mx-4 md:mx-0 px-4 md:px-[18px] py-2.5 md:py-3 bg-white border-t-[2px] md:border-[2px] border-[#171714] md:rounded-xl flex items-center gap-2 md:gap-3 shadow-[0_-6px_20px_rgba(0,0,0,0.06)]"
+        data-pasek-zamkniecia
+      >
+        <span className="flex-1 min-w-0 text-[13px] md:text-[14px] leading-[18px]">
+          {brakuje.length ? (
+            <>
+              Do zamknięcia brakuje: <b>{brakuje.join(", ")}</b>
+            </>
+          ) : (
+            <b>Wszystko wpisane · gotowe do zamknięcia</b>
           )}
-          {szablony.map((s) => {
-            const wpis = wpisDlaSzablonu(s.klucz);
-            const alarm = wpis && pozaNorma(s, wpis.payload);
-            // Poprawiona wartość bez śladu wygląda jak wpisana za pierwszym
-            // razem — a wtedy zapis HACCP przestaje być dowodem czegokolwiek.
-            const poprawka = opisPoprawki(wpis, wszystkieWpisy, polaSzablonu(s));
-            return (
-              <div
-                key={s.id}
-                className="px-4 py-3 border-b-[2px] border-[#171714] last:border-b-0 flex flex-wrap items-center gap-3"
-              >
-                <div className="flex-1 min-w-[160px]">
-                  <div className="font-['Archivo'] font-bold text-[15px]">{s.nazwa}</div>
-                  <div className="text-[12px] text-[#6E6E66]">
-                    {polaSzablonu(s)
-                      .map((p) => [p.label, opisNormy(p)].filter(Boolean).join(" "))
-                      .join(" · ")}
-                  </div>
-                </div>
-                {wpis ? (
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="font-['Archivo'] font-extrabold text-[17px]"
-                      style={{ color: alarm ? COLORS.accent : COLORS.ink }}
-                    >
-                      {polaSzablonu(s)
-                        .map((p) => wartoscPola(p, wpis.payload))
-                        .join(" / ")}
-                    </div>
-                    {alarm ? (
-                      <AlertTriangle size={18} color={COLORS.accent} />
-                    ) : (
-                      <CheckCircle2 size={18} color="#2C6A4F" />
-                    )}
-                    <div className="text-[11px] text-[#8F8E86] w-[92px]">
-                      {wpis.recorded_by} ·{" "}
-                      {new Date(wpis.recorded_at).toLocaleTimeString("pl-PL", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    className={btnSecondaryCls}
-                    disabled={zamkniety}
-                    onClick={() => setNowyWpis({ szablon: s })}
-                  >
-                    <Plus size={14} className="inline mr-1" />
-                    Wpisz
-                  </button>
-                )}
-                {poprawka && <SladPoprawki opis={poprawka} />}
-              </div>
-            );
-          })}
-          <div className="p-4">
-            <button
-              className={btnSecondaryCls}
-              disabled={zamkniety}
-              onClick={() => setZdarzenie(true)}
-            >
-              <AlertTriangle size={14} className="inline mr-1" />
-              Zgłoś zdarzenie
+          <small className={`${potwierdz ? "block" : "hidden md:block"} text-[12px] text-[#6E6E66]`}>
+            {potwierdz ? "Po zamknięciu danych nie da się edytować — tylko wysłać poprawkę." : "Utarg, wpisy, notatka i tagi zapisują się na bieżąco."}
+          </small>
+        </span>
+        {potwierdz ? (
+          <>
+            <button type="button" className={btnObrysCls} onClick={() => setPotwierdz(false)}>
+              Wróć
             </button>
-          </div>
-        </div>
+            <button type="button" className={btnGlownyCls} disabled={busy} onClick={zamknij} data-potwierdz-zamkniecie>
+              <Lock size={16} /> Tak, zamknij
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            className={btnGlownyCls}
+            disabled={busy || obrot == null}
+            title={obrot == null ? "Najpierw utarg" : ""}
+            onClick={() => setPotwierdz(true)}
+            data-zamknij-dzien
+          >
+            <Lock size={16} /> Zamknij dzień
+          </button>
+        )}
       </div>
-
-      {wpisy.filter((w) => czyWpisZadania(w)).length > 0 && (
-        <div className={sectionCardCls}>
-          <div className={sectionHeaderCls}>Z checklisty</div>
-          {wpisy
-            .filter((w) => czyWpisZadania(w))
-            .map((w) => {
-              // Pomiar zebrany przez zadanie z blokiem — ta sama wartość co w
-              // dzienniku, tylko wpisana w trakcie zmiany, a nie przy zamknięciu
-              // dnia. Pozycje podpięte pod szablon Pulsu stoją wyżej, w liście
-              // wymaganych wpisów, i nie powtarzają się tutaj.
-              const zad = zadanieWpisu(w, tasks);
-              const pola = zad ? polaZadania(zad, wszystkieSzablony) : [];
-              const alarm = pozaNormaPola(pola, w.payload || {});
-              const poprawka = opisPoprawki(w, wszystkieWpisy, pola);
-              return (
-                <div
-                  key={w.id}
-                  className="px-4 py-3 border-b-[2px] border-[#171714] last:border-b-0 flex flex-wrap items-center gap-x-3 gap-y-1"
-                >
-                  <span className="text-[15px] font-semibold">
-                    {zad ? zad.title : "Pomiar z zadania"}
-                  </span>
-                  <span
-                    className={`text-[15px] tabular-nums ${
-                      alarm ? "font-bold" : "text-[#171714]"
-                    }`}
-                    style={alarm ? { color: COLORS.accent } : undefined}
-                  >
-                    {pola.length
-                      ? pola.map((pole) => wartoscPola(pole, w.payload || {})).join(" · ")
-                      : "—"}
-                  </span>
-                  {alarm && (
-                    <span
-                      className="text-[11px] font-bold uppercase tracking-wider rounded px-2 py-0.5 text-white"
-                      style={{ backgroundColor: COLORS.accent }}
-                    >
-                      poza normą
-                    </span>
-                  )}
-                  <span className="text-[12px] text-[#6E6E66] ml-auto">
-                    {w.recorded_by || "?"}
-                    {w.recorded_at ? " · " + String(w.recorded_at).slice(11, 16) : ""}
-                  </span>
-                  {poprawka && <SladPoprawki opis={poprawka} />}
-                </div>
-              );
-            })}
-        </div>
-      )}
-
-      {wpisy.filter((w) => !w.template_key).length > 0 && (
-        <div className={sectionCardCls}>
-          <div className={sectionHeaderCls}>Zdarzenia</div>
-          {wpisy
-            .filter((w) => !w.template_key)
-            .map((w) => {
-              const pl = w.payload || {};
-              const kat = (KATEGORIE_ZDARZENIA.find((k) => k.key === pl.kategoria) || {}).label;
-              return (
-                <div
-                  key={w.id}
-                  className="px-4 py-3 border-b-[2px] border-[#171714] last:border-b-0"
-                >
-                  <div className="flex flex-wrap items-center gap-2 mb-1">
-                    {kat && (
-                      <span className="text-[11px] font-bold uppercase tracking-wider bg-[#F1F1EE] border border-[#B7B6AE] rounded px-2 py-0.5">
-                        {kat}
-                      </span>
-                    )}
-                    {pl.status === "eskalacja" && (
-                      <span
-                        className="text-[11px] font-bold uppercase tracking-wider rounded px-2 py-0.5 text-white"
-                        style={{ backgroundColor: COLORS.accent }}
-                      >
-                        do eskalacji
-                      </span>
-                    )}
-                    {pl.wymaga_prowadzenia && (
-                      <span className="text-[11px] font-bold uppercase tracking-wider border-[2px] rounded px-2 py-0.5" style={{ borderColor: COLORS.accent, color: COLORS.accent }}>
-                        w toku
-                      </span>
-                    )}
-                    {pl.czas && <span className="text-[12px] text-[#6E6E66]">{pl.czas}</span>}
-                    {pl.miejsce && <span className="text-[12px] text-[#6E6E66]">· {pl.miejsce}</span>}
-                  </div>
-                  <div className="text-[15px]">{pl.opis || "(bez opisu)"}</div>
-                  {pl.dzialania && (
-                    <div className="text-[13px] text-[#6E6E66] mt-1">
-                      Zrobiono: {pl.dzialania}
-                    </div>
-                  )}
-                  {(pl.personel || pl.gosc) && (
-                    <div className="text-[13px] text-[#6E6E66]">
-                      Udział: {[pl.personel, pl.gosc].filter(Boolean).join(", ")}
-                    </div>
-                  )}
-                  {pl.wplyw_typ && (
-                    <div className="text-[13px] text-[#6E6E66]">
-                      Skutek finansowy: {pl.wplyw_typ}
-                      {pl.wplyw_kwota != null ? ` · ${pl.wplyw_kwota} zł` : ""}
-                    </div>
-                  )}
-                  {pl.dowod && (
-                    <div className="text-[13px] text-[#6E6E66]">Dowód: {pl.dowod}</div>
-                  )}
-                  <div className="text-[12px] text-[#8F8E86] mt-1">
-                    {w.recorded_by} · {new Date(w.recorded_at).toLocaleString("pl-PL")}
-                  </div>
-                </div>
-              );
-            })}
-        </div>
-      )}
-
-      {/* Historia poprawek zamkniętego dnia. Stoi osobno i zawsze, bo jej sens
-          polega właśnie na tym, że nie da się jej pominąć ani nadpisać. */}
-      {korekty.length > 0 && (
-        <div className={sectionCardCls}>
-          <div className={sectionHeaderCls}>Poprawki po zamknięciu</div>
-          {korekty.map((k) => (
-            <div key={k.id} className="px-4 py-3 border-b-[2px] border-[#171714] last:border-b-0">
-              <div className="text-[15px]">
-                <b>{k.payload?.label}</b>: {String(k.payload?.stare ?? "—")} →{" "}
-                <b>{String(k.payload?.nowe ?? "—")}</b>
-              </div>
-              <div className="text-[13px] text-[#6E6E66]">{k.payload?.powod}</div>
-              <div className="text-[12px] text-[#8F8E86]">
-                {k.recorded_by} · {new Date(k.recorded_at).toLocaleString("pl-PL")}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Miejsce na moduł zespołu (Etap D w planie rozwoju). Stoi puste celowo:
-          dzień i ludzie tego dnia należą do jednej karty, więc lepiej zostawić
-          im miejsce teraz, niż doklejać je później gdzie indziej. */}
-      <div className="rounded-xl border-[2px] border-dashed border-[#B7B6AE] p-4">
-        <div className="flex flex-wrap items-center gap-2 mb-1">
-          <Users size={16} color={COLORS.mutedLight} />
-          <span className="font-['Archivo'] font-bold text-[15px] text-[#6E6E66]">
-            Zespół tego dnia
-          </span>
-          <span className="text-[11px] uppercase tracking-wider text-[#8F8E86] border border-[#B7B6AE] rounded px-1.5 py-0.5">
-            w budowie
-          </span>
-        </div>
-        <p className="text-[13px] text-[#6E6E66] max-w-[70ch]">
-          Tu trafią sygnały o ludziach: kto był na zmianie i jak wypadł względem
-          grafiku, nastrój zespołu, kto prosił o zamianę, czyje godziny odbiegają od
-          etatu. Wszystko, co zobaczy tu kierownik, pracownik zobaczy o sobie — inaczej
-          to nadzór, nie opieka.
-        </p>
-      </div>
-
-      <div className="flex flex-wrap gap-3 items-center justify-end">
-        <button
-          className={btnSecondaryCls}
-          disabled={zapisuje || zamkniety}
-          onClick={() => zapisz(false)}
-        >
-          Zapisz bez zamykania
-        </button>
-        <button
-          className={btnPrimaryCls}
-          disabled={zapisuje || zamkniety}
-          onClick={() => zapisz(true)}
-        >
-          <Lock size={14} className="inline mr-1" />
-          Zamknij dzień
-        </button>
-      </div>
-
-      {nowyWpis && (
-        <ModalWpisu
-          szablon={nowyWpis.szablon}
-          onClose={() => setNowyWpis(null)}
-          onSave={dodajWpis}
-        />
-      )}
 
       {zdarzenie && (
         <ZdarzenieModal
@@ -975,120 +1170,28 @@ export default function KartaDnia({
           osobyNaZmianie={auto.osoby}
           onClose={() => setZdarzenie(false)}
           onSave={async (typ, klucz, payload) => {
-            await dodajWpis(typ, klucz, payload);
+            const w = await dodajWpis(typ, klucz, payload);
+            if (!w) return;
             setZdarzenie(false);
+            // "Wymaga dalszego prowadzenia" = sprawa do Moich zadań.
+            if (payload.wymaga_prowadzenia) {
+              const kat = (KATEGORIE_ZDARZENIA.find((k) => k.key === payload.kategoria) || {}).label || "Zdarzenie";
+              const opis = String(payload.opis || "").trim();
+              await doMoich(`${kat}: ${opis.length > 70 ? `${opis.slice(0, 67)}…` : opis}`, w.id, `Zdarzenie ${data.slice(8, 10)}.${data.slice(5, 7)}`);
+            } else showMsg("Zapisano zdarzenie", "success");
           }}
         />
       )}
 
-      {korekta && (
-        <ModalKorekty
-          karta={karta}
-          onClose={() => setKorekta(null)}
-          onSave={async (pole, nowaWartosc, powod) => {
-            try {
-              await poprawZamknietyDzien({
-                karta, pole, nowaWartosc, powod, kto: currentUser.name,
-                dayLogs: karty, setDayLogs: setKarty,
-                entries: wszystkieWpisy, setEntries: setWpisy,
-              });
-              await odswiez();
-              setKorekta(null);
-              showMsg("Poprawka zapisana", "success");
-            } catch (e) {
-              showMsg(e.message || "Błąd zapisu poprawki", "error");
-            }
-          }}
+      {poprawkaWpisu && (
+        <ModalWpisu
+          szablon={poprawkaWpisu.szablon}
+          wartosciStartowe={{ ...(poprawkaWpisu.wpis.payload || {}) }}
+          powodWymagany
+          onClose={() => setPoprawkaWpisu(null)}
+          onSave={zapiszPoprawkeWpisu}
         />
       )}
-    </div>
-  );
-}
-
-// Poprawka zamkniętego dnia. Osobny ekran, nie edycja w miejscu: stara
-// wartość, nowa i powód zostają w dzienniku na zawsze. Bez tego liczba sprzed
-// miesiąca nic nie znaczy — nie wiadomo, czy tak było, czy ktoś ją podmienił.
-function ModalKorekty({ karta, onClose, onSave }) {
-  const [pole, setPole] = useState("obrot");
-  const [wartosc, setWartosc] = useState("");
-  const [powod, setPowod] = useState("");
-  const [zapisuje, setZapisuje] = useState(false);
-
-  const definicja = POLA_KOREKTY.find((p) => p.klucz === pole) || POLA_KOREKTY[0];
-  const stare = karta ? karta[pole] : null;
-  const kompletny = String(wartosc).trim() !== "" && powod.trim().length >= 3;
-
-  const zapisz = async () => {
-    if (!kompletny) return;
-    setZapisuje(true);
-    await onSave(pole, definicja.typ === "number" ? Number(wartosc) : wartosc, powod.trim());
-    setZapisuje(false);
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl border-[2.5px] border-[#171714] w-full max-w-[520px]">
-        <div className={sectionHeaderCls}>Poprawka zamkniętego dnia</div>
-        <div className="p-4 flex flex-col gap-3">
-          <div>
-            <label className={labelCls}>Co poprawiamy</label>
-            <select
-              className={inputCls}
-              value={pole}
-              onChange={(e) => {
-                setPole(e.target.value);
-                setWartosc("");
-              }}
-            >
-              {POLA_KOREKTY.map((p) => (
-                <option key={p.klucz} value={p.klucz}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="grid md:grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>Było</label>
-              <div className="border-[2px] border-[#B7B6AE] rounded px-3 py-2 text-[15px] bg-[#F1F1EE] text-[#6E6E66]">
-                {stare == null || stare === "" ? "—" : String(stare)}
-              </div>
-            </div>
-            <div>
-              <label className={labelCls}>Ma być</label>
-              <input
-                type={definicja.typ === "number" ? "number" : "text"}
-                className={inputCls}
-                value={wartosc}
-                onChange={(e) => setWartosc(e.target.value)}
-              />
-            </div>
-          </div>
-          <div>
-            <label className={labelCls}>Dlaczego</label>
-            <textarea
-              rows={2}
-              className={inputCls}
-              placeholder="np. pomyłka przy przepisywaniu z kasy"
-              value={powod}
-              onChange={(e) => setPowod(e.target.value)}
-            />
-          </div>
-          <div className="flex flex-wrap gap-2 justify-end items-center">
-            {!kompletny && (
-              <span className="text-[13px] text-[#6E6E66] mr-auto">
-                Podaj nową wartość i powód — bez powodu poprawka nic nie wyjaśnia.
-              </span>
-            )}
-            <button className={btnSecondaryCls} onClick={onClose}>
-              Anuluj
-            </button>
-            <button className={btnPrimaryCls} disabled={zapisuje || !kompletny} onClick={zapisz}>
-              Zapisz poprawkę
-            </button>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

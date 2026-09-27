@@ -1,193 +1,176 @@
 // @ts-nocheck
-// Lista dni — po jednej karcie na dzień, z liczbami, po których widać dzień
-// bez wchodzenia w szczegóły.
+// Puls → Dni. Układ z makiety właściciela (0.57.0, PulseDays): tabela
+// ostatnich dni — kto i kiedy zamknął, utarg i odchylenie od planu, koszt i %,
+// godziny wobec planu, zadania · wpisy, sygnały (zdarzenia, poprawki, pomiary
+// poza normą, tagi). Kliknięcie wiersza otwiera kartę dnia.
 //
-// Układ każdej karty jest ten sam i celowo krótki: cztery pola, w każdym
-// FAKT dużą czcionką, a odniesienie (prognoza, plan, „7 dni wcześniej”) małą
-// pod spodem. Kierownik przegląda tydzień wzrokiem po jednej kolumnie, nie
-// czytając kart po kolei.
+// Liczby idą z `wierszDnia` (utils/dziennik.ts) — tej samej funkcji co
+// Analityka, więc tydzień nie może powiedzieć czegoś innego niż dni.
+// Dziś jest na liście jako "otwarty", ale jego liczby dopiero się zbierają.
 import React, { useMemo, useState } from "react";
-import { BarChart3, Users, ClipboardCheck, Cloud, Lock, ChevronRight } from "lucide-react";
-import { COLORS, sectionCardCls, sectionHeaderCls, btnSecondaryCls } from "./designTokens";
-import { describeWeatherCode } from "../../utils/weather";
-import { getDayOfWeek } from "../../utils/format";
-import { wierszDnia, przesun } from "../../utils/dziennik";
+import { Lock, ChevronRight, Flag, History, Thermometer } from "lucide-react";
+import { wierszDnia, przesun, sygnalyDnia, listaTagow, godzinaZamkniecia } from "../../utils/dziennik";
+import { celDnia } from "../../utils/budzet";
 import { kontekstDnia, kontekstKrotko } from "../../utils/kalendarz";
+import { kartaCls, btnMalyCls, zl, f1, pctTxt, znak, dzienTxt, MiniTag } from "./pulsWspolne";
 
 const KROK_DNI = 14;
 
-const zl = (n) => (n == null ? "—" : `${Math.round(n).toLocaleString("pl-PL")} zł`);
-const znak = (n, jednostka = "") =>
-  n == null ? "" : `${n > 0 ? "+" : n < 0 ? "−" : ""}${Math.abs(Math.round(n))}${jednostka}`;
-
-// Różnica jest informacją, nie oceną: wyższy utarg od zwykłego to dobrze,
-// wyższy koszt pracy od planu to zwykle nie. Kolor niesie ten sens, dlatego
-// kierunek podajemy jawnie zamiast zakładać, że plus zawsze znaczy dobrze.
-const kolorRoznicy = (n, dobrzeGdyDodatnia) => {
-  if (n == null || Math.abs(n) < 1) return COLORS.muted;
-  return n > 0 === dobrzeGdyDodatnia ? "#2C6A4F" : COLORS.accent;
-};
-
-const Pole = ({ Icon, etykieta, wartosc, pod, kolorPod }) => (
-  <div className="flex-1 min-w-[140px] flex gap-2.5">
-    <Icon size={17} className="mt-1 flex-shrink-0" color={COLORS.mutedLight} />
-    <div className="min-w-0">
-      <div className="text-[10px] font-bold tracking-wider uppercase text-[#8F8E86]">
-        {etykieta}
-      </div>
-      <div className="font-['Archivo'] font-extrabold text-[21px] leading-tight text-[#171714]">
-        {wartosc}
-      </div>
-      <div className="text-[12px] leading-snug" style={{ color: kolorPod || COLORS.muted }}>
-        {pod}
-      </div>
-    </div>
-  </div>
-);
-
 export default function PulsDni({
-  lokal, miasto, dzis,
+  lokal, miasto, dzis, lokalRow,
   shifts, planShifts, users, tasks, taskBlocks, taskCompletions,
-  karty, wpisy, szablony, weatherForecasts, lokalRow,
+  karty, wpisy, szablony, weatherForecasts, budzetCele, budzetDni,
   onOtworzDzien,
 }) {
   const [ile, setIle] = useState(KROK_DNI);
 
   const wiersze = useMemo(() => {
-    // Od wczoraj wstecz — dzisiejszy dzień jeszcze trwa, więc jego liczby
-    // wprowadzałyby w błąd na liście podsumowań.
     const dni = [];
-    for (let i = 1; i <= ile; i += 1) dni.push(przesun(dzis, -i));
-    return dni.map((dateStr) =>
-      wierszDnia({
+    for (let i = 0; i < ile; i += 1) dni.push(przesun(dzis, -i));
+    return dni.map((dateStr) => {
+      const w = wierszDnia({
         shifts, planShifts, users, tasks, taskBlocks, taskCompletions,
         dayLogs: karty, dayLogEntries: wpisy, dayLogTemplates: szablony,
         weatherForecasts, lokal, lokalRow, miasto, dateStr,
-      })
+      });
+      const cel = celDnia({ cele: budzetCele, budzetDni }, lokal, dateStr);
+      const odn = cel && cel.utarg != null ? cel.utarg : w.prognozaUtargu ? w.prognozaUtargu.kwota : null;
+      return {
+        ...w,
+        cel,
+        odniesienie: odn,
+        odchylenie: w.obrot != null && odn ? ((w.obrot - odn) / odn) * 100 : null,
+        sygnaly: sygnalyDnia({ entries: wpisy, templates: szablony, tasks, lokal, dateStr }),
+        tagi: listaTagow(w.karta && w.karta.tagi),
+        zamknietoO: godzinaZamkniecia(w.karta),
+      };
+    });
+  }, [ile, dzis, shifts, planShifts, users, tasks, taskBlocks, taskCompletions, karty, wpisy, szablony, weatherForecasts, lokal, miasto, budzetCele, budzetDni]);
+
+  const przeszle = wiersze.filter((w) => w.date < dzis);
+  const zamkniete = przeszle.filter((w) => w.zamkniety);
+  const sredniaZamkniecia = (() => {
+    const minuty = zamkniete
+      .map((w) => w.zamknietoO)
+      .filter(Boolean)
+      .map((g) => {
+        const [h, m] = g.split(":").map(Number);
+        return (h < 6 ? h + 24 : h) * 60 + m;
+      });
+    if (!minuty.length) return null;
+    const sr = Math.round(minuty.reduce((a, b) => a + b, 0) / minuty.length) % 1440;
+    return `${String(Math.floor(sr / 60)).padStart(2, "0")}:${String(sr % 60).padStart(2, "0")}`;
+  })();
+
+  const sygnaly = (w) => (
+    <span className="flex flex-wrap gap-1">
+      {w.sygnaly.zdarzenia > 0 && (
+        <MiniTag>
+          <Flag size={11} /> {w.sygnaly.zdarzenia}
+        </MiniTag>
+      )}
+      {w.sygnaly.poprawki > 0 && (
+        <MiniTag>
+          <History size={11} /> poprawka
+        </MiniTag>
+      )}
+      {w.sygnaly.pozaNorma > 0 && (
+        <MiniTag ton="warn">
+          <Thermometer size={11} /> {w.sygnaly.pozaNorma}
+        </MiniTag>
+      )}
+      {w.tagi.map((t) => (
+        <MiniTag key={t}>{t}</MiniTag>
+      ))}
+    </span>
+  );
+
+  const status = (w) =>
+    w.zamkniety ? (
+      <span className="inline-flex items-center gap-1 text-[12px] text-[#6E6E66]">
+        <Lock size={11} /> {w.zamknietoO} · {w.karta.closed_by}
+      </span>
+    ) : (
+      <span className="text-[12px] font-bold text-[#8A5300]">{w.date === dzis ? "otwarty · dziś" : "otwarty"}</span>
     );
-  }, [ile, dzis, shifts, planShifts, users, tasks, taskBlocks, taskCompletions, karty, wpisy, szablony, weatherForecasts, lokal, miasto]);
 
   return (
-    <div className={sectionCardCls}>
-      <div className={sectionHeaderCls}>
-        <span>Ostatnie dni — {lokal}</span>
-        <span className="text-[12px] font-normal text-[#6E6E66]">
-          {wiersze.filter((w) => w.zamkniety).length} z {wiersze.length} zamkniętych
+    <div className="flex flex-col gap-3" data-puls-dni>
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <b className="font-['Archivo'] font-extrabold text-[18px]">Ostatnie dni · {lokal}</b>
+        <span className="text-[13px] text-[#6E6E66] md:ml-auto">
+          zamknięte {zamkniete.length} z {przeszle.length}
+          {sredniaZamkniecia ? ` · średnio o ${sredniaZamkniecia}` : ""}
         </span>
       </div>
-
-      {wiersze.map((w) => {
-        const pogoda = w.pogodaFakt ? describeWeatherCode(w.pogodaFakt.kod) : null;
-        const roznicaPogody =
-          w.pogodaFakt && w.pogodaZTygodnia && w.pogodaFakt.temp_max != null
-            ? Number(w.pogodaZTygodnia.temp_max) - Number(w.pogodaFakt.temp_max)
-            : null;
-        return (
-          <button
-            key={w.date}
-            onClick={() => onOtworzDzien(w.date)}
-            className="w-full text-left px-4 py-3 border-b-[2px] border-[#171714] last:border-b-0 hover:bg-[#F1F1EE] flex flex-wrap items-start gap-4"
-          >
-            <div className="w-[120px] flex-shrink-0">
-              <div className="font-['Archivo'] font-extrabold text-[16px]">
-                {w.date.split("-").reverse().slice(0, 2).join(".")}
+      <div className={`${kartaCls} overflow-hidden`}>
+        <div className="hidden lg:grid grid-cols-[150px_110px_110px_150px_110px_120px_minmax(0,1fr)_24px] gap-3 px-[18px] py-2.5 border-b-[1.5px] border-[#DEDCD4] text-[12px] font-bold uppercase tracking-[0.06em] text-[#6E6E66]">
+          <span>Dzień</span>
+          <span>Utarg</span>
+          <span>vs plan</span>
+          <span>Koszt · %</span>
+          <span>Godziny</span>
+          <span>Zadania · wpisy</span>
+          <span>Sygnały</span>
+          <span />
+        </div>
+        {wiersze.map((w) => {
+          const kontekst = kontekstKrotko(kontekstDnia(w.date, { dzienWyplaty: lokalRow && lokalRow.dzien_wyplaty }));
+          return (
+            <button
+              key={w.date}
+              type="button"
+              onClick={() => onOtworzDzien(w.date)}
+              className="w-full text-left border-t-[1.5px] border-[#DEDCD4] first:border-t-0 hover:bg-[#F6F5F1] px-4 lg:px-[18px] py-3"
+              data-wiersz-dnia={w.date}
+              data-zamkniety={w.zamkniety ? "tak" : "nie"}
+            >
+              {/* telefon / wąski ekran */}
+              <div className="lg:hidden grid grid-cols-[1fr_auto] gap-x-3 gap-y-1">
+                <div>
+                  <b className="font-['Archivo'] font-extrabold">{dzienTxt(w.date)}</b> {status(w)}
+                  {kontekst && <span className="ml-1 text-[12px] font-bold text-[#8A3A2B]">{kontekst}</span>}
+                </div>
+                <div className="text-right font-['Archivo'] font-extrabold tabular-nums">{w.obrot != null ? zl(w.obrot) : "—"}</div>
+                <div className="text-[12px] text-[#6E6E66]">
+                  koszt {w.lcPct != null ? pctTxt(w.lcPct) : zl(w.koszt)} · {f1(w.godziny)} h · zadania {w.zadaniaZrobione}/{w.zadaniaRazem}
+                </div>
+                <div className="text-right text-[12px] text-[#6E6E66] tabular-nums">{w.odchylenie != null ? znak(w.odchylenie, "%") : ""}</div>
+                <div className="col-span-2">{sygnaly(w)}</div>
               </div>
-              <div className="text-[12px] text-[#6E6E66]">
-                {getDayOfWeek(new Date(w.date + "T00:00:00"))}
-              </div>
-              {/* Święto albo dzień wypłaty tłumaczy nietypowy utarg zanim
-                  ktokolwiek zacznie szukać wyjaśnień gdzie indziej. */}
-              {kontekstKrotko(
-                kontekstDnia(w.date, { dzienWyplaty: lokalRow && lokalRow.dzien_wyplaty })
-              ) && (
-                <div className="text-[11px] font-bold mt-0.5" style={{ color: COLORS.accentSoftText }}>
-                  {kontekstKrotko(
-                    kontekstDnia(w.date, { dzienWyplaty: lokalRow && lokalRow.dzien_wyplaty })
-                  )}
-                </div>
-              )}
-              {w.zamkniety ? (
-                <div className="text-[11px] text-[#2C6A4F] mt-1 flex items-center gap-1">
-                  <Lock size={11} /> zamknięty
-                </div>
-              ) : (
-                <div className="text-[11px] mt-1" style={{ color: COLORS.accent }}>
-                  do zamknięcia
-                </div>
-              )}
-            </div>
-
-            <Pole
-              Icon={BarChart3}
-              etykieta="Utarg"
-              wartosc={zl(w.obrot)}
-              pod={
-                w.prognozaUtargu
-                  ? w.obrot != null
-                    ? `zwykle ${zl(w.prognozaUtargu.kwota)} · ${znak(w.roznicaUtargu, " zł")}`
-                    : `zwykle ${zl(w.prognozaUtargu.kwota)}`
-                  : "brak porównania"
-              }
-              kolorPod={kolorRoznicy(w.roznicaUtargu, true)}
-            />
-
-            <Pole
-              Icon={Users}
-              etykieta="Koszt pracy"
-              wartosc={zl(w.koszt)}
-              pod={
-                w.kosztPlan
-                  ? `plan ${zl(w.kosztPlan)} · ${znak(w.roznicaKosztu, " zł")}`
-                  : "brak grafiku"
-              }
-              kolorPod={kolorRoznicy(w.roznicaKosztu, false)}
-            />
-
-            <Pole
-              Icon={ClipboardCheck}
-              etykieta="Wykonanie"
-              wartosc={`${w.zadaniaZrobione}/${w.zadaniaRazem}`}
-              pod={
-                w.wpisyRazem
-                  ? `wpisy ${w.wpisyZrobione}/${w.wpisyRazem}`
-                  : "brak wpisów w konfiguracji"
-              }
-            />
-
-            <Pole
-              Icon={Cloud}
-              etykieta="Pogoda"
-              wartosc={
-                w.pogodaFakt && w.pogodaFakt.temp_max != null
-                  ? `${Math.round(w.pogodaFakt.temp_max)}°`
-                  : "—"
-              }
-              pod={
-                w.pogodaZTygodnia
-                  ? `7 dni wcześniej ${Math.round(w.pogodaZTygodnia.temp_max)}° · ${znak(roznicaPogody, "°")}`
-                  : pogoda
-                  ? pogoda.label
-                  : "brak danych"
-              }
-            />
-
-            <div className="flex items-center self-center">
-              {w.lcPct != null && (
-                <span className="font-['Archivo'] font-extrabold text-[17px] mr-3">
-                  {w.lcPct}%
+              {/* desktop */}
+              <div className="hidden lg:grid grid-cols-[150px_110px_110px_150px_110px_120px_minmax(0,1fr)_24px] gap-3 items-center text-[14px]">
+                <span className="min-w-0">
+                  <b className="block">{dzienTxt(w.date)}</b>
+                  {status(w)}
+                  {kontekst && <span className="block text-[12px] font-bold text-[#8A3A2B]">{kontekst}</span>}
                 </span>
-              )}
-              <ChevronRight size={18} color={COLORS.mutedLight} />
-            </div>
-          </button>
-        );
-      })}
-
-      <div className="p-4">
-        <button className={btnSecondaryCls} onClick={() => setIle(ile + KROK_DNI)}>
-          Pokaż wcześniejsze
-        </button>
+                <b className="tabular-nums">{w.obrot != null ? zl(w.obrot) : "—"}</b>
+                <span
+                  className={`tabular-nums ${w.odchylenie != null && w.odchylenie <= -5 ? "text-[#DE3A22] font-bold" : w.odchylenie != null && w.odchylenie >= 5 ? "text-[#1F7A4A] font-bold" : ""}`}
+                >
+                  {w.odchylenie != null ? znak(w.odchylenie, "%") : <span className="text-[#6E6E66]">{w.odniesienie ? `plan ${zl(w.odniesienie)}` : "—"}</span>}
+                </span>
+                <span className="tabular-nums">
+                  {zl(w.koszt)} ·{" "}
+                  <b className={w.lcPct != null && w.cel && w.cel.pct != null && w.lcPct > w.cel.pct ? "text-[#8A5300]" : ""}>{w.lcPct != null ? pctTxt(w.lcPct) : "—"}</b>
+                </span>
+                <span className="tabular-nums">
+                  {f1(w.godziny)} <span className="text-[#6E6E66]">/ {f1(w.godzinyPlan)}</span>
+                </span>
+                <span className="tabular-nums">
+                  {w.zadaniaZrobione}/{w.zadaniaRazem} · {w.wpisyZrobione}/{w.wpisyRazem}
+                </span>
+                {sygnaly(w)}
+                <ChevronRight size={16} className="text-[#6E6E66]" />
+              </div>
+            </button>
+          );
+        })}
       </div>
+      <button type="button" className={`${btnMalyCls} self-start`} onClick={() => setIle((n) => n + KROK_DNI)}>
+        Pokaż starsze dni
+      </button>
     </div>
   );
 }

@@ -23,6 +23,15 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.57.0",
+    date: "2026-09-27",
+    items: [
+      "Puls: karta dnia w trzech krokach — utarg, wpisy w wierszu, notatka i tagi; zapis sam, bez „Zapisz”.",
+      "„Zamknij dzień” pyta drugi raz; dzień zamknięty tylko do odczytu, zmiana przez „Poprawkę” z powodem.",
+      "Nowa Analityka tygodnia i tabela Dni; w Konfiguracji prawo zamykania na dziś lub tydzień.",
+    ],
+  },
+  {
     version: "0.56.0",
     date: "2026-09-27",
     items: [
