@@ -48,6 +48,7 @@ import RaportyIKoszty from "./manager/RaportyIKoszty";
 import Przewodnik from "./manager/Przewodnik";
 import Ustawienia from "./manager/Ustawienia";
 import { czekaNaKoniecOdKierownika } from "../utils/wpisy";
+import { TABELA_MOICH, dodajMojeZadanie } from "../utils/mojeZadania";
 import Grafik from "./manager/Grafik";
 import {
   resolveSwap,
@@ -152,6 +153,22 @@ const ManagerDashboard = ({
   };
   const [przewodnikTab, setPrzewodnikTab] = useState("pracownicy");
   const [selectedLokal, setSelectedLokal] = useState("ALL");
+  // "Moje zadania" (0.56.0, migracja 0038) — lista spraw kierownika. Czyta ją
+  // sam panel, nie App: to dane wyłącznie kierownika, a błąd (np. baza bez
+  // 0038) nie może blokować reszty — wtedy lista zostaje pusta, a zakładka
+  // mówi, czego brakuje (`mojeBlad`).
+  const [zadaniaMoje, setZadaniaMoje] = useState([]);
+  const [mojeBlad, setMojeBlad] = useState(null);
+  useEffect(() => {
+    let zyje = true;
+    api
+      .get(TABELA_MOICH, "archived=eq.false")
+      .then((w) => zyje && setZadaniaMoje(w || []))
+      .catch((e) => zyje && setMojeBlad(e?.message || "błąd odczytu"));
+    return () => {
+      zyje = false;
+    };
+  }, []);
   const [reportUserId, setReportUserId] = useState(null);
   // Miesiąc, na który ma przeskoczyć zakładka Raporty przy wejściu z imienia.
   const [reportSkok, setReportSkok] = useState(null);
@@ -536,6 +553,7 @@ const ManagerDashboard = ({
     issues: widoczneZgloszenia,
     users,
     tasks,
+    zadaniaMoje,
     absences,
     notifications: managerNotifications,
     shifts,
@@ -1049,24 +1067,27 @@ const ManagerDashboard = ({
     setIssues((prev) => prev.map((iss) => (iss.id === i.id ? i : iss)));
   };
 
-  // "Utwórz zadanie" w Zgłoszeniach — tworzy zadanie kierownika (for_manager)
-  // powiązane luźno z issue przez source_issue_id (text, bez FK — ten sam
-  // wzorzec co shift_id/issue_id w shift_edits), żeby dało się je odróżnić
-  // po odświeżeniu strony (badge "Zadanie utworzone" w Zgloszenia.tsx).
+  // "Utwórz zadanie" w Skrzynce — od 0.56.0 trafia do "Moich zadań"
+  // (`zadania_moje`, utils/mojeZadania.ts), a nie do `tasks`: sprawa ze
+  // zgłoszenia jest jednorazowa, a zadanie bez bloku wracało codziennie jak
+  // pozycja checklisty.
   const handleCreateTaskFromIssue = async (issue, title, lokalForTask) => {
-    if (!title.trim() || !lokalForTask) {
-      return showMsg("Brak tytułu albo lokalu dla zadania.", "error");
-    }
+    if (!title.trim()) return showMsg("Brak tytułu zadania.", "error");
+    const d = issue.created_at ? new Date(issue.created_at) : null;
+    const kiedy = d ? ` ${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}` : "";
+    const anonim = issue.is_anonymous || !issue.user_id;
     try {
-      const created = await api.post("tasks", {
-        lokal: lokalForTask,
-        title: title.trim(),
-        schedule_type: "ogolne",
-        for_manager: true,
-        source_issue_id: issue.id,
+      const created = await dodajMojeZadanie({
+        tytul: title,
+        lokal: lokalForTask || null,
+        termin: toLocalYMD(new Date()),
+        zrodlo: "zgloszenie",
+        zrodloId: issue.id,
+        zrodloOpis: `${anonim ? "Zgłoszenie anonimowe" : `Zgłoszenie · ${issue.user_name}`}${kiedy}`,
+        currentUser,
       });
-      setTasks((prev) => [...prev, created]);
-      showMsg("Zadanie utworzone!");
+      setZadaniaMoje((prev) => [created, ...prev]);
+      showMsg("Dodano do Moich zadań.");
     } catch (err) {
       showMsg(`Błąd tworzenia zadania: ${err.message || "nieznany błąd"}`, "error");
     }
@@ -1449,6 +1470,10 @@ const ManagerDashboard = ({
             availableLokale={availableLokaleForManager}
             activeStanowiska={activeStanowiska}
             selectedLokal={selectedLokal}
+            onWybierzLokal={setSelectedLokal}
+            zadaniaMoje={zadaniaMoje}
+            setZadaniaMoje={setZadaniaMoje}
+            mojeBlad={mojeBlad}
             showMsg={showMsg}
           />
         )}
@@ -1482,6 +1507,8 @@ const ManagerDashboard = ({
             showMsg={showMsg}
             initialLokal={pulsCel && pulsCel.lokal}
             initialDate={pulsCel && pulsCel.date}
+            zadaniaMoje={zadaniaMoje}
+            setZadaniaMoje={setZadaniaMoje}
           />
         )}
 

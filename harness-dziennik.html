@@ -609,6 +609,38 @@ const sprawdz = (nazwa, warunek, szczegol = "") => {
       D.opisPoprawki(wpisStary, wszystkieWpisy, polaTemp) === null,
       "inaczej każdy wpis miałby napis o poprawce");
 
+    // --- Puls 0.57.0: zespół dnia, tagi, późne zamknięcie -------------------
+    log("");
+    log("Puls: zespół dnia (grafik vs fakt), tagi, późne zamknięcie");
+    const zd = (h, m) => new Date(2026, 8, 14, h, m);
+    const planZ = [
+      { user_id: "u1", user_name: "Ala", lokal: "L", date: "2026-09-14", start_time: "08:30", end_time: "21:00", published_at: "x" },
+      { user_id: "u2", user_name: "Bo", lokal: "L", date: "2026-09-14", start_time: "11:00", end_time: "21:00", published_at: "x" },
+      { user_id: "u3", user_name: "Cezary", lokal: "L", date: "2026-09-14", start_time: "10:00", end_time: "18:00", published_at: "x" },
+      // Szkic (niewysłany) — nie jest grafikiem, którego ktoś się trzymał.
+      { user_id: "u4", user_name: "Dorota", lokal: "L", date: "2026-09-14", start_time: "10:00", end_time: "18:00", published_at: null },
+    ];
+    const faktZ = [
+      { user_id: "u1", user_name: "Ala", lokal: "L", start_time: zd(8, 42), end_time: zd(21, 5) },
+      { user_id: "u2", user_name: "Bo", lokal: "L", start_time: zd(11, 0), end_time: zd(21, 30) },
+      { user_id: "u5", user_name: "Ewa", lokal: "L", start_time: zd(12, 0), end_time: zd(16, 0) },
+    ];
+    const zesp = D.zespolDnia({ shifts: faktZ, planShifts: planZ, lokal: "L", dateStr: "2026-09-14" });
+    const os = (n) => zesp.find((z) => z.name === n);
+    sprawdz("spóźnienie od 10 min (Ala 08:42 przy 08:30 → 12 min)", os("Ala") && os("Ala").spoznienie === 12, JSON.stringify(os("Ala")));
+    sprawdz("5 min po końcu grafiku to nie „po grafiku”", os("Ala") && os("Ala").poGrafiku === 0);
+    sprawdz("30 min po końcu grafiku liczy się (Bo)", os("Bo") && os("Bo").poGrafiku === 30 && os("Bo").spoznienie === 0);
+    sprawdz("w grafiku bez odbicia (Cezary)", os("Cezary") && os("Cezary").bezOdbicia === true);
+    sprawdz("odbicie bez grafiku (Ewa)", os("Ewa") && os("Ewa").pozaGrafikiem === true && os("Ewa").godziny === 4);
+    sprawdz("szkic grafiku (niewysłany) nie jest grafikiem", !os("Dorota"), JSON.stringify(os("Dorota")));
+    sprawdz("tagi: lista z tekstu i z powrotem, bez duplikatów",
+      D.listaTagow(" mecz, deszcz ,,") .join("|") === "mecz|deszcz" && D.tagiTekst(["mecz", "mecz", " festyn "]) === "mecz, festyn");
+    const kartaZ = (iso) => ({ date: "2026-09-14", status: "zamkniety", closed_at: iso });
+    sprawdz("zamknięcie o 22:30 nie jest późne", !D.pozneZamkniecie(kartaZ(new Date(2026, 8, 14, 22, 30).toISOString())));
+    sprawdz("zamknięcie o 23:48 jest późne", D.pozneZamkniecie(kartaZ(new Date(2026, 8, 14, 23, 48).toISOString())));
+    sprawdz("zamknięcie po północy (następnego dnia) jest późne", D.pozneZamkniecie(kartaZ(new Date(2026, 8, 15, 0, 20).toISOString())));
+    sprawdz("dzień otwarty nie ma godziny zamknięcia", D.godzinaZamkniecia({ status: "otwarty" }) === null);
+
     log("");
     log(`ZDANYCH ${zdanych}, OBLANYCH ${oblanych}`, oblanych ? "zle" : "ok");
   } catch (e) {

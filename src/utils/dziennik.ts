@@ -18,7 +18,14 @@ import {
   timeToMin,
   minToTime,
 } from "./grafik";
-import { zadaniaNaDzien, findSharedCompletion, parseDaysOfWeek } from "./tasks";
+import {
+  zadaniaNaDzien,
+  findSharedCompletion,
+  parseDaysOfWeek,
+  czyWpisZadania,
+  zadanieWpisu,
+  polaZadania,
+} from "./tasks";
 import { kosztGodziny } from "./budzet";
 import {
   TYPY_POLA,
@@ -693,5 +700,207 @@ export const prognozaNaDzien = (forecasts, miasto, dateStr, horyzont) =>
     (f) =>
       f.miasto === miasto && f.target_date === dateStr && f.horizon_days === horyzont
   ) || null;
+
+// --- PULS 0.57.0: zespół dnia, sygnały, zdarzenia tygodnia ----------------
+// Wszystko liczone z tych samych wierszy co reszta Pulsu — nic z tego nie
+// leży w bazie, więc karta sprzed pół roku pokazuje to samo co wtedy.
+
+const hhmmZ = (d) => {
+  const x = d instanceof Date ? d : new Date(d);
+  return `${String(x.getHours()).padStart(2, "0")}:${String(x.getMinutes()).padStart(2, "0")}`;
+};
+const minZ = (d) => {
+  const x = d instanceof Date ? d : new Date(d);
+  return x.getHours() * 60 + x.getMinutes();
+};
+const trim5 = (t) => String(t || "").slice(0, 5);
+
+// Tagi dnia trzymamy jako tekst po przecinku (day_logs.tagi).
+export const listaTagow = (tagi) =>
+  String(tagi || "")
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
+export const tagiTekst = (lista) => [...new Set(lista.map((t) => t.trim()).filter(Boolean))].join(", ");
+
+// Podpowiedzi tagów na karcie dnia — reszta to własne tagi lokalu.
+export const TAGI_PODPOWIEDZI = ["mecz", "autobus turystów", "deszcz", "festyn", "awaria", "brak personelu", "dostawa późno"];
+
+// Wpis-zdarzenie (formularz "Zgłoś zdarzenie"): bez template_key i nie korekta.
+export const czyZdarzenie = (w) => !!w && !w.template_key && w.typ !== "korekta";
+
+// Zespół dnia: grafik obok faktu, per osoba, w tym lokalu. Spóźnienie liczymy
+// od 10 min (pierwszy start faktu po pierwszym starcie planu), "po grafiku"
+// od 15 min — mniejsze różnice to szum odbijania.
+export const PROG_SPOZNIENIA_MIN = 10;
+export const PROG_PO_GRAFIKU_MIN = 15;
+export const zespolDnia = ({ shifts, planShifts, lokal, dateStr }) => {
+  const fakt = (shifts || []).filter(
+    (s) => s.lokal === lokal && !s.is_urlop && s.start_time && toLocalYMD(s.start_time) === dateStr
+  );
+  const plan = (planShifts || []).filter(
+    (s) => s.lokal === lokal && s.date === dateStr && !s.deleted_at && s.published_at
+  );
+  const klucz = (s) => String(s.user_id || s.user_name);
+  const osoby = new Map();
+  plan.forEach((s) => {
+    const o = osoby.get(klucz(s)) || { name: s.user_name, plan: [], fakt: [] };
+    o.plan.push(s);
+    osoby.set(klucz(s), o);
+  });
+  fakt.forEach((s) => {
+    const o = osoby.get(klucz(s)) || { name: s.user_name, plan: [], fakt: [] };
+    o.fakt.push(s);
+    osoby.set(klucz(s), o);
+  });
+  return [...osoby.values()]
+    .map((o) => {
+      const p = o.plan.slice().sort((a, b) => trim5(a.start_time).localeCompare(trim5(b.start_time)));
+      const f = o.fakt.slice().sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+      const godziny = f.reduce((sum, s) => sum + (s.end_time ? (new Date(s.end_time) - new Date(s.start_time)) / 3600000 : 0), 0);
+      const planTxt = p.length ? `${trim5(p[0].start_time)}–${trim5(p[p.length - 1].end_time)}` : null;
+      const ostatni = f[f.length - 1];
+      const faktTxt = f.length ? `${hhmmZ(f[0].start_time)}–${ostatni.end_time ? hhmmZ(ostatni.end_time) : "trwa"}` : null;
+      let spoznienie = 0;
+      let poGrafiku = 0;
+      if (p.length && f.length) {
+        const d = minZ(f[0].start_time) - timeToMin(trim5(p[0].start_time));
+        if (d >= PROG_SPOZNIENIA_MIN) spoznienie = d;
+        if (ostatni.end_time) {
+          let koniecPlan = timeToMin(trim5(p[p.length - 1].end_time));
+          let koniecFakt = minZ(ostatni.end_time);
+          if (koniecPlan < timeToMin(trim5(p[0].start_time))) koniecPlan += 1440;
+          if (toLocalYMD(ostatni.end_time) !== dateStr) koniecFakt += 1440;
+          if (koniecFakt - koniecPlan >= PROG_PO_GRAFIKU_MIN) poGrafiku = koniecFakt - koniecPlan;
+        }
+      }
+      return {
+        name: o.name,
+        plan: planTxt,
+        fakt: faktTxt,
+        godziny: Math.round(godziny * 10) / 10,
+        spoznienie,
+        poGrafiku,
+        bezOdbicia: p.length > 0 && f.length === 0,
+        pozaGrafikiem: p.length === 0 && f.length > 0,
+      };
+    })
+    .sort((a, b) => String(a.plan || a.fakt || "").localeCompare(String(b.plan || b.fakt || "")));
+};
+
+// Pomiary poza normą dnia: pozycje karty dnia i pomiary z checklisty.
+export const pomiaryPozaNorma = ({ entries, templates, tasks, lokal, dateStr }) => {
+  const wpisy = wpisyDlaDnia(entries, lokal, dateStr);
+  const wynik = [];
+  wpisy.forEach((w) => {
+    if (czyWpisZadania(w)) {
+      const zad = zadanieWpisu(w, tasks);
+      const pola = zad ? polaZadania(zad, templates) : [];
+      if (pozaNormaPola(pola, w.payload || {})) wynik.push({ wpis: w, nazwa: zad ? zad.title : "Pomiar z zadania", pola });
+      return;
+    }
+    if (!w.template_key) return;
+    const sz = (templates || []).find((t) => t.lokal === lokal && t.klucz === w.template_key);
+    if (sz && pozaNorma(sz, w.payload || {})) wynik.push({ wpis: w, nazwa: sz.nazwa, pola: polaSzablonu(sz) });
+  });
+  return wynik;
+};
+
+// Sygnały dnia na liście dni: zdarzenia, poprawki, pomiary poza normą.
+export const sygnalyDnia = ({ entries, templates, tasks, lokal, dateStr }) => ({
+  zdarzenia: wpisyDlaDnia(entries, lokal, dateStr).filter(czyZdarzenie).length,
+  poprawki: korektyDnia(entries, lokal, dateStr).length,
+  pozaNorma: pomiaryPozaNorma({ entries, templates, tasks, lokal, dateStr }).length,
+});
+
+// Zamknięcie "późne" — od 23:00. Dyscyplina zamykania w Analityce.
+export const PROG_POZNEGO_ZAMKNIECIA = "23:00";
+export const godzinaZamkniecia = (karta) =>
+  karta && karta.status === "zamkniety" && karta.closed_at ? hhmmZ(karta.closed_at) : null;
+export const pozneZamkniecie = (karta) => {
+  const g = godzinaZamkniecia(karta);
+  if (!g) return false;
+  // Zamknięcie po północy (następnego dnia) też jest późne.
+  return g >= PROG_POZNEGO_ZAMKNIECIA || (karta.date && toLocalYMD(karta.closed_at) > karta.date);
+};
+
+// "Co się działo w tygodniu" — jedna lista z kilku źródeł, od najstarszego.
+export const TYPY_ZDARZEN_TYGODNIA = [
+  { key: "note", label: "Notatki" },
+  { key: "ev", label: "Zdarzenia" },
+  { key: "fix", label: "Poprawki" },
+  { key: "meas", label: "Pomiary" },
+  { key: "tag", label: "Tagi" },
+  { key: "late", label: "Dyscyplina" },
+];
+export const zdarzeniaTygodnia = ({ dni, dayLogs, entries, templates, tasks, lokal }) => {
+  const lista = [];
+  (dni || []).forEach((dateStr) => {
+    const karta = znajdzKarte(dayLogs, lokal, dateStr);
+    if (karta && karta.handover) lista.push({ date: dateStr, typ: "note", tytul: "Notatka zmiany", opis: karta.handover, kto: karta.closed_by || "" });
+    wpisyDlaDnia(entries, lokal, dateStr)
+      .filter(czyZdarzenie)
+      .forEach((w) => {
+        const pl = w.payload || {};
+        const kat = (KATEGORIE_ZDARZENIA.find((k) => k.key === pl.kategoria) || {}).label || "Zdarzenie";
+        lista.push({
+          date: dateStr,
+          typ: "ev",
+          tytul: `Zdarzenie · ${kat}`,
+          opis: `${pl.opis || "(bez opisu)"}${pl.wplyw_kwota != null ? ` · skutek ${pl.wplyw_kwota} zł` : ""}`,
+          kto: w.recorded_by || "",
+        });
+      });
+    korektyDnia(entries, lokal, dateStr).forEach((k) =>
+      lista.push({
+        date: dateStr,
+        typ: "fix",
+        tytul: "Poprawka",
+        opis: `${k.payload?.label || k.payload?.pole}: ${k.payload?.stare ?? "—"} → ${k.payload?.nowe ?? "—"} · „${k.payload?.powod || ""}”`,
+        kto: k.recorded_by || "",
+      })
+    );
+    pomiaryPozaNorma({ entries, templates, tasks, lokal, dateStr }).forEach((m) =>
+      lista.push({
+        date: dateStr,
+        typ: "meas",
+        tytul: "Pomiar poza normą",
+        opis: `${m.nazwa} ${m.pola.map((p) => wartoscPolaTekst(p, m.wpis.payload || {})).join(" / ")}${
+          m.pola.some((p) => opisNormy(p)) ? ` · norma ${m.pola.map((p) => opisNormy(p)).filter(Boolean).join(" / ")}` : ""
+        }`,
+        kto: m.wpis.recorded_by || "",
+      })
+    );
+    const tagi = listaTagow(karta && karta.tagi);
+    if (tagi.length) lista.push({ date: dateStr, typ: "tag", tytul: "Tagi dnia", opis: tagi.join(", "), kto: karta.closed_by || "" });
+    if (pozneZamkniecie(karta))
+      lista.push({ date: dateStr, typ: "late", tytul: "Późne zamknięcie", opis: `Dzień zamknięty ${godzinaZamkniecia(karta)}`, kto: karta.closed_by || "" });
+  });
+  return lista;
+};
+
+// Ludzie w tygodniu: godziny w grafiku (opublikowanym) i fakt w tym lokalu,
+// plus liczba spóźnień (ta sama reguła co w zespole dnia).
+export const ludzieTygodnia = ({ dni, shifts, planShifts, lokal }) => {
+  const mapa = new Map();
+  (dni || []).forEach((dateStr) => {
+    zespolDnia({ shifts, planShifts, lokal, dateStr }).forEach((z) => {
+      const o = mapa.get(z.name) || { name: z.name, plan: 0, fakt: 0, spoznienia: 0 };
+      o.fakt += z.godziny;
+      if (z.spoznienie) o.spoznienia += 1;
+      mapa.set(z.name, o);
+    });
+    (planShifts || [])
+      .filter((s) => s.lokal === lokal && s.date === dateStr && !s.deleted_at && s.published_at)
+      .forEach((s) => {
+        const o = mapa.get(s.user_name) || { name: s.user_name, plan: 0, fakt: 0, spoznienia: 0 };
+        o.plan += shiftHours(s);
+        mapa.set(s.user_name, o);
+      });
+  });
+  return [...mapa.values()]
+    .map((o) => ({ ...o, plan: Math.round(o.plan * 10) / 10, fakt: Math.round(o.fakt * 10) / 10 }))
+    .sort((a, b) => b.fakt - a.fakt || a.name.localeCompare(b.name, "pl"));
+};
 
 export { toLocalYMD, timeToMin, minToTime };

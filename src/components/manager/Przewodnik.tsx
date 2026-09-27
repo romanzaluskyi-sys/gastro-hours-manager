@@ -23,6 +23,25 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.57.0",
+    date: "2026-09-27",
+    items: [
+      "Puls: karta dnia w trzech krokach — utarg, wpisy w wierszu, notatka i tagi; zapis sam, bez „Zapisz”.",
+      "„Zamknij dzień” pyta drugi raz; dzień zamknięty tylko do odczytu, zmiana przez „Poprawkę” z powodem.",
+      "Nowa Analityka tygodnia i tabela Dni; w Konfiguracji prawo zamykania na dziś lub tydzień.",
+    ],
+  },
+  {
+    version: "0.56.0",
+    date: "2026-09-27",
+    items: [
+      "Zadania: „Dziś w lokalach” — karta na lokal, checklisty po kliknięciu, odhaczanie za zespół z „Cofnij”.",
+      "Pomiar wpisujesz w wierszu; wynik poza normą — „Do moich zadań”.",
+      "Nowe „Moje zadania”: własne sprawy, ze Skrzynki i z Pulsu, z terminem.",
+      "„Bloki i zadania”: mapa tygodnia i edycja w panelu z boku.",
+    ],
+  },
+  {
     version: "0.55.4",
     date: "2026-09-26",
     items: ["Start i koniec zmiany: dotknij dużej godziny, wybierz inną, a przycisk „… o XX:XX” zapisze."],
