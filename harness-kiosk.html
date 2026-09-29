@@ -333,7 +333,22 @@ const poprzedniMiesiac = (h) => {
         notifications, setNotifications,
         tasks, taskBlocks, taskCompletions, setTaskCompletions,
         dayLogs: [], dayLogEntries, setDayLogEntries, dayLogTemplates: [],
-        absences: [], setAbsences: () => {},
+        // Urlop i niedostępność Bo w BIEŻĄCYM miesiącu (0.62.1) — kalendarz
+        // miesiąca ma je pokazać w komórce, bez klikania.
+        absences: (() => {
+          const d = new Date();
+          const dzien = (o) => {
+            const x = new Date(d.getFullYear(), d.getMonth(), d.getDate() > 3 ? d.getDate() - o : d.getDate() + o);
+            return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+          };
+          return [
+            { id: "ab1", user_id: "u2", user_name: "Bo", status: "approved", type: "urlop",
+              start_date: dzien(2), end_date: dzien(2) },
+            { id: "ab2", user_id: "u2", user_name: "Bo", status: "approved", type: "niedostepnosc",
+              start_date: dzien(3), end_date: dzien(3) },
+          ];
+        })(),
+        setAbsences: () => {},
         // Grafik na przyszły tydzień — bez niego nie da się obejrzeć giełdy,
         // bo zmianę można wystawić tylko z wyprzedzeniem 12 h. Dorota ma
         // zmianę TEGO SAMEGO dnia co Bo: nie może wziąć jego zmiany na wprost,
@@ -738,6 +753,19 @@ const poprzedniMiesiac = (h) => {
         await klikPrzycisk("Miesiąc");
         sprawdz("Miesiąc: kalendarz z wybranym dniem", /zobacz w tygodniu|wolne|urlop/i.test(document.getElementById("app").innerText) &&
           [...document.querySelectorAll("#app main .grid-cols-7 > button")].length >= 28);
+        sprawdz("Miesiąc: urlop i niedostępność widać w komórce",
+          !!document.querySelector('#app main button[title="Urlop"]') &&
+            !!document.querySelector('#app main button[title="Niedostępność"]'));
+        // Napis okresu wraca na dziś — osobnego „Dziś” nie ma.
+        document.querySelector('#app [aria-label="Później"]').dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(200);
+        const okres = () => document.querySelector("#app [data-okres-grafiku]");
+        const poPrzewinieciu = okres()?.textContent;
+        okres().dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(200);
+        const poPowrocie = okres()?.textContent;
+        sprawdz("dotknięcie napisu okresu wraca na bieżący miesiąc, bez przycisku „Dziś”",
+          poPrzewinieciu !== poPowrocie && !przyciskTekst("Dziś"), `${poPrzewinieciu} → ${poPowrocie}`);
         klik("Zmień"); await czekaj(300);
         klik("Cezary"); await czekaj(300);
         await otworzZakladke("Grafik");

@@ -956,6 +956,11 @@ handlery i stany kreatora: `swapConfirmId`/`swapTyp`/`swapTarget`/
   zakładek jest ważniejsza.
 - `harness-kiosk.html` przechodzi giełdę: Bo oddaje zmianę Cezaremu (kroki,
   podsumowanie, zapis `shift_swaps`), Cezary widzi „Oddane Tobie” w jej dniu.
+- ⚠️ **Przycisku „Dziś” nie ma i nie dokładaj go** (0.62.1, prośba
+  właściciela): pojawiał się i znikał, przesuwając strzałki. Powrót na dziś
+  to dotknięcie napisu okresu (`data-okres-grafiku`, stała szerokość 168 px).
+- Komórka miesiąca bez zmiany, ale z zatwierdzonym urlopem / niedostępnością
+  (`wolneNa`), ma własny kolor i podpis — zmiana w grafiku ma pierwszeństwo.
 
 **Blokada PIN-em na kiosku** — zaimplementowana (patrz niżej, Schemat
 Supabase i sekcja "Panel kierownika"), TYLKO w `KioskDashboard.tsx`.

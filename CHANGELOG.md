@@ -5,6 +5,17 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.62.1 — 2026-09-29
+
+- **Grafik pracownika — powrót na dziś w napisie okresu.** Przycisku „Dziś”
+  już nie ma: dotknięcie „28 wrz – 4 paź” (albo „Wrzesień 2026”) wraca na
+  bieżący tydzień / miesiąc. Poza bieżącym okresem napis jest podkreślony.
+  Napis ma stałą szerokość, więc **strzałki stoją zawsze w tym samym
+  miejscu**.
+- **Kalendarz miesiąca pokazuje urlop i niedostępność** wprost w komórce:
+  urlop na niebiesko z podpisem „urlop”, niedostępność kreskowana z podpisem
+  „niedost.”; w legendzie doszły oba znaczenia.
+
 ## 0.62.0 — 2026-09-29
 
 - **Grafik pracownika — nowy wygląd według makiety** (Tablet Służbowy i

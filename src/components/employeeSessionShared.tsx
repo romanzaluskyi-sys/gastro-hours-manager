@@ -3037,7 +3037,6 @@ export const EmployeeSessionScreens = ({
       grafikWidok === "miesiac"
         ? `${miesiacPrefix}-01` > granicaWstecz
         : addDaysYMD(bazowy, -7) >= granicaWstecz;
-    const naDzis = grafikWidok === "miesiac" ? miesiacOffset === 0 : tydzienOffset === 0;
     const etykietaTygodnia = (() => {
       const a = new Date(dniTygodnia[0] + "T00:00:00");
       const b = new Date(dniTygodnia[6] + "T00:00:00");
@@ -3607,15 +3606,29 @@ export const EmployeeSessionScreens = ({
               const z = moje.filter((s) => s.date === ymd);
               const godzDnia = z.reduce((a, s) => a + shiftHours(s), 0);
               const inny = z.some((s) => s.lokal !== employee.default_lokal);
+              // Urlop i zgłoszona niedostępność (zatwierdzone) — dzień, w którym
+              // tej osoby nie ma, ma to mówić sam, bez klikania (0.62.1). Urlop
+              // na niebiesko (jak „wolne” w panelu kierownika), niedostępność
+              // kreskowana; zmiana w grafiku ma pierwszeństwo.
+              const nieobecnosc = z.length ? null : wolneNa(ymd);
+              const tloNieobecnosci =
+                nieobecnosc?.type === "urlop"
+                  ? "bg-[#E3EEFB] border-[#1D5FA8] text-[#1D5FA8]"
+                  : nieobecnosc
+                  ? "border-[#6E6E66] text-[#6E6E66] bg-[repeating-linear-gradient(135deg,#ECEBE6_0_4px,#fff_4px_8px)]"
+                  : "";
               return (
                 <button
                   key={ymd}
                   onClick={() => setGrafikDzienMiesiaca(ymd)}
+                  title={nieobecnosc ? (nieobecnosc.type === "urlop" ? "Urlop" : "Niedostępność") : undefined}
                   className={`aspect-[1/1.05] rounded-lg border-[1.5px] flex flex-col items-center justify-center tabular-nums ${
                     z.length
                       ? inny
                         ? "bg-[#8A5300] border-[#8A5300] text-white"
                         : "bg-[#171714] border-[#171714] text-white"
+                      : nieobecnosc
+                      ? tloNieobecnosci
                       : "bg-white border-[#DEDCD4] text-[#171714]"
                   } ${ymd < dzisYMD ? "opacity-45" : ""} ${
                     ymd === dzisYMD ? "outline outline-[3px] outline-offset-1 outline-[#DE3A22]" : ""
@@ -3623,6 +3636,11 @@ export const EmployeeSessionScreens = ({
                 >
                   <em className="not-italic font-extrabold text-[14px]">{i + 1}</em>
                   {z.length > 0 && <small className="text-[10px] font-extrabold">{h1(godzDnia)}</small>}
+                  {nieobecnosc && (
+                    <small className="text-[9px] font-extrabold uppercase leading-none mt-px">
+                      {nieobecnosc.type === "urlop" ? "urlop" : "niedost."}
+                    </small>
+                  )}
                 </button>
               );
             })}
@@ -3633,6 +3651,13 @@ export const EmployeeSessionScreens = ({
             </span>
             <span className="flex items-center gap-1">
               <i className="w-3 h-3 rounded-[3px] bg-[#8A5300]" /> inny lokal
+            </span>
+            <span className="flex items-center gap-1">
+              <i className="w-3 h-3 rounded-[3px] bg-[#E3EEFB] border border-[#1D5FA8]" /> urlop
+            </span>
+            <span className="flex items-center gap-1">
+              <i className="w-3 h-3 rounded-[3px] border border-[#6E6E66] bg-[repeating-linear-gradient(135deg,#ECEBE6_0_2px,#fff_2px_4px)]" />{" "}
+              niedostępność
             </span>
             <span className="flex items-center gap-1">
               <i className="w-3 h-3 rounded-[3px] border-2 border-[#DE3A22]" /> dziś
@@ -3723,7 +3748,7 @@ export const EmployeeSessionScreens = ({
               kończy się na 14 dniach, a zmiany, której nie widać, nie da się
               wystawić na giełdę. "Dziś" pokazuje się dopiero, gdy jest po co
               wracać. */}
-          <div className="flex items-center gap-2 mb-2.5">
+          <div className="flex items-center flex-wrap gap-2 mb-2.5">
             <button
               onClick={() =>
                 grafikWidok === "miesiac" ? setMiesiacOffset((v) => v - 1) : setTydzienOffset((v) => v - 1)
@@ -3734,7 +3759,27 @@ export const EmployeeSessionScreens = ({
             >
               <ChevronLeft size={20} />
             </button>
-            <b className="font-['Archivo'] text-[16px] font-extrabold text-[#171714] whitespace-nowrap">{etykietaZakresu}</b>
+            {/* Stała szerokość — strzałki stoją zawsze w tym samym miejscu,
+                niezależnie od długości „28 wrz – 4 paź” czy „Październik”.
+                Dotknięcie napisu wraca na dziś (prośba właściciela, 0.62.1) —
+                osobny przycisk „Dziś” pojawiał się i znikał, przesuwając
+                strzałki. Poza bieżącym okresem napis jest podkreślony. */}
+            <button
+              onClick={() => {
+                setTydzienOffset(0);
+                setMiesiacOffset(0);
+                setGrafikDzienMiesiaca(null);
+              }}
+              title="Wróć do dziś"
+              data-okres-grafiku
+              className={`w-[168px] h-10 flex-shrink-0 text-center font-['Archivo'] text-[16px] font-extrabold text-[#171714] whitespace-nowrap rounded-lg ${
+                (grafikWidok === "miesiac" ? miesiacOffset : tydzienOffset) !== 0
+                  ? "underline decoration-dotted underline-offset-4"
+                  : ""
+              }`}
+            >
+              {etykietaZakresu}
+            </button>
             <button
               onClick={() =>
                 grafikWidok === "miesiac" ? setMiesiacOffset((v) => v + 1) : setTydzienOffset((v) => v + 1)
@@ -3744,20 +3789,9 @@ export const EmployeeSessionScreens = ({
             >
               <ChevronRight size={20} />
             </button>
-            {!naDzis && (
-              <button
-                onClick={() => {
-                  setTydzienOffset(0);
-                  setMiesiacOffset(0);
-                }}
-                className="h-10 px-3 rounded-lg border-2 border-[#171714] bg-white text-[14px] font-bold text-[#171714]"
-              >
-                Dziś
-              </button>
-            )}
             <span className="flex-1" />
             {grafikWidok === "tydzien" && (
-              <div className="flex p-0.5 rounded-full bg-white border-2 border-[#DEDCD4]">
+              <div className="flex p-0.5 rounded-full bg-white border-2 border-[#DEDCD4] ml-auto">
                 <button onClick={() => setGrafikWszyscy(false)} className={segCls(!grafikWszyscy)}>
                   Ja
                 </button>

@@ -23,6 +23,14 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.62.1",
+    date: "2026-09-29",
+    items: [
+      "Grafik pracownika: dotknięcie napisu okresu („28 wrz – 4 paź”) wraca na dziś; strzałki stoją zawsze w tym samym miejscu.",
+      "Kalendarz miesiąca pokazuje urlop (niebieski) i niedostępność (kreskowane) wprost w komórce dnia.",
+    ],
+  },
+  {
     version: "0.62.0",
     date: "2026-09-29",
     items: [
