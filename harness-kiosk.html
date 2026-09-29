@@ -385,6 +385,12 @@ const poprzedniMiesiac = (h) => {
       try {
         await czekaj(500);
         sprawdz("lista osób się pokazała", widac("Dorota"));
+        // 0.58.0: osoby w grupach wg stanu na dziś. W tej atrapie nikt nie ma
+        // dziś grafiku ani odbicia, więc pusta grupa ma się NIE pokazać.
+        const grupy = [...document.querySelectorAll("#app main h3")].map((e) => e.textContent.trim());
+        sprawdz("grupa „Pozostali” jest, pustych grup nie ma",
+          grupy.length === 1 && grupy[0].startsWith("Pozostali"), JSON.stringify(grupy));
+        sprawdz("osoba na próbę ma plakietkę na liście", widac("na próbę · czeka na kierownika"));
 
         // Układ tabletu (0.47.0): od 768 px osoby stoją po trzy w rzędzie.
         // CI chodzi w oknie 1280 px, więc sprawdzamy wersję tabletową;
@@ -567,14 +573,13 @@ const poprzedniMiesiac = (h) => {
           await czekaj(200);
           // Stanowisko startuje puste i bez niego przycisk jest wyłączony —
           // lokal i stanowisko są tu wymagane, tak samo jak w karcie
-          // pracownika u kierownika.
-          const selekty = [...document.querySelectorAll("select")];
-          const selStanowisko = selekty[selekty.length - 1];
-          const setSel = Object.getOwnPropertyDescriptor(
-            window.HTMLSelectElement.prototype, "value").set;
-          setSel.call(selStanowisko, "Kucharz");
-          selStanowisko.dispatchEvent(new Event("change", { bubbles: true }));
-          await czekaj(200);
+          // pracownika u kierownika. Od 0.58.0 stanowisko wybiera się
+          // kaflem, nie listą rozwijaną.
+          const dodaj = () => [...document.querySelectorAll("button")]
+            .find((b) => b.textContent.trim() === "Dodaj i zacznij zmianę");
+          sprawdz("bez stanowiska nie da się dodać", !!dodaj() && dodaj().disabled);
+          klik("Kucharz"); await czekaj(200);
+          sprawdz("stanowisko kaflem odblokowuje przycisk", !!dodaj() && !dodaj().disabled);
           const zapisyPrzed = window.__zapisy.length;
           klik("Dodaj i zacznij zmianę"); await czekaj(500);
           const rpc = window.__rpcWywolania.filter((w) => w[0] === "dodaj_probnego");

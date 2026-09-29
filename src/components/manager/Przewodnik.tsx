@@ -23,6 +23,15 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.58.0",
+    date: "2026-09-29",
+    items: [
+      "Tablet Służbowy — nowy ekran startowy: osoby w grupach Na zmianie / Dziś w grafiku / Pozostali.",
+      "Status z boku karty dużą godziną; nad listą liczniki, w nagłówku zegar, pogoda i data.",
+      "Nowa osoba na próbę: stanowisko kaflem i lista, co ta osoba może do czasu zatwierdzenia.",
+    ],
+  },
+  {
     version: "0.57.0",
     date: "2026-09-27",
     items: [

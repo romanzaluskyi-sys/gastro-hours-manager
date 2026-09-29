@@ -862,6 +862,22 @@ od szerokości okna.
 `KioskDashboard.tsx`) zakłada konto komuś, kto przyszedł na dzień próbny, i od
 razu wpuszcza go do jego sesji. Pełny opis: "Pracownik na próbę" niżej.
 
+⚠️ **Ekran startowy — układ z makiety właściciela (0.58.0, KioskStartMobile /
+KioskStartTablet).** Przebudowa ekranów pracownika idzie BLOK PO BLOKU (prośba
+właściciela) — to jest pierwszy; ekrany sesji (`employeeSessionShared.tsx`)
+mają jeszcze stary wygląd. Rzeczy, których nie widać:
+- **Grupy liczą się z `stanDnia`** — tego samego, co liczniki nad listą: Na
+  zmianie (`na_zmianie`), Dziś w grafiku (`oczekiwany`), Pozostali
+  (`zakonczyl` + `wolne`). Pusta grupa się nie rysuje.
+- **Karta nie ma awatara** (brak zdjęć); stan to blok z prawej (etykieta +
+  godzina). Wszystkie sygnały sprzed przebudowy zostały w karcie (giełda,
+  niezakończona zmiana, Puls, wiadomości, „na próbę").
+- **Nowa osoba: stanowisko kaflem.** Lista „co może" mówi prawdę o blokach w
+  sesji (Zmiana, Raport, Zadania) — makieta chowała zadania, właściciel tego
+  nie ustalał, więc zostało jak w kodzie.
+- **PIN: wygląd nowy, logika bez zmian** (makieta: „istniejący ekran").
+  Przycisk powrotu nazywa się tam „Zmień" — `harness-kiosk.html` go szuka.
+
 **Blokada PIN-em na kiosku** — zaimplementowana (patrz niżej, Schemat
 Supabase i sekcja "Panel kierownika"), TYLKO w `KioskDashboard.tsx`.
 Pracownik z ustawionym `kiosk_pin` dostaje ekran z klawiaturą numeryczną

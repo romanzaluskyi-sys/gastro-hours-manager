@@ -5,6 +5,25 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.58.0 — 2026-09-29
+
+- **Tablet Służbowy — nowy ekran startowy według makiety.** Pierwszy krok
+  przebudowy ekranów pracownika.
+  - Osoby stoją w **trzech grupach**: *Na zmianie* (czerwona ramka), *Dziś w
+    grafiku* (zielona) i *Pozostali*. Pusta grupa się nie pokazuje.
+  - Stan osoby to **blok z prawej strony karty**: „zmiana od 11:00", „w grafiku
+    14:30" albo „dziś 5,8 h" — karta jest niższa, więcej osób mieści się bez
+    przewijania. Nad listą liczniki: na zmianie, czeka na start, zakończyło.
+  - W nagłówku marka, lokal, **duży zegar**, pogoda i data.
+  - Przy nazwisku zostają wszystkie dotychczasowe sygnały: kłódka PIN-u,
+    wiadomości, propozycja z giełdy, niezakończona zmiana, „Dziś Ty zamykasz
+    dzień", plakietka „na próbę · czeka na kierownika".
+  - **Nowa osoba na próbę**: stanowisko wybiera się kaflem zamiast listy
+    rozwijanej, a pod spodem stoi, co ta osoba może robić do czasu decyzji
+    kierownika.
+  - Ekran PIN-u w tym samym stylu — większe klawisze; działa jak dotąd (sześć
+    cyfr, zatwierdza sam).
+
 ## 0.57.0 — 2026-09-27
 
 - **Puls — nowy wygląd według makiety.** Zakładki Karta dnia · Dni · Analityka ·
