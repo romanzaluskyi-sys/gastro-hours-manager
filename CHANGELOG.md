@@ -5,6 +5,18 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.62.2 — 2026-09-29
+
+- **Grafik pracownika — pasek okresu nie skacze.** Strzałki, napis okresu i
+  „Ja / Cały lokal” stoją zawsze w jednym wierszu; na telefonie przełącznik
+  „Ja / Cały lokal” nie spada już raz do nowej linii, a raz nie.
+  - Napis okresu jest węższy, więc **strzałki są bliżej siebie**; w miesiącu
+    rok pokazuje się tylko, gdy nie jest bieżący.
+  - Na widoku miesiąca przełącznik jest niewidoczny, ale zajmuje swoje
+    miejsce — **strzałki stoją tam samo w tygodniu i w miesiącu**.
+  - Na najwęższych telefonach (poniżej 360 px) przełącznik mówi krótko
+    „Ja / Lokal”.
+
 ## 0.62.1 — 2026-09-29
 
 - **Grafik pracownika — powrót na dziś w napisie okresu.** Przycisku „Dziś”

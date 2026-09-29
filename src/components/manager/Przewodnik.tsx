@@ -23,6 +23,14 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.62.2",
+    date: "2026-09-29",
+    items: [
+      "Grafik pracownika: wybór tygodnia i „Ja / Cały lokal” zawsze w jednym wierszu — nic już nie skacze na telefonie.",
+      "Strzałki bliżej siebie i zawsze w tym samym miejscu, w tygodniu i w miesiącu.",
+    ],
+  },
+  {
     version: "0.62.1",
     date: "2026-09-29",
     items: [

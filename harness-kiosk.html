@@ -750,7 +750,18 @@ const poprzedniMiesiac = (h) => {
           !!oferta && oferta[1].target_user_name === "Cezary",
           JSON.stringify(window.__zapisy.slice(przedOfertą).map((z) => z[0])));
         sprawdz("po wysłaniu karta ma status i „Wycofaj”", !!przyciskTekst("Wycofaj"));
+        // Strzałki okresu stoją w tym samym miejscu w tygodniu i w miesiącu, a
+        // wiersz nigdy się nie zawija ani nie wychodzi poza ekran (0.62.2).
+        const strzalki = () => ["Wcześniej", "Później"].map((a) =>
+          Math.round(document.querySelector(`#app [aria-label="${a}"]`).getBoundingClientRect().left));
+        const wierszOkresu = () => document.querySelector("#app [data-okres-grafiku]").parentElement;
+        const wTygodniu = strzalki();
+        const tydzienMiesci = wierszOkresu().scrollWidth <= wierszOkresu().clientWidth;
         await klikPrzycisk("Miesiąc");
+        sprawdz("strzałki okresu w tym samym miejscu w tygodniu i miesiącu, wiersz się mieści",
+          JSON.stringify(wTygodniu) === JSON.stringify(strzalki()) && tydzienMiesci &&
+            wierszOkresu().scrollWidth <= wierszOkresu().clientWidth,
+          `${wTygodniu} → ${strzalki()}`);
         sprawdz("Miesiąc: kalendarz z wybranym dniem", /zobacz w tygodniu|wolne|urlop/i.test(document.getElementById("app").innerText) &&
           [...document.querySelectorAll("#app main .grid-cols-7 > button")].length >= 28);
         sprawdz("Miesiąc: urlop i niedostępność widać w komórce",

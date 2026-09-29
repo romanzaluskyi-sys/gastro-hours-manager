@@ -958,7 +958,17 @@ handlery i stany kreatora: `swapConfirmId`/`swapTyp`/`swapTarget`/
   podsumowanie, zapis `shift_swaps`), Cezary widzi „Oddane Tobie” w jej dniu.
 - ⚠️ **Przycisku „Dziś” nie ma i nie dokładaj go** (0.62.1, prośba
   właściciela): pojawiał się i znikał, przesuwając strzałki. Powrót na dziś
-  to dotknięcie napisu okresu (`data-okres-grafiku`, stała szerokość 168 px).
+  to dotknięcie napisu okresu (`data-okres-grafiku`, stała szerokość: 104 px
+  poniżej 360 px, 120 px na telefonie, 168 px od `md`).
+- ⚠️ **Wiersz okresu NIE zawija się** (0.62.2): strzałki · napis · odstęp ·
+  „Ja / Cały lokal”. Na miesiącu przełącznik jest `invisible`, ale zajmuje
+  miejsce — inaczej strzałki stoją gdzie indziej niż w tygodniu. Szerokości są
+  POLICZONE na 320 i 375 px; dokładając coś do tego wiersza, zmierz, czy się
+  mieści (`harness-kiosk.html` sprawdza pozycję strzałek i przepełnienie).
+- `nowyWyglad` w Shellu rezerwuje od `md` miejsce na pasek przewijania
+  (`scrollbar-gutter: stable`) — wyśrodkowana treść nie przesuwa się, gdy
+  jeden widok się przewija, a drugi nie. Na telefonie bez tego: pasek jest
+  nakładany, a 15 px zabrałoby wąskiemu wierszowi miejsce.
 - Komórka miesiąca bez zmiany, ale z zatwierdzonym urlopem / niedostępnością
   (`wolneNa`), ma własny kolor i podpis — zmiana w grafiku ma pierwszeństwo.
 

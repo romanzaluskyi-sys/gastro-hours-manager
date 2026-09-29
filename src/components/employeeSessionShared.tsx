@@ -430,7 +430,13 @@ export const Shell = ({
               odstępem. */}
           <main
             className={`flex-1 overflow-y-auto flex flex-col ${
-              nowyWyglad ? "px-3.5 md:px-6 pt-4 pb-6" : "px-5 md:px-8 pt-6 pb-5"
+              // Stałe miejsce na pasek przewijania: bez tego wyśrodkowana treść
+              // przesuwała się o jego szerokość, gdy ekran raz się przewija, a raz
+              // nie (strzałki okresu w Grafiku skakały między tygodniem a
+              // miesiącem, 0.62.2). Tylko od `md`: telefony mają pasek nakładany
+              // na treść, a zarezerwowane miejsce zabierałoby wąskiemu wierszowi
+              // 15 px.
+              nowyWyglad ? "px-3.5 md:px-6 pt-4 pb-6 md:[scrollbar-gutter:stable]" : "px-5 md:px-8 pt-6 pb-5"
             }`}
           >
             <div
@@ -3044,9 +3050,13 @@ export const EmployeeSessionScreens = ({
         ? `${a.getDate()}–${b.getDate()} ${MIES_K[b.getMonth()]}`
         : `${a.getDate()} ${MIES_K[a.getMonth()]} – ${b.getDate()} ${MIES_K[b.getMonth()]}`;
     })();
+    // Rok przy miesiącu tylko wtedy, gdy nie jest bieżący — „Październik 2026”
+    // nie mieści się na telefonie w stałej szerokości napisu (0.62.2).
     const etykietaZakresu =
       grafikWidok === "miesiac"
-        ? `${getMonthName(miesiacData.getMonth())} ${miesiacData.getFullYear()}`
+        ? `${getMonthName(miesiacData.getMonth())}${
+            miesiacData.getFullYear() !== new Date().getFullYear() ? ` ${miesiacData.getFullYear()}` : ""
+          }`
         : etykietaTygodnia;
 
     const wolneNa = (dateStr) =>
@@ -3718,7 +3728,11 @@ export const EmployeeSessionScreens = ({
         on ? "bg-[#171714] text-white" : "text-[#171714]"
       }`;
     const strzalkaCls =
-      "w-10 h-10 flex-shrink-0 rounded-lg border-2 border-[#171714] bg-white flex items-center justify-center text-[#171714] disabled:opacity-35";
+      "w-9 h-9 md:w-10 md:h-10 flex-shrink-0 rounded-lg border-2 border-[#171714] bg-white flex items-center justify-center text-[#171714] disabled:opacity-35";
+    const zakresCls = (on) =>
+      `min-h-[34px] md:min-h-[40px] px-2.5 md:px-3 rounded-full text-[13px] md:text-[14px] font-bold whitespace-nowrap ${
+        on ? "bg-[#171714] text-white" : "text-[#171714]"
+      }`;
 
     return (
       <Shell
@@ -3748,7 +3762,11 @@ export const EmployeeSessionScreens = ({
               kończy się na 14 dniach, a zmiany, której nie widać, nie da się
               wystawić na giełdę. "Dziś" pokazuje się dopiero, gdy jest po co
               wracać. */}
-          <div className="flex items-center flex-wrap gap-2 mb-2.5">
+          {/* ⚠️ JEDEN wiersz, bez zawijania (0.62.2): na telefonie „Ja / Cały
+              lokal” spadało raz do nowej linii, raz nie — i wszystko skakało.
+              Na widoku miesiąca przełącznik jest niewidoczny, ale zajmuje
+              miejsce, więc strzałki stoją tam samo w obu widokach. */}
+          <div className="flex items-center gap-1 min-[360px]:gap-1.5 md:gap-2 mb-2.5">
             <button
               onClick={() =>
                 grafikWidok === "miesiac" ? setMiesiacOffset((v) => v - 1) : setTydzienOffset((v) => v - 1)
@@ -3772,7 +3790,7 @@ export const EmployeeSessionScreens = ({
               }}
               title="Wróć do dziś"
               data-okres-grafiku
-              className={`w-[168px] h-10 flex-shrink-0 text-center font-['Archivo'] text-[16px] font-extrabold text-[#171714] whitespace-nowrap rounded-lg ${
+              className={`w-[104px] min-[360px]:w-[120px] md:w-[168px] h-9 md:h-10 flex-shrink-0 text-center font-['Archivo'] text-[13px] min-[360px]:text-[14px] md:text-[16px] font-extrabold text-[#171714] whitespace-nowrap rounded-lg ${
                 (grafikWidok === "miesiac" ? miesiacOffset : tydzienOffset) !== 0
                   ? "underline decoration-dotted underline-offset-4"
                   : ""
@@ -3789,17 +3807,23 @@ export const EmployeeSessionScreens = ({
             >
               <ChevronRight size={20} />
             </button>
-            <span className="flex-1" />
-            {grafikWidok === "tydzien" && (
-              <div className="flex p-0.5 rounded-full bg-white border-2 border-[#DEDCD4] ml-auto">
-                <button onClick={() => setGrafikWszyscy(false)} className={segCls(!grafikWszyscy)}>
-                  Ja
-                </button>
-                <button onClick={() => setGrafikWszyscy(true)} className={`${segCls(grafikWszyscy)} whitespace-nowrap`}>
-                  Cały lokal
-                </button>
-              </div>
-            )}
+            <span className="flex-1 min-w-0" />
+            <div
+              className={`flex flex-shrink-0 p-0.5 rounded-full bg-white border-2 border-[#DEDCD4] ${
+                grafikWidok === "tydzien" ? "" : "invisible"
+              }`}
+              aria-hidden={grafikWidok !== "tydzien"}
+            >
+              <button onClick={() => setGrafikWszyscy(false)} className={zakresCls(!grafikWszyscy)} tabIndex={grafikWidok === "tydzien" ? 0 : -1}>
+                Ja
+              </button>
+              <button onClick={() => setGrafikWszyscy(true)} className={zakresCls(grafikWszyscy)} tabIndex={grafikWidok === "tydzien" ? 0 : -1}>
+                {/* Najwęższe telefony (poniżej 360 px): „Lokal”, inaczej wiersz
+                    się nie mieści. */}
+                <span className="min-[360px]:hidden">Lokal</span>
+                <span className="max-[359px]:hidden">Cały lokal</span>
+              </button>
+            </div>
           </div>
 
           {grafikWidok === "miesiac" ? (
