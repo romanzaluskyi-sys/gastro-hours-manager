@@ -783,6 +783,35 @@ const poprzedniMiesiac = (h) => {
         await doTygodniaZ("Oddane Tobie");
         sprawdz("adresat widzi ofertę w jej dniu: „Oddane Tobie” · „Wezmę tę zmianę”",
           widac("Oddane Tobie") && widac("Wezmę tę zmianę"));
+
+        // --- Zadania (0.63.0) ---
+        // Cezary jest na zmianie: karta dnia z TERAZ, odhaczenie z „Cofnij”,
+        // „Nie da się zrobić?” prowadzi do Zgłoś problem z wpisanym zadaniem.
+        await otworzZakladke("Zadania");
+        const tekstApp = () => document.getElementById("app").innerText;
+        sprawdz("Zadania: karta dnia z blokiem TERAZ i licznikami zakresu",
+          /dziś ·/i.test(tekstApp()) && /teraz/i.test(tekstApp()) && widac("Moje stanowisko") && widac("Wszystkie"));
+        const przedOdhaczeniem = window.__zapisy.length;
+        document.querySelector('#app [aria-label="Zrobione: Otworzyć lokal, wyłączyć alarm"]')
+          .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(300);
+        sprawdz("odhaczenie zapisuje wykonanie i daje „Zrobione · Cofnij”",
+          window.__zapisy.slice(przedOdhaczeniem).some((z) => z[0] === "task_completions") &&
+            widac("Zrobione · Otworzyć lokal") && widac("Zrobione (1)"));
+        await klikPrzycisk("Cofnij");
+        await czekaj(200);
+        sprawdz("„Cofnij” zdejmuje wykonanie", !widac("Zrobione (1)") && !widac("Zrobione · Otworzyć lokal"));
+        await klikPrzycisk("Nie da się zrobić?");
+        await klikPrzycisk("Brak towaru");
+        await czekaj(200);
+        const opis = [...document.querySelectorAll("#app textarea")].map((t) => t.value).join(" ");
+        sprawdz("„Nie da się zrobić?” → Zgłoś problem z wpisanym zadaniem i powodem",
+          /Nie da się zrobić zadania „/.test(opis) && /brak towaru/.test(opis), opis.slice(0, 120));
+        klik("Zmień"); await czekaj(300);
+        klik("Bo"); await czekaj(300);
+        await otworzZakladke("Zadania");
+        sprawdz("Zadania w dzień wolny: „Nie masz dziś zmiany” zamiast pustej listy",
+          widac("Nie masz dziś zmiany"));
       } catch (e) {
         sprawdz("przebieg bez wyjątku", false, e.message);
       }

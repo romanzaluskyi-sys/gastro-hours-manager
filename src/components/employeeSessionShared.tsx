@@ -24,6 +24,7 @@ import {
   User,
   Lock,
   MapPin,
+  RotateCcw,
 } from "lucide-react";
 import { api } from "../api/supabase";
 import { sendToGoogleSheets, toLocalYMD } from "../api/googleSheets";
@@ -658,6 +659,8 @@ export const EmployeeSessionScreens = ({
   // Typ formularza Zgłoś wybrany PRZED wejściem na ekran (skrót „Wniosek o
   // wolne”) — patrz reset przy wejściu na ekran ZGLOS.
   const zgTypNaWejscie = useRef(null);
+  // Tekst zgłoszenia wpisany z góry („Nie da się zrobić?” w Zadaniach).
+  const zgTekstNaWejscie = useRef(null);
 
   // ---- "Popraw zmianę" (type: correction) — osobny zestaw pól, patrz handleSendKorekta ----
   const [zgCorrectionShiftId, setZgCorrectionShiftId] = useState("forgot"); // uuid zmiany albo "forgot"
@@ -754,6 +757,13 @@ export const EmployeeSessionScreens = ({
   // zamiast szukać jej ponownie w pełnym spisie.
   const [openBlockId, setOpenBlockId] = useState(null);
   const [pomiarZadania, setPomiarZadania] = useState(null); // { item, poprawka }
+  // Ekran Zadania (0.63.0): bloki z rozwiniętym „Zrobione (n)”, zadanie z
+  // otwartym „Nie da się zrobić?” i pasek „Zrobione · Cofnij” po odhaczeniu.
+  const [zadaniaZrobioneRozwiniete, setZadaniaZrobioneRozwiniete] = useState({});
+  const [zadanieNieDaSie, setZadanieNieDaSie] = useState(null);
+  const [zadanieCofnij, setZadanieCofnij] = useState(null); // { id, tytul }
+  const cofnijTimer = useRef(null);
+  useEffect(() => () => clearTimeout(cofnijTimer.current), []);
 
   const najblizszaZmiana = nextShiftFrom(planShifts, employee, dzisYMD);
   // Propozycje, które mogę wziąć, i zmiany, które już przejąłem/przejęłam,
@@ -960,7 +970,8 @@ export const EmployeeSessionScreens = ({
       setZgShiftId(zgPrefillShiftId || "none");
       setZgAnon(false);
       setZgSent(false);
-      setZgText("");
+      setZgText(zgTekstNaWejscie.current || "");
+      zgTekstNaWejscie.current = null;
       setZgKorektaNote("");
       setZgAbsType("urlop");
       setZgAbsStart("");
@@ -1486,6 +1497,11 @@ export const EmployeeSessionScreens = ({
           shiftId: openShift ? openShift.id : null,
         })
       );
+      if (!item.done) {
+        setZadanieCofnij({ id: item.task.id, tytul: item.task.title });
+        clearTimeout(cofnijTimer.current);
+        cofnijTimer.current = setTimeout(() => setZadanieCofnij(null), 5000);
+      }
     } catch (err) {
       showMsg(err.message || "Błąd zapisu zadania!", "error");
     }
@@ -1528,210 +1544,329 @@ export const EmployeeSessionScreens = ({
     }
   };
 
-  // ---- checklista zadań — wspólny renderer dla Pulpitu, ekranu Zmiana i
-  // zakładki Zadania, żeby nie duplikować JSX w trzech miejscach ----
-  const renderTaskChecklist = (list) => (
-    <div className="space-y-2">
-      {list.map((item) => {
-        const termin = (
-          item.task.deadline_time ||
-          (item.blok && item.blok.deadline_time) ||
-          ""
-        ).slice(0, 5);
-        const odznaka = taskBadgeLabel(item.task);
-        return (
-          <div
-            key={item.task.id}
-            className={`${checkboxRowCls(item.done)} ${
-              item.done ? "opacity-60" : ""
-            } flex-col items-stretch gap-2`}
-          >
-            <button
-              onClick={() => handleToggleTask(item)}
-              className="flex items-start gap-3 w-full text-left"
-            >
-              <span className="w-5 h-5 mt-0.5 border-2 border-[#B7B6AE] rounded-[3px] flex-shrink-0 flex items-center justify-center">
-                {item.done && (
-                  <span className="w-[9px] h-[9px] bg-[#DE3A22] rounded-[1px]" />
-                )}
+  // ---- checklista zadań — układ z makiety (0.63.0, EmployeeTasksMobile /
+  // EmployeeTasksTablet). Cały wiersz klikalny z polem 34 px, zrobione na dół
+  // bloku pod „Zrobione (n)”, swoje zrobione da się cofnąć, cudze — nie. ----
+  const mojeWykonanie = (c) =>
+    !!c && (String(c.user_id) === String(employee.id) || c.user_name === employee.name);
+  const powodyNieDaSie = ["Brak towaru", "Sprzęt nie działa", "Brak czasu", "Inne"];
+  const zadanieDoZgloszenia = (item, powod) => {
+    zgTypNaWejscie.current = "problem";
+    zgTekstNaWejscie.current = `Nie da się zrobić zadania „${item.task.title}”${
+      item.blok?.nazwa ? ` (${item.blok.nazwa})` : ""
+    }: ${powod.toLowerCase()}.`;
+    setZadanieNieDaSie(null);
+    setZgPrefillShiftId(null);
+    setScreen("ZGLOS");
+  };
+  const odznaczZadanie = async (item) => {
+    try {
+      zapiszWynikZadania(
+        await toggleTaskCompletion({
+          task: item.task,
+          dateStr: todayStr,
+          existingCompletion: item.completion,
+          actorId: employee.id,
+          actorName: employee.name,
+          shiftId: openShift ? openShift.id : null,
+        })
+      );
+    } catch (err) {
+      showMsg(err.message || "Błąd zapisu zadania!", "error");
+    }
+  };
+  const renderZadanie = (item) => {
+    const c = item.completion;
+    const moje = mojeWykonanie(c);
+    const punkty = (item.task.description || "")
+      .split(/\n+/)
+      .map((x) => x.replace(/^[-•·]\s*/, "").trim())
+      .filter(Boolean);
+    const wartosci =
+      item.pomiar && item.wpis
+        ? item.pola.map((pole) => `${pole.label}: ${wartoscPolaTekst(pole, item.wpis.payload || {})}`).join(" · ")
+        : null;
+    if (item.done) {
+      return (
+        <div key={item.task.id} className="flex items-start gap-3 py-2.5 px-1 border-t border-[#DEDCD4]">
+          <span className="w-[34px] h-[34px] flex-shrink-0 rounded-lg bg-[#1F7A4A] text-white flex items-center justify-center">
+            <Check size={20} strokeWidth={3} />
+          </span>
+          <div className="flex-1 min-w-0">
+            <b className="block text-[16px] font-semibold text-[#6E6E66] line-through">{item.task.title}</b>
+            {wartosci && (
+              <span className={`block text-[14px] ${item.alarm ? "font-bold text-[#DE3A22]" : "text-[#171714]"}`}>
+                {wartosci}
+                {item.alarm ? " — poza normą" : ""}
               </span>
-              <span className="flex-1">
-                <span
-                  className={`block text-[15px] font-semibold ${
-                    item.done ? "line-through text-[#6E6E66]" : "text-[#171714]"
-                  }`}
-                >
-                  {item.task.title}
-                  {!item.done && item.task.priority === "wysoki" && (
-                    <span className="ml-2 text-[11px] font-bold text-[#DE3A22] no-underline">
-                      Ważne
-                    </span>
-                  )}
-                  {item.pomiar && (
-                    <Thermometer
-                      size={13}
-                      className="inline ml-1.5 -mt-0.5 text-[#8F8E86]"
-                    />
-                  )}
-                </span>
-                {item.task.description && (
-                  <span className="block text-[12.5px] text-[#6E6E66] mt-1 whitespace-pre-line">
-                    {item.task.description}
-                  </span>
-                )}
-                {item.pomiar && item.wpis && (
-                  <span
-                    className={`block text-[13px] mt-1 ${
-                      item.alarm ? "font-bold text-[#DE3A22]" : "text-[#171714]"
-                    }`}
-                  >
-                    {item.pola
-                      .map(
-                        (pole) =>
-                          `${pole.label}: ${wartoscPolaTekst(pole, item.wpis.payload || {})}`
-                      )
-                      .join(" · ")}
-                    {item.alarm ? " — poza normą" : ""}
-                  </span>
-                )}
-
-                <span className="block text-[12px] text-[#8F8E86] mt-0.5">
-                  {item.done
-                    ? `${item.completion?.user_name || "?"}${
-                        item.completion?.completed_at
-                          ? " · " + fmtHHMM(new Date(item.completion.completed_at))
-                          : ""
-                      }`
-                    : item.pomiar
-                    ? termin
-                      ? `wpisz pomiar · do ${termin}`
-                      : "wpisz pomiar"
-                    : termin
-                    ? `do ${termin}`
-                    : " "}
-                </span>
-              </span>
-              {odznaka && (
-                <span className="flex-shrink-0 text-[11px] font-semibold px-2 py-1 rounded bg-[#E7E7E2] text-[#6E6E66]">
-                  {odznaka}
+            )}
+            <small className="flex flex-wrap items-center gap-1 text-[13px] text-[#6E6E66]">
+              {c?.user_name || "?"}
+              {c?.completed_at ? ` · ${fmtHHMM(new Date(c.completed_at))}` : ""}
+              {/* Cudzego wykonania nie cofa się z tego ekranu — na wspólnym
+                  tablecie odhaczyłoby się komuś jego pracę. Kierownik może. */}
+              {!moje && !item.pomiar && (
+                <span className="inline-flex items-center gap-1">
+                  · <Lock size={12} /> tylko {c?.user_name || "ta osoba"} lub kierownik może cofnąć
                 </span>
               )}
-            </button>
+            </small>
             {item.pomiar && item.wpis && (
               <SladPoprawki opis={opisPoprawki(item.wpis, dayLogEntries, item.pola)} />
             )}
-            {item.pomiar && item.done && item.wpis && (
-              <button
-                onClick={() => setPomiarZadania({ item, poprawka: true })}
-                className="self-start text-[12.5px] underline text-[#6E6E66]"
-              >
-                Popraw pomiar
-              </button>
-            )}
           </div>
-        );
-      })}
-    </div>
-  );
-
-  // Karty bloków. `zwiniete` = same nagłówki z licznikiem (Pulpit: kliknięcie
-  // przenosi na ekran Zadania i otwiera ten blok) — pełna lista wszystkich
-  // zadań na Pulpicie robiła z niego ścianę tekstu, przez którą nie było widać
-  // zmiany ani grafiku.
-  const renderBlockCards = (grupy, { zwiniete = false } = {}) => {
-    // Bez wyboru rozwijamy pierwszy blok, w którym coś zostało — ekran, na
-    // którym trzeba najpierw kliknąć, żeby cokolwiek zobaczyć, wygląda jak
-    // pusty.
-    const domyslny = (grupy.find((g) => g.zostalo > 0) || grupy[0] || {}).blok;
-    return (
-    <div className="space-y-3">
-      {grupy.map((g) => {
-        const otwarty =
-          !zwiniete &&
-          (openBlockId
-            ? openBlockId === g.blok.id
-            : !!domyslny && domyslny.id === g.blok.id);
-        const dni = dniBlokuLabel(g.blok);
-        return (
-          <div
-            key={g.blok.id}
-            className={`border-2 rounded ${
-              g.zostalo === 0 ? "border-[#B7B6AE] opacity-70" : "border-[#171714]"
-            }`}
-          >
+          {item.pomiar ? (
             <button
-              onClick={() => {
-                if (zwiniete) {
-                  setOpenBlockId(g.blok.id);
-                  setScreen("ZADANIA");
-                } else {
-                  setOpenBlockId(otwarty ? null : g.blok.id);
-                }
-              }}
-              className="w-full text-left p-3.5 flex items-center gap-3"
+              onClick={() => setPomiarZadania({ item, poprawka: true })}
+              className="flex-shrink-0 min-h-[36px] px-3 rounded-lg border-2 border-[#171714] bg-white text-[14px] font-bold text-[#171714]"
             >
-              <span className="flex-1">
-                <span className="block font-['Archivo'] font-extrabold text-[16px] text-[#171714]">
-                  {g.blok.nazwa}
-                  {g.pilne && (
-                    <span className="ml-2 text-[11px] font-bold text-[#DE3A22]">Ważne</span>
-                  )}
-                </span>
-                <span className="block text-[12px] text-[#8F8E86] mt-0.5">
-                  {poraLabel(g.blok.schedule_type)}
-                  {dni ? ` · tylko ${dni}` : ""}
-                  {g.blok.deadline_time ? ` · do ${g.blok.deadline_time.slice(0, 5)}` : ""}
-                  {g.alarm ? " · pomiar poza normą" : ""}
-                </span>
-              </span>
-              <span
-                className={`font-['Archivo'] font-extrabold text-[15px] tabular-nums ${
-                  g.zostalo === 0 ? "text-[#6E6E66]" : "text-[#171714]"
-                }`}
-              >
-                {g.done}/{g.total}
-              </span>
-              {zwiniete ? (
-                <ChevronRight size={18} className="text-[#8F8E86]" />
-              ) : otwarty ? (
-                <ChevronUp size={18} className="text-[#8F8E86]" />
-              ) : (
-                <ChevronDown size={18} className="text-[#8F8E86]" />
-              )}
+              Popraw
             </button>
-            <div className="px-3.5 pb-3">
-              <div className="h-2 rounded-full bg-[#E7E7E2] overflow-hidden">
-                <div
-                  className="h-full bg-[#DE3A22]"
-                  style={{ width: `${g.total ? (g.done / g.total) * 100 : 0}%` }}
-                />
-              </div>
-            </div>
-            {otwarty && <div className="px-3.5 pb-3.5">{renderTaskChecklist(g.items)}</div>}
+          ) : (
+            moje && (
+              <button
+                onClick={() => odznaczZadanie(item)}
+                className="flex-shrink-0 inline-flex items-center gap-1 min-h-[36px] px-3 rounded-lg border-2 border-[#DEDCD4] bg-white text-[14px] font-bold text-[#171714]"
+              >
+                <RotateCcw size={14} /> Cofnij
+              </button>
+            )
+          )}
+        </div>
+      );
+    }
+    return (
+      <div
+        key={item.task.id}
+        className={`border-t border-[#DEDCD4] ${zadanieNieDaSie === item.task.id ? "bg-[#FDF0D8] -mx-3 px-3" : ""}`}
+      >
+        <button
+          onClick={() => handleToggleTask(item)}
+          aria-label={`Zrobione: ${item.task.title}`}
+          className="w-full flex items-start gap-3 py-2.5 px-1 text-left"
+        >
+          <span className="w-[34px] h-[34px] flex-shrink-0 rounded-lg border-[2.5px] border-[#171714] bg-white" />
+          <span className="flex-1 min-w-0">
+            <b className="flex items-start gap-1 text-[17px] leading-[22px] font-bold text-[#171714]">
+              {item.task.priority === "wysoki" && (
+                <i
+                  title="Ważne"
+                  className="not-italic flex-shrink-0 mt-0.5 w-[18px] h-[18px] rounded-full bg-[#DE3A22] text-white text-[12px] font-black flex items-center justify-center"
+                >
+                  !
+                </i>
+              )}
+              <span>
+                {item.task.title}
+                {item.pomiar && <Thermometer size={14} className="inline ml-1.5 -mt-0.5 text-[#6E6E66]" />}
+              </span>
+            </b>
+            {punkty.length > 1 ? (
+              <ul className="mt-1 space-y-0.5">
+                {punkty.map((p) => (
+                  <li key={p} className="text-[14px] text-[#6E6E66] pl-3 relative before:content-['•'] before:absolute before:left-0">
+                    {p}
+                  </li>
+                ))}
+              </ul>
+            ) : punkty.length === 1 ? (
+              <span className="block text-[14px] text-[#6E6E66] mt-0.5">{punkty[0]}</span>
+            ) : null}
+            {item.pomiar && <small className="block text-[13px] font-bold text-[#6E6E66] mt-0.5">wpisz pomiar</small>}
+            {/* Własny cykl zadania (pora i dni stoją w nagłówku bloku). */}
+            {taskBadgeLabel(item.task) && (
+              <small className="inline-block mt-1 text-[12px] font-bold px-1.5 py-0.5 rounded-md bg-[#ECEBE6] text-[#6E6E66]">
+                {taskBadgeLabel(item.task)}
+              </small>
+            )}
+          </span>
+        </button>
+        {bloki.includes("ZGLOS_PROBLEM") && (
+          <div className="flex justify-end pb-2 -mt-1">
+            <button
+              onClick={() => setZadanieNieDaSie(zadanieNieDaSie === item.task.id ? null : item.task.id)}
+              className="inline-flex items-center gap-1 text-[13px] font-bold text-[#6E6E66] underline underline-offset-2"
+            >
+              <AlertTriangle size={13} /> Nie da się zrobić?
+            </button>
           </div>
-        );
-      })}
-      {pomiarZadania && (
-        <ModalWpisu
-          szablon={{
-            nazwa: pomiarZadania.item.task.title,
-            typ: pomiarZadania.item.task.typ || "inne",
-            klucz: kluczWpisuZadania(pomiarZadania.item.task),
-            pola: pomiarZadania.item.pola,
-          }}
-          wartosciStartowe={
-            pomiarZadania.poprawka && pomiarZadania.item.wpis
-              ? { ...(pomiarZadania.item.wpis.payload || {}) }
-              : null
-          }
-          powodWymagany={pomiarZadania.poprawka}
-          onClose={() => setPomiarZadania(null)}
-          onSave={handleZapiszPomiarZadania}
-        />
-      )}
-    </div>
+        )}
+        {zadanieNieDaSie === item.task.id && (
+          <div className="pb-3">
+            <b className="block text-[14px] text-[#171714] mb-1.5">Co się stało?</b>
+            <div className="flex flex-wrap gap-1.5">
+              {powodyNieDaSie.map((p) => (
+                <button
+                  key={p}
+                  onClick={() => zadanieDoZgloszenia(item, p)}
+                  className="min-h-[40px] px-3 rounded-full border-2 border-[#171714] bg-white text-[14px] font-bold text-[#171714]"
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+            <small className="block text-[13px] text-[#6E6E66] mt-1.5">
+              Otworzy się Zgłoś problem z tym zadaniem.
+            </small>
+          </div>
+        )}
+      </div>
     );
   };
+
+  // Termin bloku (opcjonalny): na godzinę przed — „zostało N min”, po czasie —
+  // „po terminie N min” i czerwona ramka bloku.
+  const terminBloku = (g) => {
+    const t = (g.blok.deadline_time || "").slice(0, 5);
+    if (!t) return null;
+    if (g.zostalo === 0) return { ton: "ok", tekst: `do ${t}` };
+    const [h, m] = t.split(":").map(Number);
+    const zostalo = h * 60 + m - (now.getHours() * 60 + now.getMinutes());
+    if (zostalo < 0) return { ton: "po", tekst: `po terminie ${czasTrwania(-zostalo * 60000)}` };
+    if (zostalo <= 60) return { ton: "wkrotce", tekst: `do ${t} · zostało ${zostalo} min` };
+    return { ton: "", tekst: `do ${t}` };
+  };
+
+  const renderBlockCards = (grupy, { terazId = null, pokazStanowiska = false } = {}) => {
+    // Bez wyboru rozwijamy blok TERAZ albo pierwszy, w którym coś zostało —
+    // ekran, na którym trzeba najpierw kliknąć, żeby cokolwiek zobaczyć,
+    // wygląda jak pusty. Na tablecie wszystkie bloki są rozwinięte.
+    const domyslny = terazId || (grupy.find((g) => g.zostalo > 0) || grupy[0] || {}).blok?.id;
+    return (
+      <div className="flex flex-col gap-3 md:grid md:grid-cols-3 md:items-start">
+        {grupy.map((g) => {
+          const otwarty = openBlockId ? openBlockId === g.blok.id : domyslny === g.blok.id;
+          const teraz = g.blok.id === terazId;
+          const termin = terminBloku(g);
+          const doZrobienia = g.items.filter((i) => !i.done);
+          const zrobione = g.items.filter((i) => i.done);
+          const pokazZrobione = !!zadaniaZrobioneRozwiniete[g.blok.id];
+          const stanowiskaBloku = (g.blok.stanowiska || "")
+            .split(",")
+            .map((x) => x.trim())
+            .filter(Boolean);
+          return (
+            <section
+              key={g.blok.id}
+              id={`zadania-blok-${g.blok.id}`}
+              className={`bg-white rounded-xl border-2 ${
+                termin?.ton === "po" ? "border-[#DE3A22]" : "border-[#171714]"
+              } ${teraz ? "md:shadow-[0_0_0_2px_#171714]" : ""} ${g.zostalo === 0 ? "opacity-80" : ""}`}
+            >
+              <button
+                onClick={() => setOpenBlockId(otwarty ? "__zaden__" : g.blok.id)}
+                className="w-full text-left px-3 pt-3 pb-2 grid grid-cols-[1fr_auto_20px] gap-x-2 items-center"
+              >
+                <span className="min-w-0">
+                  <span className="flex flex-wrap items-center gap-1.5 text-[13px] font-bold text-[#6E6E66]">
+                    {teraz && (
+                      <em className="not-italic text-[11px] font-extrabold uppercase text-white bg-[#DE3A22] rounded-[5px] px-1.5 py-px">
+                        teraz
+                      </em>
+                    )}
+                    {poraLabel(g.blok.schedule_type)}
+                    {dniBlokuLabel(g.blok) ? ` · tylko ${dniBlokuLabel(g.blok)}` : ""}
+                    {pokazStanowiska &&
+                      stanowiskaBloku.map((st) => (
+                        <span
+                          key={st}
+                          className="text-[11px] font-extrabold px-1.5 py-px rounded-md bg-[#ECEBE6] text-[#171714]"
+                          style={stanowiskoBadgeStyle(stanowiskaOptions, g.blok.lokal, st) || {}}
+                        >
+                          {stanowiskoShort(stanowiskaOptions, g.blok.lokal, st)}
+                        </span>
+                      ))}
+                  </span>
+                  <b className="flex items-center gap-1 font-['Archivo'] text-[18px] font-extrabold text-[#171714]">
+                    <span className="truncate">{g.blok.nazwa}</span>
+                    {g.pilne && (
+                      <i
+                        title="Ważne"
+                        className="not-italic flex-shrink-0 w-[18px] h-[18px] rounded-full bg-[#DE3A22] text-white text-[12px] font-black flex items-center justify-center"
+                      >
+                        !
+                      </i>
+                    )}
+                  </b>
+                  {termin && (
+                    <span
+                      className={`inline-flex items-center gap-1 mt-0.5 text-[13px] font-bold ${
+                        termin.ton === "po"
+                          ? "text-white bg-[#DE3A22] rounded-md px-1.5 py-px"
+                          : termin.ton === "wkrotce"
+                          ? "text-[#8A5300]"
+                          : termin.ton === "ok"
+                          ? "text-[#1F7A4A]"
+                          : "text-[#6E6E66]"
+                      }`}
+                    >
+                      {termin.ton === "po" ? <AlertTriangle size={13} /> : <Clock size={13} />}
+                      {termin.tekst}
+                    </span>
+                  )}
+                  {g.alarm && (
+                    <span className="block text-[13px] font-bold text-[#DE3A22]">pomiar poza normą</span>
+                  )}
+                </span>
+                <span className="text-[18px] font-extrabold tabular-nums text-[#171714]">
+                  {g.done}/{g.total}
+                </span>
+                <span className="md:hidden text-[#6E6E66]">
+                  {otwarty ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                </span>
+              </button>
+              <div className="px-3 pb-2.5">
+                <div className="h-2 rounded bg-[#DEDCD4] overflow-hidden">
+                  <i
+                    className="block h-full bg-[#1F7A4A]"
+                    style={{ width: `${g.total ? (g.done / g.total) * 100 : 0}%` }}
+                  />
+                </div>
+              </div>
+              <div className={`px-3 pb-2 ${otwarty ? "" : "hidden md:block"}`}>
+                {doZrobienia.map(renderZadanie)}
+                {zrobione.length > 0 && (
+                  <>
+                    <button
+                      onClick={() =>
+                        setZadaniaZrobioneRozwiniete((p) => ({ ...p, [g.blok.id]: !p[g.blok.id] }))
+                      }
+                      className="w-full flex items-center gap-1.5 py-2.5 border-t border-[#DEDCD4] text-[14px] font-bold text-[#1F7A4A]"
+                    >
+                      <Check size={16} strokeWidth={2.5} /> Zrobione ({zrobione.length})
+                      <span className="ml-auto text-[#6E6E66]">
+                        {pokazZrobione ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                      </span>
+                    </button>
+                    {pokazZrobione && zrobione.map(renderZadanie)}
+                  </>
+                )}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+    );
+  };
+  const renderModalPomiaru = () =>
+    pomiarZadania && (
+      <ModalWpisu
+        szablon={{
+          nazwa: pomiarZadania.item.task.title,
+          typ: pomiarZadania.item.task.typ || "inne",
+          klucz: kluczWpisuZadania(pomiarZadania.item.task),
+          pola: pomiarZadania.item.pola,
+        }}
+        wartosciStartowe={
+          pomiarZadania.poprawka && pomiarZadania.item.wpis
+            ? { ...(pomiarZadania.item.wpis.payload || {}) }
+            : null
+        }
+        powodWymagany={pomiarZadania.poprawka}
+        onClose={() => setPomiarZadania(null)}
+        onSave={handleZapiszPomiarZadania}
+      />
+    );
 
   // ---- fragmenty UI wspólne dla kilku ekranów ----
   // ==========================================
@@ -4368,10 +4503,42 @@ export const EmployeeSessionScreens = ({
   }
 
   // ==========================================
-  // EKRAN: ZADANIA (Roadmap p.2)
+  // EKRAN: ZADANIA — układ z makiety właściciela (0.63.0, EmployeeTasksMobile /
+  // EmployeeTasksTablet). Widoczne tylko w dniu pracy (pracujeTegoDnia) — w
+  // dzień wolny zamiast pustego ekranu następna zmiana i podgląd bloków.
   // ==========================================
   if (screen === "ZADANIA") {
     const grupyZadan = taskViewMode === "all" ? myBlocksAll : myBlocksOwn;
+    const zostaloOwn = myChecklistOwn.filter((i) => !i.done).length;
+    const zostaloAll = splaszczBloki(myBlocksAll).filter((i) => !i.done).length;
+    const zrobioneDzis = myChecklistOwn.filter((i) => i.done).length;
+    // TERAZ — pierwszy blok, w którym coś zostało (bloki są już po porze), i
+    // tylko na zmianie. Ta sama reguła co na Pulpicie.
+    const terazGrupa = openShift ? myBlocksOwn.find((g) => g.zostalo > 0) : null;
+    const terazId = terazGrupa ? terazGrupa.blok.id : null;
+    const skoczDoBloku = (id) => {
+      setOpenBlockId(id);
+      setTimeout(() => {
+        const el = document.getElementById(`zadania-blok-${id}`);
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 50);
+    };
+    const podgladBlokow =
+      !pracujeDzis && najblizszaZmiana
+        ? buildEmployeeBlocks(
+            daneZadan,
+            { lokal: najblizszaZmiana.lokal, stanowisko: najblizszaZmiana.stanowisko },
+            najblizszaZmiana.date,
+            "own",
+            { pracuje: true }
+          )
+        : [];
+    const ostatnie7 =
+      myWeeklyStats.total > 0 ? `${myWeeklyStats.done} z ${myWeeklyStats.total}` : null;
+    const zakresCls = (on) =>
+      `flex-1 min-h-[44px] px-3 rounded-full text-[15px] font-bold inline-flex items-center justify-center gap-1.5 ${
+        on ? "bg-[#171714] text-white" : "text-[#171714]"
+      }`;
     return (
       <Shell
         screen={screen}
@@ -4383,65 +4550,157 @@ export const EmployeeSessionScreens = ({
         bloki={bloki}
         personName={onBack ? employee.name : null}
         title="Zadania"
+        nowyWyglad
       >
-        {myChecklistOwn.some((i) => !i.done) && (
-          <div className="bg-[#FBEAE6] border-l-4 border-[#DE3A22] text-[#8A3A2B] text-sm p-3.5 rounded-sm mb-4">
-            Masz {myChecklistOwn.filter((i) => !i.done).length}{" "}
-            {myChecklistOwn.filter((i) => !i.done).length === 1
-              ? "niewykonane zadanie"
-              : "niewykonanych zadań"}{" "}
-            na dziś.
-          </div>
-        )}
-        <div className={`${razemRowCls} mb-4`}>
-          <span className="text-sm text-[#6E6E66]">Ostatnie 7 dni</span>
-          <span className="font-['Archivo'] font-extrabold text-[17px] text-[#171714] tabular-nums">
-            {myWeeklyStats.total > 0
-              ? `${myWeeklyStats.done} z ${myWeeklyStats.total} zadań`
-              : "brak danych"}
-          </span>
-        </div>
-        <div className="flex gap-2 mb-4">
-          <button
-            onClick={() => setTaskViewMode("own")}
-            className={`flex-1 border-2 rounded py-2.5 font-['Archivo'] font-bold text-sm ${
-              taskViewMode === "own"
-                ? "bg-[#171714] text-white border-[#171714]"
-                : "bg-white text-[#171714] border-[#B7B6AE]"
-            }`}
-          >
-            Twoje stanowisko
-          </button>
-          <button
-            onClick={() => setTaskViewMode("all")}
-            className={`flex-1 border-2 rounded py-2.5 font-['Archivo'] font-bold text-sm ${
-              taskViewMode === "all"
-                ? "bg-[#171714] text-white border-[#171714]"
-                : "bg-white text-[#171714] border-[#B7B6AE]"
-            }`}
-          >
-            Wszystkie
-          </button>
-        </div>
-        {grupyZadan.length === 0 && (
-          <div className="text-center py-10 text-[#8F8E86]">
-            <ClipboardCheck className="mx-auto mb-2 opacity-40" size={40} />
-            {/* Pusty ekran bez powodu wygląda jak awaria — mówimy wprost,
-                czemu nic tu nie ma (ta sama zasada co "za późno na giełdę"). */}
-            {pracujeDzis ? (
-              "Brak zadań na dziś."
-            ) : (
+        {!pracujeDzis ? (
+          <div className="md:max-w-[620px]">
+            <div className="bg-white border-2 border-[#171714] rounded-xl p-4 flex flex-col items-start gap-1.5">
+              <span className="w-11 h-11 rounded-full bg-[#DEDCD4] flex items-center justify-center">
+                <ClipboardCheck size={22} />
+              </span>
+              <b className="font-['Archivo'] text-[22px] font-extrabold text-[#171714]">Nie masz dziś zmiany</b>
+              <p className="text-[15px] text-[#6E6E66]">
+                Zadania pojawią się w dniu Twojej zmiany albo po jej rozpoczęciu.
+              </p>
+              {najblizszaZmiana && (
+                <div className="w-full rounded-lg bg-[#DEDCD4] px-3.5 py-3 mt-1">
+                  <span className="block text-[12px] font-extrabold uppercase tracking-[.05em] text-[#6E6E66]">
+                    Następna zmiana
+                  </span>
+                  <b className="block text-[20px] font-extrabold text-[#171714]">
+                    {opisDnia(najblizszaZmiana.date)} · {trimTime(najblizszaZmiana.start_time)}–
+                    {trimTime(najblizszaZmiana.end_time)}
+                  </b>
+                  <small className="text-[14px] text-[#6E6E66]">
+                    {najblizszaZmiana.lokal} · {najblizszaZmiana.stanowisko}
+                  </small>
+                </div>
+              )}
+              {bloki.includes("GRAFIK") && (
+                <button
+                  onClick={() => setScreen("GRAFIK")}
+                  className="w-full mt-1.5 min-h-[48px] rounded-lg border-2 border-[#171714] bg-white inline-flex items-center justify-center gap-2 font-['Archivo'] font-extrabold text-[16px] text-[#171714]"
+                >
+                  <CalendarDays size={18} /> Zobacz grafik
+                </button>
+              )}
+            </div>
+            {podgladBlokow.length > 0 && (
               <>
-                Nie masz dziś zmiany w grafiku.
-                <span className="block mt-1 text-[13px]">
-                  Zadania pokażą się w dniu Twojej zmiany albo zaraz po jej
-                  rozpoczęciu.
-                </span>
+                <h3 className="flex flex-wrap items-baseline gap-x-2 mt-4 mb-2 mx-0.5 text-[13px] font-extrabold uppercase tracking-[.05em] text-[#6E6E66]">
+                  Co będzie na Twojej zmianie
+                  <span className="normal-case tracking-normal font-bold">podgląd · nie można odhaczać</span>
+                </h3>
+                {podgladBlokow.map((g) => (
+                  <div
+                    key={g.blok.id}
+                    className="flex justify-between items-center gap-2 px-3.5 py-3 mb-2 rounded-lg bg-white border-2 border-[#DEDCD4]"
+                  >
+                    <div className="min-w-0">
+                      <span className="block text-[13px] font-bold text-[#6E6E66]">{poraLabel(g.blok.schedule_type)}</span>
+                      <b className="block text-[16px] text-[#171714] truncate">{g.blok.nazwa}</b>
+                    </div>
+                    <span className="text-[14px] text-[#6E6E66] whitespace-nowrap">
+                      {g.total} {g.total === 1 ? "zadanie" : "zadań"}
+                      {g.blok.deadline_time ? ` · do ${g.blok.deadline_time.slice(0, 5)}` : ""}
+                    </span>
+                  </div>
+                ))}
               </>
             )}
+            {ostatnie7 && (
+              <p className="text-[14px] text-[#6E6E66] mt-3 mx-0.5">
+                Ostatnie 7 dni: <b className="text-[#171714]">{ostatnie7} zadań</b>
+              </p>
+            )}
+          </div>
+        ) : (
+          <>
+            {/* Jedna karta dnia zamiast czerwonego banera i szarego paska. */}
+            <div className="bg-white border-2 border-[#171714] rounded-xl px-4 py-3.5 mb-3 md:grid md:grid-cols-[1fr_1.4fr_1fr] md:gap-4 md:items-center">
+              <div className="flex justify-between items-end gap-2.5">
+                <div>
+                  <span className="block text-[13px] font-extrabold tracking-[.05em] uppercase text-[#6E6E66]">
+                    Dziś · {fmtHHMM(now)}
+                  </span>
+                  <b className="block font-['Archivo'] text-[34px] leading-[38px] font-extrabold tabular-nums text-[#171714]">
+                    {zrobioneDzis}
+                    <small className="text-[17px] font-extrabold"> z {myChecklistOwn.length} zadań</small>
+                  </b>
+                </div>
+                {ostatnie7 && (
+                  <div className="text-right md:hidden">
+                    <span className="block text-[12px] text-[#6E6E66]">ostatnie 7 dni</span>
+                    <b className="text-[14px] text-[#6E6E66]">{ostatnie7}</b>
+                  </div>
+                )}
+              </div>
+              <div>
+                <div className="h-2.5 rounded-full bg-[#DEDCD4] overflow-hidden my-2.5 md:my-0">
+                  <i
+                    className="block h-full bg-[#1F7A4A]"
+                    style={{
+                      width: `${myChecklistOwn.length ? (zrobioneDzis / myChecklistOwn.length) * 100 : 0}%`,
+                    }}
+                  />
+                </div>
+                {ostatnie7 && (
+                  <span className="hidden md:block text-[12px] text-[#6E6E66] mt-1">
+                    ostatnie 7 dni · <b>{ostatnie7}</b>
+                  </span>
+                )}
+              </div>
+              {terazGrupa && (
+                <button
+                  onClick={() => skoczDoBloku(terazGrupa.blok.id)}
+                  className="w-full flex items-center gap-2 min-h-[48px] px-3 rounded-lg border-2 border-[#171714] bg-white text-left text-[15px] font-bold text-[#171714]"
+                >
+                  <em className="not-italic text-[11px] font-extrabold uppercase text-white bg-[#DE3A22] rounded-[5px] px-1.5 py-px">
+                    teraz
+                  </em>
+                  <span className="flex-1 truncate">
+                    {terazGrupa.blok.nazwa} · {terazGrupa.done}/{terazGrupa.total}
+                  </span>
+                  <ChevronRight size={18} />
+                </button>
+              )}
+            </div>
+            <div className="flex p-1 rounded-full bg-white border-2 border-[#DEDCD4] mb-3 md:max-w-[520px]">
+              <button onClick={() => setTaskViewMode("own")} className={zakresCls(taskViewMode === "own")}>
+                Moje stanowisko <i className="not-italic text-[13px] opacity-75">{zostaloOwn}</i>
+              </button>
+              <button onClick={() => setTaskViewMode("all")} className={zakresCls(taskViewMode === "all")}>
+                Wszystkie <i className="not-italic text-[13px] opacity-75">{zostaloAll}</i>
+              </button>
+            </div>
+            {grupyZadan.length === 0 ? (
+              <div className="text-center py-10 text-[#6E6E66]">
+                <ClipboardCheck className="mx-auto mb-2 opacity-40" size={40} />
+                Brak zadań na dziś.
+              </div>
+            ) : (
+              renderBlockCards(grupyZadan, { terazId, pokazStanowiska: taskViewMode === "all" })
+            )}
+          </>
+        )}
+        {renderModalPomiaru()}
+        {/* „Zrobione · Cofnij” — przez 5 s po odhaczeniu. */}
+        {zadanieCofnij && (
+          <div className="fixed z-40 left-3 right-3 bottom-[84px] md:left-1/2 md:right-auto md:-translate-x-1/2 md:bottom-6 md:w-[360px] flex items-center gap-3 rounded-xl bg-[#171714] text-white px-4 py-3 shadow-lg">
+            <Check size={18} strokeWidth={2.5} className="text-[#7FD4A3]" />
+            <span className="flex-1 text-[15px] font-bold truncate">Zrobione · {zadanieCofnij.tytul}</span>
+            <button
+              onClick={async () => {
+                const item = splaszczBloki(myBlocksAll).find((i) => i.task.id === zadanieCofnij.id);
+                setZadanieCofnij(null);
+                if (item && item.done) await odznaczZadanie(item);
+              }}
+              className="text-[15px] font-extrabold underline underline-offset-2"
+            >
+              Cofnij
+            </button>
           </div>
         )}
-        {renderBlockCards(grupyZadan)}
       </Shell>
     );
   }

@@ -5,6 +5,29 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.63.0 — 2026-09-29
+
+- **Zadania pracownika — nowy wygląd według makiety** (Tablet Służbowy i
+  prywatny telefon). Szósty krok przebudowy ekranów pracownika.
+  - **Jedna karta dnia** zamiast czerwonego paska: „Dziś · 10:20 — 2 z 13
+    zadań”, pasek postępu, ostatnie 7 dni i przycisk **TERAZ** — przewija do
+    bieżącego bloku.
+  - **„Moje stanowisko · N” / „Wszystkie · N”** z liczbą zadań do zrobienia; w
+    „Wszystkie” bloki mają znacznik stanowiska.
+  - **Bloki**: bieżący oznaczony TERAZ i rozwinięty, reszta zwinięta (na
+    tablecie wszystkie rozwinięte, w trzech kolumnach). Termin: na godzinę
+    przed — „zostało N min”, po czasie — czerwona plakietka „po terminie” i
+    czerwona ramka bloku. „Ważne” to czerwone „!”.
+  - **Zadanie**: cały wiersz do dotknięcia, pole 34 px, opis w punktach.
+    Zrobione schodzą na dół bloku pod **„Zrobione (n)”**; po odhaczeniu na 5 s
+    pasek **„Zrobione · Cofnij”**. Swoje zrobione można cofnąć, **cudzego nie**
+    — „tylko X lub kierownik może cofnąć”.
+  - **„Nie da się zrobić?”** — powód jednym dotknięciem (brak towaru, sprzęt
+    nie działa, brak czasu, inne) otwiera **Zgłoś problem z wpisanym
+    zadaniem**.
+  - **W dzień bez zmiany**: „Nie masz dziś zmiany”, następna zmiana, „Zobacz
+    grafik” i podgląd bloków, które będą na tej zmianie.
+
 ## 0.62.2 — 2026-09-29
 
 - **Grafik pracownika — pasek okresu nie skacze.** Strzałki, napis okresu i

@@ -23,6 +23,15 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.63.0",
+    date: "2026-09-29",
+    items: [
+      "Zadania pracownika: karta dnia z postępem i blokiem TERAZ; terminy „zostało N min” / „po terminie”.",
+      "Zrobione na dół bloku pod „Zrobione (n)”, „Zrobione · Cofnij” po odhaczeniu; cudzego wykonania nie da się cofnąć.",
+      "„Nie da się zrobić?” — powód jednym dotknięciem i Zgłoś problem z wpisanym zadaniem; w dzień wolny następna zmiana i podgląd.",
+    ],
+  },
+  {
     version: "0.62.2",
     date: "2026-09-29",
     items: [

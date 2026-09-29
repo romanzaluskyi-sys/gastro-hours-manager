@@ -1828,8 +1828,21 @@ dokładnie ta praca, która rozciąga wdrożenie u klienta.
 ### Pracownik (Tablet Służbowy, tablet z PIN-em, konto prywatne)
 
 Jeden kod w `employeeSessionShared.tsx`, trzy powierzchnie — różnic w logice nie
-ma. `renderBlockCards(grupy, { zwiniete })` rysuje karty bloków,
-`renderTaskChecklist(items)` pozycje w środku.
+ma. `renderBlockCards(grupy, { terazId, pokazStanowiska })` rysuje karty
+bloków, `renderZadanie(item)` jeden wiersz (od 0.63.0; wcześniej
+`renderTaskChecklist`). Pulpit ma własne, zwarte nagłówki bloków.
+
+⚠️ **Układ z makiety (0.63.0, EmployeeTasksMobile / EmployeeTasksTablet).**
+- **Cudzego wykonania NIE cofa się z ekranu pracownika** (kłódka „tylko X lub
+  kierownik może cofnąć”) — na wspólnym tablecie odhaczało się komuś jego
+  pracę. Swoje: „Cofnij” w wierszu i 5 s pasek „Zrobione · Cofnij”. Pomiar
+  dalej tylko „Popraw” (toggleTaskCompletion rzuca dla pomiaru).
+- **„Nie da się zrobić?”** niesie typ i TEKST do Zgłoś przez refy
+  `zgTypNaWejscie` / `zgTekstNaWejscie` — reset ekranu Zgłoś czyta je raz.
+- **TERAZ = pierwszy blok, w którym coś zostało, tylko na zmianie** — ta sama
+  reguła co na Pulpicie.
+- Zadań ze zdjęciem z makiety („Zdjęcie · wkrótce”) nie ma — nie ma czego
+  zaślepiać, dopóki zadanie nie ma takiego pola.
 
 - ⚠️ **Zadania widzi tylko ten, kto dziś pracuje** (`pracujeTegoDnia` +
   `buildEmployeeBlocks(..., { pracuje })`, od 0.38.0): stoi w OPUBLIKOWANYM
