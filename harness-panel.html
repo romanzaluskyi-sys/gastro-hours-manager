@@ -88,7 +88,10 @@ const API_STUB = stub(`
       window.__zapisy.push([tabela, id, "DELETE"]);
       return true;
     },
-    patchByFilter: async () => true,
+    patchByFilter: async (tabela, filtr, dane) => {
+      window.__zapisy.push([tabela, filtr, dane]);
+      return true;
+    },
   };
 `);
 
@@ -195,6 +198,16 @@ const planTygodnia = [
   // ktoś zapomniał zamknąć.
   { id: "g8", user_id: "u0", user_name: "Roman", lokal: "Bułka i Jacek",
     stanowisko: "Kucharz", date: dniTygodnia[4], start_time: "06:00", end_time: "14:00", ...opub },
+  // Zmiana z grafiku BEZ odbicia, zawsze cztery dni temu — kolejka „Był w
+  // grafiku, nie odbił” patrzy tylko w przeszłość (do 14 dni), a reszta planu
+  // wisi na bieżącym tygodniu. We wtorek z tego tygodnia minął jeden dzień i
+  // kolejka bywała pusta: sprawdzian „Dopisz N h” padał zależnie od dnia
+  // tygodnia (CI, 29.09.2026).
+  { id: "g-brak", user_id: "u2", user_name: "Bo", lokal: "Ceglana",
+    // Cztery, nie trzy: w niedzielę trzy dni temu to czwartek tego tygodnia,
+    // a wtedy Bo ma zatwierdzony urlop (ab1) i zmiana wypadłaby z kolejki.
+    stanowisko: "Kucharz", date: ymd(new Date(Date.now() - 4 * 86400000)),
+    start_time: "09:00", end_time: "15:00", ...opub },
   // Dwie zmiany NIEWYSŁANE: jedna nowa, jedna zdjęta z grafiku po wysłaniu
   // (deleted_at — znika z siatki, ale kasuje się dopiero przy publikacji).
   // Bez nich przycisk "Zobacz, co czeka na wysłanie" jest zawsze wyszarzony i
@@ -382,6 +395,18 @@ const poprzedniMiesiac = (h) => {
       // a nie czy lista po nim pokazuje nową wartość — a to jest właśnie ten
       // rodzaj błędu, dla którego ten harness powstał.
       const [planShifts, setPlanShifts] = useState(planTygodnia);
+      // Jedno nieprzeczytane powiadomienie kierownika — Skrzynka → Informacje
+      // ma je sama oznaczyć jako przeczytane po 3 s (0.58.0).
+      const [notifications, setNotifications] = useState(() => [
+        { id: "n1", audience: "manager", lokal: "Ceglana", type: "info",
+          message: "Test: nowe powiadomienie", is_read: false,
+          created_at: new Date().toISOString() },
+        // Przypomnienie crona o Pulsie — do 0.57.0 nie dało się go oznaczyć
+        // jako przeczytane i trzymało znaczek przy dzwonku na stałe.
+        { id: "n2", audience: "manager", lokal: "Ceglana", type: "puls",
+          message: "Przypomnienie: zamknij Puls", is_read: false,
+          created_at: new Date().toISOString() },
+      ]);
       const [staffingRules, setStaffingRules] = useState(regulyStartowe);
       const [staffingRuleSets, setStaffingRuleSets] = useState(zestawyStartowe);
       // Budżet: zestaw celów od początku bieżącego miesiąca plus JEDEN wyjątek
@@ -540,7 +565,7 @@ const poprzedniMiesiac = (h) => {
             proposed_stanowisko: "Kucharz", proposed_start_time: "08:00",
             proposed_end_time: "16:30", issue_text: "Zostałem pół godziny dłużej.",
             created_at: "2026-09-12T07:00:00Z" },
-        ], notifications: [], shiftEdits: [],
+        ], notifications, setNotifications, shiftEdits: [],
         tasks, setTasks, taskBlocks, setTaskBlocks, taskCompletions, setTaskCompletions,
         // Plan na bieżący tydzień — bez niego siatka Grafiku jest pusta i nie
         // widać ani szerokości kolumn, ani wykorzystania normy w wierszu.
@@ -582,7 +607,7 @@ const poprzedniMiesiac = (h) => {
         dayLogTemplates, setDayLogTemplates,
         showMsg: (m, t) => console.log("showMsg:", t, m),
       };
-      "setUsers setLokale setStanowiska setShifts setIssues setNotifications setShiftEdits setAbsences setShiftSwaps setLokaleGodziny setGrafikWyjatki"
+      "setUsers setLokale setStanowiska setShifts setIssues setShiftEdits setAbsences setShiftSwaps setLokaleGodziny setGrafikWyjatki"
         .split(" ").forEach((k) => { props[k] = () => {}; });
 
       window.__stanSzablonow = dayLogTemplates;
@@ -901,6 +926,18 @@ const poprzedniMiesiac = (h) => {
         sprawdz("…jest w „Informacjach”, ze zwykłym (nie czerwonym) przyciskiem",
           !!puls && !!puls.querySelector('[data-akcja="puls"]') &&
             !/DE3A22/.test(puls.querySelector('[data-akcja="puls"]').className));
+        // 0.58.0: wejście w Informacje samo oznacza wszystko jako przeczytane
+        // po 3 s — bez klikania, znaczek przy dzwonku gaśnie.
+        const przedOdczytem = window.__zapisy.length;
+        await czekaj(3400);
+        const odczyt = window.__zapisy.slice(przedOdczytem)
+          .find((z) => z[0] === "notifications" && /n1/.test(String(z[1])));
+        sprawdz("Informacje: po 3 s wszystko przeczytane, też przypomnienie o Pulsie",
+          !!odczyt && odczyt[2].is_read === true && /n2/.test(String(odczyt[1])),
+          JSON.stringify(window.__zapisy.slice(przedOdczytem)));
+        await czekaj(300);
+        sprawdz("…i przycisk „Oznacz wszystko” znika", !document.getElementById("app").innerText.includes("Oznacz wszystko jako przeczytane"),
+          [...document.querySelectorAll("#app [data-sprawa-skrzynki]")].map((e) => e.getAttribute("data-sprawa-skrzynki") + " " + e.className.slice(0, 40)).join(" | "));
       } catch (e) {
         if (e) sprawdz("Skrzynka: przebieg bez wyjątku", false, e.message);
       }

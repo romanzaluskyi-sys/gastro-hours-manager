@@ -23,6 +23,85 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.63.0",
+    date: "2026-09-29",
+    items: [
+      "Zadania pracownika: karta dnia z postępem i blokiem TERAZ; terminy „zostało N min” / „po terminie”.",
+      "Zrobione na dół bloku pod „Zrobione (n)”, „Zrobione · Cofnij” po odhaczeniu; cudzego wykonania nie da się cofnąć.",
+      "„Nie da się zrobić?” — powód jednym dotknięciem i Zgłoś problem z wpisanym zadaniem; w dzień wolny następna zmiana i podgląd.",
+    ],
+  },
+  {
+    version: "0.62.2",
+    date: "2026-09-29",
+    items: [
+      "Grafik pracownika: wybór tygodnia i „Ja / Cały lokal” zawsze w jednym wierszu — nic już nie skacze na telefonie.",
+      "Strzałki bliżej siebie i zawsze w tym samym miejscu, w tygodniu i w miesiącu.",
+    ],
+  },
+  {
+    version: "0.62.1",
+    date: "2026-09-29",
+    items: [
+      "Grafik pracownika: dotknięcie napisu okresu („28 wrz – 4 paź”) wraca na dziś; strzałki stoją zawsze w tym samym miejscu.",
+      "Kalendarz miesiąca pokazuje urlop (niebieski) i niedostępność (kreskowane) wprost w komórce dnia.",
+    ],
+  },
+  {
+    version: "0.62.0",
+    date: "2026-09-29",
+    items: [
+      "Grafik pracownika: pasek siedmiu dni, wolne dni zwinięte w jeden wiersz, zwarte karty zmian z „Z tobą”.",
+      "Giełda w samej karcie z paskiem kroków (sposób → komu → na którą → wyślij); oferty w dniu, którego dotyczą.",
+      "Miesiąc jako kalendarz z godzinami w dniu i normą przy etacie; „Ja / Cały lokal” w tygodniu.",
+    ],
+  },
+  {
+    version: "0.61.0",
+    date: "2026-09-29",
+    items: [
+      "Raport pracownika: podsumowanie miesiąca na górze — przy etacie pasek z normą, ponad/do normy i „z grafikiem wyjdzie”.",
+      "Zlecenie: „bez normy” i ile grafiku już przepracowano; miesiąc strzałkami, bez pola „Pracownik”.",
+      "Zmiany tygodniami z sumą tygodnia, duża flaga korekty ze statusem, na końcu „Jeszcze w grafiku”.",
+    ],
+  },
+  {
+    version: "0.60.1",
+    date: "2026-09-29",
+    items: [
+      "Zmiana: osoba w grafiku w innym lokalu albo na innym stanowisku może je wybrać przy rozpoczęciu zmiany.",
+      "Stanowisko z dzisiejszego grafiku podstawia się samo — także po zmianie lokalu.",
+    ],
+  },
+  {
+    version: "0.60.0",
+    date: "2026-09-29",
+    items: [
+      "Zmiana: kafle „Zaczynam teraz” / „Cała zmiana”, duża godzina 44 px, lokal i stanowisko z plakietką „z grafiku”.",
+      "Na zmianie: licznik, pasek do końca wg grafiku, „Do końca zmiany” albo „Ponad grafik”.",
+      "„Dziś zapisane” ze statusem „czeka” i zasady lokalu obok formularza; na telefonie przycisk nad paskiem.",
+    ],
+  },
+  {
+    version: "0.59.0",
+    date: "2026-09-29",
+    items: [
+      "Pulpit pracownika: górna karta wg stanu dnia — wolne, przed zmianą, na zmianie, po zmianie.",
+      "Na zmianie licznik i pasek do końca wg grafiku; „Dziś z Tobą” z grafiku; zadania z blokiem TERAZ.",
+      "Nowy nagłówek „‹ Zmień · imię · zakładka”, dolny pasek i szyna na tablecie we wszystkich zakładkach.",
+    ],
+  },
+  {
+    version: "0.58.0",
+    date: "2026-09-29",
+    items: [
+      "Tablet Służbowy — nowy ekran startowy: osoby w grupach Na zmianie / Dziś w grafiku / Pozostali.",
+      "Status z boku karty dużą godziną; nad listą liczniki, w nagłówku zegar, pogoda i data.",
+      "Nowa osoba na próbę: stanowisko kaflem i lista, co ta osoba może do czasu zatwierdzenia.",
+      "Skrzynka → Informacje: po 3 s wszystko przeczytane, znaczek przy dzwonku gaśnie sam.",
+    ],
+  },
+  {
     version: "0.57.0",
     date: "2026-09-27",
     items: [

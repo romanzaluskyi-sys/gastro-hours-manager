@@ -1,4 +1,5 @@
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ekrany pracownika — Raport i norma</title>
 <!-- Montuje PersonalDashboard (osobisty telefon pracownika) z atrapą
      Supabase. Powstał dla bloku "norma miesięczna w Raporcie": ekran liczy
@@ -242,14 +243,102 @@ const poprzedniMiesiac = (h) => {
             }, `${OSOBY[k].name} (${k})`)
           )
         ),
-        h("div", { style: { maxWidth: 430, margin: "0 auto", height: "88vh" } }, h(PD, props))
+        // `key` — każda osoba to w aplikacji osobne konto i osobne montowanie;
+        // bez tego miesiąc wybrany u jednej przechodził na następną.
+        // Ramka telefonu tylko na wąskim ekranie — układ tabletu (md) liczy się
+        // od szerokości OKNA, więc w ramce 430 px na szerokim oknie wychodził
+        // ściśnięty tablet, którego nikt nigdy nie zobaczy.
+        h("div", { style: { maxWidth: innerWidth < 768 ? 430 : "none", margin: "0 auto", height: "88vh" } }, h(PD, { ...props, key: kto }))
       );
     }
 
     ReactDOM.createRoot(document.getElementById("app")).render(h(Harness));
-    setTimeout(() => {
-      if (status.className !== "zle") status.textContent = "ekrany pracownika zamontowane — wejdź w Raport";
-    }, 400);
+
+    // ------------------------------------------------------------------
+    // Raport (0.61.0) klikany automatycznie: każda osoba ma przypadek, w
+    // którym jakiejś liczby NIE MA — i wtedy blok ma zniknąć, a nie pokazać
+    // "null h". Wcześniej ten harness był tylko do oglądania.
+    // ------------------------------------------------------------------
+    const czekaj = (ms) => new Promise((r) => setTimeout(r, ms));
+    const out = document.createElement("div");
+    out.id = "out";
+    out.style.cssText = "font: 12px ui-monospace, monospace; padding: 8px 14px; white-space: pre-wrap";
+    document.body.insertBefore(out, document.getElementById("app"));
+    let zdanych = 0, oblanych = 0;
+    const sprawdz = (nazwa, warunek, szczegol = "") => {
+      const d = document.createElement("div");
+      if (warunek) { zdanych++; d.textContent = "  OK   " + nazwa; d.style.color = "#2C6A4F"; }
+      else { oblanych++; d.className = "zle"; d.style.color = "#DE3A22";
+             d.textContent = "  ŹLE  " + nazwa + (szczegol ? " — " + szczegol : ""); }
+      out.appendChild(d);
+    };
+    const przycisk = (tekst) => [...document.querySelectorAll("#app button")]
+      .find((b) => b.textContent.replace(/▪/g, "").trim() === tekst);
+    const klikTekst = async (tekst) => {
+      const b = przycisk(tekst);
+      if (!b) throw new Error("nie znalazłem przycisku: " + tekst);
+      b.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await czekaj(250);
+    };
+    const podsumowanie = () =>
+      (document.querySelector("#app [data-raport-podsumowanie]") || {}).innerText || "";
+    const osoba = async (k, imie) => {
+      await klikTekst(`${imie} (${k})`);
+      await klikTekst("Raport");
+    };
+    (async () => {
+      try {
+        await czekaj(600);
+        await osoba("etat", "Bo");
+        let t = podsumowanie();
+        sprawdz("etat: kreska normy i fakt wobec normy",
+          /norma \d/.test(t) && /(Do normy|Ponad normą|Dokładnie w normie)/.test(t), t.slice(0, 200));
+        sprawdz("etat: prognoza „Z grafikiem wyjdzie”", /Z grafikiem wyjdzie/.test(t), t.slice(0, 200));
+        sprawdz("etat: „Jeszcze w grafiku” pod listą zmian",
+          /jeszcze w grafiku/i.test(document.getElementById("app").innerText));
+        sprawdz("przy zmianie jest flaga korekty (48 px)",
+          [...document.querySelectorAll('#app [aria-label^="Zgłoś korektę zmiany"]')]
+            .some((b) => b.getBoundingClientRect().height >= 47));
+        const wstecz = document.querySelector('#app [aria-label="Poprzedni miesiąc"]');
+        wstecz.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(250);
+        t = podsumowanie();
+        sprawdz("etat, zamknięty miesiąc ponad normę: „Ponad normą … +X h”, bez prognozy",
+          /zamknięty miesiąc/i.test(t) && /Ponad normą/.test(t) && !/Z grafikiem/.test(t), t.slice(0, 200));
+
+        await osoba("polEtatu", "Cezary");
+        t = podsumowanie();
+        sprawdz("pół etatu: norma przeskalowana (mniejsza niż przy pełnym)",
+          /norma \d/.test(t), t.slice(0, 200));
+
+        await osoba("zlecenie", "Ala");
+        t = podsumowanie();
+        sprawdz("zlecenie: „bez normy”, pasek grafiku, bez kreski normy",
+          /bez normy/.test(t) && /% grafiku/.test(t) && !/norma \d/.test(t), t.slice(0, 200));
+
+        await osoba("zlecenieBezGrafiku", "Ewa");
+        t = podsumowanie();
+        sprawdz("zlecenie bez grafiku: bez paska „% grafiku”",
+          /bez normy/.test(t) && !/% grafiku/.test(t), t.slice(0, 200));
+
+        await osoba("bezDanych", "Dorota");
+        t = podsumowanie();
+        sprawdz("bez danych o umowie: ani normy, ani „bez normy”",
+          !/norma/i.test(t), t.slice(0, 200));
+
+        const calosc = document.getElementById("app").innerText;
+        sprawdz("nigdzie nie ma „null”, „NaN” ani „undefined”", !/\b(null|NaN|undefined)\b/.test(calosc));
+      } catch (e) {
+        sprawdz("przebieg bez wyjątku", false, e.message);
+      }
+      const linia = document.createElement("div");
+      linia.textContent = `ZDANYCH ${zdanych}, OBLANYCH ${oblanych}`;
+      out.appendChild(linia);
+      if (status.className !== "zle") {
+        status.textContent = `Raport pracownika — ${zdanych}/${zdanych + oblanych}`;
+        if (oblanych) status.className = "zle";
+      }
+    })();
   } catch (e) { pokazBlad(e); }
 })();
 </script>

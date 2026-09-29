@@ -216,6 +216,14 @@ const poprzedniMiesiac = (h) => {
         date: zaDni(6), start_time: "12:00", end_time: "20:00", ...opubGielda },
       { id: "g3", user_id: "u4", user_name: "Dorota", lokal: "Ceglana", stanowisko: "Kucharz",
         date: zaDni(5), start_time: "08:00", end_time: "16:00", ...opubGielda },
+      // 0.60.1 — Filip jest z Bułki, dziś wg grafiku tutaj, na stanowisku,
+      // którego Ceglana nie ma w słowniku (grafik przypisuje stanowisko PO
+      // NAZWIE). Gosia odwrotnie: z Ceglanej, dziś w grafiku w Bułce, której ten
+      // tablet nie obsługuje. Obie sytuacje wcześniej blokowały wybór.
+      { id: "g4", user_id: "u7", user_name: "Filip", lokal: "Ceglana", stanowisko: "Burgery",
+        date: zaDni(0), start_time: "23:30", end_time: "23:59", ...opubGielda },
+      { id: "g5", user_id: "u8", user_name: "Gosia", lokal: "Bułka i Jacek", stanowisko: "Kasa",
+        date: zaDni(0), start_time: "23:30", end_time: "23:59", ...opubGielda },
     ];
 
     function Harness() {
@@ -275,6 +283,10 @@ const poprzedniMiesiac = (h) => {
           default_lokal: "Ceglana", default_stanowisko: "Kucharz", kiosk_pin: "654321" },
         // Czeka na decyzję kierownika: ma mieć plakietkę "na próbę" na liście
         // i skrócony zestaw zakładek po wejściu (bez Grafiku).
+        { id: "u7", name: "Filip", role: "open", active: true, archived: false,
+          default_lokal: "Bułka i Jacek", default_stanowisko: "Burgery" },
+        { id: "u8", name: "Gosia", role: "open", active: true, archived: false,
+          default_lokal: "Ceglana", default_stanowisko: "Kelner" },
         { id: "u5", name: "Na Próbę", role: "open", active: true, archived: false,
           default_lokal: "Ceglana", default_stanowisko: "Kelner", email: "",
           probny_status: "oczekuje", probny_od: "2026-09-19", probny_przez: "Tablet Ceglana" },
@@ -321,7 +333,22 @@ const poprzedniMiesiac = (h) => {
         notifications, setNotifications,
         tasks, taskBlocks, taskCompletions, setTaskCompletions,
         dayLogs: [], dayLogEntries, setDayLogEntries, dayLogTemplates: [],
-        absences: [], setAbsences: () => {},
+        // Urlop i niedostępność Bo w BIEŻĄCYM miesiącu (0.62.1) — kalendarz
+        // miesiąca ma je pokazać w komórce, bez klikania.
+        absences: (() => {
+          const d = new Date();
+          const dzien = (o) => {
+            const x = new Date(d.getFullYear(), d.getMonth(), d.getDate() > 3 ? d.getDate() - o : d.getDate() + o);
+            return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+          };
+          return [
+            { id: "ab1", user_id: "u2", user_name: "Bo", status: "approved", type: "urlop",
+              start_date: dzien(2), end_date: dzien(2) },
+            { id: "ab2", user_id: "u2", user_name: "Bo", status: "approved", type: "niedostepnosc",
+              start_date: dzien(3), end_date: dzien(3) },
+          ];
+        })(),
+        setAbsences: () => {},
         // Grafik na przyszły tydzień — bez niego nie da się obejrzeć giełdy,
         // bo zmianę można wystawić tylko z wyprzedzeniem 12 h. Dorota ma
         // zmianę TEGO SAMEGO dnia co Bo: nie może wziąć jego zmiany na wprost,
@@ -377,6 +404,9 @@ const poprzedniMiesiac = (h) => {
       if (!cel) throw new Error("nie znalazłem cyfry: " + c);
       cel.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     };
+    // Przycisk po DOKŁADNYM tekście (bez stubów ikon „▪”).
+    const przyciskTekst = (t) => [...document.querySelectorAll("#app button")]
+      .find((b) => b.textContent.replace(/▪/g, "").trim() === t);
     const wpisz = async (cyfry) => {
       for (const c of cyfry) { klikCyfre(c); await czekaj(30); }
     };
@@ -385,6 +415,13 @@ const poprzedniMiesiac = (h) => {
       try {
         await czekaj(500);
         sprawdz("lista osób się pokazała", widac("Dorota"));
+        // 0.58.0: osoby w grupach wg stanu na dziś. W tej atrapie nikt nie ma
+        // dziś grafiku ani odbicia, więc pusta grupa ma się NIE pokazać.
+        const grupy = [...document.querySelectorAll("#app main h3")].map((e) => e.textContent.trim());
+        sprawdz("grupy: „Dziś w grafiku” i „Pozostali”, pustej „Na zmianie” nie ma",
+          grupy.length === 2 && grupy[0].startsWith("Dziś w grafiku") && grupy[1].startsWith("Pozostali"),
+          JSON.stringify(grupy));
+        sprawdz("osoba na próbę ma plakietkę na liście", widac("na próbę · czeka na kierownika"));
 
         // Układ tabletu (0.47.0): od 768 px osoby stoją po trzy w rzędzie.
         // CI chodzi w oknie 1280 px, więc sprawdzamy wersję tabletową;
@@ -498,6 +535,15 @@ const poprzedniMiesiac = (h) => {
         await czekaj(300);
         sprawdz("formularz mówi z góry, gdzie jest granica",
           widac("Start możesz sam cofnąć najwyżej o 15 min"));
+        // 0.60.0: sposób wpisu wybiera się kaflem (zamiast „Znam godzinę
+        // zakończenia”), a zasady lokalu stoją w osobnej karcie.
+        sprawdz("Zmiana: kafle „Zaczynam teraz” / „Cała zmiana”, bez pola wyboru",
+          widac("Zaczynam teraz") && widac("Cała zmiana") && !widac("Znam godzinę zakończenia"));
+        // Na tablecie zasady stoją w osobnej karcie obok formularza; na telefonie
+        // to samo zdanie jest pod polem godziny (sprawdzone wyżej).
+        if (innerWidth >= 768)
+          sprawdz("tablet: karta „Zasady lokalu” obok formularza",
+            /zasady lokalu/i.test(document.getElementById("app").innerText));
         // Duża godzina to WIDOCZNE pole czasu (0.55.4): domyślnie "teraz",
         // dotknięcie od razu otwiera wybór. Nie przezroczyste pole na czymś
         // innym i nie pole w przycisku — na iPadzie tamte się nie otwierały.
@@ -567,14 +613,13 @@ const poprzedniMiesiac = (h) => {
           await czekaj(200);
           // Stanowisko startuje puste i bez niego przycisk jest wyłączony —
           // lokal i stanowisko są tu wymagane, tak samo jak w karcie
-          // pracownika u kierownika.
-          const selekty = [...document.querySelectorAll("select")];
-          const selStanowisko = selekty[selekty.length - 1];
-          const setSel = Object.getOwnPropertyDescriptor(
-            window.HTMLSelectElement.prototype, "value").set;
-          setSel.call(selStanowisko, "Kucharz");
-          selStanowisko.dispatchEvent(new Event("change", { bubbles: true }));
-          await czekaj(200);
+          // pracownika u kierownika. Od 0.58.0 stanowisko wybiera się
+          // kaflem, nie listą rozwijaną.
+          const dodaj = () => [...document.querySelectorAll("button")]
+            .find((b) => b.textContent.trim() === "Dodaj i zacznij zmianę");
+          sprawdz("bez stanowiska nie da się dodać", !!dodaj() && dodaj().disabled);
+          klik("Kucharz"); await czekaj(200);
+          sprawdz("stanowisko kaflem odblokowuje przycisk", !!dodaj() && !dodaj().disabled);
           const zapisyPrzed = window.__zapisy.length;
           klik("Dodaj i zacznij zmianę"); await czekaj(500);
           const rpc = window.__rpcWywolania.filter((w) => w[0] === "dodaj_probnego");
@@ -594,6 +639,179 @@ const poprzedniMiesiac = (h) => {
         sprawdz("stary wiersz (sam kiosk_pin) dalej jest zablokowany",
           widac("Ten profil jest zablokowany"),
           (document.getElementById("app").innerText || "").slice(0, 120));
+
+        // --- Pulpit (0.58.0) ---
+        // Bo nie ma dziś ani grafiku, ani odbicia: karta „Dziś wolne” z
+        // następną zmianą, a skrót „Wniosek o wolne” ma otworzyć formularz
+        // WOLNEGO — do 0.57.0 reset ekranu Zgłoś nadpisywał go na „problem”.
+        klik("Zmień"); await czekaj(300);
+        klik("Bo"); await czekaj(300);
+        sprawdz("Pulpit: nagłówek „imię · Pulpit”",
+          (document.querySelector("#app header h1") || {}).textContent === "Pulpit");
+        sprawdz("Pulpit: dzień bez zmiany to „Dziś wolne” z następną zmianą",
+          /dziś wolne/i.test(document.getElementById("app").innerText) &&
+            /następna zmiana/i.test(document.getElementById("app").innerText));
+        sprawdz("Pulpit: poza grafikiem przycisk jest drugorzędny i tylko prowadzi do Zmiany",
+          widac("poza grafikiem") && !widac("Zakończ zmianę"));
+        klik("Wniosek o wolne"); await czekaj(300);
+        sprawdz("„Wniosek o wolne” otwiera formularz wolnego, nie problemu",
+          widac("Wyślij wniosek"), (document.getElementById("app").innerText || "").slice(0, 160));
+        klik("Pulpit"); await czekaj(200);
+        klik("Zmień"); await czekaj(300);
+        klik("Cezary"); await czekaj(300);
+        // --- lokal i stanowisko z dzisiejszego grafiku (0.60.1) ---
+        const zakladkaZmiana = async () => {
+          [...document.querySelectorAll("#app nav button")]
+            .find((b) => b.textContent.replace(/▪/g, "").trim() === "Zmiana")
+            .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          await czekaj(300);
+        };
+        const selekty = () => [...document.querySelectorAll("#app main select")];
+        const opcje = (sel) => [...sel.options].map((o) => o.value);
+        klik("Zmień"); await czekaj(300);
+        klik("Filip"); await czekaj(300);
+        await zakladkaZmiana();
+        {
+          const [lok, stan] = selekty();
+          sprawdz("stanowisko z grafiku spoza słownika lokalu: jest na liście i wybrane",
+            !!stan && stan.value === "Burgery" && opcje(stan).includes("Burgery") && lok.value === "Ceglana",
+            stan ? `${lok.value} / ${stan.value} [${opcje(stan)}]` : "brak selectów");
+        }
+        klik("Zmień"); await czekaj(300);
+        klik("Gosia"); await czekaj(300);
+        await zakladkaZmiana();
+        {
+          const [lok] = selekty();
+          sprawdz("lokal z grafiku spoza tabletu da się wybrać, domyślnie zostaje lokal tabletu",
+            !!lok && lok.value === "Ceglana" && opcje(lok).includes("Bułka i Jacek"),
+            lok ? `${lok.value} [${opcje(lok)}]` : "brak selectów");
+          if (lok) {
+            Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value").set.call(lok, "Bułka i Jacek");
+            lok.dispatchEvent(new Event("change", { bubbles: true }));
+            await czekaj(300);
+            const stan = selekty()[1];
+            sprawdz("po wyborze lokalu z grafiku — stanowisko z grafiku",
+              !!stan && stan.value === "Kasa", stan ? `${stan.value} [${opcje(stan)}]` : "");
+          }
+        }
+        klik("Zmień"); await czekaj(300);
+        klik("Cezary"); await czekaj(300);
+        sprawdz("Pulpit na zmianie: licznik i „Zakończ zmianę ›” prowadzące do Zmiany",
+          /na zmianie od/i.test(document.getElementById("app").innerText) &&
+            widac("Zakończ zmianę") && widac("przejdziesz do Zmiany"));
+
+        // --- Grafik pracownika (0.62.0) ---
+        // Bo ma zmianę za 5 dni (10:00–18:00), Cezary jest wtedy wolny i jest
+        // jedynym kandydatem przy „oddaj”. Kreator giełdy idzie w samej karcie,
+        // z paskiem kroków, a oferta pokazuje się adresatowi w jej dniu.
+        const otworzZakladke = async (nazwa) => {
+          [...document.querySelectorAll("#app nav button")]
+            // Na zakładce bywa znaczek z liczbą („Grafik1”).
+            .find((b) => b.textContent.replace(/▪|\d/g, "").trim() === nazwa)
+            .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          await czekaj(300);
+        };
+        // Przycisk, w którym tekst siedzi w <b> albo <small> — `klik` szuka tylko
+        // wśród button/div/span.
+        const klikPrzycisk = async (tekst) => {
+          const b = [...document.querySelectorAll("#app button")]
+            .find((x) => x.textContent.replace(/▪/g, "").includes(tekst));
+          if (!b) throw new Error("nie znalazłem przycisku: " + tekst);
+          b.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          await czekaj(250);
+        };
+        const doTygodniaZ = async (tekst) => {
+          for (let i = 0; i < 3 && !widac(tekst); i++) {
+            document.querySelector('#app [aria-label="Później"]')
+              .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            await czekaj(250);
+          }
+        };
+        klik("Zmień"); await czekaj(300);
+        klik("Bo"); await czekaj(300);
+        await otworzZakladke("Grafik");
+        await doTygodniaZ("10:00–18:00");
+        sprawdz("Grafik: karta zmiany z przyciskiem „Giełda”",
+          widac("10:00–18:00") && !!przyciskTekst("Giełda"));
+        sprawdz("Grafik: siedem dni w pasku nad listą",
+          [...document.querySelectorAll("#app main .grid-cols-7 > button")].length === 7);
+        przyciskTekst("Giełda").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(250);
+        sprawdz("giełda: pasek kroków i trzy sposoby",
+          widac("Sposób") && widac("Wystaw na giełdę") && widac("Oddaj konkretnej osobie") && widac("Zamień się"));
+        await klikPrzycisk("Oddaj konkretnej osobie");
+        sprawdz("giełda: „Komu oddajesz?” z wolnym kucharzem", /komu oddajesz\?/i.test(document.getElementById("app").innerText) && widac("Cezary"));
+        await klikPrzycisk("Cezary");
+        sprawdz("giełda: podsumowanie przed wysłaniem", /sprawdź i wyślij/i.test(document.getElementById("app").innerText) && widac("Oddaj: Cezary"));
+        const przedOfertą = window.__zapisy.length;
+        await klikPrzycisk("Oddaj: Cezary"); await czekaj(150);
+        const oferta = window.__zapisy.slice(przedOfertą).find((z) => z[0] === "shift_swaps");
+        sprawdz("giełda: oferta zapisana i skierowana do Cezarego",
+          !!oferta && oferta[1].target_user_name === "Cezary",
+          JSON.stringify(window.__zapisy.slice(przedOfertą).map((z) => z[0])));
+        sprawdz("po wysłaniu karta ma status i „Wycofaj”", !!przyciskTekst("Wycofaj"));
+        // Strzałki okresu stoją w tym samym miejscu w tygodniu i w miesiącu, a
+        // wiersz nigdy się nie zawija ani nie wychodzi poza ekran (0.62.2).
+        const strzalki = () => ["Wcześniej", "Później"].map((a) =>
+          Math.round(document.querySelector(`#app [aria-label="${a}"]`).getBoundingClientRect().left));
+        const wierszOkresu = () => document.querySelector("#app [data-okres-grafiku]").parentElement;
+        const wTygodniu = strzalki();
+        const tydzienMiesci = wierszOkresu().scrollWidth <= wierszOkresu().clientWidth;
+        await klikPrzycisk("Miesiąc");
+        sprawdz("strzałki okresu w tym samym miejscu w tygodniu i miesiącu, wiersz się mieści",
+          JSON.stringify(wTygodniu) === JSON.stringify(strzalki()) && tydzienMiesci &&
+            wierszOkresu().scrollWidth <= wierszOkresu().clientWidth,
+          `${wTygodniu} → ${strzalki()}`);
+        sprawdz("Miesiąc: kalendarz z wybranym dniem", /zobacz w tygodniu|wolne|urlop/i.test(document.getElementById("app").innerText) &&
+          [...document.querySelectorAll("#app main .grid-cols-7 > button")].length >= 28);
+        sprawdz("Miesiąc: urlop i niedostępność widać w komórce",
+          !!document.querySelector('#app main button[title="Urlop"]') &&
+            !!document.querySelector('#app main button[title="Niedostępność"]'));
+        // Napis okresu wraca na dziś — osobnego „Dziś” nie ma.
+        document.querySelector('#app [aria-label="Później"]').dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(200);
+        const okres = () => document.querySelector("#app [data-okres-grafiku]");
+        const poPrzewinieciu = okres()?.textContent;
+        okres().dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(200);
+        const poPowrocie = okres()?.textContent;
+        sprawdz("dotknięcie napisu okresu wraca na bieżący miesiąc, bez przycisku „Dziś”",
+          poPrzewinieciu !== poPowrocie && !przyciskTekst("Dziś"), `${poPrzewinieciu} → ${poPowrocie}`);
+        klik("Zmień"); await czekaj(300);
+        klik("Cezary"); await czekaj(300);
+        await otworzZakladke("Grafik");
+        await doTygodniaZ("Oddane Tobie");
+        sprawdz("adresat widzi ofertę w jej dniu: „Oddane Tobie” · „Wezmę tę zmianę”",
+          widac("Oddane Tobie") && widac("Wezmę tę zmianę"));
+
+        // --- Zadania (0.63.0) ---
+        // Cezary jest na zmianie: karta dnia z TERAZ, odhaczenie z „Cofnij”,
+        // „Nie da się zrobić?” prowadzi do Zgłoś problem z wpisanym zadaniem.
+        await otworzZakladke("Zadania");
+        const tekstApp = () => document.getElementById("app").innerText;
+        sprawdz("Zadania: karta dnia z blokiem TERAZ i licznikami zakresu",
+          /dziś ·/i.test(tekstApp()) && /teraz/i.test(tekstApp()) && widac("Moje stanowisko") && widac("Wszystkie"));
+        const przedOdhaczeniem = window.__zapisy.length;
+        document.querySelector('#app [aria-label="Zrobione: Otworzyć lokal, wyłączyć alarm"]')
+          .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(300);
+        sprawdz("odhaczenie zapisuje wykonanie i daje „Zrobione · Cofnij”",
+          window.__zapisy.slice(przedOdhaczeniem).some((z) => z[0] === "task_completions") &&
+            widac("Zrobione · Otworzyć lokal") && widac("Zrobione (1)"));
+        await klikPrzycisk("Cofnij");
+        await czekaj(200);
+        sprawdz("„Cofnij” zdejmuje wykonanie", !widac("Zrobione (1)") && !widac("Zrobione · Otworzyć lokal"));
+        await klikPrzycisk("Nie da się zrobić?");
+        await klikPrzycisk("Brak towaru");
+        await czekaj(200);
+        const opis = [...document.querySelectorAll("#app textarea")].map((t) => t.value).join(" ");
+        sprawdz("„Nie da się zrobić?” → Zgłoś problem z wpisanym zadaniem i powodem",
+          /Nie da się zrobić zadania „/.test(opis) && /brak towaru/.test(opis), opis.slice(0, 120));
+        klik("Zmień"); await czekaj(300);
+        klik("Bo"); await czekaj(300);
+        await otworzZakladke("Zadania");
+        sprawdz("Zadania w dzień wolny: „Nie masz dziś zmiany” zamiast pustej listy",
+          widac("Nie masz dziś zmiany"));
       } catch (e) {
         sprawdz("przebieg bez wyjątku", false, e.message);
       }

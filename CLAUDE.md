@@ -862,6 +862,116 @@ od szerokości okna.
 `KioskDashboard.tsx`) zakłada konto komuś, kto przyszedł na dzień próbny, i od
 razu wpuszcza go do jego sesji. Pełny opis: "Pracownik na próbę" niżej.
 
+⚠️ **Ekran startowy — układ z makiety właściciela (0.58.0, KioskStartMobile /
+KioskStartTablet).** Przebudowa ekranów pracownika idzie BLOK PO BLOKU (prośba
+właściciela) — to jest pierwszy; ekrany sesji (`employeeSessionShared.tsx`)
+mają jeszcze stary wygląd. Rzeczy, których nie widać:
+- **Grupy liczą się z `stanDnia`** — tego samego, co liczniki nad listą: Na
+  zmianie (`na_zmianie`), Dziś w grafiku (`oczekiwany`), Pozostali
+  (`zakonczyl` + `wolne`). Pusta grupa się nie rysuje.
+- **Karta nie ma awatara** (brak zdjęć); stan to blok z prawej (etykieta +
+  godzina). Wszystkie sygnały sprzed przebudowy zostały w karcie (giełda,
+  niezakończona zmiana, Puls, wiadomości, „na próbę").
+- **Nowa osoba: stanowisko kaflem.** Lista „co może" mówi prawdę o blokach w
+  sesji (Zmiana, Raport, Zadania) — makieta chowała zadania, właściciel tego
+  nie ustalał, więc zostało jak w kodzie.
+- **PIN: wygląd nowy, logika bez zmian** (makieta: „istniejący ekran").
+  Przycisk powrotu nazywa się tam „Zmień" — `harness-kiosk.html` go szuka.
+
+⚠️ **Pulpit i rama sesji — układ z makiety (0.59.0, EmployeeHomeMobile /
+EmployeeHomeTablet).** Rama (`Shell`) jest nowa dla WSZYSTKICH zakładek:
+nagłówek „‹ Zmień · imię · zakładka" (tytułem jest nazwa zakładki, także na
+Pulpicie i Zmianie), dolny pasek / szyna 96 px na tablecie. Ekrany jeszcze
+nieprzebudowane zostają na białym tle — nowe przekazują `nowyWyglad` (ciepłe
+tło, kolumna do 1100 px). Rzeczy, których nie widać:
+- **Stan dnia liczy się w gałęzi PULPIT** (`stan`: off / before / on / after).
+  Zmiana dzielona: po zakończeniu pierwszej części dzień jest znowu „before",
+  jeśli grafik ma coś PO ostatnim odbitym końcu.
+- **Przycisk tylko prowadzi do Zmiany** — makieta: „to nie szybka akcja".
+  Zapis godzin (okna tolerancji, korekty) zostaje w jednym miejscu.
+- **Bez bloku GRAFIK** (prywatny telefon) nie ma „Dziś wolne" — skąd mamy
+  wiedzieć, że wolne. Karta mówi wtedy samo „Dziś".
+- **„Komunikat od kierownika" z makiety = najnowsza NIEPRZECZYTANA
+  wiadomość** — osobnych komunikatów do zespołu w bazie nie ma.
+- **TERAZ = pierwszy blok, w którym coś zostało** (bloki są już po porze),
+  tylko na zmianie.
+- ⚠️ **Reset ekranu Zgłoś nadpisywał typ formularza** — skrót „Wniosek o
+  wolne" otwierał „Zgłoś problem" (do 0.58.0). Typ ustawiony przed wejściem
+  niesie teraz `zgTypNaWejscie` (ref); sprawdza `harness-kiosk.html`.
+
+⚠️ **Zmiana — układ z makiety (0.60.0, EmployeeShiftMobile /
+EmployeeShiftTablet). Zmienił się WYGLĄD, nie reguły.** Makieta opisuje inną
+mechanikę tolerancji (liczoną od GRAFIKU, z godziną „zablokowaną na
+faktycznej”) — świadomie jej NIE wdrożono: obowiązuje ustalenie właściciela z
+0.45.0 (okno „od teraz wstecz”, godzina spoza okna → korekta do kierownika,
+`renderPozaOknem`). Zmiana mechaniki to osobna decyzja właściciela.
+- Kafle „Zaczynam teraz” / „Cała zmiana” ustawiają ten sam `knowsEnd`, co
+  dawny przełącznik; przy `wymuszonaCala` kafli nie ma, jest zdanie.
+- „Czeka” przy zapisanej zmianie = otwarta korekta (`issues`) z jej
+  `shift_id` (`czekaNaKierownika`).
+- Przycisk: na telefonie w stopce Shella (nad paskiem), na tablecie pod
+  formularzem — ta sama funkcja (`przyciskStartu`/`przyciskKonca`), dwa
+  miejsca. `PoleGodziny` zostało WIDOCZNYM polem (makieta kładła przezroczyste
+  pole na etykiecie — na iPadzie to nie działa).
+- ⚠️ **Listy lokali i stanowisk formularza startu = urządzenie + DZISIEJSZY
+  grafik tej osoby** (`lokaleFormularza`, `stanowiskaDlaLokalu`, 0.60.1).
+  Grafik przypisuje stanowisko PO NAZWIE, więc potrafi stać na stanowisku,
+  którego lokal nie ma w słowniku — bez tego osoba wypożyczona nie mogła
+  zacząć zmiany tak, jak ją zaplanowano. Domyślny lokal dalej z urządzenia,
+  domyślne stanowisko: grafik → karta → pierwsze (`domyslneStanowisko`).
+
+⚠️ **Raport — układ z makiety (0.61.0, EmployeeReportMobile /
+EmployeeReportTablet).** Podsumowanie na górze zamiast stopki; liczby zamiast
+jednego zdania z `podsumowanieMiesiaca` (ta funkcja dalej obsługuje Moją Pracę
+kierownika). Rzeczy, których nie widać:
+- **„Ponad/do normy” liczy się z FAKTU** (`raportTotal`, z urlopem), a „Z
+  grafikiem wyjdzie” z `faktIPlanMiesiaca` (fakt do wczoraj + grafik od dziś)
+  — ta sama prognoza co w Mojej Pracy.
+- **Norma tylko przy etacie z wymiarem i nie w pustym zamkniętym miesiącu**
+  (`pokazNorme`) — ta sama zasada co w `podsumowanieMiesiaca`.
+- **Pasek „% grafiku” przy zleceniu tylko w trwającym miesiącu i gdy grafik
+  ma coś jeszcze** — „100% grafiku” w zamkniętym miesiącu nic nie mówi.
+- **Status flagi = korekta (`issues`) z `shift_id` tej zmiany**: otwarta →
+  „czeka”, rozwiązana → „korekta rozpatrzona”.
+- **„Jeszcze w grafiku”: od jutra, a dziś tylko gdy dzisiejszej zmiany nikt
+  nie zaczął** — inaczej ten sam dzień stałby dwa razy.
+- `harness-raport.html` jest od 0.61.0 AUTOMATYCZNY (5 osób: etat, pół etatu,
+  zlecenie, bez danych, zlecenie bez grafiku) i ma `meta viewport` — bez niego
+  telefon renderował układ tabletu.
+
+⚠️ **Grafik pracownika — układ z makiety (0.62.0, EmployeeScheduleMobile /
+EmployeeScheduleTablet).** Logika giełdy bez zmian (utils/swaps.ts, te same
+handlery i stany kreatora: `swapConfirmId`/`swapTyp`/`swapTarget`/
+`swapWzajemna`). Rzeczy, których nie widać:
+- **Godziny miesiąca = `faktIPlanMiesiaca` (fakt + plan)** — ta sama liczba co
+  „Z grafikiem wyjdzie” w Raporcie. Miesiąc w linii nad paskiem to miesiąc
+  CZWARTKU oglądanego tygodnia (tydzień ISO).
+- **Oferty tylko w swoim dniu** (makieta: bez stałej kolumny). Gdy żadna nie
+  wypada w oglądanym tygodniu, znaczek „do wzięcia · inny tydzień” przenosi do
+  tygodnia najbliższej.
+- **„Cały lokal”** pokazuje każdy dzień tygodnia (bez zwijania wolnych) jako
+  listę osób z lokalu, w którym tego dnia pracuję (albo z mojego lokalu).
+- Nagłówek zostaje wspólny („‹ Zmień · imię · Grafik”) — makieta miała tu
+  osobny wariant „GRAFIK nad dużym imieniem”; jedna rama dla wszystkich
+  zakładek jest ważniejsza.
+- `harness-kiosk.html` przechodzi giełdę: Bo oddaje zmianę Cezaremu (kroki,
+  podsumowanie, zapis `shift_swaps`), Cezary widzi „Oddane Tobie” w jej dniu.
+- ⚠️ **Przycisku „Dziś” nie ma i nie dokładaj go** (0.62.1, prośba
+  właściciela): pojawiał się i znikał, przesuwając strzałki. Powrót na dziś
+  to dotknięcie napisu okresu (`data-okres-grafiku`, stała szerokość: 104 px
+  poniżej 360 px, 120 px na telefonie, 168 px od `md`).
+- ⚠️ **Wiersz okresu NIE zawija się** (0.62.2): strzałki · napis · odstęp ·
+  „Ja / Cały lokal”. Na miesiącu przełącznik jest `invisible`, ale zajmuje
+  miejsce — inaczej strzałki stoją gdzie indziej niż w tygodniu. Szerokości są
+  POLICZONE na 320 i 375 px; dokładając coś do tego wiersza, zmierz, czy się
+  mieści (`harness-kiosk.html` sprawdza pozycję strzałek i przepełnienie).
+- `nowyWyglad` w Shellu rezerwuje od `md` miejsce na pasek przewijania
+  (`scrollbar-gutter: stable`) — wyśrodkowana treść nie przesuwa się, gdy
+  jeden widok się przewija, a drugi nie. Na telefonie bez tego: pasek jest
+  nakładany, a 15 px zabrałoby wąskiemu wierszowi miejsce.
+- Komórka miesiąca bez zmiany, ale z zatwierdzonym urlopem / niedostępnością
+  (`wolneNa`), ma własny kolor i podpis — zmiana w grafiku ma pierwszeństwo.
+
 **Blokada PIN-em na kiosku** — zaimplementowana (patrz niżej, Schemat
 Supabase i sekcja "Panel kierownika"), TYLKO w `KioskDashboard.tsx`.
 Pracownik z ustawionym `kiosk_pin` dostaje ekran z klawiaturą numeryczną
@@ -1053,6 +1163,8 @@ Informacje / Archiwum, filtr typu Wnioski / Zgłoszenia / System.
 - **Wnioski o wolne są w DWÓCH miejscach** — tu i w Zatwierdzaniu (makieta).
   Oba liczą je z tych samych `absences`, więc decyzja w jednym znika z
   drugiego; znaczki obu zakładek je liczą.
+- ⚠️ **Wejście w Informacje oznacza wszystko jako przeczytane po 3 s**
+  (0.58.0, `useEffect` w Skrzynce; sprawdza `harness-panel.html`).
 - **Informacje = powiadomienia z 14 dni**, te same (typ, lokal, treść)
   sklejone w jedną pozycję z „×N"; starsze idą do Archiwum. Archiwum ma też
   rozwiązane zgłoszenia i wnioski rozstrzygnięte w ostatnich 60 dniach.
@@ -1185,9 +1297,11 @@ Supabase Table Editor jest nieaktualna.
 `NotificationsPanel`) — wiersze z tabeli `notifications` gdzie
 `audience === "manager"`, przefiltrowane przez `hasAccessToLokal(n.lokal)`
 — `manager_lokalu` widzi tylko swoje `allowed_lokale`, `admin` widzi
-wszystko. ⚠️ Od 0.51.0 NIE oznaczamy ich jako przeczytane przy wejściu —
-jest przycisk "Oznacz wszystko jako przeczytane"; znaczek przy dzwonku dalej
-liczy nieprzeczytane. Tworzenie takich powiadomień idzie przez ogólną funkcję
+wszystko. ⚠️ Od 0.58.0 wejście w Informacje OZNACZA wszystko jako
+przeczytane po 3 s (prośba właściciela: znaczek przy dzwonku wisiał, dopóki
+ktoś nie kliknął przycisku). Wyjście z zakładki przed upływem 3 s niczego nie
+oznacza; przycisk "Oznacz wszystko jako przeczytane" został dla
+niecierpliwych. Tworzenie takich powiadomień idzie przez ogólną funkcję
 `createManagerNotification(lokal, message, type)` w
 [`api/notifications.ts`](src/api/notifications.ts) — analogiczna
 `createEmployeeNotification(userName, message, type)` robi to samo dla
@@ -1485,7 +1599,8 @@ odpadają. Zamiast tego dwa pliki w katalogu głównym, uruchamiane przez
   pokazuje nazwę produktu, nazwę najemcy i znak — czyli dokładnie to, co
   najłatwiej po cichu zepsuć zmianą w `config.ts`;
 - `harness-raport.html` — montuje `PersonalDashboard` (osobisty telefon) z
-  atrapą Supabase i przełącznikiem czterech osób: pełny etat, pół etatu,
+  atrapą Supabase i przełącznikiem pięciu osób (od 0.61.0 klikany
+  automatycznie): pełny etat, pół etatu,
   zlecenie, konto bez żadnych danych o umowie. Powstał dla normy w Raporcie —
   każda liczba w tym bloku ma przypadek, w którym jej NIE MA, i wtedy blok ma
   zniknąć, a nie pokazać "null h";
@@ -1713,8 +1828,21 @@ dokładnie ta praca, która rozciąga wdrożenie u klienta.
 ### Pracownik (Tablet Służbowy, tablet z PIN-em, konto prywatne)
 
 Jeden kod w `employeeSessionShared.tsx`, trzy powierzchnie — różnic w logice nie
-ma. `renderBlockCards(grupy, { zwiniete })` rysuje karty bloków,
-`renderTaskChecklist(items)` pozycje w środku.
+ma. `renderBlockCards(grupy, { terazId, pokazStanowiska })` rysuje karty
+bloków, `renderZadanie(item)` jeden wiersz (od 0.63.0; wcześniej
+`renderTaskChecklist`). Pulpit ma własne, zwarte nagłówki bloków.
+
+⚠️ **Układ z makiety (0.63.0, EmployeeTasksMobile / EmployeeTasksTablet).**
+- **Cudzego wykonania NIE cofa się z ekranu pracownika** (kłódka „tylko X lub
+  kierownik może cofnąć”) — na wspólnym tablecie odhaczało się komuś jego
+  pracę. Swoje: „Cofnij” w wierszu i 5 s pasek „Zrobione · Cofnij”. Pomiar
+  dalej tylko „Popraw” (toggleTaskCompletion rzuca dla pomiaru).
+- **„Nie da się zrobić?”** niesie typ i TEKST do Zgłoś przez refy
+  `zgTypNaWejscie` / `zgTekstNaWejscie` — reset ekranu Zgłoś czyta je raz.
+- **TERAZ = pierwszy blok, w którym coś zostało, tylko na zmianie** — ta sama
+  reguła co na Pulpicie.
+- Zadań ze zdjęciem z makiety („Zdjęcie · wkrótce”) nie ma — nie ma czego
+  zaślepiać, dopóki zadanie nie ma takiego pola.
 
 - ⚠️ **Zadania widzi tylko ten, kto dziś pracuje** (`pracujeTegoDnia` +
   `buildEmployeeBlocks(..., { pracuje })`, od 0.38.0): stoi w OPUBLIKOWANYM

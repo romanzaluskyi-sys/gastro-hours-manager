@@ -5,6 +5,185 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.63.0 — 2026-09-29
+
+- **Zadania pracownika — nowy wygląd według makiety** (Tablet Służbowy i
+  prywatny telefon). Szósty krok przebudowy ekranów pracownika.
+  - **Jedna karta dnia** zamiast czerwonego paska: „Dziś · 10:20 — 2 z 13
+    zadań”, pasek postępu, ostatnie 7 dni i przycisk **TERAZ** — przewija do
+    bieżącego bloku.
+  - **„Moje stanowisko · N” / „Wszystkie · N”** z liczbą zadań do zrobienia; w
+    „Wszystkie” bloki mają znacznik stanowiska.
+  - **Bloki**: bieżący oznaczony TERAZ i rozwinięty, reszta zwinięta (na
+    tablecie wszystkie rozwinięte, w trzech kolumnach). Termin: na godzinę
+    przed — „zostało N min”, po czasie — czerwona plakietka „po terminie” i
+    czerwona ramka bloku. „Ważne” to czerwone „!”.
+  - **Zadanie**: cały wiersz do dotknięcia, pole 34 px, opis w punktach.
+    Zrobione schodzą na dół bloku pod **„Zrobione (n)”**; po odhaczeniu na 5 s
+    pasek **„Zrobione · Cofnij”**. Swoje zrobione można cofnąć, **cudzego nie**
+    — „tylko X lub kierownik może cofnąć”.
+  - **„Nie da się zrobić?”** — powód jednym dotknięciem (brak towaru, sprzęt
+    nie działa, brak czasu, inne) otwiera **Zgłoś problem z wpisanym
+    zadaniem**.
+  - **W dzień bez zmiany**: „Nie masz dziś zmiany”, następna zmiana, „Zobacz
+    grafik” i podgląd bloków, które będą na tej zmianie.
+
+## 0.62.2 — 2026-09-29
+
+- **Grafik pracownika — pasek okresu nie skacze.** Strzałki, napis okresu i
+  „Ja / Cały lokal” stoją zawsze w jednym wierszu; na telefonie przełącznik
+  „Ja / Cały lokal” nie spada już raz do nowej linii, a raz nie.
+  - Napis okresu jest węższy, więc **strzałki są bliżej siebie**; w miesiącu
+    rok pokazuje się tylko, gdy nie jest bieżący.
+  - Na widoku miesiąca przełącznik jest niewidoczny, ale zajmuje swoje
+    miejsce — **strzałki stoją tam samo w tygodniu i w miesiącu**.
+  - Na najwęższych telefonach (poniżej 360 px) przełącznik mówi krótko
+    „Ja / Lokal”.
+
+## 0.62.1 — 2026-09-29
+
+- **Grafik pracownika — powrót na dziś w napisie okresu.** Przycisku „Dziś”
+  już nie ma: dotknięcie „28 wrz – 4 paź” (albo „Wrzesień 2026”) wraca na
+  bieżący tydzień / miesiąc. Poza bieżącym okresem napis jest podkreślony.
+  Napis ma stałą szerokość, więc **strzałki stoją zawsze w tym samym
+  miejscu**.
+- **Kalendarz miesiąca pokazuje urlop i niedostępność** wprost w komórce:
+  urlop na niebiesko z podpisem „urlop”, niedostępność kreskowana z podpisem
+  „niedost.”; w legendzie doszły oba znaczenia.
+
+## 0.62.0 — 2026-09-29
+
+- **Grafik pracownika — nowy wygląd według makiety** (Tablet Służbowy i
+  prywatny telefon). Piąty krok przebudowy ekranów pracownika; giełda działa
+  tak samo jak dotąd.
+  - **Tydzień / Miesiąc** jako przełącznik, tydzień strzałkami („28 wrz – 4
+    paź”), obok **„Ja / Cały lokal”**.
+  - Nad listą: godziny w tygodniu, godziny miesiąca (przy etacie wobec
+    normy) i zielony znaczek **„N do wzięcia”** — przewija do oferty albo
+    przenosi do tygodnia, w którym jest.
+  - **Pasek siedmiu dni** z kreską przy dniu ze zmianą (bursztynową, gdy w
+    innym lokalu) i zieloną kropką przy ofercie — dotknięcie przewija do dnia.
+  - **Wolne dni pod rząd zwinięte w jeden wiersz** („pn 28 – sob 3 · wolne”).
+  - **Zwarta karta zmiany**: stanowisko, godziny, liczba godzin, mały przycisk
+    **„⇄ Giełda”** (w ostatnich 12 h — kłódka), „inny lokal”, **„Z tobą”** z
+    imionami (pierwsze trzy, reszta pod „+N”).
+  - **Giełda rozwija się w samej karcie z paskiem kroków**: Sposób → Komu / Z
+    kim → Na którą → „Sprawdź i wyślij” z podsumowaniem.
+  - **Oferty stoją w dniu, którego dotyczą** (zielona, przerywana ramka) z
+    „Wezmę tę zmianę”; gdy masz już zmianę tego dnia — ostrzeżenie.
+  - **Miesiąc jako kalendarz**: dzień ze zmianą na czarno z liczbą godzin, w
+    innym lokalu na bursztynowo; wybrany dzień pod spodem z „Zobacz w
+    tygodniu, z kim pracujesz”. Nad kalendarzem zmiany i godziny, przy etacie
+    wobec normy.
+  - Na tablecie dni tygodnia w trzech kolumnach.
+
+## 0.61.0 — 2026-09-29
+
+- **Raport pracownika — nowy wygląd według makiety** (Tablet Służbowy i
+  prywatny telefon). Czwarty krok przebudowy ekranów pracownika.
+  - **Miesiąc zmienia się dużymi strzałkami**, pod nazwą miesiąca rodzaj umowy.
+    Pola „Pracownik” już nie ma — osobę wybiera się przez „Zmień”.
+  - **Podsumowanie stoi na górze** (zamiast paska na dole): duża liczba godzin
+    i liczba zmian.
+    - **Umowa o pracę**: pasek z czerwoną kreską normy, „Do normy 176 h
+      brakuje X h” albo „Ponad normą +X h” i „Z grafikiem wyjdzie …”
+      (przyszłe zmiany zakreskowane na pasku).
+    - **Zlecenie**: „bez normy”, a w trwającym miesiącu pasek „ile grafiku już
+      przepracowane” i ile jeszcze stoi w grafiku.
+    - Konto bez danych o umowie dostaje same godziny — bez normy.
+  - **Zmiany pogrupowane tygodniami** z sumą tygodnia; weekend na czerwono,
+    stanowisko w kolorze.
+  - **Flaga korekty 48 px** przy każdej zmianie — otwiera zgłoszenie z wpisaną
+    zmianą. Po wysłaniu wiersz jest podświetlony i ma „korekta wysłana ·
+    czeka”, po decyzji kierownika — „korekta rozpatrzona”.
+  - Na końcu **„Jeszcze w grafiku”** — zaplanowane zmiany do końca miesiąca,
+    wyszarzone.
+  - Na tablecie podsumowanie po lewej, lista zmian po prawej.
+
+## 0.60.1 — 2026-09-29
+
+- **Zmiana — lokal i stanowisko z dzisiejszego grafiku zawsze są do wybrania.**
+  Osoba, którą grafik stawia dziś w innym lokalu albo na stanowisku spoza
+  słownika tego lokalu, nie mogła rozpocząć zmiany tak, jak ją zaplanowano —
+  lista pokazywała tylko lokale i stanowiska tabletu.
+  - Na liście lokali jest też lokal z dzisiejszego grafiku (domyślnie dalej
+    lokal tabletu — zmiana ma mówić, gdzie ktoś naprawdę pracował).
+  - Na liście stanowisk jest stanowisko z grafiku, a przy rozpoczęciu i po
+    zmianie lokalu **podstawia się samo**, także gdy własne stanowisko z karty
+    w tym lokalu też istnieje.
+
+## 0.60.0 — 2026-09-29
+
+- **Zmiana — nowy wygląd według makiety.** Trzeci krok przebudowy ekranów
+  pracownika. Reguły wpisu godzin się NIE zmieniły.
+  - Sposób wpisu wybiera się **kaflem**: „Zaczynam teraz” (koniec zapiszesz
+    później) albo „Cała zmiana” (start i koniec razem) — zamiast pola „Znam
+    godzinę zakończenia”.
+  - Nad formularzem „**Dziś w grafiku** 09:00 – 21:00” (albo „Dziś nie ma Cię
+    w grafiku”); przy lokalu i stanowisku plakietka **„z grafiku”**, gdy
+    zgadzają się z dzisiejszym grafikiem.
+  - **Duża godzina** (44 px) — dotknięcie otwiera wybór godziny; z prawej
+    „teraz” albo „zmień”.
+  - **Dziś zapisane**: lista dzisiejszych zmian z godzinami, a przy tych, które
+    czekają na kierownika — „czeka”.
+  - **Na zmianie**: duży licznik, pasek od startu do końca wg grafiku i karta
+    „Do końca zmiany” — po czasie bursztynowa „Ponad grafik +…”. Bez grafiku:
+    „liczymy czas pracy”.
+  - **Zmiana zapisana**: zielony znak, lista dnia, „Razem dziś” i trzy
+    przyciski (kolejna zmiana, swoje godziny, lista osób).
+  - Okno „Za późno na samodzielny wpis” w nowym stylu — na telefonie jako
+    arkusz od dołu.
+  - Na tablecie formularz po lewej, **„Dziś zapisane” i „Zasady lokalu”** po
+    prawej; na telefonie przycisk stoi nad dolnym paskiem.
+
+## 0.59.0 — 2026-09-29
+
+- **Pulpit pracownika — nowy wygląd według makiety** (Tablet Służbowy i
+  prywatny telefon). Drugi krok przebudowy ekranów pracownika.
+  - Górna karta mówi, **jaki jest stan dnia**: *Dziś wolne* (następna zmiana i
+    kto z Tobą pracuje), *Dziś w grafiku* (godziny, stanowisko, „Dziś z Tobą”),
+    *Na zmianie* (licznik, pasek do końca wg grafiku, po czasie — „ponad
+    grafik”) albo *Dziś zapisane* (godziny i suma).
+  - Duży przycisk **tylko prowadzi do Zmiany** („Rozpocznij zmianę ›”,
+    „Zakończ zmianę ›”) — godziny zapisuje się dalej w jednym miejscu. W dniu
+    wolnym przycisk jest drugorzędny i podpisany „poza grafikiem”.
+  - Karty pokazują się tylko, gdy mają treść: **nowa wiadomość**, **zmiana do
+    wzięcia z giełdy**, **Twoje zgłoszenia** ze statusem (czeka / rozpatrzona /
+    zatwierdzony).
+  - **Zadania dnia** jako bloki z licznikiem; bieżący oznaczony **TERAZ** z
+    paskiem postępu. Kliknięcie otwiera ten blok w Zadaniach.
+  - W dniu wolnym **mini tydzień** z kropkami zmian (→ Grafik) i skrót
+    **„Wniosek o wolne”**; na dole **godziny w miesiącu** (etat: „24/176 h”).
+  - Na tablecie dwie kolumny: stan i przycisk po lewej, zadania po prawej.
+- **Nowa rama wszystkich zakładek pracownika**: nagłówek „‹ Zmień · imię ·
+  zakładka” (przycisk 48 px), zielone „na zmianie”, dolny pasek z czerwoną
+  kreską nad aktywną zakładką, a na tablecie wąska ciemna szyna ze znakiem.
+- Poprawione: skrót „Wniosek o wolne” (z Grafiku) otwierał formularz „Zgłoś
+  problem” zamiast wniosku.
+
+## 0.58.0 — 2026-09-29
+
+- **Tablet Służbowy — nowy ekran startowy według makiety.** Pierwszy krok
+  przebudowy ekranów pracownika.
+  - Osoby stoją w **trzech grupach**: *Na zmianie* (czerwona ramka), *Dziś w
+    grafiku* (zielona) i *Pozostali*. Pusta grupa się nie pokazuje.
+  - Stan osoby to **blok z prawej strony karty**: „zmiana od 11:00", „w grafiku
+    14:30" albo „dziś 5,8 h" — karta jest niższa, więcej osób mieści się bez
+    przewijania. Nad listą liczniki: na zmianie, czeka na start, zakończyło.
+  - W nagłówku marka, lokal, **duży zegar**, pogoda i data.
+  - Przy nazwisku zostają wszystkie dotychczasowe sygnały: kłódka PIN-u,
+    wiadomości, propozycja z giełdy, niezakończona zmiana, „Dziś Ty zamykasz
+    dzień", plakietka „na próbę · czeka na kierownika".
+  - **Nowa osoba na próbę**: stanowisko wybiera się kaflem zamiast listy
+    rozwijanej, a pod spodem stoi, co ta osoba może robić do czasu decyzji
+    kierownika.
+  - Ekran PIN-u w tym samym stylu — większe klawisze; działa jak dotąd (sześć
+    cyfr, zatwierdza sam).
+- **Skrzynka → Informacje oznacza wszystko jako przeczytane samo**, po 3 s od
+  wejścia — znaczek przy dzwonku gaśnie bez klikania. Przy okazji naprawione:
+  przypomnienia „Puls niezamknięty" nie dawały się oznaczyć jako przeczytane w
+  ogóle i trzymały znaczek zapalony na stałe.
+
 ## 0.57.0 — 2026-09-27
 
 - **Puls — nowy wygląd według makiety.** Zakładki Karta dnia · Dni · Analityka ·
