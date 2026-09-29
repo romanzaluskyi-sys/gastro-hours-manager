@@ -285,8 +285,9 @@ const poprzedniMiesiac = (h) => {
         // i skrócony zestaw zakładek po wejściu (bez Grafiku).
         { id: "u7", name: "Filip", role: "open", active: true, archived: false,
           default_lokal: "Bułka i Jacek", default_stanowisko: "Burgery" },
+        // Na zleceniu — w „Wniosek o wolne” ma widzieć samą niedostępność.
         { id: "u8", name: "Gosia", role: "open", active: true, archived: false,
-          default_lokal: "Ceglana", default_stanowisko: "Kelner" },
+          default_lokal: "Ceglana", default_stanowisko: "Kelner", typ_umowy: "zlecenie" },
         { id: "u5", name: "Na Próbę", role: "open", active: true, archived: false,
           default_lokal: "Ceglana", default_stanowisko: "Kelner", email: "",
           probny_status: "oczekuje", probny_od: "2026-09-19", probny_przez: "Tablet Ceglana" },
@@ -807,6 +808,84 @@ const poprzedniMiesiac = (h) => {
         const opis = [...document.querySelectorAll("#app textarea")].map((t) => t.value).join(" ");
         sprawdz("„Nie da się zrobić?” → Zgłoś problem z wpisanym zadaniem i powodem",
           /Nie da się zrobić zadania „/.test(opis) && /brak towaru/.test(opis), opis.slice(0, 120));
+
+        // --- Zgłoś (0.64.0) ---
+        // Cezary stoi na „Zgłoś problem”. Anonimowo: bez wyboru zmiany i bez
+        // shift_id w zapisie (data zmiany wskazałaby osobę), kategoria na
+        // początku treści.
+        const wpiszPole = (el, v) => {
+          Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, v);
+          el.dispatchEvent(new Event("input", { bubbles: true }));
+        };
+        const ostatniZapis = (tabela) => [...window.__zapisy].reverse().find((z) => z[0] === tabela);
+        sprawdz("Zgłoś problem pod imieniem: można wskazać zmianę",
+          !!document.querySelector("#app main select"));
+        await klikPrzycisk("Anonimowo");
+        sprawdz("anonimowo: nie ma wyboru zmiany", !document.querySelector("#app main select"));
+        await klikPrzycisk("Sprzęt / awaria");
+        document.querySelector("#app [data-wyslij-zgloszenie]").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(300);
+        const anon = (ostatniZapis("issues") || [])[1] || {};
+        sprawdz("anonimowe zgłoszenie: bez imienia i bez shift_id, kategoria w treści",
+          anon.is_anonymous === true && anon.shift_id === null && anon.user_id === null &&
+            /^Sprzęt \/ awaria: Nie da się/.test(anon.issue_text || ""),
+          JSON.stringify(anon).slice(0, 160));
+
+        // Popraw zmianę: lista zmian z 3 tygodni, wybór, poprawiony koniec.
+        document.querySelector('#app [data-typ-zgloszenia="correction"]').dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(250);
+        const wiersze = document.querySelectorAll("#app [data-zmiana-korekty]");
+        sprawdz("Popraw zmianę: lista własnych zmian i „Zmiany nie ma na liście”",
+          wiersze.length >= 1 && !!document.querySelector("#app [data-zmiany-nie-ma]"));
+        const idZmiany = wiersze[0].getAttribute("data-zmiana-korekty");
+        wiersze[0].dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(250);
+        wpiszPole(document.querySelector('#app [data-korekta-pole="koniec"]'), "23:30");
+        await czekaj(200);
+        sprawdz("zmienione pole mówi, co było",
+          !!document.querySelector("#app [data-wybrana-zmiana]") && /było/.test(tekstApp()));
+        await klikPrzycisk("Zapomniałem/łam odbić wyjście");
+        document.querySelector("#app [data-wyslij-zgloszenie]").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(300);
+        const korekta = (ostatniZapis("issues") || [])[1] || {};
+        sprawdz("korekta: shift_id wybranej zmiany, nowy koniec i powód w treści",
+          korekta.type === "correction" && String(korekta.shift_id) === idZmiany &&
+            korekta.proposed_end_time === "23:30" && /odbić wyjście/.test(korekta.issue_text || ""),
+          JSON.stringify(korekta).slice(0, 200));
+        sprawdz("po wysłaniu wraca lista, a zmiana ma „czeka”",
+          !!document.querySelector(`#app [data-zmiana-korekty="${idZmiany}"]`) &&
+            /czeka/.test(document.querySelector(`#app [data-zmiana-korekty="${idZmiany}"]`).textContent));
+
+        // Wolne: kalendarz, klik ostatniego dnia PRZED pierwszym — zakres i
+        // tak ma wyjść od–do.
+        document.querySelector('#app [data-typ-zgloszenia="absence"]').dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(250);
+        document.querySelector('#app [aria-label="Następny miesiąc"]').dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(250);
+        const nm = new Date(); nm.setDate(1); nm.setMonth(nm.getMonth() + 1);
+        const dzienNm = (d) => `${nm.getFullYear()}-${String(nm.getMonth() + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+        document.querySelector(`#app [data-dzien-wolnego="${dzienNm(12)}"]`).dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(150);
+        document.querySelector(`#app [data-dzien-wolnego="${dzienNm(10)}"]`).dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(250);
+        sprawdz("wolne: podsumowanie zakresu z liczbą dni",
+          /3 dni/.test((document.querySelector("#app [data-wolne-podsumowanie]") || {}).textContent || ""));
+        document.querySelector("#app [data-wyslij-zgloszenie]").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(300);
+        const wolne = (ostatniZapis("absences") || [])[1] || {};
+        sprawdz("wniosek o wolne: daty od–do w dobrej kolejności",
+          wolne.start_date === dzienNm(10) && wolne.end_date === dzienNm(12), JSON.stringify(wolne).slice(0, 160));
+
+        // Zlecenie: urlop nie przysługuje, zostaje sama niedostępność.
+        klik("Zmień"); await czekaj(300);
+        klik("Gosia"); await czekaj(300);
+        await otworzZakladke("Więcej");
+        await klikPrzycisk("Zgłoś");
+        document.querySelector('#app [data-typ-zgloszenia="absence"]').dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(250);
+        sprawdz("zlecenie: w „Wolne” tylko niedostępność, bez urlopu",
+          !!document.querySelector("#app [data-tylko-niedostepnosc]") &&
+            ![...document.querySelectorAll("#app main button")].some((b) => /^Urlop/.test(b.textContent.replace(/▪/g, "").trim())));
         klik("Zmień"); await czekaj(300);
         klik("Bo"); await czekaj(300);
         await otworzZakladke("Zadania");

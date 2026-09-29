@@ -20,6 +20,8 @@ import {
   Mail,
   ArrowLeftRight,
   AlertTriangle,
+  EyeOff,
+  Plus,
   Users,
   User,
   Lock,
@@ -58,6 +60,7 @@ import {
   formatNotificationText,
 } from "../utils/format";
 import { stanowiskoShort, stanowiskoBadgeStyle } from "../utils/stanowiska";
+import { countWorkdays, URLOP_HOURS_PER_DAY } from "../utils/absences";
 import {
   normaMiesiaca,
   naEtacie,
@@ -312,6 +315,9 @@ export const Shell = ({
   // tle z białymi kartami i szerszą kolumną; pozostałe zostają na białym,
   // dopóki nie przyjdzie ich kolej — ich szare pola zlewałyby się z nowym tłem.
   nowyWyglad = false,
+  // Imię NAD tytułem na telefonie (Zgłoś, 0.64.0): „Wniosek o wolne” obok
+  // imienia i „‹ Zmień” nie mieści się w jednym wierszu.
+  imieNadTytulem = false,
   footer = null,
   children,
 }) => {
@@ -389,15 +395,27 @@ export const Shell = ({
             {/* Na wspólnym tablecie tytuł ekranu ("Grafik", "Raport") nie
                 mówi, KTO jest wybrany — imię musi być stale widoczne obok
                 przycisku powrotu. */}
-            <div className="flex-1 min-w-0 flex items-baseline gap-2">
+            <div
+              className={`flex-1 min-w-0 flex ${
+                imieNadTytulem ? "flex-col md:flex-row md:items-baseline md:gap-2" : "items-baseline gap-2"
+              }`}
+            >
               {personName && personName !== title && (
-                <span className="font-['Archivo'] font-bold text-[18px] md:text-[20px] text-[#6E6E66] truncate min-w-0">
+                <span
+                  className={`font-['Archivo'] font-bold text-[#6E6E66] truncate min-w-0 ${
+                    imieNadTytulem ? "text-[15px] leading-[18px] md:text-[20px] md:leading-normal" : "text-[18px] md:text-[20px]"
+                  }`}
+                >
                   {personName} ·
                 </span>
               )}
               <h1
-                className={`font-['Archivo'] font-extrabold text-[#171714] flex-none ${
-                  personName ? "text-[22px] md:text-[24px]" : "text-[24px] md:text-[26px]"
+                className={`font-['Archivo'] font-extrabold text-[#171714] ${
+                  imieNadTytulem ? "truncate md:flex-none md:overflow-visible" : "flex-none"
+                } ${
+                  personName
+                    ? `${imieNadTytulem ? "leading-[26px] md:leading-normal " : ""}text-[22px] md:text-[24px]`
+                    : "text-[24px] md:text-[26px]"
                 }`}
               >
                 {title}
@@ -654,7 +672,6 @@ export const EmployeeSessionScreens = ({
   const [zgShiftId, setZgShiftId] = useState("none");
   const [zgText, setZgText] = useState("");
   const [zgSaving, setZgSaving] = useState(false);
-  const [zgSent, setZgSent] = useState(false);
   const [zgPrefillShiftId, setZgPrefillShiftId] = useState(null);
   // Typ formularza Zgłoś wybrany PRZED wejściem na ekran (skrót „Wniosek o
   // wolne”) — patrz reset przy wejściu na ekran ZGLOS.
@@ -663,21 +680,29 @@ export const EmployeeSessionScreens = ({
   const zgTekstNaWejscie = useRef(null);
 
   // ---- "Popraw zmianę" (type: correction) — osobny zestaw pól, patrz handleSendKorekta ----
-  const [zgCorrectionShiftId, setZgCorrectionShiftId] = useState("forgot"); // uuid zmiany albo "forgot"
+  // null = jeszcze nie wybrano (lista zmian), uuid zmiany albo "forgot" (od 0.64.0)
+  const [zgCorrectionShiftId, setZgCorrectionShiftId] = useState(null);
   const [zgPropDate, setZgPropDate] = useState("");
   const [zgPropLokal, setZgPropLokal] = useState("");
   const [zgPropStanowisko, setZgPropStanowisko] = useState("");
   const [zgPropStart, setZgPropStart] = useState("");
   const [zgPropEnd, setZgPropEnd] = useState("");
   const [zgKorektaNote, setZgKorektaNote] = useState("");
+  // Powód jednym dotknięciem (chipy z makiety 0.64.0) — trafia na początek
+  // issue_text, bo `issues` nie ma osobnej kolumny na powód.
+  const [zgPowod, setZgPowod] = useState(null);
+  // Data, lokal i stanowisko poprawianej zmiany są schowane pod linkiem —
+  // zwykle poprawia się same godziny, ale pełna korekta zostaje możliwa.
+  const [zgKorektaWiecej, setZgKorektaWiecej] = useState(false);
+  // Kategoria „Zgłoś problem” — też na początku issue_text.
+  const [zgKategoria, setZgKategoria] = useState(null);
 
   // ---- "Wniosek o wolne" (type: absence) — patrz handleSendAbsence ----
   const [zgAbsType, setZgAbsType] = useState("urlop"); // "urlop" | "niedostepnosc"
-  // Niedostępność bywa zgłaszana na JEDEN dzień znacznie częściej niż na
-  // okres, a wpisywanie tej samej daty dwa razy było uciążliwe. Technicznie
-  // to nadal jedno pole start/end — dzień po prostu wypełnia oba naraz.
-  // Urlop zostaje bez zmian (tam okres to reguła, nie wyjątek).
-  const [zgAbsDay, setZgAbsDay] = useState("");
+  // Zakres wybiera się w kalendarzu: pierwszy dzień, potem ostatni; jeden
+  // dzień = dwa razy ten sam (albo tylko pierwszy). `zgAbsMies` to przesunięcie
+  // oglądanego miesiąca względem bieżącego.
+  const [zgAbsMies, setZgAbsMies] = useState(0);
   const [zgAbsStart, setZgAbsStart] = useState("");
   const [zgAbsEnd, setZgAbsEnd] = useState("");
   const [zgAbsNote, setZgAbsNote] = useState("");
@@ -963,31 +988,42 @@ export const EmployeeSessionScreens = ({
       // ⚠️ Wejście z „Wniosek o wolne” (Pulpit, Grafik) ustawia typ z góry —
       // do 0.57.0 ten reset nadpisywał go na „problem” i skrót otwierał zły
       // formularz.
+      // Typ spoza bloków lokalu (prywatny telefon) zamieniamy na pierwszy
+      // dostępny — inaczej pokazałby się formularz, którego lokal nie włączył.
+      const chciany = zgPrefillShiftId ? "correction" : zgTypNaWejscie.current || "problem";
       setZgType(
-        zgPrefillShiftId ? "correction" : zgTypNaWejscie.current || "problem"
+        dostepneTypyZgloszen.some((t) => t.key === chciany)
+          ? chciany
+          : dostepneTypyZgloszen[0]?.key || "problem"
       );
       zgTypNaWejscie.current = null;
       setZgShiftId(zgPrefillShiftId || "none");
       setZgAnon(false);
-      setZgSent(false);
+      setZgKategoria(null);
       setZgText(zgTekstNaWejscie.current || "");
       zgTekstNaWejscie.current = null;
       setZgKorektaNote("");
-      setZgAbsType("urlop");
+      setZgAbsType(moznaUrlop ? "urlop" : "niedostepnosc");
+      setZgAbsMies(0);
       setZgAbsStart("");
       setZgAbsEnd("");
       setZgAbsNote("");
-      applyKorektaShiftDefaults(zgPrefillShiftId || "forgot");
+      // Bez chorągiewki z Raportu — najpierw lista zmian do wybrania.
+      applyKorektaShiftDefaults(zgPrefillShiftId || null);
     }
   }, [screen]);
 
   // "Popraw zmianę" wymaga RAPORTU — bez listy swoich zmian pracownik nie
   // widzi, co właściwie poprawia (ustalenie właściciela).
   const dostepneTypyZgloszen = [
-    { key: "correction", label: "Popraw zmianę", blok: "RAPORT" },
-    { key: "absence", label: "Wolne / urlop", blok: "WOLNE" },
-    { key: "problem", label: "Zgłoś problem", blok: "ZGLOS_PROBLEM" },
+    { key: "correction", label: "Popraw zmianę", Icon: Flag, blok: "RAPORT" },
+    { key: "absence", label: "Wolne", Icon: Palmtree, blok: "WOLNE" },
+    { key: "problem", label: "Zgłoś problem", Icon: AlertTriangle, blok: "ZGLOS_PROBLEM" },
   ].filter((t) => bloki.includes(t.blok));
+  // Urlop przysługuje z umowy o pracę (makieta 0.64.0: zlecenie widzi samą
+  // niedostępność). Konto bez danych o umowie dostaje oba — brak danych to
+  // nie powód, żeby zabrać komuś urlop.
+  const moznaUrlop = !["zlecenie", "b2b"].includes(typUmowy(employee));
 
   const openZgloszenie = (shiftId) => {
     setZgPrefillShiftId(shiftId || null);
@@ -1002,7 +1038,6 @@ export const EmployeeSessionScreens = ({
   const openWniosekOWolne = () => {
     zgTypNaWejscie.current = "absence";
     setZgType("absence");
-    setZgSent(false);
     setZgPrefillShiftId(null);
     setScreen("ZGLOS");
   };
@@ -1072,6 +1107,9 @@ export const EmployeeSessionScreens = ({
   // do poprawy) albo pustymi/domyślnymi wartościami dla "Zapomniałem odbić" ----
   const applyKorektaShiftDefaults = (shiftId) => {
     setZgCorrectionShiftId(shiftId);
+    setZgPowod(null);
+    setZgKorektaWiecej(false);
+    if (!shiftId) return;
     if (shiftId === "forgot") {
       setZgPropDate(toLocalYMD(new Date()));
       setZgPropLokal(employee?.default_lokal || lokaleOptions[0]?.name || "");
@@ -1080,7 +1118,9 @@ export const EmployeeSessionScreens = ({
       setZgPropEnd("");
       return;
     }
-    const s = recentShiftsForZgloszenie.find((sh) => sh.id === shiftId);
+    // Z całej historii, nie z listy 3 tygodni — chorągiewka w Raporcie
+    // prowadzi tu też ze starszych miesięcy.
+    const s = shifts.find((sh) => String(sh.id) === String(shiftId));
     if (!s) return;
     setZgPropDate(toLocalYMD(s.start_time));
     setZgPropLokal(s.lokal);
@@ -1364,17 +1404,21 @@ export const EmployeeSessionScreens = ({
       const issue = await api.post("issues", {
         user_id: zgAnon ? null : employee.id,
         user_name: zgAnon ? null : employee.name,
-        issue_text: zgText,
+        // Kategoria na początku treści — `issues` nie ma na nią kolumny.
+        issue_text: zgKategoria ? `${zgKategoria}: ${zgText.trim()}` : zgText.trim(),
         status: "nowe",
         type: "problem",
         is_anonymous: zgAnon,
         // shift_id to uuid (string) w bazie — nie rzutować na liczbę.
-        shift_id: zgShiftId && zgShiftId !== "none" ? zgShiftId : null,
+        // ⚠️ Anonimowe BEZ zmiany: data i godzina zmiany wskazują osobę.
+        shift_id: !zgAnon && zgShiftId && zgShiftId !== "none" ? zgShiftId : null,
       });
       setIssues([...issues, issue]);
       setZgText("");
-      setZgSent(true);
-      showMsg("Zgłoszenie wysłane pomyślnie!");
+      setZgKategoria(null);
+      setZgShiftId("none");
+      showMsg(zgAnon ? "Wysłano anonimowo." : "Wysłano · kierownik odpowie w Wiadomościach.");
+      setZgAnon(false);
     } catch (err) {
       showMsg(`Błąd połączenia: ${err.message || "nieznany błąd"}`, "error");
     }
@@ -1388,12 +1432,26 @@ export const EmployeeSessionScreens = ({
         "error"
       );
     }
+    const zmiana =
+      zgCorrectionShiftId !== "forgot"
+        ? shifts.find((sh) => String(sh.id) === String(zgCorrectionShiftId))
+        : null;
+    if (
+      zmiana &&
+      zgPropDate === toLocalYMD(zmiana.start_time) &&
+      zgPropLokal === zmiana.lokal &&
+      zgPropStanowisko === zmiana.stanowisko &&
+      zgPropStart === fmtHHMM(zmiana.start_time) &&
+      zgPropEnd === (zmiana.end_time ? fmtHHMM(zmiana.end_time) : "")
+    ) {
+      return showMsg("Nic się nie zmieniło — popraw godzinę, która się nie zgadza.", "error");
+    }
     setZgSaving(true);
     try {
       const issue = await api.post("issues", {
         user_id: employee.id,
         user_name: employee.name,
-        issue_text: zgKorektaNote,
+        issue_text: [zgPowod, zgKorektaNote.trim()].filter(Boolean).join(" — "),
         status: "nowe",
         type: "correction",
         is_anonymous: false,
@@ -1406,8 +1464,9 @@ export const EmployeeSessionScreens = ({
       });
       setIssues([...issues, issue]);
       setZgKorektaNote("");
-      setZgSent(true);
-      showMsg("Poprawka wysłana do kierownika!");
+      setZgPrefillShiftId(null);
+      applyKorektaShiftDefaults(null);
+      showMsg("Wysłano · czeka na kierownika.");
     } catch (err) {
       showMsg(`Błąd połączenia: ${err.message || "nieznany błąd"}`, "error");
     }
@@ -1415,20 +1474,11 @@ export const EmployeeSessionScreens = ({
   };
 
   const handleSendAbsence = async () => {
-    const jedenDzien = zgAbsType === "niedostepnosc" && zgAbsDay;
-    const odData = jedenDzien ? zgAbsDay : zgAbsStart;
-    const doData = jedenDzien ? zgAbsDay : zgAbsEnd;
-    if (!odData || !doData) {
-      return showMsg(
-        zgAbsType === "niedostepnosc"
-          ? "Podaj dzień albo zakres od-do!"
-          : "Podaj daty od-do!",
-        "error"
-      );
-    }
-    if (doData < odData) {
-      return showMsg("Data „do” nie może być wcześniejsza niż „od”.", "error");
-    }
+    // Kalendarz trzyma pierwszy i (opcjonalnie) ostatni dzień w kolejności
+    // kliknięć — porządkujemy dopiero tutaj.
+    const [odData, doData] = [zgAbsStart, zgAbsEnd || zgAbsStart].sort();
+    if (!odData) return showMsg("Zaznacz w kalendarzu, których dni dotyczy wniosek.", "error");
+    const typWolnego = moznaUrlop ? zgAbsType : "niedostepnosc";
     setZgSaving(true);
     try {
       const lokal = employee.default_lokal || lokaleOptions[0]?.name || null;
@@ -1438,7 +1488,7 @@ export const EmployeeSessionScreens = ({
         lokal,
         start_date: odData,
         end_date: doData,
-        type: zgAbsType,
+        type: typWolnego,
         status: "pending",
         note: zgAbsNote || null,
         requested_by: "employee",
@@ -1448,13 +1498,15 @@ export const EmployeeSessionScreens = ({
         await createManagerNotification(
           lokal,
           `${employee.name} prosi o ${
-            zgAbsType === "urlop" ? "urlop" : "dni niedostępności"
+            typWolnego === "urlop" ? "urlop" : "dni niedostępności"
           } (${odData === doData ? odData : `${odData}–${doData}`}).`,
           "absence_request"
         );
       }
-      setZgSent(true);
-      showMsg("Wniosek wysłany do kierownika!");
+      setZgAbsStart("");
+      setZgAbsEnd("");
+      setZgAbsNote("");
+      showMsg("Wysłano · czeka na kierownika.");
     } catch (err) {
       showMsg(`Błąd połączenia: ${err.message || "nieznany błąd"}`, "error");
     }
@@ -4867,13 +4919,737 @@ export const EmployeeSessionScreens = ({
   }
 
   // ==========================================
-  // EKRAN: ZGLOS
+  // EKRAN: ZGLOS — układ z makiety właściciela (0.64.0, EmployeeRequestsMobile /
+  // EmployeeRequestsTablet). Zmienił się wygląd i sposób wyboru (lista zmian,
+  // kalendarz, chipy); zapis idzie tymi samymi funkcjami co wcześniej
+  // (handleSendKorekta / handleSendAbsence / handleSendZgloszenie).
   // ==========================================
   if (screen === "ZGLOS") {
-    const korektaShift =
-      zgCorrectionShiftId !== "forgot"
-        ? recentShiftsForZgloszenie.find((s) => s.id === zgCorrectionShiftId)
+    const MIES_Z = ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"];
+    const MIES_D = ["stycznia", "lutego", "marca", "kwietnia", "maja", "czerwca", "lipca",
+      "sierpnia", "września", "października", "listopada", "grudnia"];
+    const MIES_M = ["Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec", "Lipiec",
+      "Sierpień", "Wrzesień", "Październik", "Listopad", "Grudzień"];
+    const DNI_K = ["Nd", "Pn", "Wt", "Śr", "Cz", "Pt", "Sb"];
+    const DNI_P = ["niedziela", "poniedziałek", "wtorek", "środa", "czwartek", "piątek", "sobota"];
+    const h1 = (n) => (Math.round((n || 0) * 10) / 10).toFixed(1).replace(".", ",");
+    const pad = (n) => String(n).padStart(2, "0");
+    const ddmm = (d) => `${pad(d.getDate())}.${pad(d.getMonth() + 1)}`;
+    const zYMD = (ymd) => new Date(ymd + "T00:00:00");
+    const dzienMies = (ymd) => {
+      const d = zYMD(ymd);
+      return `${d.getDate()} ${MIES_Z[d.getMonth()]}`;
+    };
+    const godz = (t) => (t ? String(t).slice(0, 5) : "…");
+    // Zakończenie przed rozpoczęciem = przez północ — tak samo liczy
+    // resolveCorrection przy zatwierdzeniu.
+    const dlugoscH = (od, dok) => {
+      if (!od || !dok) return null;
+      const [sh, sm] = od.split(":").map(Number);
+      const [eh, em] = dok.split(":").map(Number);
+      let r = eh * 60 + em - (sh * 60 + sm);
+      if (r < 0) r += 1440;
+      return r / 60;
+    };
+    const robocze = (n) =>
+      n === 1 ? "dzień roboczy" : n % 10 >= 2 && n % 10 <= 4 && !(n % 100 >= 12 && n % 100 <= 14) ? "dni robocze" : "dni roboczych";
+
+    // --- klocki ---
+    const lblZg = (tytul, pod) => (
+      <div className="mt-[18px] mb-2 mx-0.5">
+        <b className="block text-[18px] font-extrabold text-[#171714]">{tytul}</b>
+        {pod && <span className="text-[14px] leading-[19px] text-[#6E6E66]">{pod}</span>}
+      </div>
+    );
+    const podpisCls = "block text-[15px] text-[#6E6E66] mx-0.5 mb-1.5";
+    const poleCls =
+      "w-full h-14 px-3 rounded-lg border-2 border-[#171714] bg-white text-[17px] font-bold text-[#171714] min-w-0";
+    const tekstCls =
+      "w-full px-3.5 py-3 rounded-lg border-2 border-[#B7B6AE] bg-white text-[17px] text-[#171714] resize-y";
+    const linkCls = "text-[15px] font-bold underline text-[#171714] flex-none";
+    const chip = (on, onClick, tekst) => (
+      <button
+        key={tekst}
+        type="button"
+        onClick={onClick}
+        className={`min-h-[44px] px-4 rounded-full border-2 text-[15px] font-bold inline-flex items-center gap-1.5 ${
+          on ? "border-[#171714] bg-[#171714] text-white" : "border-[#B7B6AE] bg-white text-[#171714]"
+        }`}
+      >
+        {on && <Check size={18} />}
+        {tekst}
+      </button>
+    );
+    const ramka = (Icon, tekst, ton = "info") => (
+      <div
+        className={`flex gap-2.5 items-start px-3.5 py-3 rounded-lg text-[15px] leading-[21px] mt-1.5 mb-3 ${
+          ton === "warn"
+            ? "bg-[#FDF0D8] text-[#8A5300] font-bold"
+            : ton === "anon"
+            ? "bg-[#E6EEF6] text-[#171714]"
+            : "bg-[#DEDCD4] text-[#171714]"
+        }`}
+      >
+        <Icon size={20} className={`flex-none mt-px ${ton === "warn" ? "" : "text-[#6E6E66]"}`} />
+        <span>{tekst}</span>
+      </div>
+    );
+    const kafelDuzy = (on, onClick, Icon, tytul, opis) => (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-pressed={on}
+        className={`min-h-[96px] px-3.5 py-3 rounded-lg border-2 bg-white text-left flex flex-col gap-1 min-w-0 ${
+          on ? "border-[#171714] shadow-[inset_0_0_0_2px_#171714]" : "border-[#B7B6AE]"
+        }`}
+      >
+        {Icon && <Icon size={26} className={on ? "text-[#171714]" : "text-[#6E6E66]"} />}
+        {/* 17 px na telefonie: „Niedostępność” w 19 px nie mieści się w
+            połowie ekranu 375 px i łamało się w środku słowa. */}
+        <b className="text-[17px] md:text-[19px] font-extrabold text-[#171714] break-words">{tytul}</b>
+        <span className="text-[14px] leading-[18px] text-[#6E6E66]">{opis}</span>
+      </button>
+    );
+    const znaczekStanowiska = (lokal, stanowisko) => (
+      <span
+        className="text-[12px] md:text-[13px] font-extrabold px-1.5 py-0.5 rounded-md text-[#6E6E66] bg-[#ECEBE6] flex-none"
+        style={stanowiskoBadgeStyle(stanowiskaOptions, lokal, stanowisko) || {}}
+      >
+        {stanowiskoShort(stanowiskaOptions, lokal, stanowisko)}
+      </span>
+    );
+
+    // --- kafle typów ---
+    const kafleTypow = dostepneTypyZgloszen.length > 1 && (
+      <div className={`grid gap-2 ${dostepneTypyZgloszen.length === 2 ? "grid-cols-2" : "grid-cols-3"}`}>
+        {dostepneTypyZgloszen.map(({ key, label, Icon }) => {
+          const on = zgType === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setZgType(key)}
+              data-typ-zgloszenia={key}
+              aria-pressed={on}
+              className={`min-h-[72px] rounded-lg border-2 flex flex-col items-center justify-center gap-1 px-1 py-1.5 text-[15px] leading-[18px] font-bold text-center ${
+                on ? "border-[#171714] bg-[#171714] text-white" : "border-[#B7B6AE] bg-white text-[#171714]"
+              }`}
+            >
+              <Icon size={24} className={on ? "text-white" : "text-[#6E6E66]"} />
+              <span>{label}</span>
+            </button>
+          );
+        })}
+      </div>
+    );
+
+    // ---------- Popraw zmianę ----------
+    const granica3tyg = new Date();
+    granica3tyg.setHours(0, 0, 0, 0);
+    granica3tyg.setDate(granica3tyg.getDate() - 21);
+    const mojeZmiany = shifts
+      .filter(
+        (s) => String(s.user_id) === String(employee.id) && !s.is_urlop && s.start_time >= granica3tyg
+      )
+      .sort((a, b) => b.start_time - a.start_time);
+    const zapomniana = zgCorrectionShiftId === "forgot";
+    const zmiana =
+      zgCorrectionShiftId && !zapomniana
+        ? shifts.find((s) => String(s.id) === String(zgCorrectionShiftId))
         : null;
+    const wybrana = zapomniana || !!zmiana;
+    const dniWstecz = Array.from({ length: 22 }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      return toLocalYMD(d);
+    });
+
+    const renderListaZmian = () => (
+      <>
+        {lblZg("1. Która zmiana?", "Twoje zmiany z ostatnich 3 tygodni")}
+        <div className="border-2 border-[#DEDCD4] rounded-lg bg-white overflow-hidden" data-lista-zmian-korekty>
+          {mojeZmiany.length === 0 && (
+            <p className="px-3 py-3.5 text-[15px] text-[#6E6E66]">Brak odbitych zmian z ostatnich 3 tygodni.</p>
+          )}
+          {mojeZmiany.map((s) => {
+            const dow = s.start_time.getDay();
+            const czeka = czekaNaKierownika(s);
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => applyKorektaShiftDefaults(s.id)}
+                data-zmiana-korekty={s.id}
+                className="w-full grid grid-cols-[52px_1fr_auto_minmax(28px,auto)] gap-2 items-center min-h-[60px] px-3 py-1.5 border-b border-[#DEDCD4] last:border-b-0 text-left"
+              >
+                <span>
+                  <b className="block text-[17px] font-extrabold tabular-nums text-[#171714]">{ddmm(s.start_time)}</b>
+                  <span className={`text-[14px] font-bold ${dow === 0 || dow === 6 ? "text-[#DE3A22]" : "text-[#6E6E66]"}`}>
+                    {DNI_K[dow]}
+                  </span>
+                </span>
+                <span className="flex gap-1.5 items-center min-w-0">
+                  {znaczekStanowiska(s.lokal, s.stanowisko)}
+                  <b className="text-[17px] font-semibold tabular-nums whitespace-nowrap text-[#171714]">
+                    {fmtHHMM(s.start_time)} –{" "}
+                    {s.end_time ? fmtHHMM(s.end_time) : <span className="text-[#DE3A22]">trwa</span>}
+                  </b>
+                </span>
+                <span className="text-[16px] font-extrabold tabular-nums text-[#171714]">
+                  {s.end_time ? `${h1((s.end_time - s.start_time) / 3600000)} h` : ""}
+                </span>
+                {czeka ? (
+                  <span className="text-[11px] font-extrabold text-[#8A5300] bg-[#FDF0D8] rounded-md px-1 py-0.5">czeka</span>
+                ) : (
+                  <ChevronRight size={20} className="text-[#6E6E66] justify-self-end" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+        <button
+          type="button"
+          onClick={() => applyKorektaShiftDefaults("forgot")}
+          data-zmiany-nie-ma
+          className="w-full mt-2.5 grid grid-cols-[40px_1fr_24px] gap-2.5 items-center min-h-[64px] px-3 py-2 border-2 border-dashed border-[#B7B6AE] rounded-lg text-left"
+        >
+          <span className="w-9 h-9 rounded-full bg-[#DEDCD4] flex items-center justify-center text-[#171714]">
+            <Plus size={22} />
+          </span>
+          <span>
+            <b className="block text-[16px] text-[#171714]">Zmiany nie ma na liście</b>
+            <small className="text-[14px] text-[#6E6E66]">zapomniałem/łam odbić — dopisz całą zmianę</small>
+          </span>
+          <ChevronRight size={20} className="text-[#6E6E66]" />
+        </button>
+      </>
+    );
+
+    const renderPolaMiejsca = (zDaty) => (
+      <>
+        <div className="grid grid-cols-2 gap-2.5">
+          <label className="block mb-2.5 min-w-0">
+            <span className={podpisCls}>Data</span>
+            {zDaty ? (
+              <select value={zgPropDate} onChange={(e) => setZgPropDate(e.target.value)} className={poleCls}>
+                {dniWstecz.map((ymd) => (
+                  <option key={ymd} value={ymd}>
+                    {ddmm(zYMD(ymd))} · {DNI_P[zYMD(ymd).getDay()]}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input type="date" value={zgPropDate} onChange={(e) => setZgPropDate(e.target.value)} className={poleCls} />
+            )}
+          </label>
+          <label className="block mb-2.5 min-w-0">
+            <span className={podpisCls}>Lokal</span>
+            <select value={zgPropLokal} onChange={(e) => setZgPropLokal(e.target.value)} className={poleCls}>
+              {lokaleDoKorekty.map((l) => (
+                <option key={l.id} value={l.name}>
+                  {l.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <label className="block mb-2.5">
+          <span className={podpisCls}>Stanowisko</span>
+          <select value={zgPropStanowisko} onChange={(e) => setZgPropStanowisko(e.target.value)} className={poleCls}>
+            {korektaStanowiska.length === 0 && <option value="">Brak stanowisk w tym lokalu</option>}
+            {korektaStanowiska.map((s) => (
+              <option key={s.id} value={s.name}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      </>
+    );
+
+    const renderKorekta = () => {
+      if (!wybrana) return renderListaZmian();
+      const bylStart = zmiana ? fmtHHMM(zmiana.start_time) : null;
+      const bylKoniec = zmiana ? (zmiana.end_time ? fmtHHMM(zmiana.end_time) : "") : null;
+      const noweH = dlugoscH(zgPropStart, zgPropEnd);
+      const stareH = zmiana && zmiana.end_time ? (zmiana.end_time - zmiana.start_time) / 3600000 : null;
+      const roznica = noweH != null && stareH != null ? noweH - stareH : null;
+      const zRaportu = zmiana && zgPrefillShiftId && String(zgPrefillShiftId) === String(zmiana.id);
+      const powody = zapomniana
+        ? ["Zapomniałem/łam odbić", "Tablet nie działał", "Inne"]
+        : ["Zapomniałem/łam odbić wyjście", "Zapomniałem/łam odbić wejście", "Źle odbite", "Inne"];
+      return (
+        <>
+          {lblZg("1. Która zmiana?")}
+          {zapomniana ? (
+            <>
+              <div className="flex items-center gap-2.5 px-3.5 py-3 rounded-lg border-2 border-dashed border-[#171714] bg-white mb-2.5">
+                <div className="flex-1 min-w-0">
+                  <b className="block text-[17px] text-[#171714]">Nowa zmiana</b>
+                  <span className="text-[14px] text-[#6E6E66]">nie była odbita</span>
+                </div>
+                <button type="button" onClick={() => applyKorektaShiftDefaults(null)} className={linkCls}>
+                  Wybierz z listy
+                </button>
+              </div>
+              {renderPolaMiejsca(true)}
+            </>
+          ) : (
+            <>
+              <div
+                className="relative grid grid-cols-[auto_1fr_auto] gap-2.5 items-center px-3.5 py-3 rounded-lg border-2 border-[#171714] bg-white"
+                data-wybrana-zmiana
+              >
+                {zRaportu && (
+                  <em className="absolute -top-[11px] left-3 not-italic bg-[#FDF0D8] text-[#8A5300] text-[12px] font-extrabold px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <Flag size={12} /> z Raportu
+                  </em>
+                )}
+                <div className="min-w-[76px]">
+                  <b className="block text-[22px] font-extrabold tabular-nums text-[#171714]">{ddmm(zmiana.start_time)}</b>
+                  <span className="text-[14px] font-bold text-[#6E6E66]">{DNI_P[zmiana.start_time.getDay()]}</span>
+                </div>
+                <div className="min-w-0 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  {znaczekStanowiska(zmiana.lokal, zmiana.stanowisko)}
+                  <b className="text-[18px] font-bold tabular-nums whitespace-nowrap text-[#171714]">
+                    {bylStart} – {bylKoniec || "trwa"}
+                  </b>
+                  <small className="basis-full text-[14px] text-[#6E6E66]">
+                    {zmiana.lokal}
+                    {stareH != null ? ` · zapisane ${h1(stareH)} h` : ""}
+                  </small>
+                </div>
+                <button type="button" onClick={() => applyKorektaShiftDefaults(null)} className={linkCls}>
+                  Inna zmiana
+                </button>
+              </div>
+              {/* Zwykle poprawia się same godziny, ale dzień, lokal i
+                  stanowisko też bywają źle wybrane — schowane, nie usunięte. */}
+              {zgKorektaWiecej ? (
+                <div className="mt-3">{renderPolaMiejsca(false)}</div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setZgKorektaWiecej(true)}
+                  className="mt-2 mx-0.5 text-[14px] font-bold underline text-[#6E6E66]"
+                >
+                  Inny dzień, lokal albo stanowisko?
+                </button>
+              )}
+            </>
+          )}
+
+          {lblZg("2. Jak powinno być?", zapomniana ? "Wpisz godziny pracy" : "Zmień tylko to, co się nie zgadza")}
+          <div className="grid grid-cols-2 gap-2.5">
+            {[
+              ["start", "Rozpoczęcie", zgPropStart, setZgPropStart, bylStart],
+              ["koniec", "Zakończenie", zgPropEnd, setZgPropEnd, bylKoniec],
+            ].map(([klucz, etykieta, wartosc, ustaw, bylo]) => {
+              const zmienione = !!zmiana && wartosc !== bylo;
+              return (
+                <label key={klucz} className="block mb-2.5 min-w-0">
+                  <span className={podpisCls}>{etykieta}</span>
+                  <input
+                    type="time"
+                    value={wartosc}
+                    onChange={(e) => ustaw(e.target.value)}
+                    data-korekta-pole={klucz}
+                    className={`w-full h-16 px-3 rounded-lg border-2 text-[26px] font-extrabold tabular-nums text-[#171714] min-w-0 ${
+                      zmienione ? "border-[#8A5300] bg-[#FDF0D8]" : "border-[#171714] bg-white"
+                    }`}
+                  />
+                  {zmiana && (
+                    <small className={`block mt-1 mx-0.5 text-[14px] font-bold ${zmienione ? "text-[#8A5300]" : "text-[#6E6E66]"}`}>
+                      {zmienione ? (bylo ? `było ${bylo}` : "było: nie odbite") : "bez zmian"}
+                    </small>
+                  )}
+                </label>
+              );
+            })}
+          </div>
+          {noweH != null && (
+            <div className="flex items-baseline gap-2.5 px-3.5 py-3 rounded-lg bg-[#DEDCD4] mb-1" data-korekta-wynik>
+              <span className="flex-1 text-[15px] text-[#6E6E66]">Po poprawce</span>
+              <b className="text-[24px] font-extrabold tabular-nums text-[#171714]">{h1(noweH)} h</b>
+              {roznica != null && (
+                <em
+                  className={`not-italic text-[16px] font-extrabold ${
+                    Math.abs(roznica) > 0.01 ? "text-[#8A5300]" : "text-[#6E6E66]"
+                  }`}
+                >
+                  {Math.abs(roznica) < 0.01 ? "bez zmiany" : `${roznica > 0 ? "+" : "−"}${h1(Math.abs(roznica))} h`}
+                </em>
+              )}
+            </div>
+          )}
+
+          {lblZg("3. Dlaczego?", "Wybierz jedno")}
+          <div className="flex flex-wrap gap-2 mb-3">
+            {powody.map((p) => chip(zgPowod === p, () => setZgPowod(zgPowod === p ? null : p), p))}
+          </div>
+          <label className="block mb-2.5">
+            <span className={podpisCls}>Komentarz (opcjonalnie)</span>
+            <textarea
+              rows={2}
+              value={zgKorektaNote}
+              onChange={(e) => setZgKorektaNote(e.target.value)}
+              className={tekstCls}
+              placeholder="Np. wyszłam o 21:00, nie zdążyłam odbić."
+            />
+          </label>
+          {ramka(
+            Flag,
+            "Kierownik zatwierdzi albo poprawi te dane. Do czasu decyzji zmiana w Raporcie ma znaczek „czeka”."
+          )}
+        </>
+      );
+    };
+
+    // ---------- Wniosek o wolne ----------
+    const typWolnego = moznaUrlop ? zgAbsType : "niedostepnosc";
+    const renderWolne = () => {
+      const dzisY = toLocalYMD(new Date());
+      const pierwszy = new Date();
+      pierwszy.setDate(1);
+      pierwszy.setMonth(pierwszy.getMonth() + zgAbsMies);
+      const rok = pierwszy.getFullYear();
+      const mies = pierwszy.getMonth();
+      const dniMies = new Date(rok, mies + 1, 0).getDate();
+      const przesuniecie = (pierwszy.getDay() + 6) % 7;
+      const [lo, hi] = [zgAbsStart, zgAbsEnd || zgAbsStart].sort();
+      // Kropka „masz zmianę” tylko tam, gdzie pracownik widzi grafik.
+      const zaplanowane = new Set(
+        bloki.includes("GRAFIK") ? publishedShiftsFor(planShifts, employee).map((p) => p.date) : []
+      );
+      const klikDzien = (ymd) => {
+        if (!zgAbsStart || zgAbsEnd) {
+          setZgAbsStart(ymd);
+          setZgAbsEnd("");
+        } else setZgAbsEnd(ymd);
+      };
+      const opisZakresu = () => {
+        const a = zYMD(lo);
+        const b = zYMD(hi);
+        const n = Math.round((b - a) / 86400000) + 1;
+        if (n === 1) return `${a.getDate()} ${MIES_D[a.getMonth()]} · ${DNI_P[a.getDay()]}`;
+        const od = a.getMonth() === b.getMonth() ? `${a.getDate()}` : `${a.getDate()} ${MIES_D[a.getMonth()]} `;
+        return `${od}–${b.getDate()} ${MIES_D[b.getMonth()]} · ${n} dni`;
+      };
+      const kolizje = lo ? [...zaplanowane].filter((d) => d >= lo && d <= hi).sort() : [];
+      const ileRoboczych = lo ? countWorkdays(lo, hi) : 0;
+      return (
+        <>
+          {lblZg("1. Rodzaj")}
+          {moznaUrlop ? (
+            <div className="grid grid-cols-1 min-[360px]:grid-cols-2 gap-2.5">
+              {kafelDuzy(zgAbsType === "urlop", () => setZgAbsType("urlop"), null, "Urlop", "8 h za każdy dzień roboczy (bez sob. i niedz.)")}
+              {kafelDuzy(
+                zgAbsType === "niedostepnosc",
+                () => setZgAbsType("niedostepnosc"),
+                null,
+                "Niedostępność",
+                "nie mogę pracować · bez godzin"
+              )}
+            </div>
+          ) : (
+            <div className="px-3.5 py-3 rounded-lg border-2 border-[#171714] bg-white" data-tylko-niedostepnosc>
+              <b className="block text-[19px] font-extrabold text-[#171714]">Niedostępność</b>
+              <span className="text-[14px] leading-[19px] text-[#6E6E66]">
+                {typUmowyLabel(typUmowy(employee))} — urlop nie przysługuje. Zaznacz dni, w które nie możesz pracować.
+              </span>
+            </div>
+          )}
+
+          {lblZg("2. Które dni?", "Dotknij pierwszy dzień, potem ostatni. Jeden dzień — dotknij go raz.")}
+          <div className="bg-white border-2 border-[#DEDCD4] rounded-lg p-2.5" data-kalendarz-wolnego>
+            <div className="grid grid-cols-[48px_1fr_48px] items-center text-center mb-1.5">
+              <button
+                type="button"
+                disabled={zgAbsMies <= 0}
+                onClick={() => setZgAbsMies(zgAbsMies - 1)}
+                aria-label="Poprzedni miesiąc"
+                className="h-11 rounded-lg border-2 border-[#B7B6AE] bg-white flex items-center justify-center text-[#171714] disabled:opacity-30"
+              >
+                <ChevronLeft size={20} />
+              </button>
+              <b className="text-[19px] font-extrabold text-[#171714]">
+                {MIES_M[mies]} {rok}
+              </b>
+              <button
+                type="button"
+                disabled={zgAbsMies >= 12}
+                onClick={() => setZgAbsMies(zgAbsMies + 1)}
+                aria-label="Następny miesiąc"
+                className="h-11 rounded-lg border-2 border-[#B7B6AE] bg-white flex items-center justify-center text-[#171714] disabled:opacity-30"
+              >
+                <ChevronRight size={20} />
+              </button>
+            </div>
+            <div className="grid grid-cols-7 gap-y-[3px]">
+              {["Pn", "Wt", "Śr", "Cz", "Pt", "Sb", "Nd"].map((d, i) => (
+                <span key={d} className={`text-center text-[13px] font-extrabold py-1 ${i > 4 ? "text-[#DE3A22]" : "text-[#6E6E66]"}`}>
+                  {d}
+                </span>
+              ))}
+              {Array.from({ length: przesuniecie }, (_, i) => (
+                <span key={`p${i}`} />
+              ))}
+              {Array.from({ length: dniMies }, (_, i) => i + 1).map((d) => {
+                const ymd = `${rok}-${pad(mies + 1)}-${pad(d)}`;
+                const dow = new Date(rok, mies, d).getDay();
+                const zaznaczony = !!lo && ymd >= lo && ymd <= hi;
+                const przeszly = ymd < dzisY;
+                const ma = zaplanowane.has(ymd);
+                return (
+                  <button
+                    key={ymd}
+                    type="button"
+                    disabled={przeszly}
+                    onClick={() => klikDzien(ymd)}
+                    data-dzien-wolnego={ymd}
+                    className={`relative h-11 text-[17px] font-bold tabular-nums ${
+                      zaznaczony
+                        ? "bg-[#171714] text-white"
+                        : przeszly
+                        ? "text-[#C9C6BD]"
+                        : dow === 0 || dow === 6
+                        ? "text-[#DE3A22]"
+                        : "text-[#171714]"
+                    } ${zaznaczony && ymd === lo ? "rounded-l-full" : ""} ${zaznaczony && ymd === hi ? "rounded-r-full" : ""}`}
+                  >
+                    {d}
+                    {ma && (
+                      <i
+                        className={`absolute left-1/2 bottom-1 w-1.5 h-1.5 -ml-[3px] rounded-full ${
+                          zaznaczony ? "bg-[#FDF0D8]" : "bg-[#171714]"
+                        }`}
+                      />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex gap-4 text-[13px] text-[#6E6E66] px-1 pt-2 pb-0.5">
+              {zaplanowane.size > 0 && (
+                <span className="flex items-center gap-1.5">
+                  <i className="w-1.5 h-1.5 rounded-full bg-[#171714]" /> masz zmianę
+                </span>
+              )}
+              <span className="flex items-center gap-1.5">
+                <i className="w-2.5 h-2.5 rounded-full bg-[#171714]" /> wybrane
+              </span>
+            </div>
+          </div>
+          {lo && (
+            <>
+              <div className="grid gap-1.5 px-3.5 py-3 rounded-lg border-2 border-[#171714] bg-white mt-3 mb-1.5" data-wolne-podsumowanie>
+                <div className="flex justify-between gap-2.5 items-baseline">
+                  <span className="text-[15px] text-[#6E6E66]">Wybrane</span>
+                  <b className="text-[17px] font-extrabold text-right text-[#171714]">{opisZakresu()}</b>
+                </div>
+                {typWolnego === "urlop" && (
+                  <div className="flex justify-between gap-2.5 items-baseline">
+                    <span className="text-[15px] text-[#6E6E66]">Urlop</span>
+                    <b className="text-[17px] font-extrabold text-right text-[#171714]">
+                      {ileRoboczych} {robocze(ileRoboczych)} = {ileRoboczych * URLOP_HOURS_PER_DAY} h
+                    </b>
+                  </div>
+                )}
+              </div>
+              {kolizje.length > 0 &&
+                ramka(
+                  AlertTriangle,
+                  `W tych dniach masz ${kolizje.length === 1 ? "zmianę" : `${kolizje.length} ${odmianaZmian(kolizje.length)}`} (${kolizje
+                    .map(dzienMies)
+                    .join(", ")}). Po zatwierdzeniu kierownik znajdzie zastępstwo.`,
+                  "warn"
+                )}
+            </>
+          )}
+          <label className="block mt-3 mb-2.5">
+            <span className={podpisCls}>Komentarz (opcjonalnie)</span>
+            <textarea
+              rows={2}
+              value={zgAbsNote}
+              onChange={(e) => setZgAbsNote(e.target.value)}
+              className={tekstCls}
+              placeholder="Np. wyjazd rodzinny"
+            />
+          </label>
+          {ramka(
+            Palmtree,
+            typWolnego === "urlop"
+              ? "Kierownik zatwierdzi albo odrzuci wniosek. Po zatwierdzeniu urlop wpisze się jako godziny (8 h za dzień roboczy)."
+              : "Kierownik zatwierdzi albo odrzuci wniosek. Niedostępność nie daje godzin — to informacja, że wtedy nie możesz pracować."
+          )}
+        </>
+      );
+    };
+
+    // ---------- Zgłoś problem ----------
+    const KATEGORIE = ["Sprzęt / awaria", "Braki towaru", "Czystość / BHP", "Zespół / atmosfera", "Inne"];
+    const renderProblem = () => (
+      <>
+        {lblZg("1. Kto zgłasza?")}
+        <div className="grid grid-cols-1 min-[360px]:grid-cols-2 gap-2.5">
+          {kafelDuzy(!zgAnon, () => setZgAnon(false), User, employee.name, "kierownik wie, kto pisze · odpowie w Wiadomościach")}
+          {kafelDuzy(zgAnon, () => setZgAnon(true), EyeOff, "Anonimowo", "nikt nie zobaczy, kto napisał · bez odpowiedzi")}
+        </div>
+        {lblZg("2. Czego dotyczy?")}
+        <div className="flex flex-wrap gap-2 mb-3">
+          {KATEGORIE.map((k) => chip(zgKategoria === k, () => setZgKategoria(zgKategoria === k ? null : k), k))}
+        </div>
+        {zgAnon ? (
+          ramka(
+            EyeOff,
+            "Przy zgłoszeniu anonimowym nie wybierasz zmiany — data i godzina zmiany wskazałyby, kto pisze.",
+            "anon"
+          )
+        ) : (
+          <label className="block mb-2.5">
+            <span className={podpisCls}>Która zmiana (opcjonalnie)</span>
+            <select value={zgShiftId || "none"} onChange={(e) => setZgShiftId(e.target.value)} className={poleCls}>
+              <option value="none">Bez konkretnej zmiany</option>
+              {recentShiftsForZgloszenie.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {ddmm(s.start_time)} {DNI_K[s.start_time.getDay()]} · {fmtHHMM(s.start_time)}
+                  {s.end_time ? `–${fmtHHMM(s.end_time)}` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <label className="block mb-2.5">
+          <span className={podpisCls}>Opis</span>
+          <textarea
+            rows={4}
+            value={zgText}
+            onChange={(e) => setZgText(e.target.value)}
+            className={tekstCls}
+            placeholder="Np. zepsuta zmywarka, brak rękawic…"
+          />
+        </label>
+        {ramka(
+          AlertTriangle,
+          zgAnon
+            ? "Zgłoszenie anonimowe — kierownik je przeczyta, ale nie może Ci odpowiedzieć."
+            : "Kierownik odpowie w Wiadomościach."
+        )}
+      </>
+    );
+
+    // ---------- Moje zgłoszenia ----------
+    // Czekające zawsze, rozstrzygnięte z ostatnich 30 dni.
+    const granica30 = Date.now() - 30 * 86400000;
+    const swiezy = (d) => new Date(d).getTime() > granica30;
+    const moje = [
+      ...(issues || [])
+        .filter(
+          (i) =>
+            !i.is_anonymous &&
+            String(i.user_id) === String(employee.id) &&
+            (i.status !== "rozwiazane" || swiezy(i.created_at))
+        )
+        .map((i) => {
+          const korekta = i.type === "correction";
+          const byla = korekta && i.shift_id ? shifts.find((s) => String(s.id) === String(i.shift_id)) : null;
+          return {
+            klucz: `i:${i.id}`,
+            kiedy: new Date(i.created_at || 0),
+            tytul: korekta
+              ? `Korekta${i.proposed_date ? ` · ${dzienMies(i.proposed_date)}` : ""}`
+              : `Problem${i.created_at ? ` · ${dzienMies(toLocalYMD(new Date(i.created_at)))}` : ""}`,
+            opis: korekta
+              ? `${
+                  byla && i.status !== "rozwiazane"
+                    ? `${fmtHHMM(byla.start_time)}–${byla.end_time ? fmtHHMM(byla.end_time) : "…"} → `
+                    : !i.shift_id
+                    ? "nowa zmiana "
+                    : ""
+                }${godz(i.proposed_start_time)}–${godz(i.proposed_end_time)}`
+              : i.issue_text || "",
+            status:
+              i.status === "rozwiazane"
+                ? [korekta ? "rozpatrzona" : "rozwiązane", "ok"]
+                : ["czeka", "wait"],
+          };
+        }),
+      ...(absences || [])
+        .filter(
+          (a) =>
+            String(a.user_id) === String(employee.id) &&
+            a.requested_by !== "manager" &&
+            (a.status === "pending" || swiezy(a.created_at))
+        )
+        .map((a) => ({
+          klucz: `a:${a.id}`,
+          kiedy: new Date(a.created_at || 0),
+          tytul: `${a.type === "urlop" ? "Urlop" : "Wolne"} · ${dzienMies(a.start_date)}${
+            a.end_date && a.end_date !== a.start_date ? `–${dzienMies(a.end_date)}` : ""
+          }`,
+          opis:
+            a.type === "urlop"
+              ? `${countWorkdays(a.start_date, a.end_date || a.start_date)} ${robocze(
+                  countWorkdays(a.start_date, a.end_date || a.start_date)
+                )}`
+              : "niedostępność",
+          status:
+            a.status === "approved"
+              ? ["zatwierdzony", "ok"]
+              : a.status === "rejected"
+              ? ["odrzucony", "no"]
+              : ["czeka", "wait"],
+        })),
+    ]
+      .sort((a, b) => b.kiedy - a.kiedy)
+      .slice(0, 8);
+    const plakietka = {
+      ok: "bg-[#E2F3E9] text-[#1F7A4A]",
+      wait: "bg-[#FDF0D8] text-[#8A5300]",
+      no: "bg-[#ECEBE6] text-[#6E6E66]",
+    };
+    const renderMoje = () => (
+      <section data-moje-zgloszenia>
+        <h3 className="font-['Archivo'] text-[18px] font-extrabold text-[#171714] mx-0.5 mb-2">Moje zgłoszenia</h3>
+        {moje.length === 0 && <p className="text-[15px] text-[#6E6E66] mx-0.5">Nic jeszcze nie wysłano.</p>}
+        {moje.map((r) => (
+          <div
+            key={r.klucz}
+            className="flex justify-between gap-2.5 items-center px-3 py-2.5 bg-white border-2 border-[#DEDCD4] rounded-lg mb-1.5"
+          >
+            <div className="min-w-0">
+              <b className="block text-[16px] text-[#171714]">{r.tytul}</b>
+              <span className="block text-[14px] text-[#6E6E66] truncate">{r.opis}</span>
+            </div>
+            <em className={`not-italic flex-none text-[13px] font-extrabold px-2 py-1 rounded-lg whitespace-nowrap ${plakietka[r.status[1]]}`}>
+              {r.status[0]}
+            </em>
+          </div>
+        ))}
+      </section>
+    );
+
+    // ---------- całość ----------
+    const gotowe = zgType !== "correction" || wybrana;
+    const przyciskWyslij = gotowe && (
+      <button
+        type="button"
+        onClick={
+          zgType === "correction" ? handleSendKorekta : zgType === "absence" ? handleSendAbsence : handleSendZgloszenie
+        }
+        disabled={zgSaving}
+        data-wyslij-zgloszenie
+        className={przyciskGlownyCls}
+      >
+        {zgSaving
+          ? "Wysyłanie…"
+          : zgType === "correction"
+          ? "Wyślij poprawkę"
+          : zgType === "absence"
+          ? "Wyślij wniosek"
+          : "Wyślij zgłoszenie"}
+      </button>
+    );
     return (
       <Shell
         screen={screen}
@@ -4884,361 +5660,30 @@ export const EmployeeSessionScreens = ({
         grafikBadgeCount={grafikBadgeCount}
         bloki={bloki}
         personName={onBack ? employee.name : null}
-        title={
-          zgType === "correction"
-            ? "Popraw zmianę"
-            : zgType === "absence"
-            ? "Wniosek o wolne"
-            : "Zgłoś problem"
+        title={zgType === "correction" ? "Popraw zmianę" : zgType === "absence" ? "Wniosek o wolne" : "Zgłoś problem"}
+        imieNadTytulem
+        nowyWyglad
+        footer={
+          przyciskWyslij && (
+            // Na telefonie przycisk nad dolnym paskiem, pod kciukiem; na
+            // tablecie — pod formularzem.
+            <div className="md:hidden flex-shrink-0 px-3.5 pt-2 pb-2.5 bg-[#F1F0EC]">{przyciskWyslij}</div>
+          )
         }
       >
-        {!zgSent && (
-          <div
-            className={`grid gap-2 ${
-              dostepneTypyZgloszen.length === 1
-                ? "grid-cols-1"
-                : dostepneTypyZgloszen.length === 2
-                ? "grid-cols-2"
-                : "grid-cols-3"
-            }`}
-          >
-            {dostepneTypyZgloszen.map((t) => (
-              <button
-                key={t.key}
-                type="button"
-                onClick={() => setZgType(t.key)}
-                className={checkboxRowCls(zgType === t.key)}
-              >
-                <span className="text-[13.5px] font-semibold text-[#171714]">
-                  {t.label}
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
-
-        {zgType === "correction" ? (
-          <>
-            <div className="mt-5">
-              <span className={fieldLabelCls}>Która zmiana</span>
-              <div className={selectWrapCls}>
-                <select
-                  value={zgCorrectionShiftId}
-                  onChange={(e) => applyKorektaShiftDefaults(e.target.value)}
-                  className={selectElCls}
-                >
-                  {recentShiftsForZgloszenie.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.start_time.toLocaleDateString("pl-PL", {
-                        day: "2-digit",
-                        month: "2-digit",
-                      })}{" "}
-                      · {fmtHHMM(s.start_time)}
-                      {s.end_time ? `–${fmtHHMM(s.end_time)}` : ""} · {s.lokal}
-                    </option>
-                  ))}
-                  <option value="forgot">Zapomniałem/łam odbić</option>
-                </select>
-                <ChevronDown size={16} className={selectChevronCls} />
-              </div>
-            </div>
-            {korektaShift && (
-              <div className="mt-5">
-                <span className={sectionLabelCls}>Obecnie zapisane</span>
-                <div className={`${staticBoxCls} mt-2`}>
-                  <span className="text-[15px] text-[#171714]">
-                    {korektaShift.lokal} · {korektaShift.stanowisko}
-                  </span>
-                  <span className="font-['Archivo'] font-bold text-[15px] text-[#171714]">
-                    {fmtHHMM(korektaShift.start_time)}
-                    {korektaShift.end_time
-                      ? `–${fmtHHMM(korektaShift.end_time)}`
-                      : " – trwa"}
-                  </span>
-                </div>
-              </div>
-            )}
-            <div className="grid grid-cols-2 gap-3 mt-5">
-              <div>
-                <span className={fieldLabelCls}>Lokal</span>
-                <div className={selectWrapCls}>
-                  <select
-                    value={zgPropLokal}
-                    onChange={(e) => setZgPropLokal(e.target.value)}
-                    className={selectElCls}
-                  >
-                    {lokaleDoKorekty.map((l) => (
-                      <option key={l.id} value={l.name}>
-                        {l.name}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown size={16} className={selectChevronCls} />
-                </div>
-              </div>
-              <div>
-                <span className={fieldLabelCls}>Stanowisko</span>
-                <div className={selectWrapCls}>
-                  <select
-                    value={zgPropStanowisko}
-                    onChange={(e) => setZgPropStanowisko(e.target.value)}
-                    className={selectElCls}
-                  >
-                    {korektaStanowiska.length === 0 && (
-                      <option value="">Brak stanowisk</option>
-                    )}
-                    {korektaStanowiska.map((s) => (
-                      <option key={s.id} value={s.name}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown size={16} className={selectChevronCls} />
-                </div>
-              </div>
-            </div>
-            <div className="mt-5">
-              <span className={fieldLabelCls}>Data</span>
-              <input
-                type="date"
-                value={zgPropDate}
-                onChange={(e) => setZgPropDate(e.target.value)}
-                className={selectElCls}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3 mt-5">
-              <div>
-                <span className={fieldLabelCls}>Rozpoczęcie</span>
-                <input
-                  type="time"
-                  value={zgPropStart}
-                  onChange={(e) => setZgPropStart(e.target.value)}
-                  className={selectElCls}
-                />
-              </div>
-              <div>
-                <span className={fieldLabelCls}>Zakończenie</span>
-                <input
-                  type="time"
-                  value={zgPropEnd}
-                  onChange={(e) => setZgPropEnd(e.target.value)}
-                  className={selectElCls}
-                />
-              </div>
-            </div>
-            <div className="mt-5">
-              <span className={fieldLabelCls}>Komentarz (opcjonalnie)</span>
-              <textarea
-                value={zgKorektaNote}
-                onChange={(e) => setZgKorektaNote(e.target.value)}
-                className="border-2 border-[#B7B6AE] rounded bg-[#E7E7E2] p-3.5 text-[15px] text-[#171714] min-h-[80px] w-full"
-                placeholder="Np. wyszłam o 20:30, nie zdążyłam odbić."
-              />
-            </div>
-            <div className="bg-[#E7E7E2] rounded p-3.5 text-sm text-[#6E6E66] mt-5">
-              Kierownik zatwierdzi albo poprawi te dane. Do czasu decyzji
-              wiersz ma czerwoną chorągiewkę.
-            </div>
-            {zgSent && (
-              <div className="mt-2.5 text-xs text-[#A83226] bg-[#FBEAE6] rounded p-2.5">
-                Poprawka wysłana. Kierownik odpowie w Wiadomościach.
-              </div>
-            )}
-            <div className="flex-1" />
-            {!zgSent && (
-              <button
-                onClick={handleSendKorekta}
-                disabled={zgSaving}
-                className={ctaPrimaryCls}
-              >
-                Wyślij poprawkę
-              </button>
-            )}
-          </>
-        ) : zgType === "absence" ? (
-          <>
-            <div className="mt-5 grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setZgAbsType("urlop");
-                  setZgAbsDay("");
-                }}
-                className={checkboxRowCls(zgAbsType === "urlop")}
-              >
-                <span className="text-[15px] font-semibold text-[#171714]">Urlop</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setZgAbsType("niedostepnosc")}
-                className={checkboxRowCls(zgAbsType === "niedostepnosc")}
-              >
-                <span className="text-[15px] font-semibold text-[#171714]">
-                  Niedostępność
-                </span>
-              </button>
-            </div>
-            {zgAbsType === "niedostepnosc" && (
-              <>
-                <div className="mt-5">
-                  <span className={fieldLabelCls}>Jeden dzień</span>
-                  <input
-                    type="date"
-                    value={zgAbsDay}
-                    disabled={!!(zgAbsStart || zgAbsEnd)}
-                    onChange={(e) => setZgAbsDay(e.target.value)}
-                    className={`${selectElCls} disabled:opacity-40`}
-                  />
-                </div>
-                <div className="flex items-center gap-3 mt-4">
-                  <span className="h-px bg-[#B7B6AE] flex-1" />
-                  <span className="text-[12px] font-bold uppercase tracking-wider text-[#8F8E86]">
-                    albo
-                  </span>
-                  <span className="h-px bg-[#B7B6AE] flex-1" />
-                </div>
-              </>
-            )}
-            <div className="grid grid-cols-2 gap-3 mt-5">
-              <div>
-                <span className={fieldLabelCls}>Od</span>
-                <input
-                  type="date"
-                  value={zgAbsStart}
-                  disabled={!!zgAbsDay}
-                  onChange={(e) => setZgAbsStart(e.target.value)}
-                  className={`${selectElCls} disabled:opacity-40`}
-                />
-              </div>
-              <div>
-                <span className={fieldLabelCls}>Do</span>
-                <input
-                  type="date"
-                  value={zgAbsEnd}
-                  disabled={!!zgAbsDay}
-                  onChange={(e) => setZgAbsEnd(e.target.value)}
-                  className={`${selectElCls} disabled:opacity-40`}
-                />
-              </div>
-            </div>
-            {zgAbsType === "niedostepnosc" && (zgAbsDay || zgAbsStart || zgAbsEnd) && (
-              <button
-                type="button"
-                onClick={() => {
-                  setZgAbsDay("");
-                  setZgAbsStart("");
-                  setZgAbsEnd("");
-                }}
-                className="mt-2 text-[13px] font-bold underline text-[#6E6E66] self-start"
-              >
-                Wyczyść daty
-              </button>
-            )}
-            <div className="mt-5">
-              <span className={fieldLabelCls}>Komentarz (opcjonalnie)</span>
-              <textarea
-                value={zgAbsNote}
-                onChange={(e) => setZgAbsNote(e.target.value)}
-                className="border-2 border-[#B7B6AE] rounded bg-[#E7E7E2] p-3.5 text-[15px] text-[#171714] min-h-[80px] w-full"
-                placeholder="Np. wyjazd rodzinny"
-              />
-            </div>
-            <div className="bg-[#E7E7E2] rounded p-3.5 text-sm text-[#6E6E66] mt-5">
-              {zgAbsType === "urlop"
-                ? "Kierownik zatwierdzi albo odrzuci wniosek. Po zatwierdzeniu urlop zostanie wpisany jako godziny (8h za każdy dzień roboczy, bez sobót i niedziel)."
-                : "Kierownik zatwierdzi albo odrzuci wniosek. Niedostępność nie generuje godzin — to tylko informacja, że nie możesz wtedy pracować."}
-            </div>
-            {zgSent && (
-              <div className="mt-2.5 text-xs text-[#A83226] bg-[#FBEAE6] rounded p-2.5">
-                Wniosek wysłany. Kierownik odpowie w Wiadomościach.
-              </div>
-            )}
-            <div className="flex-1" />
-            {!zgSent && (
-              <button
-                onClick={handleSendAbsence}
-                disabled={zgSaving}
-                className={ctaPrimaryCls}
-              >
-                Wyślij wniosek
-              </button>
-            )}
-          </>
-        ) : (
-          <>
-            <div className="mt-5">
-              <span className={fieldLabelCls}>Kto zgłasza</span>
-              <div className={selectWrapCls}>
-                <select
-                  value={zgAnon ? "anon" : "named"}
-                  onChange={(e) => setZgAnon(e.target.value === "anon")}
-                  className={selectElCls}
-                >
-                  <option value="named">
-                    {employee.name} · {employee.default_stanowisko || ""}
-                  </option>
-                  <option value="anon">Zgłoś anonimowo</option>
-                </select>
-                <ChevronDown size={16} className={selectChevronCls} />
-              </div>
-              {zgAnon && (
-                <span className="text-xs text-[#8F8E86] mt-1.5 italic block">
-                  Kierownik zobaczy zgłoszenie bez Twojego imienia.
-                </span>
-              )}
-            </div>
-            <div className="mt-5">
-              <span className={fieldLabelCls}>Która zmiana (opcjonalnie)</span>
-              <div className={selectWrapCls}>
-                <select
-                  value={zgShiftId || "none"}
-                  onChange={(e) => setZgShiftId(e.target.value)}
-                  className={selectElCls}
-                >
-                  {recentShiftsForZgloszenie.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.start_time.toLocaleDateString("pl-PL", {
-                        day: "2-digit",
-                        month: "2-digit",
-                      })}{" "}
-                      · {fmtHHMM(s.start_time)}
-                      {s.end_time ? `–${fmtHHMM(s.end_time)}` : ""} · {s.lokal}
-                    </option>
-                  ))}
-                  <option value="none">Bez konkretnej zmiany</option>
-                </select>
-                <ChevronDown size={16} className={selectChevronCls} />
-              </div>
-            </div>
-            <div className="mt-5">
-              <span className={fieldLabelCls}>Opis</span>
-              <textarea
-                value={zgText}
-                onChange={(e) => setZgText(e.target.value)}
-                className="border-2 border-[#B7B6AE] rounded bg-[#E7E7E2] p-3.5 text-[15px] text-[#171714] min-h-[120px] w-full"
-                placeholder="Np. zepsuta zmywarka, brak rękawic..."
-              />
-            </div>
-            <div className="bg-[#E7E7E2] rounded p-3.5 text-sm text-[#6E6E66] mt-5">
-              Kierownik odpowie w Wiadomościach.
-            </div>
-            {zgSent && (
-              <div className="mt-2.5 text-xs text-[#A83226] bg-[#FBEAE6] rounded p-2.5">
-                Zgłoszenie wysłane. Kierownik odpowie w Wiadomościach.
-              </div>
-            )}
-            <div className="flex-1" />
-            {!zgSent && (
-              <button
-                onClick={handleSendZgloszenie}
-                disabled={zgSaving}
-                className={ctaPrimaryCls}
-              >
-                Wyślij zgłoszenie
-              </button>
-            )}
-          </>
-        )}
+        {ukladZmiany({
+          glowna: (
+            <>
+              {kafleTypow}
+              {zgType === "correction" ? renderKorekta() : zgType === "absence" ? renderWolne() : renderProblem()}
+              {/* Na telefonie „Moje zgłoszenia” tylko pod listą zmian (makieta)
+                  — w formularzu zasłaniałyby przycisk. */}
+              {zgType === "correction" && !wybrana && <div className="md:hidden mt-[22px]">{renderMoje()}</div>}
+            </>
+          ),
+          bok: renderMoje(),
+          przycisk: przyciskWyslij,
+        })}
       </Shell>
     );
   }

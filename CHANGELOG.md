@@ -5,6 +5,35 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.64.0 — 2026-09-29
+
+- **Zgłoś — nowy wygląd według makiety** (Tablet Służbowy i prywatny
+  telefon). Siódmy krok przebudowy ekranów pracownika.
+  - **Trzy duże kafle**: Popraw zmianę, Wolne, Zgłoś problem. Przycisk
+    „Wyślij …” na telefonie stoi nad dolnym paskiem, na tablecie pod
+    formularzem. Na telefonie imię stoi nad tytułem, żeby „Wniosek o wolne”
+    się nie ucinał.
+  - **Popraw zmianę**: zamiast listy rozwijanej — **Twoje zmiany z ostatnich
+    3 tygodni** (z „czeka” przy już zgłoszonej) i **„Zmiany nie ma na
+    liście”** (data, lokal, stanowisko). Z chorągiewki w Raporcie zmiana jest
+    od razu wybrana („z Raportu”). Zmienione pole godziny jest podświetlone z
+    „było 16:00”, pod spodem **„Po poprawce 13,5 h · +5,5 h”**. Powód jednym
+    dotknięciem, komentarz opcjonalny. Dzień, lokal i stanowisko dalej da się
+    poprawić („Inny dzień, lokal albo stanowisko?”). Wysłanie korekty, w której
+    nic się nie zmieniło, mówi o tym wprost.
+  - **Wolne**: **kalendarz** — dotknij pierwszy dzień, potem ostatni; kropka =
+    masz tego dnia zmianę. Podsumowanie „5–9 października · 5 dni”, przy
+    urlopie „5 dni roboczych = 40 h”, i ostrzeżenie, gdy w wybranych dniach
+    stoją zmiany z grafiku. **Na zleceniu (i B2B) urlopu nie ma** — zostaje
+    sama niedostępność. Dni minione są wyłączone.
+  - **Zgłoś problem**: kto zgłasza jako dwa kafle (pod imieniem / anonimowo),
+    **kategoria** chipami. **Anonimowo nie wybiera się zmiany** — i zmiana nie
+    idzie już z anonimowym zgłoszeniem do bazy (data i godzina zmiany
+    wskazywały osobę).
+  - **Moje zgłoszenia** — korekty, zgłoszenia i wnioski o wolne ze statusem
+    (czeka / rozpatrzona / zatwierdzony / odrzucony): na tablecie stale z
+    prawej, na telefonie pod listą zmian.
+
 ## 0.63.0 — 2026-09-29
 
 - **Zadania pracownika — nowy wygląd według makiety** (Tablet Służbowy i

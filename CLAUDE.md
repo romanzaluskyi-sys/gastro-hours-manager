@@ -972,6 +972,36 @@ handlery i stany kreatora: `swapConfirmId`/`swapTyp`/`swapTarget`/
 - Komórka miesiąca bez zmiany, ale z zatwierdzonym urlopem / niedostępnością
   (`wolneNa`), ma własny kolor i podpis — zmiana w grafiku ma pierwszeństwo.
 
+⚠️ **Zgłoś — układ z makiety (0.64.0, EmployeeRequestsMobile /
+EmployeeRequestsTablet).** Zapis bez zmian (`handleSendKorekta` /
+`handleSendAbsence` / `handleSendZgloszenie`), zmienił się wybór. Rzeczy,
+których nie widać:
+- **`zgCorrectionShiftId = null` znaczy „jeszcze nie wybrano”** — ekran
+  pokazuje listę zmian z 3 tygodni. Zmianę z chorągiewki Raportu szukamy w
+  CAŁYM `shifts` (Raport sięga starszych miesięcy), nie tylko w tej liście.
+- **Powód korekty i kategoria problemu idą na POCZĄTEK `issue_text`** —
+  `issues` nie ma na nie kolumn. Kierownik czyta je w Skrzynce jak treść.
+- ⚠️ **Anonimowe zgłoszenie zapisuje się BEZ `shift_id`** (do 0.63.0 szło z
+  nim): data i godzina zmiany wskazują osobę. Ekran przy „Anonimowo” chowa
+  wybór zmiany, a zapis i tak zeruje pole.
+- **Urlop tylko przy umowie o pracę** (`moznaUrlop`): zlecenie i B2B widzą samą
+  niedostępność. Konto BEZ danych o umowie dostaje oba — brak danych to nie
+  powód, żeby zabrać urlop.
+- **Kalendarz wolnego trzyma dni w kolejności kliknięć** (`zgAbsStart`,
+  `zgAbsEnd`), porządkuje je dopiero zapis. Dni minione są wyłączone. Kropka
+  „masz zmianę” tylko z blokiem GRAFIK (prywatny telefon bez grafiku jej nie
+  pokaże).
+- **Świadomie NIE ma z makiety**: „Tylko część dnia” przy niedostępności
+  (`absences` nie ma godzin, a Grafik blokuje dzień w całości — zapis
+  „16–21” w notatce kłamałby o dostępności) i zdjęcia przy problemie (brak
+  miejsca na pliki).
+- Typ spoza bloków lokalu (prywatny telefon) reset ekranu zamienia na pierwszy
+  dostępny — wcześniej wejście z „Więcej” dawało „Zgłoś problem”, nawet gdy
+  lokal go wyłączył.
+- `harness-kiosk.html` przechodzi wszystkie trzy drogi (anonimowo bez
+  `shift_id`, korekta z listy, zakres wolnego klikany od tyłu, zlecenie bez
+  urlopu — Gosia ma `typ_umowy: "zlecenie"`).
+
 **Blokada PIN-em na kiosku** — zaimplementowana (patrz niżej, Schemat
 Supabase i sekcja "Panel kierownika"), TYLKO w `KioskDashboard.tsx`.
 Pracownik z ustawionym `kiosk_pin` dostaje ekran z klawiaturą numeryczną

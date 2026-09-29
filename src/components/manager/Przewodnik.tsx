@@ -23,6 +23,15 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.64.0",
+    date: "2026-09-29",
+    items: [
+      "Zgłoś: trzy duże kafle — Popraw zmianę, Wolne, Zgłoś problem; przycisk wysyłki na dole, pod kciukiem.",
+      "Popraw zmianę: lista zmian z 3 tygodni, zmienione pole podświetlone z „było”, wyliczenie godzin po poprawce, powód jednym dotknięciem.",
+      "Wolne: kalendarz od–do z kropką przy dniach ze zmianą; na zleceniu tylko niedostępność. Problem: kategoria, anonimowo bez wyboru zmiany; „Moje zgłoszenia” ze statusem.",
+    ],
+  },
+  {
     version: "0.63.0",
     date: "2026-09-29",
     items: [
