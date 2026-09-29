@@ -504,6 +504,15 @@ const poprzedniMiesiac = (h) => {
         await czekaj(300);
         sprawdz("formularz mówi z góry, gdzie jest granica",
           widac("Start możesz sam cofnąć najwyżej o 15 min"));
+        // 0.60.0: sposób wpisu wybiera się kaflem (zamiast „Znam godzinę
+        // zakończenia”), a zasady lokalu stoją w osobnej karcie.
+        sprawdz("Zmiana: kafle „Zaczynam teraz” / „Cała zmiana”, bez pola wyboru",
+          widac("Zaczynam teraz") && widac("Cała zmiana") && !widac("Znam godzinę zakończenia"));
+        // Na tablecie zasady stoją w osobnej karcie obok formularza; na telefonie
+        // to samo zdanie jest pod polem godziny (sprawdzone wyżej).
+        if (innerWidth >= 768)
+          sprawdz("tablet: karta „Zasady lokalu” obok formularza",
+            /zasady lokalu/i.test(document.getElementById("app").innerText));
         // Duża godzina to WIDOCZNE pole czasu (0.55.4): domyślnie "teraz",
         // dotknięcie od razu otwiera wybór. Nie przezroczyste pole na czymś
         // innym i nie pole w przycisku — na iPadzie tamte się nie otwierały.

@@ -23,6 +23,15 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.60.0",
+    date: "2026-09-29",
+    items: [
+      "Zmiana: kafle „Zaczynam teraz” / „Cała zmiana”, duża godzina 44 px, lokal i stanowisko z plakietką „z grafiku”.",
+      "Na zmianie: licznik, pasek do końca wg grafiku, „Do końca zmiany” albo „Ponad grafik”.",
+      "„Dziś zapisane” ze statusem „czeka” i zasady lokalu obok formularza; na telefonie przycisk nad paskiem.",
+    ],
+  },
+  {
     version: "0.59.0",
     date: "2026-09-29",
     items: [

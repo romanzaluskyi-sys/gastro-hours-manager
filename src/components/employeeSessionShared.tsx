@@ -19,6 +19,7 @@ import {
   Palmtree,
   Mail,
   ArrowLeftRight,
+  AlertTriangle,
 } from "lucide-react";
 import { api } from "../api/supabase";
 import { sendToGoogleSheets, toLocalYMD } from "../api/googleSheets";
@@ -214,11 +215,15 @@ export function PoleGodziny({ wartosc, teraz = null, onZmiana, etykieta, onTeraz
   const [zamrozona, setZamrozona] = React.useState(null);
   const pokazana = wartosc ?? zamrozona ?? teraz ?? "";
   const naTeraz = teraz != null && wartosc == null;
+  // Wygląd z makiety (0.60.0, EmployeeShiftMobile): 76 px wysokości, godzina
+  // 44 px, z prawej „teraz” albo „zmień”. Pole zostaje WIDOCZNYM inputem —
+  // makieta kładła przezroczyste pole na etykiecie, a tego na iPadzie nie
+  // wolno (patrz komentarz wyżej).
   return (
     <div>
       <div className="relative">
         <Clock
-          size={20}
+          size={26}
           className="absolute left-4 top-1/2 -translate-y-1/2 text-[#171714] pointer-events-none"
         />
         <input
@@ -230,19 +235,19 @@ export function PoleGodziny({ wartosc, teraz = null, onZmiana, etykieta, onTeraz
           onBlur={() => setZamrozona(null)}
           onChange={(e) => onZmiana(e.target.value)}
           aria-label={etykieta}
-          className={`w-full border-[2.5px] border-[#171714] rounded py-3 pl-12 ${
-            naTeraz ? "pr-20 bg-[#F1F1EE]" : "pr-4 bg-white"
-          } font-['Archivo'] font-extrabold text-[30px] text-[#171714] tabular-nums cursor-pointer`}
+          className={`w-full h-[76px] border-[2.5px] border-[#171714] rounded-lg bg-white pl-14 ${
+            teraz != null ? "pr-20" : "pr-4"
+          } font-['Archivo'] font-extrabold text-[44px] tracking-[-.01em] text-[#171714] tabular-nums cursor-pointer`}
           {...reszta}
         />
-        {naTeraz && (
-          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[13px] text-[#8F8E86] pointer-events-none">
-            teraz
+        {teraz != null && (
+          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[15px] font-bold text-[#6E6E66] pointer-events-none">
+            {naTeraz ? "teraz" : "zmień"}
           </span>
         )}
       </div>
       {teraz != null && (
-        <p className="text-[13px] text-[#6E6E66] mt-1.5">
+        <p className="text-[14px] text-[#6E6E66] mt-1.5 mx-0.5">
           {naTeraz ? (
             "Dotknij godziny, żeby wybrać inną."
           ) : (
@@ -1684,112 +1689,210 @@ export const EmployeeSessionScreens = ({
   };
 
   // ---- fragmenty UI wspólne dla kilku ekranów ----
-  const renderShiftInProgress = () => {
-    const startDate = openShift.start_time;
-    const elapsedMs = Math.max(0, now - startDate);
-    const elH = Math.floor(elapsedMs / 3600000);
-    const elM = Math.floor((elapsedMs % 3600000) / 60000);
+  // ==========================================
+  // ZMIANA — układ z makiety właściciela (0.60.0, EmployeeShiftMobile /
+  // EmployeeShiftTablet). Zmienił się WYGLĄD; reguły wpisu zostały te z 0.45.0
+  // (utils/wpisy.ts): okno liczy się „od teraz wstecz”, a godzina spoza okna
+  // idzie do kierownika jako korekta przez okno `renderPozaOknem`.
+  // ==========================================
+  const lblCls =
+    "block text-[13px] font-extrabold tracking-[.05em] uppercase text-[#6E6E66] mx-0.5 mb-1.5";
+  const przyciskGlownyCls =
+    "w-full min-h-[64px] rounded-lg bg-[#DE3A22] text-white font-['Archivo'] font-extrabold text-[21px] flex flex-col items-center justify-center px-4 disabled:bg-[#DEDCD4] disabled:text-[#6E6E66]";
+  const przyciskDrugiCls =
+    "w-full min-h-[48px] rounded-lg bg-white border-2 border-[#171714] text-[#171714] font-['Archivo'] font-extrabold text-[15px] flex items-center justify-center px-4";
+  const godzinyH = (ms) => (Math.round((ms / 3600000) * 10) / 10).toString().replace(".", ",");
+  const czasTrwania = (ms) => {
+    const abs = Math.max(0, Math.abs(ms));
+    const h = Math.floor(abs / 3600000);
+    const m = Math.floor((abs % 3600000) / 60000);
+    return `${h ? `${h} godz. ` : ""}${m} min`;
+  };
+  // Zamknięta zmiana, o którą pracownik poprosił kierownika (korekta czeka) —
+  // na liście „Dziś zapisane” dostaje „czeka” zamiast samej liczby godzin.
+  const czekaNaKierownika = (s) =>
+    (issues || []).some(
+      (i) => i.type === "correction" && i.status !== "rozwiazane" && String(i.shift_id) === String(s.id)
+    );
+  const renderDzisZapisane = (zawsze = false) => {
+    if (!todaysClosedShifts.length && !zawsze) return null;
     return (
-      <>
-        <div className={sectionLabelCls}>Pracujesz od {fmtHHMM(startDate)}</div>
-        <div className={ruleStrongCls} />
-        <div className="font-['Archivo'] font-extrabold text-[42px] text-[#171714] mt-4 tabular-nums">
-          {elH} godz. {elM} min
-        </div>
-        <div className="text-sm text-[#6E6E66] mt-1">
-          {openShift.lokal} · {openShift.stanowisko}
-        </div>
-        {/* Zmiana z poprzedniego dnia wygląda na ekranie dokładnie tak samo
-            jak dzisiejsza — widać tylko godzinę startu. Człowiek, który
-            zapomniał odbić koniec, dowiadywał się o tym dopiero od kierownika,
-            kilka dni później. Tutaj dowiaduje się od razu i może to poprawić
-            sam, podając właściwą godzinę. */}
-        {toLocalYMD(startDate) !== toLocalYMD(now) && (
-          <div className="mt-2.5 rounded p-3 border-2 border-[#DE3A22] bg-[#FBEAE6]">
-            <div className="font-['Archivo'] font-extrabold text-[15px] text-[#8A3A2B]">
-              Ta zmiana trwa od {opisDnia(toLocalYMD(startDate))}
-            </div>
-            <div className="text-[13px] text-[#6E6E66] mt-0.5">
-              Jeśli już ją skończyłeś(-aś), zakończ ją poniżej i podaj godzinę, o
-              której naprawdę wyszedłeś(-aś). Bez tego te godziny nie policzą
-              się nikomu.
-            </div>
-          </div>
+      <div className="bg-white border-2 border-[#DEDCD4] rounded-lg px-3 py-2.5 mb-3.5">
+        <span className={lblCls}>Dziś zapisane</span>
+        {todaysClosedShifts.length === 0 && (
+          <p className="text-[15px] text-[#6E6E66] mx-0.5">Jeszcze nic.</p>
         )}
-        {planowanyKoniec &&
-          bloki.includes("GRAFIK") &&
-          (() => {
-            const zostaloMs = planowanyKoniec - now;
-            const po = zostaloMs < 0;
-            const absMs = Math.abs(zostaloMs);
-            const h = Math.floor(absMs / 3600000);
-            const m = Math.floor((absMs % 3600000) / 60000);
-            return (
-              <div
-                className={`mt-2.5 rounded p-3 border-2 ${
-                  po
-                    ? "border-[#DE3A22] bg-[#FBEAE6]"
-                    : "border-[#B7B6AE] bg-[#F1F1EE]"
+        {todaysClosedShifts.map((s, i) => {
+          const czeka = czekaNaKierownika(s);
+          return (
+            <div
+              key={s.id}
+              className={`grid grid-cols-[1fr_auto] gap-x-2.5 items-center py-1.5 ${i ? "border-t border-[#DEDCD4]" : ""}`}
+            >
+              <b className="text-[18px] tabular-nums text-[#171714]">
+                {fmtHHMM(s.start_time)} – {fmtHHMM(s.end_time)}
+              </b>
+              <em
+                className={`row-span-2 not-italic text-[14px] font-extrabold px-2 py-1 rounded-lg ${
+                  czeka ? "bg-[#FDF0D8] text-[#8A5300]" : "bg-[#E2F3E9] text-[#1F7A4A]"
                 }`}
               >
-                <div className={sectionLabelCls}>
-                  {po ? "Po planowanym końcu" : "Do końca zmiany"}
-                </div>
-                <div
-                  className={`font-['Archivo'] font-extrabold text-[22px] tabular-nums ${
-                    po ? "text-[#8A3A2B]" : "text-[#171714]"
-                  }`}
-                >
-                  {h} godz. {m} min
-                </div>
-                <div className="text-[13px] text-[#6E6E66]">
-                  Wg grafiku {trimTime(planTrwajacej.start_time)} –{" "}
-                  {trimTime(planTrwajacej.end_time)}
-                </div>
-              </div>
-            );
-          })()}
-        <div className={ruleSoftCls} />
-        {myChecklistOwn.length > 0 && (
-          <>
-            <div className="flex items-baseline justify-between mt-4">
-              <span className={sectionLabelCls}>Zadania na zmianę</span>
-              <span className="font-['Archivo'] font-extrabold text-sm text-[#171714] tabular-nums">
-                {myChecklistOwn.filter((i) => i.done).length} z{" "}
-                {myChecklistOwn.length}
+                {godzinyH(s.end_time - s.start_time)} h{czeka ? " · czeka" : ""}
+              </em>
+              <span className="text-[14px] text-[#6E6E66]">
+                {s.lokal} · {s.stanowisko}
               </span>
             </div>
-            <div className="flex gap-1 mt-2.5">
-              {myChecklistOwn.map((item) => (
-                <span
-                  key={item.task.id}
-                  className={`h-1.5 flex-1 rounded-full ${
-                    item.done ? "bg-[#171714]" : "bg-[#E7E7E2]"
-                  }`}
-                />
-              ))}
-            </div>
-            <div className="mt-3">{renderBlockCards(myBlocksOwn)}</div>
-            {myChecklistOwn.some((i) => !i.done) && (
-              <div className="bg-[#FBEAE6] border-l-4 border-[#DE3A22] text-[#8A3A2B] text-sm p-3.5 rounded-sm mt-3.5">
-                Zostały {myChecklistOwn.filter((i) => !i.done).length}{" "}
-                {myChecklistOwn.filter((i) => !i.done).length === 1
-                  ? "zadanie"
-                  : "zadania"}
-                . Możesz zakończyć zmianę, kierownik zobaczy status w panelu.
-              </div>
-            )}
-          </>
+          );
+        })}
+      </div>
+    );
+  };
+  // Zasady lokalu jednym zdaniem na rodzaj wpisu — te same teksty, które
+  // wcześniej stały pod polem godziny (podpisOkna).
+  const renderZasady = (lokal) => {
+    const r = regulyWpisu(lokaleWszystkie, lokal);
+    const zdania = [
+      podpisOkna("start", r.startWstecz, lokalDoOpisu(lokal)),
+      podpisOkna("koniec", r.koniecWstecz, lokalDoOpisu(lokal)),
+    ].filter(Boolean);
+    return (
+      <div className="bg-[#DEDCD4] rounded-lg px-3 py-2.5">
+        <span className={lblCls}>Zasady lokalu</span>
+        {zdania.length ? (
+          zdania.map((z) => (
+            <p key={z} className="text-[14px] leading-5 text-[#171714] mx-0.5">
+              {z}
+            </p>
+          ))
+        ) : (
+          <p className="text-[14px] leading-5 text-[#171714] mx-0.5">
+            Bez ograniczeń — godzinę wpisujesz dowolnie (nie w przyszłości i nie
+            na inną zmianę).
+          </p>
         )}
-        <div className="mb-4" />
-        <div className="flex-1" />
+      </div>
+    );
+  };
+  // Układ ekranu Zmiana: na telefonie jedna kolumna, przycisk nad dolnym
+  // paskiem (stopka Shella); na tablecie formularz po lewej, „Dziś zapisane”
+  // i zasady lokalu po prawej, przycisk pod formularzem.
+  const ukladZmiany = ({ glowna, bok, przycisk }) => (
+    <div className="md:grid md:grid-cols-[minmax(0,600px)_340px] md:gap-7 md:items-start md:justify-center">
+      <div className="min-w-0">
+        {glowna}
+        {przycisk && <div className="hidden md:block mt-2">{przycisk}</div>}
+      </div>
+      {bok && <aside className="hidden md:flex flex-col gap-3.5 sticky top-0">{bok}</aside>}
+    </div>
+  );
+
+  const renderShiftInProgress = () => {
+    const startDate = openShift.start_time;
+    const minelo = Math.max(0, now - startDate);
+    const zGrafikiem = planowanyKoniec && bloki.includes("GRAFIK");
+    const zostalo = zGrafikiem ? planowanyKoniec - now : null;
+    const po = zGrafikiem && zostalo < 0;
+    const planStart = zGrafikiem
+      ? (() => {
+          const d = new Date(planTrwajacej.date + "T00:00:00");
+          const [h, m] = trimTime(planTrwajacej.start_time).split(":").map(Number);
+          d.setHours(h, m, 0, 0);
+          return d;
+        })()
+      : null;
+    const calosc = zGrafikiem ? planowanyKoniec - planStart : 0;
+    const procent =
+      zGrafikiem && calosc > 0 ? Math.max(0, Math.min(100, ((now - planStart) / calosc) * 100)) : 0;
+    // Po czasie: zielona część to cały plan, bursztynowa — nadwyżka (do 40%).
+    const nadwyzka = po ? Math.min(40, (-zostalo / calosc) * 100) : 0;
+    const granica = po ? 100 / (1 + nadwyzka / 100) : procent;
+    const zostaloZadan = myChecklistOwn.filter((i) => !i.done).length;
+    return (
+      <>
+        <section className="pb-3 mb-3.5 border-b-2 border-[#DEDCD4]">
+          <span className={lblCls}>Pracujesz od {fmtHHMM(startDate)}</span>
+          <b className="block font-['Archivo'] text-[44px] leading-[50px] font-extrabold tabular-nums text-[#171714]">
+            {czasTrwania(minelo)}
+          </b>
+          <span className="text-[16px] text-[#6E6E66]">
+            {openShift.lokal} · {openShift.stanowisko}
+          </span>
+          {/* Zmiana z poprzedniego dnia wygląda na ekranie dokładnie tak samo
+              jak dzisiejsza — widać tylko godzinę startu. Człowiek, który
+              zapomniał odbić koniec, dowiadywał się o tym dopiero od kierownika,
+              kilka dni później. Tutaj dowiaduje się od razu i może to poprawić
+              sam, podając właściwą godzinę. */}
+          {toLocalYMD(startDate) !== toLocalYMD(now) && (
+            <div className="mt-3 rounded-lg px-3.5 py-3 border-2 border-[#8A5300] bg-[#FDF0D8] text-[#8A5300]">
+              <b className="block text-[15px]">
+                Ta zmiana trwa od {opisDnia(toLocalYMD(startDate))}
+              </b>
+              <span className="text-[14px]">
+                Jeśli już ją skończyłeś(-aś), zakończ ją poniżej i podaj godzinę, o
+                której naprawdę wyszedłeś(-aś). Bez tego te godziny nie policzą się
+                nikomu.
+              </span>
+            </div>
+          )}
+          {zGrafikiem ? (
+            <>
+              <div className="relative h-3.5 rounded-full bg-[#DEDCD4] mt-4 mb-1 overflow-hidden">
+                <i className="absolute inset-y-0 left-0 bg-[#1F7A4A]" style={{ width: `${granica}%` }} />
+                {po && (
+                  <>
+                    <i className="absolute inset-y-0 right-0 bg-[#8A5300]" style={{ left: `${granica}%` }} />
+                    <em className="absolute inset-y-0 w-[3px] -ml-[1.5px] bg-white" style={{ left: `${granica}%` }} />
+                  </>
+                )}
+              </div>
+              <div className="flex justify-between text-[13px] font-bold text-[#6E6E66]">
+                <span>{trimTime(planTrwajacej.start_time)}</span>
+                <span>koniec wg grafiku {trimTime(planTrwajacej.end_time)}</span>
+              </div>
+              <div
+                className={`flex justify-between items-baseline gap-2.5 mt-3 px-3.5 py-3 border-2 rounded-lg ${
+                  po ? "border-[#8A5300] bg-[#FDF0D8] text-[#8A5300]" : "border-[#171714] bg-white"
+                }`}
+              >
+                <span className={`text-[15px] font-bold ${po ? "" : "text-[#6E6E66]"}`}>
+                  {po ? "Ponad grafik" : "Do końca zmiany"}
+                </span>
+                <b className={`font-['Archivo'] text-[26px] font-extrabold tabular-nums ${po ? "" : "text-[#171714]"}`}>
+                  {po ? "+" : ""}
+                  {czasTrwania(zostalo)}
+                </b>
+              </div>
+            </>
+          ) : (
+            <div className="flex justify-between items-baseline gap-2.5 mt-3 px-3.5 py-3 border-2 border-[#171714] rounded-lg bg-white">
+              <span className="text-[15px] font-bold text-[#6E6E66]">Bez grafiku na dziś</span>
+              <b className="text-[17px] text-[#171714]">liczymy czas pracy</b>
+            </div>
+          )}
+        </section>
+        {/* Zadania mają własną zakładkę i blok TERAZ na Pulpicie — tutaj
+            zostaje jedno zdanie, niewymuszające: zmianę można zakończyć. */}
+        {myChecklistOwn.length > 0 && zostaloZadan > 0 && (
+          <button
+            onClick={() => setScreen("ZADANIA")}
+            className="w-full flex items-center gap-2 text-left px-3.5 py-3 mb-3.5 rounded-lg bg-white border-2 border-[#DEDCD4] text-[15px] text-[#171714]"
+          >
+            <ClipboardCheck size={18} className="flex-shrink-0" />
+            <span className="flex-1">
+              Zostały {zostaloZadan} {zostaloZadan === 1 ? "zadanie" : "zadania"}. Możesz
+              zakończyć zmianę — kierownik zobaczy status w panelu.
+            </span>
+            <ChevronRight size={18} className="text-[#6E6E66] flex-shrink-0" />
+          </button>
+        )}
         {/* Wyłączone "Wpisy" zabierają całą obsługę zmiany, także jej
             zakończenie — inaczej pracownik mógłby zamknąć zmianę z telefonu
             mimo że lokal tego nie udostępnia. Zmianę kończy wtedy na
             Tablecie Służbowym. */}
         {bloki.includes("WPISY") ? (
           <>
-            <span className={fieldLabelCls}>Zakończenie</span>
+            <span className={lblCls}>Zakończenie</span>
             <PoleGodziny
               wartosc={innyKoniec}
               teraz={fmtHHMM(now)}
@@ -1798,19 +1901,12 @@ export const EmployeeSessionScreens = ({
               etykieta="Godzina zakończenia"
               data-godzina-konca
             />
-            <button
-              onClick={() => handleCloseShift(innyKoniec)}
-              disabled={saving || innyKoniec === ""}
-              className={`${ctaPrimaryCls} mt-3`}
-            >
-              Zakończ zmianę o {innyKoniec || fmtHHMM(now)}
-            </button>
             {podpisOkna(
               "koniec",
               regulyWpisu(lokaleWszystkie, openShift.lokal).koniecWstecz,
               lokalDoOpisu(openShift.lokal)
             ) && (
-              <p className={`${helperTextCls} mt-2.5`}>
+              <p className="md:hidden text-[14px] text-[#6E6E66] mt-2 mx-0.5">
                 {podpisOkna(
                   "koniec",
                   regulyWpisu(lokaleWszystkie, openShift.lokal).koniecWstecz,
@@ -1820,13 +1916,23 @@ export const EmployeeSessionScreens = ({
             )}
           </>
         ) : (
-          <p className={helperTextCls}>
+          <p className="text-[15px] text-[#6E6E66]">
             Zmianę kończysz na Tablecie Służbowym w lokalu.
           </p>
         )}
       </>
     );
   };
+  const przyciskKonca = () =>
+    bloki.includes("WPISY") && (
+      <button
+        onClick={() => handleCloseShift(innyKoniec)}
+        disabled={saving || innyKoniec === ""}
+        className={przyciskGlownyCls}
+      >
+        Zakończ zmianę o {innyKoniec || fmtHHMM(now)}
+      </button>
+    );
 
   const razem = (() => {
     if (!znamKoniec || !formStartTime || !formEndTime) return null;
@@ -1837,101 +1943,114 @@ export const EmployeeSessionScreens = ({
     return (mins / 60).toFixed(1).replace(".", ",");
   })();
 
+  // Plan na dziś w lokalu z formularza — z niego podpis „z grafiku” przy
+  // lokalu i stanowisku (domyślnyLokal i korekta stanowiska już go używają).
+  const planFormularza = mojeDzis.find((s) => s.lokal === formLokal) || null;
   const renderStartForm = () => (
     <>
-      {todaysClosedShifts.length > 0 && (
-        <div className="bg-[#FBEAE6] border-l-4 border-[#DE3A22] text-[#8A3A2B] text-sm p-3.5 rounded-sm mb-4">
-          <p className="font-bold mb-1">Dziś już zarejestrowano:</p>
-          {todaysClosedShifts.map((s) => (
-            <p key={s.id}>
-              {fmtHHMM(s.start_time)} – {fmtHHMM(s.end_time)} ({s.lokal},{" "}
-              {s.stanowisko})
-            </p>
+      {/* Na telefonie „Dziś zapisane” stoi nad formularzem — pokazuje, że
+          nowa zmiana nie może zacząć się wcześniej niż koniec poprzedniej. */}
+      <div className="md:hidden">{renderDzisZapisane()}</div>
+      {/* Lokal może wymusić jeden sposób wpisu (Ustawienia → Lokale →
+          Rejestracja godzin). Wtedy kafli nie ma — jest zdanie, które mówi, jak
+          się tu wpisuje godziny. */}
+      {wymuszonaCala === null ? (
+        <div className="grid grid-cols-2 gap-2 mb-3.5">
+          {[
+            [false, "Zaczynam teraz", "koniec zapiszesz później", Clock],
+            [true, "Cała zmiana", "start i koniec razem", CalendarDays],
+          ].map(([wartosc, tytul, pod, Ikona]) => (
+            <button
+              key={tytul}
+              type="button"
+              onClick={() => setKnowsEnd(wartosc)}
+              className={`min-h-[64px] flex items-center gap-2 px-2.5 py-2 rounded-lg border-2 text-left ${
+                knowsEnd === wartosc
+                  ? "bg-[#171714] border-[#171714] text-white"
+                  : "bg-white border-[#171714] text-[#171714]"
+              }`}
+            >
+              <Ikona size={22} className="flex-shrink-0" />
+              <span>
+                <b className="block text-[16px]">{tytul}</b>
+                <small
+                  className={`block text-[12px] leading-[15px] ${
+                    knowsEnd === wartosc ? "text-white/75" : "text-[#6E6E66]"
+                  }`}
+                >
+                  {pod}
+                </small>
+              </span>
+            </button>
           ))}
         </div>
-      )}
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <span className={fieldLabelCls}>Lokal</span>
-          <div className={selectWrapCls}>
-            <select
-              value={formLokal}
-              onChange={(e) => setFormLokal(e.target.value)}
-              className={selectElCls}
-            >
-              {lokaleOptions.map((l) => (
-                <option key={l.id} value={l.name}>
-                  {l.name}
-                </option>
-              ))}
-            </select>
-            <ChevronDown size={16} className={selectChevronCls} />
-          </div>
-        </div>
-        <div>
-          <span className={fieldLabelCls}>Stanowisko</span>
-          <div className={selectWrapCls}>
-            <select
-              value={formStanowisko}
-              onChange={(e) => setFormStanowisko(e.target.value)}
-              className={selectElCls}
-            >
-              {dostepneStanowiska.length === 0 && (
-                <option value="">Brak stanowisk</option>
-              )}
-              {dostepneStanowiska.map((s) => (
-                <option key={s.id} value={s.name}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-            <ChevronDown size={16} className={selectChevronCls} />
-          </div>
-        </div>
-      </div>
-      <div className="mt-5">
-        <span className={fieldLabelCls}>Data</span>
-        <div className={staticBoxCls}>
-          <span className={selectValCls}>
-            {new Date().toLocaleDateString("pl-PL", {
-              day: "2-digit",
-              month: "2-digit",
-              year: "numeric",
-            })}
-          </span>
-          <span className="text-[11px] font-bold tracking-wider uppercase text-[#8F8E86]">
-            dziś
-          </span>
-        </div>
-      </div>
-      {/* Lokal może wymusić jeden sposób wpisu (Ustawienia → Lokale →
-          Rejestracja godzin). Wtedy przełącznika nie ma — jest zdanie, które
-          mówi, jak się tu wpisuje godziny. */}
-      {wymuszonaCala === null ? (
-        <button
-          type="button"
-          onClick={() => setKnowsEnd((v) => !v)}
-          className={`${checkboxRowCls(knowsEnd)} mt-5`}
-        >
-          <span className="w-5 h-5 border-2 border-[#B7B6AE] rounded-[3px] flex-shrink-0 flex items-center justify-center">
-            {knowsEnd && (
-              <span className="w-[9px] h-[9px] bg-[#DE3A22] rounded-[1px]" />
-            )}
-          </span>
-          <span className="text-[15.5px] font-semibold text-[#171714]">
-            Znam godzinę zakończenia
-          </span>
-        </button>
       ) : (
-        <p className={`${helperTextCls} mt-5`}>
+        <p className="text-[15px] text-[#6E6E66] mb-3.5 mx-0.5">
           {opisGdzie(lokalDoOpisu(formLokal))}{" "}
           {wymuszonaCala
             ? "wpisujesz całą zmianę naraz — po jej zakończeniu."
             : "odbijasz osobno: start teraz, koniec po pracy."}
         </p>
       )}
-      <div className="mt-5">
-        <span className={fieldLabelCls}>Rozpoczęcie</span>
+      {bloki.includes("GRAFIK") && (
+        <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-[#DEDCD4] mb-3 text-[15px]">
+          <CalendarDays size={20} className="text-[#6E6E66] flex-shrink-0" />
+          <span className="flex-1 text-[#6E6E66]">
+            {mojeDzis.length ? "Dziś w grafiku" : "Dziś nie ma Cię w grafiku"}
+          </span>
+          <b className="text-[17px] tabular-nums text-[#171714]">
+            {mojeDzis.length
+              ? mojeDzis
+                  .map((s) => `${trimTime(s.start_time)} – ${trimTime(s.end_time)}`)
+                  .join(", ")
+              : "—"}
+          </b>
+        </div>
+      )}
+      <div className="grid grid-cols-2 gap-2.5">
+        {[
+          ["Lokal", formLokal, setFormLokal, lokaleOptions, !!planFormularza, null],
+          [
+            "Stanowisko",
+            formStanowisko,
+            setFormStanowisko,
+            dostepneStanowiska,
+            planFormularza?.stanowisko === formStanowisko,
+            "Brak stanowisk",
+          ],
+        ].map(([etykieta, wartosc, ustaw, opcje, zGrafiku, pusto]) => (
+          <label key={etykieta} className="block min-w-0">
+            <span className="block text-[15px] text-[#6E6E66] mx-0.5 mb-1.5">
+              {etykieta}
+              {zGrafiku && (
+                <em className="not-italic text-[11px] font-extrabold text-[#1F7A4A] bg-[#E2F3E9] rounded-[5px] px-1.5 py-px ml-1">
+                  z grafiku
+                </em>
+              )}
+            </span>
+            <span className="relative block">
+              <select
+                value={wartosc}
+                onChange={(e) => ustaw(e.target.value)}
+                className="w-full h-14 appearance-none bg-white border-2 border-[#171714] rounded-lg pl-3.5 pr-9 text-[17px] font-bold text-[#171714] truncate"
+              >
+                {opcje.length === 0 && pusto && <option value="">{pusto}</option>}
+                {opcje.map((o) => (
+                  <option key={o.id} value={o.name}>
+                    {o.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                size={18}
+                className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[#171714]"
+              />
+            </span>
+          </label>
+        ))}
+      </div>
+      <div className="mt-3.5">
+        <span className={lblCls}>Rozpoczęcie</span>
         {znamKoniec ? (
           <PoleGodziny
             wartosc={formStartTime}
@@ -1951,8 +2070,8 @@ export const EmployeeSessionScreens = ({
         )}
       </div>
       {znamKoniec && (
-        <div className="mt-5">
-          <span className={fieldLabelCls}>Zakończenie</span>
+        <div className="mt-3.5">
+          <span className={lblCls}>Zakończenie</span>
           <PoleGodziny
             wartosc={formEndTime}
             onZmiana={setFormEndTime}
@@ -1961,16 +2080,19 @@ export const EmployeeSessionScreens = ({
           />
         </div>
       )}
-      {znamKoniec && razem && (
-        <div className={`${razemRowCls} mt-5`}>
-          <span className="text-sm text-[#6E6E66]">Razem</span>
-          <span className="font-['Archivo'] font-extrabold text-[17px] text-[#171714] tabular-nums">
-            {razem} godz.
+      {znamKoniec && (
+        <div className="flex justify-between items-baseline px-3.5 py-3 rounded-lg bg-[#DEDCD4] mt-3.5">
+          <span className="text-[15px] text-[#6E6E66]">
+            Razem · dziś,{" "}
+            {new Date().toLocaleDateString("pl-PL", { day: "2-digit", month: "2-digit" })}
           </span>
+          <b className="font-['Archivo'] text-[24px] font-extrabold tabular-nums text-[#171714]">
+            {razem ? `${razem} godz.` : "—"}
+          </b>
         </div>
       )}
       {!znamKoniec && (
-        <p className={`${helperTextCls} mt-5`}>
+        <p className="text-[15px] leading-[21px] text-[#6E6E66] mt-2.5 mx-0.5">
           Zapiszemy tylko start. Zmianę zakończysz przy następnym wejściu.
         </p>
       )}
@@ -1979,7 +2101,8 @@ export const EmployeeSessionScreens = ({
         znamKoniec ? regulyFormularza.koniecWstecz : regulyFormularza.startWstecz,
         lokalDoOpisu(formLokal)
       ) && (
-        <p className={`${helperTextCls} mt-2`}>
+        // Na tablecie to samo zdanie stoi w „Zasadach lokalu” obok.
+        <p className="md:hidden text-[15px] leading-[21px] text-[#6E6E66] mt-2 mx-0.5">
           {podpisOkna(
             znamKoniec ? "cala" : "start",
             znamKoniec ? regulyFormularza.koniecWstecz : regulyFormularza.startWstecz,
@@ -1987,17 +2110,18 @@ export const EmployeeSessionScreens = ({
           )}
         </p>
       )}
-      <div className="flex-1" />
-      <button
-        onClick={() => handleCreateShift()}
-        disabled={saving || (!znamKoniec && innyStart === "")}
-        className={ctaPrimaryCls}
-      >
-        {znamKoniec
-          ? "Zapisz całą zmianę"
-          : `Rozpocznij zmianę o ${innyStart || fmtHHMM(now)}`}
-      </button>
     </>
+  );
+  const przyciskStartu = () => (
+    <button
+      onClick={() => handleCreateShift()}
+      disabled={saving || (!znamKoniec && innyStart === "")}
+      className={przyciskGlownyCls}
+    >
+      {znamKoniec
+        ? "Zapisz całą zmianę"
+        : `Rozpocznij zmianę o ${innyStart || fmtHHMM(now)}`}
+    </button>
   );
 
   // Wpis poza oknem tolerancji lokalu — wyjaśnienie i jedyna droga dalej:
@@ -2025,20 +2149,25 @@ export const EmployeeSessionScreens = ({
           : `${opisGdzie(lokalDoOpisu(formLokal))} całą zmianę zapisujesz sam najpóźniej ${p.okno} min po jej zakończeniu. Zmianę ${fmtHHMM(p.startD)}–${godzina} wyślemy kierownikowi do zatwierdzenia.`;
     }
     return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-        <div className="bg-white rounded-lg border-[2.5px] border-[#171714] w-full max-w-md p-5 max-h-[90vh] overflow-y-auto">
-          <p className="font-['Archivo'] font-extrabold text-xl text-[#171714]">{tytul}</p>
-          <p className={`${helperTextCls} mt-2`}>{tresc}</p>
+      <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center md:p-4 z-50">
+        <div className="bg-white rounded-t-[20px] md:rounded-[20px] border-2 border-[#171714] w-full md:max-w-[460px] p-5 pb-7 max-h-[90vh] overflow-y-auto flex flex-col gap-2.5">
+          <div
+            className={`flex gap-2.5 items-start rounded-lg px-3.5 py-3 text-[15px] leading-[21px] font-bold ${
+              p.powod === "za_pozno"
+                ? "bg-[#FDF0D8] text-[#8A5300] border-2 border-[#8A5300]"
+                : "bg-[#DEDCD4] text-[#171714]"
+            }`}
+          >
+            <AlertTriangle size={20} className="flex-shrink-0 mt-px" />
+            <span className="font-['Archivo'] font-extrabold text-[20px] leading-6">{tytul}</span>
+          </div>
+          <p className="text-[16px] leading-[22px] text-[#6E6E66]">{tresc}</p>
           {p.powod === "za_pozno" && (
-            <button
-              onClick={potwierdzPozaOknem}
-              disabled={saving}
-              className={`${ctaPrimaryCls} mt-5`}
-            >
+            <button onClick={potwierdzPozaOknem} disabled={saving} className={`${przyciskGlownyCls} mt-1`}>
               {p.rodzaj === "start" ? "Rozpocznij i wyślij do kierownika" : "Wyślij do kierownika"}
             </button>
           )}
-          <button onClick={() => setPozaOknem(null)} className={ctaSecondaryCls}>
+          <button onClick={() => setPozaOknem(null)} className={przyciskDrugiCls}>
             {p.powod === "za_pozno" ? "Anuluj" : "Rozumiem"}
           </button>
         </div>
@@ -2048,68 +2177,64 @@ export const EmployeeSessionScreens = ({
 
   const renderJustClosedSummary = () => {
     const total = sumHours(todaysClosedShifts);
+    const cosCzeka = todaysClosedShifts.some(czekaNaKierownika);
     return (
       <>
-        <div className="font-['Archivo'] font-extrabold text-[30px] text-[#171714]">
-          Zmiana zapisana
-        </div>
-        <div className="text-sm text-[#6E6E66] mb-6">
-          Dzięki, {employee.name}
-        </div>
-        <div className={sectionLabelCls}>{employee.name} ma dziś zapisane</div>
-        <div className={ruleStrongCls} />
-        {todaysClosedShifts.map((s) => (
-          <div key={s.id} className="flex items-center gap-3 py-3.5">
-            <span className="w-[26px] h-[26px] rounded bg-[#DCEEDF] text-[#2F7A45] flex items-center justify-center flex-shrink-0">
-              <Check size={14} strokeWidth={3} />
-            </span>
-            <span className="flex-1 font-['Archivo'] font-extrabold text-[21px] text-[#171714]">
-              {fmtHHMM(s.start_time)} – {fmtHHMM(s.end_time)}
-            </span>
-            <span className="text-[15px] text-[#6E6E66]">
-              {((s.end_time - s.start_time) / 3600000).toFixed(1).replace(".", ",")}{" "}
-              godz.
-            </span>
-          </div>
-        ))}
-        <div className="flex items-baseline justify-between mt-1.5">
-          <span className={sectionLabelCls}>Razem dziś</span>
-          <span className="font-['Archivo'] font-extrabold text-[26px] text-[#171714] tabular-nums">
-            {total.toFixed(1).replace(".", ",")} godz.
+        <section className="px-0.5 pt-1.5 pb-3.5">
+          <span className="w-12 h-12 rounded-full bg-[#E2F3E9] text-[#1F7A4A] flex items-center justify-center">
+            <Check size={28} strokeWidth={3} />
           </span>
+          <h2 className="font-['Archivo'] font-extrabold text-[32px] text-[#171714] mt-2.5">
+            Zmiana zapisana
+          </h2>
+          <p className="text-[17px] text-[#6E6E66]">Dzięki, {employee.name}</p>
+        </section>
+        {renderDzisZapisane()}
+        <div className="flex justify-between items-baseline px-3.5 py-3 rounded-lg bg-[#DEDCD4]">
+          <span className="text-[15px] text-[#6E6E66]">Razem dziś</span>
+          <b className="font-['Archivo'] text-[30px] font-extrabold tabular-nums text-[#171714]">
+            {total.toFixed(1).replace(".", ",")} godz.
+          </b>
         </div>
         {myChecklistOwn.length > 0 && (
-          <div className="flex items-baseline justify-between mt-1.5">
-            <span className={sectionLabelCls}>Zadania</span>
-            <span className="text-[15px] text-[#171714]">
-              {myChecklistOwn.filter((i) => i.done).length} z{" "}
-              {myChecklistOwn.length} wykonanych
-            </span>
-          </div>
+          <p className="text-[15px] text-[#6E6E66] mt-2.5 mx-0.5">
+            Zadania: {myChecklistOwn.filter((i) => i.done).length} z {myChecklistOwn.length}{" "}
+            wykonanych
+          </p>
         )}
-        <div className={ruleSoftCls} />
-        <div className="flex-1" />
-        <div className={`${sectionLabelCls} mb-2.5`}>Wracasz jeszcze dziś?</div>
-        <button
-          onClick={() => {
-            setJustClosed(false);
-            resetShiftForm();
-          }}
-          className={ctaPrimaryCls}
-        >
-          Rozpocznij kolejną zmianę
-        </button>
-        <button onClick={() => setScreen("RAPORT")} className={ctaSecondaryCls}>
-          Zobacz swoje godziny
-        </button>
-        {onBack && (
-          <button onClick={onBack} className={ctaSecondaryQuietCls}>
-            Wróć do listy osób
-          </button>
+        {cosCzeka && (
+          <div className="flex gap-2.5 items-start mt-2.5 px-3.5 py-3 rounded-lg border-2 border-[#8A5300] bg-[#FDF0D8] text-[#8A5300] text-[15px] leading-[21px] font-bold">
+            <AlertTriangle size={20} className="flex-shrink-0 mt-px" />
+            Godzina poza oknem lokalu czeka na zatwierdzenie kierownika.
+          </div>
         )}
       </>
     );
   };
+  const przyciskiPoZapisie = () => (
+    <>
+      <span className={`${lblCls} mt-1`}>Wracasz jeszcze dziś?</span>
+      <button
+        onClick={() => {
+          setJustClosed(false);
+          resetShiftForm();
+        }}
+        className={przyciskGlownyCls}
+      >
+        Rozpocznij kolejną zmianę
+      </button>
+      <div className="grid gap-1.5 mt-1.5">
+        <button onClick={() => setScreen("RAPORT")} className={przyciskDrugiCls}>
+          Zobacz swoje godziny
+        </button>
+        {onBack && (
+          <button onClick={onBack} className={`${przyciskDrugiCls} !border-[#DEDCD4] !text-[#6E6E66]`}>
+            Wróć do listy osób
+          </button>
+        )}
+      </div>
+    </>
+  );
 
   // ==========================================
   // EKRAN: PULPIT — układ z makiety właściciela (0.58.0, EmployeeHomeMobile /
@@ -2771,6 +2896,11 @@ export const EmployeeSessionScreens = ({
   // EKRAN: ZMIANA
   // ==========================================
   if (screen === "ZMIANA") {
+    const przycisk = openShift
+      ? przyciskKonca()
+      : justClosed
+      ? przyciskiPoZapisie()
+      : przyciskStartu();
     return (
       <Shell
         screen={screen}
@@ -2783,12 +2913,28 @@ export const EmployeeSessionScreens = ({
         personName={onBack ? employee.name : null}
         title="Zmiana"
         showPill={!!openShift}
+        nowyWyglad
+        footer={
+          przycisk && (
+            // Na telefonie przycisk stoi nad dolnym paskiem, pod kciukiem.
+            <div className="md:hidden flex-shrink-0 px-3.5 pt-2 pb-2.5 bg-[#F1F0EC]">{przycisk}</div>
+          )
+        }
       >
-        {openShift
-          ? renderShiftInProgress()
-          : justClosed
-          ? renderJustClosedSummary()
-          : renderStartForm()}
+        {ukladZmiany({
+          glowna: openShift
+            ? renderShiftInProgress()
+            : justClosed
+            ? renderJustClosedSummary()
+            : renderStartForm(),
+          przycisk,
+          bok: (
+            <>
+              {!justClosed || openShift ? renderDzisZapisane(true) : null}
+              {renderZasady(openShift ? openShift.lokal : formLokal)}
+            </>
+          ),
+        })}
         {renderPozaOknem()}
       </Shell>
     );

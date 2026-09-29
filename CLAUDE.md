@@ -899,6 +899,21 @@ tło, kolumna do 1100 px). Rzeczy, których nie widać:
   wolne" otwierał „Zgłoś problem" (do 0.58.0). Typ ustawiony przed wejściem
   niesie teraz `zgTypNaWejscie` (ref); sprawdza `harness-kiosk.html`.
 
+⚠️ **Zmiana — układ z makiety (0.60.0, EmployeeShiftMobile /
+EmployeeShiftTablet). Zmienił się WYGLĄD, nie reguły.** Makieta opisuje inną
+mechanikę tolerancji (liczoną od GRAFIKU, z godziną „zablokowaną na
+faktycznej”) — świadomie jej NIE wdrożono: obowiązuje ustalenie właściciela z
+0.45.0 (okno „od teraz wstecz”, godzina spoza okna → korekta do kierownika,
+`renderPozaOknem`). Zmiana mechaniki to osobna decyzja właściciela.
+- Kafle „Zaczynam teraz” / „Cała zmiana” ustawiają ten sam `knowsEnd`, co
+  dawny przełącznik; przy `wymuszonaCala` kafli nie ma, jest zdanie.
+- „Czeka” przy zapisanej zmianie = otwarta korekta (`issues`) z jej
+  `shift_id` (`czekaNaKierownika`).
+- Przycisk: na telefonie w stopce Shella (nad paskiem), na tablecie pod
+  formularzem — ta sama funkcja (`przyciskStartu`/`przyciskKonca`), dwa
+  miejsca. `PoleGodziny` zostało WIDOCZNYM polem (makieta kładła przezroczyste
+  pole na etykiecie — na iPadzie to nie działa).
+
 **Blokada PIN-em na kiosku** — zaimplementowana (patrz niżej, Schemat
 Supabase i sekcja "Panel kierownika"), TYLKO w `KioskDashboard.tsx`.
 Pracownik z ustawionym `kiosk_pin` dostaje ekran z klawiaturą numeryczną

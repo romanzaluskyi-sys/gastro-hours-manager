@@ -5,6 +5,30 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.60.0 — 2026-09-29
+
+- **Zmiana — nowy wygląd według makiety.** Trzeci krok przebudowy ekranów
+  pracownika. Reguły wpisu godzin się NIE zmieniły.
+  - Sposób wpisu wybiera się **kaflem**: „Zaczynam teraz” (koniec zapiszesz
+    później) albo „Cała zmiana” (start i koniec razem) — zamiast pola „Znam
+    godzinę zakończenia”.
+  - Nad formularzem „**Dziś w grafiku** 09:00 – 21:00” (albo „Dziś nie ma Cię
+    w grafiku”); przy lokalu i stanowisku plakietka **„z grafiku”**, gdy
+    zgadzają się z dzisiejszym grafikiem.
+  - **Duża godzina** (44 px) — dotknięcie otwiera wybór godziny; z prawej
+    „teraz” albo „zmień”.
+  - **Dziś zapisane**: lista dzisiejszych zmian z godzinami, a przy tych, które
+    czekają na kierownika — „czeka”.
+  - **Na zmianie**: duży licznik, pasek od startu do końca wg grafiku i karta
+    „Do końca zmiany” — po czasie bursztynowa „Ponad grafik +…”. Bez grafiku:
+    „liczymy czas pracy”.
+  - **Zmiana zapisana**: zielony znak, lista dnia, „Razem dziś” i trzy
+    przyciski (kolejna zmiana, swoje godziny, lista osób).
+  - Okno „Za późno na samodzielny wpis” w nowym stylu — na telefonie jako
+    arkusz od dołu.
+  - Na tablecie formularz po lewej, **„Dziś zapisane” i „Zasady lokalu”** po
+    prawej; na telefonie przycisk stoi nad dolnym paskiem.
+
 ## 0.59.0 — 2026-09-29
 
 - **Pulpit pracownika — nowy wygląd według makiety** (Tablet Służbowy i
