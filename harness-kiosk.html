@@ -599,6 +599,29 @@ const poprzedniMiesiac = (h) => {
         sprawdz("stary wiersz (sam kiosk_pin) dalej jest zablokowany",
           widac("Ten profil jest zablokowany"),
           (document.getElementById("app").innerText || "").slice(0, 120));
+
+        // --- Pulpit (0.58.0) ---
+        // Bo nie ma dziś ani grafiku, ani odbicia: karta „Dziś wolne” z
+        // następną zmianą, a skrót „Wniosek o wolne” ma otworzyć formularz
+        // WOLNEGO — do 0.57.0 reset ekranu Zgłoś nadpisywał go na „problem”.
+        klik("Zmień"); await czekaj(300);
+        klik("Bo"); await czekaj(300);
+        sprawdz("Pulpit: nagłówek „imię · Pulpit”",
+          (document.querySelector("#app header h1") || {}).textContent === "Pulpit");
+        sprawdz("Pulpit: dzień bez zmiany to „Dziś wolne” z następną zmianą",
+          /dziś wolne/i.test(document.getElementById("app").innerText) &&
+            /następna zmiana/i.test(document.getElementById("app").innerText));
+        sprawdz("Pulpit: poza grafikiem przycisk jest drugorzędny i tylko prowadzi do Zmiany",
+          widac("poza grafikiem") && !widac("Zakończ zmianę"));
+        klik("Wniosek o wolne"); await czekaj(300);
+        sprawdz("„Wniosek o wolne” otwiera formularz wolnego, nie problemu",
+          widac("Wyślij wniosek"), (document.getElementById("app").innerText || "").slice(0, 160));
+        klik("Pulpit"); await czekaj(200);
+        klik("Zmień"); await czekaj(300);
+        klik("Cezary"); await czekaj(300);
+        sprawdz("Pulpit na zmianie: licznik i „Zakończ zmianę ›” prowadzące do Zmiany",
+          /na zmianie od/i.test(document.getElementById("app").innerText) &&
+            widac("Zakończ zmianę") && widac("przejdziesz do Zmiany"));
       } catch (e) {
         sprawdz("przebieg bez wyjątku", false, e.message);
       }

@@ -23,6 +23,15 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.59.0",
+    date: "2026-09-29",
+    items: [
+      "Pulpit pracownika: górna karta wg stanu dnia — wolne, przed zmianą, na zmianie, po zmianie.",
+      "Na zmianie licznik i pasek do końca wg grafiku; „Dziś z Tobą” z grafiku; zadania z blokiem TERAZ.",
+      "Nowy nagłówek „‹ Zmień · imię · zakładka”, dolny pasek i szyna na tablecie we wszystkich zakładkach.",
+    ],
+  },
+  {
     version: "0.58.0",
     date: "2026-09-29",
     items: [

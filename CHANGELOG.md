@@ -5,6 +5,31 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.59.0 — 2026-09-29
+
+- **Pulpit pracownika — nowy wygląd według makiety** (Tablet Służbowy i
+  prywatny telefon). Drugi krok przebudowy ekranów pracownika.
+  - Górna karta mówi, **jaki jest stan dnia**: *Dziś wolne* (następna zmiana i
+    kto z Tobą pracuje), *Dziś w grafiku* (godziny, stanowisko, „Dziś z Tobą”),
+    *Na zmianie* (licznik, pasek do końca wg grafiku, po czasie — „ponad
+    grafik”) albo *Dziś zapisane* (godziny i suma).
+  - Duży przycisk **tylko prowadzi do Zmiany** („Rozpocznij zmianę ›”,
+    „Zakończ zmianę ›”) — godziny zapisuje się dalej w jednym miejscu. W dniu
+    wolnym przycisk jest drugorzędny i podpisany „poza grafikiem”.
+  - Karty pokazują się tylko, gdy mają treść: **nowa wiadomość**, **zmiana do
+    wzięcia z giełdy**, **Twoje zgłoszenia** ze statusem (czeka / rozpatrzona /
+    zatwierdzony).
+  - **Zadania dnia** jako bloki z licznikiem; bieżący oznaczony **TERAZ** z
+    paskiem postępu. Kliknięcie otwiera ten blok w Zadaniach.
+  - W dniu wolnym **mini tydzień** z kropkami zmian (→ Grafik) i skrót
+    **„Wniosek o wolne”**; na dole **godziny w miesiącu** (etat: „24/176 h”).
+  - Na tablecie dwie kolumny: stan i przycisk po lewej, zadania po prawej.
+- **Nowa rama wszystkich zakładek pracownika**: nagłówek „‹ Zmień · imię ·
+  zakładka” (przycisk 48 px), zielone „na zmianie”, dolny pasek z czerwoną
+  kreską nad aktywną zakładką, a na tablecie wąska ciemna szyna ze znakiem.
+- Poprawione: skrót „Wniosek o wolne” (z Grafiku) otwierał formularz „Zgłoś
+  problem” zamiast wniosku.
+
 ## 0.58.0 — 2026-09-29
 
 - **Tablet Służbowy — nowy ekran startowy według makiety.** Pierwszy krok

@@ -878,6 +878,27 @@ mają jeszcze stary wygląd. Rzeczy, których nie widać:
 - **PIN: wygląd nowy, logika bez zmian** (makieta: „istniejący ekran").
   Przycisk powrotu nazywa się tam „Zmień" — `harness-kiosk.html` go szuka.
 
+⚠️ **Pulpit i rama sesji — układ z makiety (0.59.0, EmployeeHomeMobile /
+EmployeeHomeTablet).** Rama (`Shell`) jest nowa dla WSZYSTKICH zakładek:
+nagłówek „‹ Zmień · imię · zakładka" (tytułem jest nazwa zakładki, także na
+Pulpicie i Zmianie), dolny pasek / szyna 96 px na tablecie. Ekrany jeszcze
+nieprzebudowane zostają na białym tle — nowe przekazują `nowyWyglad` (ciepłe
+tło, kolumna do 1100 px). Rzeczy, których nie widać:
+- **Stan dnia liczy się w gałęzi PULPIT** (`stan`: off / before / on / after).
+  Zmiana dzielona: po zakończeniu pierwszej części dzień jest znowu „before",
+  jeśli grafik ma coś PO ostatnim odbitym końcu.
+- **Przycisk tylko prowadzi do Zmiany** — makieta: „to nie szybka akcja".
+  Zapis godzin (okna tolerancji, korekty) zostaje w jednym miejscu.
+- **Bez bloku GRAFIK** (prywatny telefon) nie ma „Dziś wolne" — skąd mamy
+  wiedzieć, że wolne. Karta mówi wtedy samo „Dziś".
+- **„Komunikat od kierownika" z makiety = najnowsza NIEPRZECZYTANA
+  wiadomość** — osobnych komunikatów do zespołu w bazie nie ma.
+- **TERAZ = pierwszy blok, w którym coś zostało** (bloki są już po porze),
+  tylko na zmianie.
+- ⚠️ **Reset ekranu Zgłoś nadpisywał typ formularza** — skrót „Wniosek o
+  wolne" otwierał „Zgłoś problem" (do 0.58.0). Typ ustawiony przed wejściem
+  niesie teraz `zgTypNaWejscie` (ref); sprawdza `harness-kiosk.html`.
+
 **Blokada PIN-em na kiosku** — zaimplementowana (patrz niżej, Schemat
 Supabase i sekcja "Panel kierownika"), TYLKO w `KioskDashboard.tsx`.
 Pracownik z ustawionym `kiosk_pin` dostaje ekran z klawiaturą numeryczną

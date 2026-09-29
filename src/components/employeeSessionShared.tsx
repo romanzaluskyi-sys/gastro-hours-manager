@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Home,
   Clock,
@@ -16,6 +16,9 @@ import {
   Check,
   BookOpen,
   Thermometer,
+  Palmtree,
+  Mail,
+  ArrowLeftRight,
 } from "lucide-react";
 import { api } from "../api/supabase";
 import { sendToGoogleSheets, toLocalYMD } from "../api/googleSheets";
@@ -50,7 +53,7 @@ import {
   formatNotificationText,
 } from "../utils/format";
 import { stanowiskoShort, stanowiskoBadgeStyle } from "../utils/stanowiska";
-import { podsumowanieMiesiaca } from "../utils/umowy";
+import { podsumowanieMiesiaca, normaMiesiaca } from "../utils/umowy";
 import {
   offerSwap,
   withdrawSwap,
@@ -291,6 +294,10 @@ export const Shell = ({
   title,
   showPill = false,
   showBell = true,
+  // Ekrany już przebudowane wg makiety (od 0.58.0: Pulpit) stoją na ciepłym
+  // tle z białymi kartami i szerszą kolumną; pozostałe zostają na białym,
+  // dopóki nie przyjdzie ich kolej — ich szare pola zlewałyby się z nowym tłem.
+  nowyWyglad = false,
   footer = null,
   children,
 }) => {
@@ -302,22 +309,24 @@ export const Shell = ({
   const widoczneTaby = TABS.filter((t) => !t.blok || bloki.includes(t.blok));
   // ⚠️ DWA układy z jednego drzewa (0.47.0, prośba właściciela): na telefonie
   // wąska kolumna z paskiem zakładek na DOLE; od `md` (768 px — tablet w
-  // pionie) pełna szerokość ekranu i zakładki w ciemnym pasku po LEWEJ, jak
-  // w panelu kierownika. Pasek jest jednym elementem przestawianym klasami
-  // (`order-last md:order-first`), a nie dwoma kopiami — dwie kopie zakładek
-  // rozjechałyby się przy pierwszej nowej zakładce albo znaczku.
+  // pionie) pełna szerokość ekranu i zakładki w ciemnym pasku po LEWEJ. Pasek
+  // jest jednym elementem przestawianym klasami (`order-last md:order-first`),
+  // a nie dwoma kopiami — dwie kopie zakładek rozjechałyby się przy pierwszej
+  // nowej zakładce albo znaczku.
+  //
+  // Wygląd z makiety właściciela (0.58.0): na telefonie biały pasek z grubą
+  // górną krawędzią i czerwoną kreską nad aktywną zakładką, na tablecie wąska
+  // (96 px) ciemna szyna z ikoną nad podpisem.
   const znaczekCls =
-    "absolute top-1 right-[18%] md:static md:ml-auto bg-[#DE3A22] text-white font-['Archivo'] font-extrabold text-[9.5px] md:text-[11px] min-w-[15px] md:min-w-[20px] h-[15px] md:h-5 rounded-[3px] flex items-center justify-center px-0.5 md:px-1.5";
+    "absolute top-0.5 right-[14%] md:top-1 md:right-4 bg-[#DE3A22] text-white font-['Archivo'] font-extrabold text-[11px] min-w-[20px] h-5 rounded-full flex items-center justify-center px-1";
   return (
     <div className="h-screen bg-white flex flex-col items-center overflow-hidden">
       <div className="w-full max-w-md md:max-w-none bg-white h-full flex flex-col md:flex-row shadow-lg md:shadow-none overflow-hidden">
-        <nav className="order-last md:order-first flex md:flex-col md:w-60 border-t-[1.5px] md:border-t-0 border-[#B7B6AE] bg-white md:bg-[#3D3C36] flex-shrink-0">
-          {/* Znak i nazwa produktu tylko w bocznym pasku — na telefonie
-              dolny pasek nie ma na to miejsca, a nagłówek i tak mówi, gdzie
-              jesteśmy. */}
-          <div className="hidden md:flex items-center gap-2.5 px-5 pt-6 pb-5 border-b border-white/15">
-            <ShiftroMark size={26} tone="dark" />
-            <span className="font-['Archivo'] font-extrabold text-lg text-white">{PRODUKT}</span>
+        <nav className="order-last md:order-first flex md:flex-col md:w-24 border-t-2 md:border-t-0 border-[#171714] bg-white md:bg-[#393834] md:py-3 md:gap-1 flex-shrink-0">
+          {/* Znak tylko w bocznej szynie — na telefonie dolny pasek nie ma
+              na to miejsca, a nagłówek i tak mówi, gdzie jesteśmy. */}
+          <div className="hidden md:flex justify-center pt-1.5 pb-3.5" title={PRODUKT}>
+            <ShiftroMark size={34} tone="dark" />
           </div>
           {widoczneTaby.map(({ key, label, Icon }) => {
             const active = activeTabKey === key;
@@ -325,16 +334,19 @@ export const Shell = ({
               <button
                 key={key}
                 onClick={() => setScreen(key)}
-                className={`flex-1 md:flex-none flex flex-col md:flex-row items-center gap-1 md:gap-3 py-3 pb-3.5 md:py-4 md:px-5 relative border-t-[2.5px] md:border-t-0 md:border-l-[3px] md:w-full md:text-left ${
+                className={`flex-1 md:flex-none flex flex-col items-center gap-0.5 md:gap-1 pt-2 pb-3 md:py-2.5 md:px-1 relative md:w-full md:border-l-4 ${
+                  key === "WIECEJ" ? "md:mt-auto" : ""
+                } ${
                   active
-                    ? "text-[#DE3A22] border-[#DE3A22] md:text-white md:bg-white/10"
-                    : "text-[#8F8E86] border-transparent md:text-[#C9C8C1]"
+                    ? "text-[#DE3A22] md:text-[#F2F0EA] md:bg-[#4A4944] md:border-[#DE3A22]"
+                    : "text-[#6E6E66] md:text-[#C9C6BD] md:border-transparent"
                 }`}
               >
-                <Icon size={20} />
-                <span className="text-[11px] md:text-[16px] font-semibold md:font-['Archivo'] md:font-bold">
-                  {label}
-                </span>
+                {active && (
+                  <span className="md:hidden absolute top-0 left-[18%] right-[18%] h-[3px] rounded-sm bg-[#DE3A22]" />
+                )}
+                <Icon size={24} />
+                <span className="text-[12px] font-bold">{label}</span>
                 {key === "WIECEJ" && unreadCount > 0 && (
                   <span className={znaczekCls}>{unreadCount}</span>
                 )}
@@ -348,55 +360,73 @@ export const Shell = ({
             );
           })}
         </nav>
-        <div className="flex-1 min-w-0 min-h-0 flex flex-col">
-          <header className="px-[18px] md:px-8 pt-[22px] pb-[14px] bg-[#F1F1EE] border-b-[1.5px] border-[#B7B6AE] flex items-center justify-between gap-2.5 flex-shrink-0">
-            <div className="flex items-center gap-3 min-w-0">
-              {onBack && (
-                <button
-                  onClick={onBack}
-                  className="flex items-center gap-1 border-2 border-[#B7B6AE] rounded font-['Archivo'] font-bold text-sm px-3 py-2 text-[#171714] flex-shrink-0"
-                >
-                  <ChevronLeft size={16} strokeWidth={2.5} /> Zmień
-                </button>
-              )}
-              {/* Na wspólnym tablecie tytuł ekranu ("Grafik", "Raport") nie
-                  mówi, KTO jest wybrany — imię musi być stale widoczne obok
-                  przycisku powrotu. Na Pulpicie tytułem jest już imię, więc
-                  nie dublujemy. */}
+        <div className={`flex-1 min-w-0 min-h-0 flex flex-col ${nowyWyglad ? "bg-[#F1F0EC]" : ""}`}>
+          <header className="px-3.5 md:px-6 pt-2.5 pb-3 bg-white border-b-2 border-[#171714] flex items-center gap-2.5 flex-shrink-0">
+            {/* Na wspólnym tablecie zawsze „‹ Zmień” — powrót do listy osób.
+                48 px: z tabletu korzystają też starsze osoby. */}
+            {onBack && (
+              <button
+                onClick={onBack}
+                className="h-12 flex items-center gap-1 border-2 border-[#171714] rounded-lg bg-white pl-2.5 pr-4 font-['Archivo'] font-bold text-[17px] text-[#171714] flex-shrink-0"
+              >
+                <ChevronLeft size={20} strokeWidth={2.5} /> Zmień
+              </button>
+            )}
+            {/* Na wspólnym tablecie tytuł ekranu ("Grafik", "Raport") nie
+                mówi, KTO jest wybrany — imię musi być stale widoczne obok
+                przycisku powrotu. */}
+            <div className="flex-1 min-w-0 flex items-baseline gap-2">
               {personName && personName !== title && (
-                <span className="font-['Archivo'] font-bold text-[15px] text-[#6E6E66] truncate flex-shrink-0">
+                <span className="font-['Archivo'] font-bold text-[18px] md:text-[20px] text-[#6E6E66] truncate min-w-0">
                   {personName} ·
                 </span>
               )}
-              <span className="font-['Archivo'] font-extrabold text-[19px] text-[#171714] truncate">
+              <h1
+                className={`font-['Archivo'] font-extrabold text-[#171714] flex-none ${
+                  personName ? "text-[22px] md:text-[24px]" : "text-[24px] md:text-[26px]"
+                }`}
+              >
                 {title}
-              </span>
+              </h1>
             </div>
             {showPill ? (
-              <span className="flex-shrink-0 bg-[#FAEAE6] text-[#8A3A2B] text-[13px] font-semibold px-3.5 py-2 rounded">
+              <span className="flex-shrink-0 inline-flex items-center gap-1.5 h-[34px] md:h-10 px-2.5 md:px-3 rounded-full bg-[#E2F3E9] text-[#1F7A4A] text-[13px] md:text-[14px] font-extrabold whitespace-nowrap">
+                <i className="w-2.5 h-2.5 rounded-full bg-[#1F7A4A] shadow-[0_0_0_4px_rgba(42,122,58,.18)]" />
                 na zmianie
               </span>
             ) : showBell && bloki.includes("WIADOMOSCI") ? (
               <button
                 onClick={() => setScreen("WIADOMOSCI")}
-                className="relative border-2 border-[#B7B6AE] rounded w-11 h-11 flex items-center justify-center text-[#171714] flex-shrink-0"
+                aria-label="Wiadomości"
+                className="relative border-2 border-[#DEDCD4] rounded-lg bg-white w-12 h-12 flex items-center justify-center text-[#171714] flex-shrink-0"
               >
-                <Bell size={19} />
+                <Bell size={20} />
                 {unreadCount > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-[#DE3A22] text-white font-['Archivo'] font-extrabold text-[11px] min-w-[18px] h-[18px] rounded flex items-center justify-center px-1">
+                  <span className="absolute -top-1.5 -right-1.5 bg-[#DE3A22] text-white font-['Archivo'] font-extrabold text-[11px] min-w-[20px] h-5 rounded-full flex items-center justify-center px-1">
                     {unreadCount}
                   </span>
                 )}
               </button>
             ) : null}
           </header>
-          {/* Na tablecie treść ma szerokość ekranu, ale nie rozlewa się na
-              całą: formularz albo przycisk "Rozpocznij zmianę" na 900 px
-              szerokości czyta się gorzej niż w kolumnie. Wewnętrzna kolumna
-              zostaje `flex-col`, bo ekrany spychają przyciski na dół
-              `flex-1`-owym odstępem. */}
-          <main className="flex-1 overflow-y-auto px-5 md:px-8 pt-6 pb-5 flex flex-col">
-            <div className="flex-1 flex flex-col w-full md:max-w-3xl md:mx-auto">{children}</div>
+          {/* Stare ekrany: treść w kolumnie do 3xl, bo formularz albo przycisk
+              "Rozpocznij zmianę" na 900 px szerokości czyta się gorzej niż w
+              kolumnie. Nowe mają własny układ (na tablecie dwie kolumny) i
+              potrzebują szerszego miejsca. Wewnętrzna kolumna zostaje
+              `flex-col`, bo ekrany spychają przyciski na dół `flex-1`-owym
+              odstępem. */}
+          <main
+            className={`flex-1 overflow-y-auto flex flex-col ${
+              nowyWyglad ? "px-3.5 md:px-6 pt-4 pb-6" : "px-5 md:px-8 pt-6 pb-5"
+            }`}
+          >
+            <div
+              className={`flex-1 flex flex-col w-full md:mx-auto ${
+                nowyWyglad ? "md:max-w-[1100px]" : "md:max-w-3xl"
+              }`}
+            >
+              {children}
+            </div>
           </main>
           {footer}
         </div>
@@ -551,6 +581,9 @@ export const EmployeeSessionScreens = ({
   const [zgSaving, setZgSaving] = useState(false);
   const [zgSent, setZgSent] = useState(false);
   const [zgPrefillShiftId, setZgPrefillShiftId] = useState(null);
+  // Typ formularza Zgłoś wybrany PRZED wejściem na ekran (skrót „Wniosek o
+  // wolne”) — patrz reset przy wejściu na ekran ZGLOS.
+  const zgTypNaWejscie = useRef(null);
 
   // ---- "Popraw zmianę" (type: correction) — osobny zestaw pól, patrz handleSendKorekta ----
   const [zgCorrectionShiftId, setZgCorrectionShiftId] = useState("forgot"); // uuid zmiany albo "forgot"
@@ -867,7 +900,13 @@ export const EmployeeSessionScreens = ({
       // wejście przez chorągiewkę przy konkretnej zmianie (Raport) ⇒ od razu
       // "Popraw zmianę" z tą zmianą; wejście z "Więcej" (bez kontekstu) ⇒
       // domyślnie "Zgłoś problem", jak dotychczasowe "Zgłoś"
-      setZgType(zgPrefillShiftId ? "correction" : "problem");
+      // ⚠️ Wejście z „Wniosek o wolne” (Pulpit, Grafik) ustawia typ z góry —
+      // do 0.57.0 ten reset nadpisywał go na „problem” i skrót otwierał zły
+      // formularz.
+      setZgType(
+        zgPrefillShiftId ? "correction" : zgTypNaWejscie.current || "problem"
+      );
+      zgTypNaWejscie.current = null;
       setZgShiftId(zgPrefillShiftId || "none");
       setZgAnon(false);
       setZgSent(false);
@@ -900,6 +939,7 @@ export const EmployeeSessionScreens = ({
   // Skrót z zakładki Grafik — wniosek o wolne mieszka w "Zgłoś", ale
   // najczęściej przychodzi do głowy przy oglądaniu grafiku, nie tam.
   const openWniosekOWolne = () => {
+    zgTypNaWejscie.current = "absence";
     setZgType("absence");
     setZgSent(false);
     setZgPrefillShiftId(null);
@@ -2072,9 +2112,608 @@ export const EmployeeSessionScreens = ({
   };
 
   // ==========================================
-  // EKRAN: PULPIT
+  // EKRAN: PULPIT — układ z makiety właściciela (0.58.0, EmployeeHomeMobile /
+  // EmployeeHomeTablet). Górna karta zmienia się wg STANU dnia (wolne / przed
+  // zmianą / na zmianie / po zmianie), a główny przycisk tylko PROWADZI do
+  // Zmiany — zapis godzin zostaje w jednym miejscu, z oknami tolerancji.
+  // Pozostałe karty pokazują się wyłącznie wtedy, gdy mają treść.
   // ==========================================
   if (screen === "PULPIT") {
+    const godzH = (n) => (Math.round((n || 0) * 10) / 10).toString().replace(".", ",");
+    const hm = (ms) => {
+      const abs = Math.max(0, Math.abs(ms));
+      return `${Math.floor(abs / 3600000)} godz. ${Math.floor((abs % 3600000) / 60000)} min`;
+    };
+    const dataKrotko = (ymd) =>
+      new Date(ymd + "T00:00:00").toLocaleDateString("pl-PL", { day: "numeric", month: "short" });
+    const widziGrafik = bloki.includes("GRAFIK");
+    const planDzis = widziGrafik
+      ? [...mojeDzis].sort((a, b) => trimTime(a.start_time).localeCompare(trimTime(b.start_time)))
+      : [];
+    const zamknieteDzis = [...todaysClosedShifts].sort((a, b) => a.start_time - b.start_time);
+    const ostatniKoniec = zamknieteDzis.length ? zamknieteDzis[zamknieteDzis.length - 1].end_time : null;
+    const naDzisPlan = (p) => {
+      const d = new Date(p.date + "T00:00:00");
+      const [h, m] = trimTime(p.start_time).split(":").map(Number);
+      d.setHours(h, m, 0, 0);
+      return d;
+    };
+    // Zmiana dzielona: po zakończeniu pierwszej części dzień jest znowu
+    // „przed zmianą”, jeśli grafik ma jeszcze coś PO ostatnim odbitym końcu.
+    const kolejnaDzis = ostatniKoniec
+      ? planDzis.find((p) => naDzisPlan(p) > ostatniKoniec)
+      : planDzis[0];
+    const stan = openShift
+      ? "on"
+      : zamknieteDzis.length
+      ? kolejnaDzis
+        ? "before"
+        : "after"
+      : planDzis.length
+      ? "before"
+      : "off";
+    const jutroYMD = addDaysYMD(dzisYMD, 1);
+    const nastepna = widziGrafik
+      ? stan === "off"
+        ? najblizszaZmiana
+        : nextShiftFrom(planShifts, employee, jutroYMD)
+      : null;
+
+    // „Dziś z Tobą” — kto jeszcze stoi w OPUBLIKOWANYM grafiku tego dnia w
+    // tym samym lokalu. Z grafiku, nie z odbić: chodzi o to, z kim będę
+    // pracować, a nie kto już przyszedł.
+    const zespol = (date, lokal) => {
+      if (!widziGrafik || !date || !lokal) return [];
+      const imiona = [];
+      (planShifts || []).forEach((s) => {
+        if (
+          s.published_at &&
+          !s.deleted_at &&
+          s.date === date &&
+          s.lokal === lokal &&
+          String(s.user_id) !== String(employee.id) &&
+          s.user_name !== employee.name &&
+          s.user_name &&
+          !imiona.includes(s.user_name)
+        )
+          imiona.push(s.user_name);
+      });
+      return imiona;
+    };
+    const renderZespol = (imiona, etykieta) =>
+      imiona.length > 0 && (
+        <div className="flex items-center flex-wrap mt-3 pt-2.5 border-t border-[#DEDCD4] text-[14px] text-[#6E6E66]">
+          {etykieta}
+          <span className="inline-flex ml-2">
+            {imiona.slice(0, 4).map((n, i) => (
+              <span
+                key={n}
+                className={`w-[30px] h-[30px] rounded-full bg-[#DEDCD4] border-2 border-white inline-flex items-center justify-center text-[11px] font-extrabold text-[#171714] ${
+                  i ? "-ml-1.5" : ""
+                }`}
+              >
+                {n.slice(0, 2)}
+              </span>
+            ))}
+          </span>
+          <em className="not-italic ml-2 text-[#171714] font-semibold">
+            {imiona.slice(0, 4).join(", ")}
+            {imiona.length > 4 ? ` +${imiona.length - 4}` : ""}
+          </em>
+        </div>
+      );
+
+    const kartaCls = "bg-white border-2 border-[#171714] rounded-xl px-4 py-3.5 mb-3";
+    const etykietaCls =
+      "flex items-center gap-1.5 text-[13px] font-extrabold tracking-[.05em] uppercase text-[#6E6E66]";
+    const duzaCls =
+      "block font-['Archivo'] text-[36px] leading-[42px] font-extrabold tabular-nums text-[#171714] mt-1";
+
+    const renderNastepna = (solo) =>
+      nastepna && (
+        <div
+          className={`rounded-lg px-3.5 py-3 ${
+            solo ? "bg-white border-2 border-[#171714] mb-3" : "bg-[#DEDCD4] mt-2.5"
+          }`}
+        >
+          <span className="block text-[12px] font-extrabold uppercase tracking-[.05em] text-[#6E6E66]">
+            Następna zmiana
+          </span>
+          <b className="block font-['Archivo'] text-[24px] leading-[30px] font-extrabold text-[#171714]">
+            {opisDnia(nastepna.date)} · {trimTime(nastepna.start_time)}–{trimTime(nastepna.end_time)}
+          </b>
+          <small className="text-[15px] text-[#6E6E66]">
+            {nastepna.stanowisko} · {nastepna.lokal}
+          </small>
+          {!solo && renderZespol(zespol(nastepna.date, nastepna.lokal), "z Tobą:")}
+        </div>
+      );
+
+    // --- karta stanu ---
+    const renderStatus = () => {
+      if (stan === "on") {
+        const startDate = openShift.start_time;
+        const minelo = now - startDate;
+        const zGrafikiem = planowanyKoniec && widziGrafik;
+        const calosc = zGrafikiem ? planowanyKoniec - startDate : 0;
+        const po = zGrafikiem && now > planowanyKoniec;
+        const procent = zGrafikiem && calosc > 0 ? Math.min(100, (minelo / calosc) * 100) : 0;
+        return (
+          <section className={kartaCls}>
+            <span className={`${etykietaCls} !text-[#1F7A4A]`}>
+              <i className="w-2.5 h-2.5 rounded-full bg-[#1F7A4A] shadow-[0_0_0_4px_rgba(42,122,58,.18)]" />
+              Na zmianie od {fmtHHMM(startDate)}
+            </span>
+            <b className={duzaCls}>{hm(minelo)}</b>
+            <small className="text-[15px] text-[#6E6E66]">
+              {openShift.lokal} · {openShift.stanowisko}
+            </small>
+            {/* Zmiana z poprzedniego dnia wygląda tu tak samo jak dzisiejsza —
+                bez tego człowiek, który zapomniał odbić koniec, dowiadywał się
+                o tym od kierownika, kilka dni później. */}
+            {toLocalYMD(startDate) !== toLocalYMD(now) && (
+              <div className="mt-2.5 rounded-lg px-3 py-2.5 border-2 border-[#8A5300] bg-[#FDF0D8] text-[#8A5300] text-[15px] font-bold">
+                Ta zmiana trwa od {opisDnia(toLocalYMD(startDate))}. Jeśli już ją
+                skończyłeś(-aś), zakończ ją w zakładce Zmiana i podaj godzinę
+                wyjścia.
+              </div>
+            )}
+            {zGrafikiem ? (
+              <>
+                <div className="relative h-3.5 rounded-full bg-[#DEDCD4] mt-3 mb-2 overflow-hidden">
+                  <i
+                    className={`absolute inset-y-0 left-0 ${po ? "bg-[#8A5300]" : "bg-[#1F7A4A]"}`}
+                    style={{ width: `${procent}%` }}
+                  />
+                </div>
+                <div
+                  className={`flex justify-between items-baseline text-[15px] ${
+                    po ? "text-[#8A5300]" : "text-[#6E6E66]"
+                  }`}
+                >
+                  <span>{po ? "ponad grafik" : "do końca wg grafiku"}</span>
+                  <b className={`text-[18px] tabular-nums ${po ? "" : "text-[#171714]"}`}>
+                    {po ? "+" : ""}
+                    {hm(planowanyKoniec - now)}
+                  </b>
+                </div>
+              </>
+            ) : (
+              <p className="text-[15px] text-[#6E6E66] mt-2">
+                Bez zmiany w grafiku — liczymy czas pracy.
+              </p>
+            )}
+            {!bloki.includes("WPISY") && (
+              <p className="text-[14px] text-[#6E6E66] mt-2">
+                Zmianę kończysz na Tablecie Służbowym w lokalu.
+              </p>
+            )}
+            {renderZespol(zespol(toLocalYMD(startDate), openShift.lokal), "Dziś z Tobą:")}
+          </section>
+        );
+      }
+      if (stan === "before") {
+        const p = kolejnaDzis || planDzis[0];
+        return (
+          <section className={kartaCls}>
+            <span className={etykietaCls}>
+              <Clock size={18} /> Dziś w grafiku
+            </span>
+            <b className={duzaCls}>
+              {trimTime(p.start_time)} – {trimTime(p.end_time)}
+            </b>
+            <small className="text-[15px] text-[#6E6E66]">
+              {p.stanowisko} · {p.lokal}
+            </small>
+            {zamknieteDzis.length > 0 && (
+              <p className="text-[14px] text-[#6E6E66] mt-1">
+                Dziś już zapisane: {zamknieteDzis
+                  .map((s) => `${fmtHHMM(s.start_time)}–${fmtHHMM(s.end_time)}`)
+                  .join(", ")}
+              </p>
+            )}
+            {renderZespol(zespol(p.date, p.lokal), "Dziś z Tobą:")}
+          </section>
+        );
+      }
+      if (stan === "after") {
+        const ostatnia = zamknieteDzis[zamknieteDzis.length - 1];
+        return (
+          <section className={kartaCls}>
+            <span className={`${etykietaCls} !text-[#1F7A4A]`}>
+              <Check size={18} strokeWidth={2.5} /> Dziś zapisane
+            </span>
+            <b className={duzaCls}>
+              {fmtHHMM(zamknieteDzis[0].start_time)} – {fmtHHMM(ostatnia.end_time)}
+            </b>
+            <small className="text-[15px] text-[#6E6E66]">
+              {godzH(sumHours(zamknieteDzis))} godz. · {ostatnia.stanowisko} · {ostatnia.lokal}
+            </small>
+          </section>
+        );
+      }
+      return (
+        <section className={kartaCls}>
+          <span className={etykietaCls}>
+            <Palmtree size={18} /> {widziGrafik ? "Dziś wolne" : "Dziś"}
+          </span>
+          {widziGrafik ? (
+            nastepna ? (
+              renderNastepna(false)
+            ) : (
+              <p className="text-[15px] text-[#6E6E66] mt-2">
+                Nie masz jeszcze wpisanych zmian w grafiku.
+              </p>
+            )
+          ) : (
+            <p className="text-[15px] text-[#6E6E66] mt-2">
+              Rozpocznij zmianę, gdy zaczniesz pracę.
+            </p>
+          )}
+        </section>
+      );
+    };
+
+    // --- główny przycisk: tylko przejście do Zmiany ---
+    const renderGlowny = () => {
+      if (!bloki.includes("WPISY")) return null;
+      const glowny = stan === "on" || stan === "before";
+      const tytul =
+        stan === "on"
+          ? "Zakończ zmianę"
+          : stan === "after"
+          ? "Rozpocznij kolejną zmianę"
+          : "Rozpocznij zmianę";
+      const pod = stan === "off" && widziGrafik ? "poza grafikiem" : "przejdziesz do Zmiany";
+      return (
+        <button
+          onClick={() => {
+            // Bez tego, jeśli pracownik wcześniej dziś zamknął zmianę, wejście
+            // pokazywałoby stare podsumowanie zamiast formularza.
+            setJustClosed(false);
+            setScreen("ZMIANA");
+          }}
+          className={`w-full flex items-center justify-between text-left px-[18px] rounded-lg ${
+            glowny
+              ? "min-h-[68px] bg-[#DE3A22] text-white"
+              : "min-h-[60px] bg-white border-2 border-[#171714] text-[#171714]"
+          }`}
+        >
+          <span className="grid">
+            <b className={`font-['Archivo'] font-extrabold ${glowny ? "text-[21px]" : "text-[18px]"}`}>
+              {tytul}
+            </b>
+            <small className="text-[13px] font-semibold opacity-85">{pod}</small>
+          </span>
+          <ChevronRight size={26} />
+        </button>
+      );
+    };
+
+    // --- mini tydzień (dzień wolny) ---
+    const renderTydzien = () => {
+      if (!widziGrafik || stan !== "off") return null;
+      const pn = mondayOf(dzisYMD);
+      const SKROT = ["pn", "wt", "śr", "czw", "pt", "sob", "nd"];
+      return (
+        <button
+          onClick={() => setScreen("GRAFIK")}
+          className="w-full block text-left bg-white border-2 border-[#DEDCD4] rounded-lg px-3 py-2.5 mb-3"
+        >
+          <span className="flex items-center gap-1 text-[13px] font-extrabold uppercase tracking-[.05em] text-[#6E6E66]">
+            Ten tydzień <ChevronRight size={16} className="ml-auto" />
+          </span>
+          <span className="grid grid-cols-7 mt-2 text-center">
+            {SKROT.map((sk, i) => {
+              const ymd = addDaysYMD(pn, i);
+              const ma = mojGrafik.some((s) => s.date === ymd);
+              return (
+                <span
+                  key={ymd}
+                  className={`grid justify-items-center gap-0.5 py-1 rounded-[10px] ${
+                    ymd === dzisYMD ? "bg-[#DEDCD4]" : ""
+                  }`}
+                >
+                  <small className="text-[12px] font-bold text-[#6E6E66]">{sk}</small>
+                  <b className="text-[18px] text-[#171714]">{Number(ymd.slice(8))}</b>
+                  <i className={`w-2 h-2 rounded-full ${ma ? "bg-[#171714]" : ""}`} />
+                </span>
+              );
+            })}
+          </span>
+        </button>
+      );
+    };
+
+    // --- karty pokazywane tylko wtedy, gdy mają treść ---
+    const nieprzeczytane = bloki.includes("WIADOMOSCI")
+      ? myNotifications
+          .filter((n) => !n.is_read)
+          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      : [];
+    const oferta = widziGrafik ? mojeOferty[0] : null;
+    // Moje sprawy u kierownika: czekające i rozstrzygnięte w ostatnich
+    // 3 dniach — starsza odpowiedź jest już w Wiadomościach.
+    const granicaSpraw = Date.now() - 3 * 86400000;
+    const mojeSprawy = [
+      ...(issues || [])
+        .filter(
+          (i) =>
+            !i.is_anonymous &&
+            String(i.user_id) === String(employee.id) &&
+            (i.status !== "rozwiazane" ||
+              new Date(i.updated_at || i.created_at).getTime() > granicaSpraw)
+        )
+        .map((i) => ({
+          klucz: `i:${i.id}`,
+          kiedy: new Date(i.created_at),
+          tytul:
+            i.type === "correction"
+              ? `Korekta${i.proposed_date ? ` ${dataKrotko(i.proposed_date)}` : ""}`
+              : "Zgłoszenie",
+          status: i.status === "rozwiazane" ? ["rozpatrzona", "ok"] : ["czeka", "wait"],
+        })),
+      ...(absences || [])
+        .filter(
+          (a) =>
+            String(a.user_id) === String(employee.id) &&
+            a.requested_by !== "manager" &&
+            (a.status === "pending" ||
+              new Date(a.decided_at || a.created_at).getTime() > granicaSpraw)
+        )
+        .map((a) => ({
+          klucz: `a:${a.id}`,
+          kiedy: new Date(a.created_at),
+          tytul: `${a.type === "urlop" ? "Urlop" : "Wolne"} ${dataKrotko(a.start_date)}${
+            a.end_date && a.end_date !== a.start_date ? `–${dataKrotko(a.end_date)}` : ""
+          }`,
+          status:
+            a.status === "approved"
+              ? ["zatwierdzony", "ok"]
+              : a.status === "rejected"
+              ? ["odrzucony", "no"]
+              : ["czeka", "wait"],
+        })),
+    ]
+      .sort((a, b) => b.kiedy - a.kiedy)
+      .slice(0, 2);
+    const plakietka = {
+      ok: "bg-[#E2F3E9] text-[#1F7A4A]",
+      wait: "bg-[#FDF0D8] text-[#8A5300]",
+      no: "bg-[#ECEBE6] text-[#6E6E66]",
+    };
+    const kartaInfoCls =
+      "w-full flex items-center gap-3 px-3.5 py-3 rounded-lg mb-2.5 text-left text-[#171714]";
+    const kolkoCls = "w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0";
+    const renderKarty = () => (
+      <>
+        {nieprzeczytane.length > 0 && (
+          <button
+            onClick={() => setScreen("WIADOMOSCI")}
+            className={`${kartaInfoCls} bg-[#E3EEFB]`}
+          >
+            <span className={`${kolkoCls} bg-white text-[#1D5FA8]`}>
+              <Mail size={22} />
+            </span>
+            <span className="flex-1 min-w-0">
+              <small className="block text-[13px] font-extrabold text-[#1D5FA8]">
+                {nieprzeczytane.length === 1
+                  ? "Nowa wiadomość"
+                  : `Nowe wiadomości · ${nieprzeczytane.length}`}
+              </small>
+              <b className="block text-[16px] leading-[22px] line-clamp-2">
+                {formatNotificationText(nieprzeczytane[0], false)}
+              </b>
+            </span>
+            <ChevronRight size={20} className="text-[#6E6E66] flex-shrink-0" />
+          </button>
+        )}
+        {oferta && oferta.ps && (
+          <button
+            onClick={() => setScreen("GRAFIK")}
+            className={`${kartaInfoCls} bg-[#E2F3E9] border-2 border-dashed border-[#1F7A4A]`}
+          >
+            <span className={`${kolkoCls} bg-[#1F7A4A] text-white`}>
+              <ArrowLeftRight size={22} />
+            </span>
+            <span className="flex-1 min-w-0">
+              <small className="block text-[13px] font-extrabold text-[#1F7A4A]">
+                Możesz wziąć zmianę
+                {mojeOferty.length > 1 ? ` · jeszcze ${mojeOferty.length - 1}` : ""}
+              </small>
+              <b className="block text-[16px] leading-[22px]">
+                {opisDnia(oferta.ps.date)} · {trimTime(oferta.ps.start_time)}–
+                {trimTime(oferta.ps.end_time)}
+                {oferta.sw.author_user_name ? ` · od ${oferta.sw.author_user_name}` : ""}
+              </b>
+            </span>
+            <ChevronRight size={20} className="text-[#6E6E66] flex-shrink-0" />
+          </button>
+        )}
+        {mojeSprawy.length > 0 && (
+          <div className={`${kartaInfoCls} bg-white border-2 border-[#DEDCD4]`}>
+            <span className={`${kolkoCls} bg-[#DEDCD4]`}>
+              <Flag size={22} />
+            </span>
+            <span className="flex-1 min-w-0">
+              <small className="block text-[13px] font-extrabold text-[#6E6E66]">
+                Twoje zgłoszenia
+              </small>
+              {mojeSprawy.map((s) => (
+                <b key={s.klucz} className="block text-[16px] leading-[22px]">
+                  {s.tytul}{" "}
+                  <em className={`not-italic text-[12px] font-extrabold px-1.5 py-0.5 rounded-md ml-1 ${plakietka[s.status[1]]}`}>
+                    {s.status[0]}
+                  </em>
+                </b>
+              ))}
+            </span>
+          </div>
+        )}
+      </>
+    );
+
+    // --- zadania dnia: bloki, bieżący oznaczony TERAZ ---
+    const pokazZadania =
+      bloki.includes("ZADANIA") && (stan === "on" || stan === "before") && myBlocksOwn.length > 0;
+    // „Teraz” = pierwszy blok, w którym coś zostało — bloki są już ułożone
+    // wg pory (buildEmployeeBlocks), więc to ten, który wypada najbliżej.
+    const terazId = stan === "on" ? (myBlocksOwn.find((g) => g.zostalo > 0) || {}).blok?.id : null;
+    const renderZadania = () =>
+      pokazZadania && (
+        <>
+          <div className="flex justify-between items-baseline mx-0.5 mt-1 mb-2">
+            <span className="text-[13px] font-extrabold uppercase tracking-[.05em] text-[#6E6E66]">
+              Zadania dziś
+            </span>
+            <b className="text-[18px] text-[#171714] tabular-nums">
+              {myChecklistOwn.filter((i) => i.done).length} z {myChecklistOwn.length}
+            </b>
+          </div>
+          {myBlocksOwn.map((g) => {
+            const teraz = g.blok.id === terazId;
+            return (
+              <button
+                key={g.blok.id}
+                onClick={() => {
+                  setOpenBlockId(g.blok.id);
+                  setScreen("ZADANIA");
+                }}
+                className={`w-full grid grid-cols-[1fr_auto_22px] gap-x-2.5 gap-y-2 items-center text-left bg-white border-2 rounded-lg mb-2 ${
+                  teraz ? "border-[#171714] p-3.5" : "border-[#171714] px-3.5 py-3"
+                } ${g.zostalo === 0 ? "opacity-60" : ""}`}
+              >
+                <span className="min-w-0">
+                  <span className="flex items-center gap-1.5 text-[13px] font-bold text-[#6E6E66]">
+                    {teraz && (
+                      <em className="not-italic text-[11px] font-extrabold uppercase text-white bg-[#DE3A22] rounded-[5px] px-1.5 py-px">
+                        teraz
+                      </em>
+                    )}
+                    {poraLabel(g.blok.schedule_type)}
+                    {g.blok.deadline_time ? ` · do ${g.blok.deadline_time.slice(0, 5)}` : ""}
+                  </span>
+                  <b
+                    className={`flex items-center font-['Archivo'] font-extrabold text-[#171714] ${
+                      teraz ? "text-[20px]" : "text-[17px]"
+                    }`}
+                  >
+                    <span className="truncate">{g.blok.nazwa}</span>
+                    {g.pilne && (
+                      <i
+                        title="Ważne"
+                        className="not-italic inline-flex items-center justify-center w-[18px] h-[18px] ml-1 rounded-full bg-[#DE3A22] text-white text-[12px] font-black flex-shrink-0"
+                      >
+                        !
+                      </i>
+                    )}
+                  </b>
+                </span>
+                <span className="text-[18px] font-extrabold tabular-nums text-[#171714]">
+                  {g.done}/{g.total}
+                </span>
+                <ChevronRight size={20} className="text-[#6E6E66]" />
+                {teraz && (
+                  <span className="col-span-3 h-2 rounded bg-[#DEDCD4] overflow-hidden">
+                    <i
+                      className="block h-full bg-[#1F7A4A]"
+                      style={{ width: `${g.total ? (g.done / g.total) * 100 : 0}%` }}
+                    />
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </>
+      );
+
+    // --- godziny w miesiącu → Raport ---
+    const renderGodziny = () => {
+      if (!bloki.includes("RAPORT")) return null;
+      const rok = now.getFullYear();
+      const mies = now.getMonth() + 1;
+      const { fakt } = faktIPlanMiesiaca({ shifts, planShifts, user: employee, rok, mies });
+      const norma = normaMiesiaca(employee, rok, mies);
+      const ponad = norma != null ? Math.round((fakt - norma) * 10) / 10 : 0;
+      return (
+        <button
+          onClick={() => {
+            setRaportMonth(now.getMonth());
+            setRaportYear(now.getFullYear());
+            setScreen("RAPORT");
+          }}
+          className="w-full flex items-center gap-2 min-h-[52px] px-3.5 rounded-lg bg-[#DEDCD4] text-[15px] text-[#6E6E66] mt-1 mb-2.5"
+        >
+          <FileText size={18} />
+          <span className="capitalize">{getMonthName(now.getMonth())}</span>
+          <b className="ml-auto text-[16px] text-[#171714] whitespace-nowrap tabular-nums">
+            {norma != null ? (
+              <>
+                {godzH(fakt)}/{godzH(norma)} h
+                {ponad > 0.5 && <em className="not-italic text-[#8A5300]"> · +{godzH(ponad)} h</em>}
+              </>
+            ) : (
+              `${godzH(fakt)} h`
+            )}
+          </b>
+          <ChevronRight size={18} />
+        </button>
+      );
+    };
+
+    const renderWolne = () =>
+      stan === "off" &&
+      bloki.includes("WOLNE") && (
+        <button
+          onClick={openWniosekOWolne}
+          className="w-full flex items-center gap-2 min-h-[52px] px-3.5 rounded-lg bg-white border-2 border-[#171714] text-[16px] font-bold text-[#171714] mt-1 mb-2.5"
+        >
+          <Palmtree size={18} /> Wniosek o wolne
+          <ChevronRight size={18} className="ml-auto text-[#6E6E66]" />
+        </button>
+      );
+
+    let lewa;
+    let prawa;
+    if (stan === "off") {
+      lewa = (
+        <>
+          {renderStatus()}
+          {renderTydzien()}
+        </>
+      );
+      prawa = (
+        <>
+          {renderKarty()}
+          {renderWolne()}
+          {renderGodziny()}
+        </>
+      );
+    } else if (stan === "after") {
+      lewa = renderStatus();
+      prawa = (
+        <>
+          {renderNastepna(true)}
+          {renderKarty()}
+          {renderGodziny()}
+        </>
+      );
+    } else {
+      lewa = (
+        <>
+          {renderStatus()}
+          {renderKarty()}
+        </>
+      );
+      prawa = (
+        <>
+          {renderZadania()}
+          {renderGodziny()}
+        </>
+      );
+    }
+    const glowny = renderGlowny();
+
     return (
       <Shell
         screen={screen}
@@ -2085,109 +2724,45 @@ export const EmployeeSessionScreens = ({
         grafikBadgeCount={grafikBadgeCount}
         bloki={bloki}
         personName={onBack ? employee.name : null}
-        title={employee.name}
+        title="Pulpit"
         showPill={!!openShift}
+        nowyWyglad
+        footer={
+          glowny && (
+            // Na telefonie przycisk stoi nad dolnym paskiem, pod kciukiem; na
+            // tablecie — w lewej kolumnie, pod kartą stanu.
+            <div className="md:hidden flex-shrink-0 px-3.5 pt-2 pb-2.5 bg-[#F1F0EC]">{glowny}</div>
+          )
+        }
       >
-        {/* Stoi nad wszystkim i w obu stanach Pulpitu — zamknięcie dnia jest
-            czynnością na koniec zmiany, więc musi być widoczne i wtedy, gdy
-            zmiana jeszcze trwa. */}
+        {/* Stoi nad wszystkim — zamknięcie dnia jest czynnością na koniec
+            zmiany, więc musi być widoczne i wtedy, gdy zmiana jeszcze trwa. */}
         <PulsPrzypomnienie
           employee={employee}
           lokal={effectiveAssignment.lokal}
           onOtworz={() => setScreen("PULS")}
         />
-        {openShift ? (
-          renderShiftInProgress()
-        ) : (
-          <>
-            <div className="flex items-start justify-between gap-3">
-              <div className="font-['Archivo'] font-extrabold text-[30px] text-[#171714]">
-                Cześć, {employee.name}
-              </div>
-              <WeatherBadge
-                city={
-                  lokaleOptions.find((l) => l.name === effectiveAssignment.lokal)?.miasto
-                }
-                className="text-[#8F8E86] text-sm mt-1.5 flex-shrink-0"
-              />
-            </div>
-            <div className="text-sm text-[#6E6E66] mt-0.5 mb-7">
-              {employee.default_lokal} · {employee.default_stanowisko}
-            </div>
-            {bloki.includes("GRAFIK") && (
-              <>
-            <div className={sectionLabelCls}>Twoja zmiana dziś</div>
-            <div className={ruleStrongCls} />
-            {mojeDzis.length > 0 ? (
-              <div className="mt-3 space-y-2">
-                {mojeDzis.map((s) => (
-                  <div key={s.id} className={staticBoxCls}>
-                    <span className="font-['Archivo'] font-extrabold text-[19px]">
-                      {trimTime(s.start_time)} – {trimTime(s.end_time)}
-                    </span>
-                    <span className="text-[13px] text-[#6E6E66] text-right">
-                      {s.stanowisko}
-                      <br />
-                      {s.lokal}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : najblizszaZmiana ? (
-              <button
-                onClick={() => setScreen("GRAFIK")}
-                className="mt-3 w-full text-left border-2 border-[#B7B6AE] rounded bg-[#F1F1EE] p-3.5"
-              >
-                <div className={sectionLabelCls}>Następna zmiana</div>
-                <div className="font-['Archivo'] font-extrabold text-[19px] mt-0.5">
-                  {opisDnia(najblizszaZmiana.date)} ·{" "}
-                  {trimTime(najblizszaZmiana.start_time)} –{" "}
-                  {trimTime(najblizszaZmiana.end_time)}
-                </div>
-                <div className="text-[13px] text-[#6E6E66]">
-                  {najblizszaZmiana.stanowisko} · {najblizszaZmiana.lokal}
-                </div>
-              </button>
-            ) : (
-              <div className="text-[15px] text-[#8F8E86] italic mt-4">
-                Nie masz jeszcze wpisanych zmian w grafiku.
-              </div>
-            )}
-              </>
-            )}
-            {myChecklistOwn.length > 0 && (
-              <>
-                <div className="flex items-baseline justify-between mt-6">
-                  <span className={sectionLabelCls}>Zadania dziś</span>
-                  <span className="font-['Archivo'] font-extrabold text-sm text-[#171714] tabular-nums">
-                    {myChecklistOwn.filter((i) => i.done).length} z{" "}
-                    {myChecklistOwn.length}
-                  </span>
-                </div>
-                <div className={ruleSoftCls} />
-                <div className="mt-3">
-                  {renderBlockCards(myBlocksOwn, { zwiniete: true })}
-                </div>
-              </>
-            )}
-            <div className="flex-1" />
-            {bloki.includes("WPISY") && (
-            <button
-              onClick={() => {
-                // Bez tego, jeśli pracownik wcześniej dziś zamknął zmianę,
-                // wejście tutaj pokazywałoby stare podsumowanie zamiast
-                // formularza — kliknięcie ma znaczyć "chcę zacząć", nie
-                // "pokaż mi ponownie ostatnie podsumowanie".
-                setJustClosed(false);
-                setScreen("ZMIANA");
-              }}
-              className={ctaPrimaryCls}
-            >
-              <Clock size={19} /> Rozpocznij zmianę
-            </button>
-            )}
-          </>
-        )}
+        <div className="flex justify-between items-start gap-2.5 mb-3.5">
+          <div className="min-w-0">
+            <h2 className="font-['Archivo'] font-extrabold text-[30px] leading-[34px] text-[#171714]">
+              Cześć, {employee.name}
+            </h2>
+            <small className="text-[15px] text-[#6E6E66]">
+              {[employee.default_lokal, employee.default_stanowisko].filter(Boolean).join(" · ")}
+            </small>
+          </div>
+          <WeatherBadge
+            city={lokaleOptions.find((l) => l.name === effectiveAssignment.lokal)?.miasto}
+            className="text-[16px] text-[#6E6E66] whitespace-nowrap mt-1 flex-shrink-0"
+          />
+        </div>
+        <div className="md:grid md:grid-cols-2 md:gap-6 md:items-start">
+          <div className="min-w-0">
+            {lewa}
+            {glowny && <div className="hidden md:block mt-1.5">{glowny}</div>}
+          </div>
+          <div className="min-w-0">{prawa}</div>
+        </div>
       </Shell>
     );
   }
@@ -2206,7 +2781,7 @@ export const EmployeeSessionScreens = ({
         grafikBadgeCount={grafikBadgeCount}
         bloki={bloki}
         personName={onBack ? employee.name : null}
-        title={employee.name}
+        title="Zmiana"
         showPill={!!openShift}
       >
         {openShift
