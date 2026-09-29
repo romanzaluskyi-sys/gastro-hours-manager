@@ -23,6 +23,10 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
     kierownika.
   - Ekran PIN-u w tym samym stylu — większe klawisze; działa jak dotąd (sześć
     cyfr, zatwierdza sam).
+- **Skrzynka → Informacje oznacza wszystko jako przeczytane samo**, po 3 s od
+  wejścia — znaczek przy dzwonku gaśnie bez klikania. Przy okazji naprawione:
+  przypomnienia „Puls niezamknięty" nie dawały się oznaczyć jako przeczytane w
+  ogóle i trzymały znaczek zapalony na stałe.
 
 ## 0.57.0 — 2026-09-27
 

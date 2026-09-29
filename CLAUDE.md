@@ -1069,6 +1069,8 @@ Informacje / Archiwum, filtr typu Wnioski / Zgłoszenia / System.
 - **Wnioski o wolne są w DWÓCH miejscach** — tu i w Zatwierdzaniu (makieta).
   Oba liczą je z tych samych `absences`, więc decyzja w jednym znika z
   drugiego; znaczki obu zakładek je liczą.
+- ⚠️ **Wejście w Informacje oznacza wszystko jako przeczytane po 3 s**
+  (0.58.0, `useEffect` w Skrzynce; sprawdza `harness-panel.html`).
 - **Informacje = powiadomienia z 14 dni**, te same (typ, lokal, treść)
   sklejone w jedną pozycję z „×N"; starsze idą do Archiwum. Archiwum ma też
   rozwiązane zgłoszenia i wnioski rozstrzygnięte w ostatnich 60 dniach.
@@ -1201,9 +1203,11 @@ Supabase Table Editor jest nieaktualna.
 `NotificationsPanel`) — wiersze z tabeli `notifications` gdzie
 `audience === "manager"`, przefiltrowane przez `hasAccessToLokal(n.lokal)`
 — `manager_lokalu` widzi tylko swoje `allowed_lokale`, `admin` widzi
-wszystko. ⚠️ Od 0.51.0 NIE oznaczamy ich jako przeczytane przy wejściu —
-jest przycisk "Oznacz wszystko jako przeczytane"; znaczek przy dzwonku dalej
-liczy nieprzeczytane. Tworzenie takich powiadomień idzie przez ogólną funkcję
+wszystko. ⚠️ Od 0.58.0 wejście w Informacje OZNACZA wszystko jako
+przeczytane po 3 s (prośba właściciela: znaczek przy dzwonku wisiał, dopóki
+ktoś nie kliknął przycisku). Wyjście z zakładki przed upływem 3 s niczego nie
+oznacza; przycisk "Oznacz wszystko jako przeczytane" został dla
+niecierpliwych. Tworzenie takich powiadomień idzie przez ogólną funkcję
 `createManagerNotification(lokal, message, type)` w
 [`api/notifications.ts`](src/api/notifications.ts) — analogiczna
 `createEmployeeNotification(userName, message, type)` robi to samo dla

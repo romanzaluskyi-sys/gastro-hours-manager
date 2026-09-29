@@ -15,7 +15,7 @@
 // ⚠️ Liczbę pozycji "Do zrobienia" liczy `zbierzSprawy` — ta sama funkcja daje
 // znaczek w menu (ManagerDashboard) i listę tutaj. Dokładając rodzaj sprawy,
 // dopisz go TYLKO tam.
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   AlertTriangle,
   ArrowRight,
@@ -216,6 +216,10 @@ export const zbierzSprawy = ({
         ? new Date(Math.max(...przypomnienia.map((n) => new Date(n.created_at))))
         : new Date(`${otwarteDni[otwarteDni.length - 1]}T23:59:00`),
       nowe: przypomnienia.some((n) => !n.is_read),
+      // ⚠️ Bez tego przypomnienia o Pulsie nigdy nie dawały się oznaczyć jako
+      // przeczytane — ani przyciskiem, ani wejściem w Informacje — i trzymały
+      // znaczek przy dzwonku zapalony na stałe (do 0.57.0).
+      idsPowiadomien: przypomnienia.map((n) => n.id),
       razy: przypomnienia.length,
       lokal,
       tytul: `Puls niezamknięty · ${listaDat(otwarteDni.map(dm))}`,
@@ -466,6 +470,23 @@ export default function Skrzynka({
     (s) => s.box === zakladka && (rodzaj === "all" || RODZAJE[rodzaj].includes(s.rodzaj))
   );
   const nieprzeczytane = wszystkie.filter((s) => s.nowe && s.idsPowiadomien).flatMap((s) => s.idsPowiadomien);
+
+  // ⚠️ Wejście w Informacje OZNACZA wszystko jako przeczytane — po 3 s, żeby
+  // nowe pozycje zdążyły mignąć pogrubieniem (prośba właściciela, 0.58.0).
+  // Do 0.57.0 zostawało to przyciskowi i znaczek przy dzwonku wisiał, dopóki
+  // ktoś o nim nie pamiętał. Klucz z listy id, a nie sama tablica: każdy
+  // render daje nową tablicę i zegar ruszałby od nowa w nieskończoność.
+  // Wyjście z zakładki przed upływem 3 s niczego nie oznacza.
+  // Same id bierzemy z refa — mogą być liczbami, a tekst z klucza by ich nie
+  // dopasował w stanie powiadomień.
+  const kluczNieprzeczytanych = nieprzeczytane.join(",");
+  const nieprzeczytaneRef = useRef(nieprzeczytane);
+  nieprzeczytaneRef.current = nieprzeczytane;
+  useEffect(() => {
+    if (zakladka !== "info" || !kluczNieprzeczytanych) return;
+    const t = setTimeout(() => onMarkRead(nieprzeczytaneRef.current), 3000);
+    return () => clearTimeout(t);
+  }, [zakladka, kluczNieprzeczytanych]);
 
   const akcja = (s, id) => {
     if (id === "zatwierdz_wolne" || id === "odrzuc_wolne") {

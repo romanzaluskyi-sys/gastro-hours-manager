@@ -29,6 +29,7 @@ const CHANGELOG = [
       "Tablet Służbowy — nowy ekran startowy: osoby w grupach Na zmianie / Dziś w grafiku / Pozostali.",
       "Status z boku karty dużą godziną; nad listą liczniki, w nagłówku zegar, pogoda i data.",
       "Nowa osoba na próbę: stanowisko kaflem i lista, co ta osoba może do czasu zatwierdzenia.",
+      "Skrzynka → Informacje: po 3 s wszystko przeczytane, znaczek przy dzwonku gaśnie sam.",
     ],
   },
   {
