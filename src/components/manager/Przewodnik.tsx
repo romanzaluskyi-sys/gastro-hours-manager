@@ -23,6 +23,14 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.66.0",
+    date: "2026-09-29",
+    items: [
+      "Więcej pracownika: duże wiersze Zgłoś (z liczbą spraw, które czekają), Wiadomości, Wróć do listy osób.",
+      "Na dole urządzenie („Tablet Służbowy · lokal” / „Twój telefon”), ostrzeżenie i „Wyloguj” z potwierdzeniem — domyślnie „Nie, zostaw zalogowany”.",
+    ],
+  },
+  {
     version: "0.65.0",
     date: "2026-09-29",
     items: [

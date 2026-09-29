@@ -812,8 +812,8 @@ dashboardy przez wspólny komponent `EmployeeSessionScreens` w
   `EmployeeSessionScreens` z `onBack` ustawionym na powrót do tej listy —
   stąd w nagłówku każdego ekranu przycisk "< Zmień" (bez stosu "wstecz",
   zawsze prosto do listy — świadoma decyzja z sesji projektowej), a w
-  "Więcej" wiersz "Wróć do listy osób" i notatka "Uwaga" o tym, że
-  urządzenie zostaje zalogowane na stałe.
+  "Więcej" wiersz "Wróć do listy osób" i ostrzeżenie o tym, że
+  urządzenie zostaje zalogowane na stałe (od 0.66.0 — patrz „Więcej” niżej).
 - **`PersonalDashboard.tsx`** (osobisty telefon, role `closed`/`open`,
   `closed_dashboard`) — `currentUser` to już konkretna osoba, więc od razu
   `EmployeeSessionScreens` BEZ `onBack` — nagłówki bez "< Zmień", "Więcej"
@@ -833,9 +833,8 @@ w `EmployeeSessionScreens` — NIE reużywa samego komponentu `TimeEntryForm`,
 bo ten renderuje własny picker pracownika, którego tu nie chcemy.
 **Zadania**: placeholder "w budowie" — moduł Zadania z Roadmapy punkt 2
 jeszcze nie istnieje, świadomie NIE ma fałszywego, nieinteraktywnego
-checklisty. **Więcej**: Grafik-placeholder, Zgłoś, Wiadomości, mały
-podkreślony link "Wyloguj" (nie duży przycisk — na kiosku wylogowanie
-wymaga ponownego Email+PIN, na koncie osobistym to zwykłe wylogowanie).
+checklisty. **Więcej**: opis tego akapitu jest historyczny (zakładki
+Zadania i Więcej przebudowano później — patrz „układ z makiety” niżej).
 
 Reużywa bez zmian: `findOverlappingShift`, `getTodaysShiftsForUser`,
 `sendToGoogleSheets`, formattery z `utils/format.ts`, oraz ten sam wzorzec
@@ -864,8 +863,9 @@ razu wpuszcza go do jego sesji. Pełny opis: "Pracownik na próbę" niżej.
 
 ⚠️ **Ekran startowy — układ z makiety właściciela (0.58.0, KioskStartMobile /
 KioskStartTablet).** Przebudowa ekranów pracownika idzie BLOK PO BLOKU (prośba
-właściciela) — to jest pierwszy; ekrany sesji (`employeeSessionShared.tsx`)
-mają jeszcze stary wygląd. Rzeczy, których nie widać:
+właściciela) — to był pierwszy; ostatni (Więcej) wszedł w 0.66.0 i od tej
+wersji wszystkie ekrany pracownika mają nowy wygląd (poza „Zamknięciem dnia”,
+które jest ekranem Pulsu). Rzeczy, których nie widać:
 - **Grupy liczą się z `stanDnia`** — tego samego, co liczniki nad listą: Na
   zmianie (`na_zmianie`), Dziś w grafiku (`oczekiwany`), Pozostali
   (`zakonczyl` + `wolne`). Pusta grupa się nie rysuje.
@@ -1021,6 +1021,20 @@ EmployeeMessagesTablet).** Rzeczy, których nie widać:
   „Wszystkie”.
 - **Akcje** tylko przy włączonym bloku: „Zobacz grafik” (GRAFIK), „Popraw
   zmianę” (RAPORT — otwiera Zgłoś na liście zmian przez `zgTypNaWejscie`).
+
+⚠️ **Więcej — układ z makiety (0.66.0, EmployeeMoreMobile /
+EmployeeMoreTablet).**
+- **„Wyloguj” to duży czerwony obrys i ZAWSZE pyta drugi raz** (arkusz,
+  czarną akcją domyślną jest „Nie, zostaw zalogowany”). Wylogowany tablet
+  gaśnie dla całego lokalu do czasu, aż kierownik wpisze dane kiosku —
+  dlatego ostrzeżenie i pytanie stoją tuż obok.
+- **Tekst ostrzeżenia zależy od `onBack`** (wspólny tablet / własny
+  telefon). Prop `deviceNote` z KioskDashboard usunięty.
+- **„N czeka” przy Zgłoś liczy te same sprawy co „Moje zgłoszenia”**:
+  korekty i zgłoszenia pod imieniem bez rozstrzygnięcia + własne wnioski o
+  wolne `pending`. Anonimowe się nie liczą.
+- „Zamknięcie dnia” (prawo `puls_do`) zostało jako wiersz, choć makieta go
+  nie ma — to istniejąca funkcja.
 
 **Blokada PIN-em na kiosku** — zaimplementowana (patrz niżej, Schemat
 Supabase i sekcja "Panel kierownika"), TYLKO w `KioskDashboard.tsx`.

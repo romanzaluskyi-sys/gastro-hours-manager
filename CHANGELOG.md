@@ -5,6 +5,22 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.66.0 — 2026-09-29
+
+- **Więcej — nowy wygląd według makiety** (Tablet Służbowy i prywatny
+  telefon). Ostatni krok przebudowy — wszystkie ekrany pracownika mają już
+  nowy wygląd.
+  - **Duże wiersze z ikoną i podpisem**: Zgłoś („popraw zmianę · wolne ·
+    problem · 2 czeka”), Zamknięcie dnia (gdy ktoś ma to prawo), Wiadomości
+    (z liczbą nowych), Wróć do listy osób (tylko tablet, przerywana ramka).
+  - **Na dole urządzenie**: „Tablet Służbowy · lokal” albo „Twój telefon ·
+    konto”, pomarańczowe ostrzeżenie (tablet: zalogowany na stałe, ponowne
+    logowanie danymi kiosku; żeby oddać tablet — „Wróć do listy osób”) i
+    wersja aplikacji. Na tablecie lista po lewej, urządzenie po prawej.
+  - **„Wyloguj urządzenie” pyta drugi raz**: domyślnie „Nie, zostaw
+    zalogowany”, wylogowanie to osobny, czerwony przycisk. Wcześniej jedno
+    dotknięcie małego linku od razu wylogowywało tablet całego lokalu.
+
 ## 0.65.0 — 2026-09-29
 
 - **Wiadomości — nowy wygląd według makiety** (Tablet Służbowy i prywatny

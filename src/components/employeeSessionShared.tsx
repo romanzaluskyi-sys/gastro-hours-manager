@@ -23,6 +23,9 @@ import {
   EyeOff,
   Plus,
   X,
+  LogOut,
+  Tablet,
+  Smartphone,
   Users,
   User,
   Lock,
@@ -537,9 +540,8 @@ export const Shell = ({
 // `onBack` (opcjonalny): gdy podany, w nagłówku pojawia się "< Zmień", a w
 // "Więcej" wiersz "Wróć do listy osób". Gdy brak (osobiste konto — nie ma
 // listy, do której wracać), oba znikają.
-// `deviceNote` (opcjonalny React node): dodatkowa ramka "Uwaga" na dole
-// "Więcej" (kiosk używa jej do ostrzeżenia o stałym zalogowaniu urządzenia;
-// osobiste konto jej nie potrzebuje — pomiń).
+// Ostrzeżenie o wylogowaniu w "Więcej" zależy od `onBack` (wspólny tablet
+// albo własny telefon) — do 0.65.0 kiosk podawał je propem `deviceNote`.
 // `showEmployeeNameInMessages`: przekazywane wprost do
 // `formatNotificationText` — true na kiosku (wspólne urządzenie, trzeba
 // wiedzieć czyje powiadomienie), false na koncie osobistym.
@@ -578,7 +580,6 @@ export const EmployeeSessionScreens = ({
   bloki = BLOKI_WSZYSTKIE,
   onBack,
   onLogout,
-  deviceNote = null,
 }) => {
   const [screen, setScreen] = useState("PULPIT");
   const [justClosed, setJustClosed] = useState(false);
@@ -733,6 +734,9 @@ export const EmployeeSessionScreens = ({
   // lista trzyma wyróżnienie „nowa” do dotknięcia karty albo „Przeczytane”.
   const [noweWiadomosci, setNoweWiadomosci] = useState([]);
   const [katWiadomosci, setKatWiadomosci] = useState("all");
+  // Arkusz „Wylogować?” w Więcej (0.66.0) — wylogowanie tabletu gasi go dla
+  // całego lokalu, więc zawsze pytamy drugi raz.
+  const [pytanieWyloguj, setPytanieWyloguj] = useState(false);
   const [zgPrefillShiftId, setZgPrefillShiftId] = useState(null);
   // Typ formularza Zgłoś wybrany PRZED wejściem na ekran (skrót „Wniosek o
   // wolne”) — patrz reset przy wejściu na ekran ZGLOS.
@@ -4823,7 +4827,139 @@ export const EmployeeSessionScreens = ({
   // ==========================================
   // EKRAN: WIECEJ
   // ==========================================
+  // ==========================================
+  // EKRAN: WIECEJ — układ z makiety właściciela (0.66.0, EmployeeMoreMobile /
+  // EmployeeMoreTablet): duże wiersze (Zgłoś, Zamknięcie dnia, Wiadomości,
+  // Wróć do listy osób), na dole urządzenie, ostrzeżenie i „Wyloguj” z
+  // potwierdzeniem. Na tablecie lista po lewej, urządzenie po prawej.
+  // ==========================================
   if (screen === "WIECEJ") {
+    const wspolny = !!onBack;
+    // „N czeka” przy Zgłoś — te same sprawy co „Moje zgłoszenia”: korekty i
+    // zgłoszenia pod imieniem bez rozstrzygnięcia plus własne wnioski o wolne.
+    const czekaSpraw =
+      (issues || []).filter(
+        (i) => !i.is_anonymous && String(i.user_id) === String(employee.id) && i.status !== "rozwiazane"
+      ).length +
+      (absences || []).filter(
+        (a) => String(a.user_id) === String(employee.id) && a.requested_by !== "manager" && a.status === "pending"
+      ).length;
+    const wiersz = ({ Ikona, tytul, podpis, znaczek, onClick, przerywany, dane }) => (
+      <button
+        type="button"
+        onClick={onClick}
+        {...dane}
+        className={`w-full grid grid-cols-[48px_1fr_auto_22px] gap-3 items-center min-h-[76px] px-3.5 py-2.5 border-2 rounded-lg bg-white text-left ${
+          przerywany ? "border-dashed border-[#B7B6AE]" : "border-[#B7B6AE]"
+        }`}
+      >
+        <span className="w-12 h-12 rounded-full bg-[#DEDCD4] flex items-center justify-center text-[#171714]">
+          <Ikona size={24} />
+        </span>
+        <span className="min-w-0">
+          <b className="block text-[20px] font-extrabold text-[#171714]">{tytul}</b>
+          <small className="text-[14px] leading-[18px] text-[#6E6E66]">{podpis}</small>
+        </span>
+        {znaczek ? (
+          <em className="not-italic min-w-[28px] h-7 rounded-full bg-[#DE3A22] text-white text-[14px] font-extrabold flex items-center justify-center px-2">
+            {znaczek}
+          </em>
+        ) : (
+          <span />
+        )}
+        <ChevronRight size={22} className="text-[#6E6E66]" />
+      </button>
+    );
+    const lista = (
+      <div className="grid gap-2.5">
+        {dostepneTypyZgloszen.length > 0 &&
+          wiersz({
+            Ikona: Flag,
+            tytul: "Zgłoś",
+            podpis: (
+              <>
+                {dostepneTypyZgloszen
+                  .map((t) => ({ correction: "popraw zmianę", absence: "wolne", problem: "problem" })[t.key])
+                  .join(" · ")}
+                {czekaSpraw > 0 && <b className="font-extrabold text-[#8A5300]"> · {czekaSpraw} czeka</b>}
+              </>
+            ),
+            onClick: () => openZgloszenie(null),
+            dane: { "data-wiecej": "zglos" },
+          })}
+        {/* Prawo kierownika zmiany (users.puls_do) jest na czas i wygasa samo —
+            dlatego wiersz pojawia się i znika bez niczyjej ingerencji. */}
+        {mozeZamykacPuls(employee) &&
+          wiersz({
+            Ikona: BookOpen,
+            tytul: "Zamknięcie dnia",
+            podpis: "Puls lokalu — możesz dziś zamknąć dzień",
+            onClick: () => setScreen("PULS"),
+            dane: { "data-wiecej": "puls" },
+          })}
+        {bloki.includes("WIADOMOSCI") &&
+          wiersz({
+            Ikona: Mail,
+            tytul: "Wiadomości",
+            podpis: unreadCount > 0 ? `${unreadCount} ${unreadCount === 1 ? "nowa" : "nowe"} od kierownika` : "brak nowych",
+            znaczek: unreadCount > 0 ? unreadCount : null,
+            onClick: () => setScreen("WIADOMOSCI"),
+            dane: { "data-wiecej": "wiadomosci" },
+          })}
+        {wspolny &&
+          wiersz({
+            Ikona: Users,
+            tytul: "Wróć do listy osób",
+            podpis: "tablet zostaje zalogowany dla innych",
+            onClick: onBack,
+            przerywany: true,
+            dane: { "data-wiecej": "lista" },
+          })}
+      </div>
+    );
+    const lokaleUrzadzenia = (lokaleOptions || []).map((l) => l.name).join(", ");
+    const urzadzenie = (
+      <section>
+        <div className="flex items-center gap-2 text-[14px] text-[#6E6E66] mx-0.5 mb-2">
+          {wspolny ? <Tablet size={18} /> : <Smartphone size={18} />}
+          <span>
+            {wspolny ? (
+              <>
+                <b className="text-[#171714]">Tablet Służbowy</b>
+                {lokaleUrzadzenia ? ` · ${lokaleUrzadzenia}` : ""}
+              </>
+            ) : (
+              <>
+                <b className="text-[#171714]">Twój telefon</b> · konto {employee.name}
+              </>
+            )}
+          </span>
+        </div>
+        <div className="flex gap-2.5 px-3.5 py-3 border-2 border-dashed border-[#8A5300] rounded-lg bg-[#FDF0D8] text-[#8A5300]">
+          <AlertTriangle size={22} className="flex-none mt-px" />
+          <p className="text-[15px] leading-[21px]">
+            {wspolny ? (
+              <>
+                <b>Uwaga:</b> to urządzenie jest zalogowane na stałe. Nie wylogowuj go bez potrzeby — potem trzeba
+                zalogować się ponownie <b>danymi kiosku</b> (ma je kierownik). Żeby oddać tablet innej osobie, użyj
+                „Wróć do listy osób”.
+              </>
+            ) : (
+              "Po wylogowaniu zalogujesz się ponownie swoim e-mailem i PIN-em."
+            )}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setPytanieWyloguj(true)}
+          data-wyloguj
+          className="w-full min-h-[56px] mt-2.5 flex items-center justify-center gap-2 border-2 border-[#DE3A22] rounded-lg bg-white text-[#DE3A22] text-[17px] font-extrabold"
+        >
+          <LogOut size={22} /> {wspolny ? "Wyloguj urządzenie" : "Wyloguj się"}
+        </button>
+        <small className="block text-center text-[13px] text-[#6E6E66] mt-2.5 mb-1">Wersja {APP_VERSION}</small>
+      </section>
+    );
     return (
       <Shell
         screen={screen}
@@ -4835,72 +4971,65 @@ export const EmployeeSessionScreens = ({
         bloki={bloki}
         personName={onBack ? employee.name : null}
         title="Więcej"
+        nowyWyglad
       >
-        {dostepneTypyZgloszen.length > 0 && (
-        <button onClick={() => openZgloszenie(null)} className={menuRowCls}>
-          <Flag size={21} className="text-[#171714] flex-shrink-0" />
-          <span className="flex-1 text-base font-semibold text-[#171714]">
-            Zgłoś
-          </span>
-        </button>
-        )}
-        {/* Prawo kierownika zmiany (users.puls_do) jest na czas i wygasa samo —
-            dlatego wiersz pojawia się i znika bez niczyjej ingerencji. */}
-        {mozeZamykacPuls(employee) && (
-          <button onClick={() => setScreen("PULS")} className={menuRowCls}>
-            <BookOpen size={21} className="text-[#171714] flex-shrink-0" />
-            <span className="flex-1 text-base font-semibold text-[#171714]">
-              Zamknięcie dnia
-            </span>
-          </button>
-        )}
-        {bloki.includes("WIADOMOSCI") && (
-        <button onClick={() => setScreen("WIADOMOSCI")} className={menuRowCls}>
-          <Bell size={21} className="text-[#171714] flex-shrink-0" />
-          <span className="flex-1 text-base font-semibold text-[#171714]">
-            Wiadomości
-          </span>
-          {unreadCount > 0 && (
-            <span className="flex-shrink-0 text-[13px] font-semibold px-3 py-1.5 rounded bg-[#FAEAE6] text-[#8A3A2B]">
-              {unreadCount} nowe
-            </span>
-          )}
-        </button>
-        )}
-        {onBack && (
-          <button onClick={onBack} className={menuRowCls}>
-            <ChevronLeft
-              size={21}
-              strokeWidth={2.5}
-              className="text-[#171714] flex-shrink-0"
-            />
-            <span className="flex-1 text-base font-semibold text-[#171714]">
-              Wróć do listy osób
-            </span>
-          </button>
-        )}
-        <div className="flex-1" />
-        {deviceNote && (
-          <div className="border-2 border-dashed border-[#B7B6AE] rounded p-4">
-            <div className="text-[11px] font-bold tracking-wider uppercase text-[#8F8E86] mb-2">
-              Uwaga
-            </div>
-            <div className="text-[15px] text-[#171714] leading-relaxed">
-              {deviceNote}
+        {/* Telefon: lista u góry, urządzenie przyklejone do dołu (flex-1 nad
+            nim). Tablet: dwie kolumny. */}
+        <div className="flex-1 flex flex-col md:grid md:grid-cols-[minmax(0,620px)_360px] md:gap-7 md:items-start md:justify-center">
+          {lista}
+          <div className="flex-1 md:hidden min-h-[24px]" />
+          {urzadzenie}
+        </div>
+        {pytanieWyloguj && (
+          <div
+            className="fixed inset-0 bg-black/45 flex items-end md:items-center justify-center md:p-4 z-50"
+            onClick={() => setPytanieWyloguj(false)}
+          >
+            <div
+              role="dialog"
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-t-[22px] md:rounded-[22px] w-full md:max-w-[440px] px-[18px] pt-[22px] pb-6 text-center"
+              data-pytanie-wyloguj
+            >
+              <span className="inline-flex w-14 h-14 rounded-full bg-[#FBEAE6] text-[#DE3A22] items-center justify-center">
+                <LogOut size={28} />
+              </span>
+              <h3 className="font-['Archivo'] text-[24px] font-extrabold text-[#171714] mt-2.5 mb-1.5">
+                {wspolny ? "Wylogować tablet?" : "Wylogować się?"}
+              </h3>
+              <p className="text-[16px] leading-[23px] text-[#171714] mb-4">
+                {wspolny ? (
+                  <>
+                    Tablet przestanie działać dla <b>wszystkich pracowników</b>
+                    {lokaleUrzadzenia ? ` lokalu ${lokaleUrzadzenia}` : ""}, dopóki kierownik nie zaloguje go
+                    ponownie danymi kiosku.
+                  </>
+                ) : (
+                  "Zalogujesz się ponownie swoim e-mailem i PIN-em."
+                )}
+              </p>
+              {/* Domyślna, czarna akcja to ZOSTAĆ — wylogowanie ma czerwony obrys. */}
+              <button
+                type="button"
+                onClick={() => setPytanieWyloguj(false)}
+                className="w-full min-h-[58px] rounded-lg bg-[#171714] text-white text-[18px] font-extrabold mb-2"
+              >
+                {wspolny ? "Nie, zostaw zalogowany" : "Anuluj"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPytanieWyloguj(false);
+                  onLogout();
+                }}
+                data-wyloguj-tak
+                className="w-full min-h-[58px] rounded-lg bg-white border-2 border-[#DE3A22] text-[#DE3A22] text-[18px] font-extrabold"
+              >
+                {wspolny ? "Tak, wyloguj tablet" : "Wyloguj się"}
+              </button>
             </div>
           </div>
         )}
-        <button
-          onClick={onLogout}
-          className={`text-[13px] text-[#8F8E86] underline underline-offset-2 self-center ${
-            deviceNote ? "mt-3.5" : "mt-2"
-          }`}
-        >
-          Wyloguj
-        </button>
-        <p className="text-[11px] text-[#B7B6AE] self-center mt-1.5">
-          Wersja {APP_VERSION}
-        </p>
       </Shell>
     );
   }

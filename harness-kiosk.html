@@ -937,6 +937,27 @@ const poprzedniMiesiac = (h) => {
         await klikPrzycisk("Popraw zmianę");
         sprawdz("„Popraw zmianę” przy braku odbicia otwiera korektę z listą zmian",
           !!document.querySelector("#app [data-zmiany-nie-ma]"));
+
+        // --- Więcej (0.66.0) ---
+        // Cezary wysłał wyżej dwie korekty (start poza oknem i z listy w Zgłoś)
+        // — wiersz Zgłoś ma to powiedzieć. Anonimowe się nie liczy.
+        klik("Zmień"); await czekaj(300);
+        klik("Cezary"); await czekaj(300);
+        await otworzZakladke("Więcej");
+        const wiecej = (k) => document.querySelector(`#app [data-wiecej="${k}"]`);
+        sprawdz("Więcej: Zgłoś, Wiadomości i przerywane „Wróć do listy osób”",
+          !!wiecej("zglos") && !!wiecej("wiadomosci") && /border-dashed/.test((wiecej("lista") || {}).className || ""));
+        sprawdz("Zgłoś w Więcej mówi, ile spraw czeka", /2 czeka/.test((wiecej("zglos") || {}).textContent || ""),
+          (wiecej("zglos") || {}).textContent);
+        sprawdz("urządzenie: „Tablet Służbowy” i ostrzeżenie o danych kiosku",
+          widac("Tablet Służbowy") && widac("danymi kiosku") && widac("Wyloguj urządzenie"));
+        document.querySelector("#app [data-wyloguj]").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(200);
+        sprawdz("„Wyloguj urządzenie” najpierw pyta", !!document.querySelector("#app [data-pytanie-wyloguj]") &&
+          widac("Wylogować tablet?"));
+        await klikPrzycisk("Nie, zostaw zalogowany");
+        sprawdz("„Nie, zostaw zalogowany” zamyka pytanie i zostawia sesję",
+          !document.querySelector("#app [data-pytanie-wyloguj]") && !!wiecej("zglos"));
       } catch (e) {
         sprawdz("przebieg bez wyjątku", false, e.message);
       }
