@@ -198,6 +198,16 @@ const planTygodnia = [
   // ktoś zapomniał zamknąć.
   { id: "g8", user_id: "u0", user_name: "Roman", lokal: "Bułka i Jacek",
     stanowisko: "Kucharz", date: dniTygodnia[4], start_time: "06:00", end_time: "14:00", ...opub },
+  // Zmiana z grafiku BEZ odbicia, zawsze cztery dni temu — kolejka „Był w
+  // grafiku, nie odbił” patrzy tylko w przeszłość (do 14 dni), a reszta planu
+  // wisi na bieżącym tygodniu. We wtorek z tego tygodnia minął jeden dzień i
+  // kolejka bywała pusta: sprawdzian „Dopisz N h” padał zależnie od dnia
+  // tygodnia (CI, 29.09.2026).
+  { id: "g-brak", user_id: "u2", user_name: "Bo", lokal: "Ceglana",
+    // Cztery, nie trzy: w niedzielę trzy dni temu to czwartek tego tygodnia,
+    // a wtedy Bo ma zatwierdzony urlop (ab1) i zmiana wypadłaby z kolejki.
+    stanowisko: "Kucharz", date: ymd(new Date(Date.now() - 4 * 86400000)),
+    start_time: "09:00", end_time: "15:00", ...opub },
   // Dwie zmiany NIEWYSŁANE: jedna nowa, jedna zdjęta z grafiku po wysłaniu
   // (deleted_at — znika z siatki, ale kasuje się dopiero przy publikacji).
   // Bez nich przycisk "Zobacz, co czeka na wysłanie" jest zawsze wyszarzony i
