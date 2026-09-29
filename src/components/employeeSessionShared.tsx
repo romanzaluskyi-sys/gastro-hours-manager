@@ -517,9 +517,60 @@ export const EmployeeSessionScreens = ({
     return dostepne[0];
   };
 
+  // ⚠️ Listy formularza startu = to, co oferuje urządzenie, PLUS lokal i
+  // stanowisko z DZISIEJSZEGO grafiku tej osoby (0.60.1, zgłoszenie
+  // właściciela: Anastazja w grafiku w innym lokalu i na innym stanowisku nie
+  // dała się tak zapisać). Tablet podaje tylko swoje lokale i ich stanowiska, a
+  // grafik przypisuje stanowisko PO NAZWIE (to samo uprawnienie w każdym
+  // lokalu) — więc stanowisko z grafiku potrafi nie istnieć w słowniku lokalu,
+  // w którym ta osoba dziś stoi. Domyślnie dalej lokal urządzenia (domyslnyLokal)
+  // — fakt ma mówić, gdzie człowiek naprawdę pracował; lokal z grafiku jest do
+  // wybrania, gdy urządzenie go nie obsługuje.
+  const grafikDzisOsoby = () =>
+    publishedShiftsFor(planShifts, employee).filter(
+      (s) => s.date === toLocalYMD(new Date())
+    );
+  const lokaleFormularza = (() => {
+    const lista = [...(lokaleOptions || [])];
+    grafikDzisOsoby().forEach((g) => {
+      if (!g.lokal || lista.some((l) => l.name === g.lokal)) return;
+      const wSlowniku = (lokaleWszystkie || []).find((l) => l.name === g.lokal);
+      lista.push(wSlowniku || { id: `grafik:${g.lokal}`, name: g.lokal });
+    });
+    return lista;
+  })();
+  const stanowiskaDlaLokalu = (lokal) => {
+    const zUrzadzenia = (stanowiskaOptions || []).filter((s) => s.lokal_name === lokal);
+    // Lokal spoza urządzenia (dołożony z grafiku) — jego stanowiska z pełnego
+    // słownika.
+    const lista = zUrzadzenia.length
+      ? [...zUrzadzenia]
+      : (stanowiskaWszystkie || []).filter((s) => s.lokal_name === lokal && !s.archived);
+    grafikDzisOsoby()
+      .filter((g) => g.lokal === lokal && g.stanowisko)
+      .forEach((g) => {
+        if (!lista.some((x) => x.name === g.stanowisko))
+          lista.push({ id: `grafik:${g.stanowisko}`, name: g.stanowisko });
+      });
+    return lista;
+  };
+  // Stanowisko domyślne dla lokalu: z dzisiejszego grafiku w TYM lokalu, potem
+  // własne z karty, na końcu pierwsze z listy. Grafik pierwszy, bo wie, po co
+  // ta osoba dziś tu jest — także gdy własne stanowisko w tym lokalu istnieje.
+  const domyslneStanowisko = (lokal) => {
+    const dostepne = stanowiskaDlaLokalu(lokal);
+    const zGrafiku = grafikDzisOsoby().find(
+      (g) => g.lokal === lokal && dostepne.some((d) => d.name === g.stanowisko)
+    );
+    if (zGrafiku) return zGrafiku.stanowisko;
+    if (dostepne.some((d) => d.name === employee?.default_stanowisko))
+      return employee.default_stanowisko;
+    return dostepne[0]?.name || "";
+  };
+
   const [formLokal, setFormLokal] = useState(domyslnyLokal);
-  const [formStanowisko, setFormStanowisko] = useState(
-    employee?.default_stanowisko || ""
+  const [formStanowisko, setFormStanowisko] = useState(() =>
+    domyslneStanowisko(domyslnyLokal())
   );
   const [knowsEnd, setKnowsEnd] = useState(false);
   const [formStartTime, setFormStartTime] = useState(fmtHHMM(new Date()));
@@ -615,9 +666,7 @@ export const EmployeeSessionScreens = ({
   // urządzenie) — patrz utils/tasks.ts buildEmployeeChecklist.
   const [taskViewMode, setTaskViewMode] = useState("own");
 
-  const dostepneStanowiska = stanowiskaOptions.filter(
-    (s) => s.lokal_name === formLokal
-  );
+  const dostepneStanowiska = stanowiskaDlaLokalu(formLokal);
 
   // ⚠️ Zmiana bez odbitego końca NIE trwa w nieskończoność. Po przekroczeniu
   // progu lokalu (utils/porzucone.ts) przestaje być uznawana za trwającą i
@@ -832,7 +881,7 @@ export const EmployeeSessionScreens = ({
 
   const resetShiftForm = () => {
     setFormLokal(domyslnyLokal());
-    setFormStanowisko(employee?.default_stanowisko || "");
+    setFormStanowisko(domyslneStanowisko(domyslnyLokal()));
     setKnowsEnd(false);
     setFormStartTime(fmtHHMM(new Date()));
     setInnyStart(null);
@@ -840,26 +889,13 @@ export const EmployeeSessionScreens = ({
   };
 
   // ---- korekta stanowiska, gdy zmienia się lokal (jak w TimeEntryForm) ----
+  // Osoba wypożyczona ma default_stanowisko ze swojego lokalu, którego tutaj
+  // może nie być — wtedy bierzemy domyślne dla lokalu (grafik → własne →
+  // pierwsze). Wybór zrobiony ręcznie zostaje, dopóki jest na liście.
   useEffect(() => {
-    const dostepne = stanowiskaOptions.filter((s) => s.lokal_name === formLokal);
-    if (dostepne.find((s) => s.name === formStanowisko)) return;
-    // Osoba wypożyczona ma default_stanowisko ze swojego lokalu, którego tutaj
-    // może nie być. Zanim spadniemy na pierwsze z brzegu, pytamy grafiku — to
-    // on wie, po co ta osoba dziś tu jest.
-    const dzisiaj = toLocalYMD(new Date());
-    const zGrafiku = publishedShiftsFor(planShifts, employee).find(
-      (s) =>
-        s.date === dzisiaj &&
-        s.lokal === formLokal &&
-        dostepne.some((d) => d.name === s.stanowisko)
-    );
-    const wlasne = dostepne.find((s) => s.name === employee?.default_stanowisko);
-    setFormStanowisko(
-      (zGrafiku && zGrafiku.stanowisko) ||
-        (wlasne && wlasne.name) ||
-        (dostepne.length > 0 ? dostepne[0].name : "")
-    );
-  }, [formLokal, stanowiskaOptions]);
+    if (dostepneStanowiska.some((s) => s.name === formStanowisko)) return;
+    setFormStanowisko(domyslneStanowisko(formLokal));
+  }, [formLokal, stanowiskaOptions, planShifts]);
 
   // Poprawiana zmiana mogła się odbyć w lokalu, którego to urządzenie nie
   // obsługuje — osoba wypożyczona pracuje z tabletu lokalu B, a w jej historii
@@ -2009,7 +2045,18 @@ export const EmployeeSessionScreens = ({
       )}
       <div className="grid grid-cols-2 gap-2.5">
         {[
-          ["Lokal", formLokal, setFormLokal, lokaleOptions, !!planFormularza, null],
+          [
+            "Lokal",
+            formLokal,
+            // Zmiana lokalu ustawia od razu stanowisko z grafiku w tym lokalu.
+            (v) => {
+              setFormLokal(v);
+              setFormStanowisko(domyslneStanowisko(v));
+            },
+            lokaleFormularza,
+            !!planFormularza,
+            null,
+          ],
           [
             "Stanowisko",
             formStanowisko,

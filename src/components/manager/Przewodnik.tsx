@@ -23,6 +23,14 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.60.1",
+    date: "2026-09-29",
+    items: [
+      "Zmiana: osoba w grafiku w innym lokalu albo na innym stanowisku może je wybrać przy rozpoczęciu zmiany.",
+      "Stanowisko z dzisiejszego grafiku podstawia się samo — także po zmianie lokalu.",
+    ],
+  },
+  {
     version: "0.60.0",
     date: "2026-09-29",
     items: [

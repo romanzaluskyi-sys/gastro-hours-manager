@@ -5,6 +5,18 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.60.1 — 2026-09-29
+
+- **Zmiana — lokal i stanowisko z dzisiejszego grafiku zawsze są do wybrania.**
+  Osoba, którą grafik stawia dziś w innym lokalu albo na stanowisku spoza
+  słownika tego lokalu, nie mogła rozpocząć zmiany tak, jak ją zaplanowano —
+  lista pokazywała tylko lokale i stanowiska tabletu.
+  - Na liście lokali jest też lokal z dzisiejszego grafiku (domyślnie dalej
+    lokal tabletu — zmiana ma mówić, gdzie ktoś naprawdę pracował).
+  - Na liście stanowisk jest stanowisko z grafiku, a przy rozpoczęciu i po
+    zmianie lokalu **podstawia się samo**, także gdy własne stanowisko z karty
+    w tym lokalu też istnieje.
+
 ## 0.60.0 — 2026-09-29
 
 - **Zmiana — nowy wygląd według makiety.** Trzeci krok przebudowy ekranów

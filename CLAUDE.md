@@ -913,6 +913,12 @@ faktycznej”) — świadomie jej NIE wdrożono: obowiązuje ustalenie właścic
   formularzem — ta sama funkcja (`przyciskStartu`/`przyciskKonca`), dwa
   miejsca. `PoleGodziny` zostało WIDOCZNYM polem (makieta kładła przezroczyste
   pole na etykiecie — na iPadzie to nie działa).
+- ⚠️ **Listy lokali i stanowisk formularza startu = urządzenie + DZISIEJSZY
+  grafik tej osoby** (`lokaleFormularza`, `stanowiskaDlaLokalu`, 0.60.1).
+  Grafik przypisuje stanowisko PO NAZWIE, więc potrafi stać na stanowisku,
+  którego lokal nie ma w słowniku — bez tego osoba wypożyczona nie mogła
+  zacząć zmiany tak, jak ją zaplanowano. Domyślny lokal dalej z urządzenia,
+  domyślne stanowisko: grafik → karta → pierwsze (`domyslneStanowisko`).
 
 **Blokada PIN-em na kiosku** — zaimplementowana (patrz niżej, Schemat
 Supabase i sekcja "Panel kierownika"), TYLKO w `KioskDashboard.tsx`.

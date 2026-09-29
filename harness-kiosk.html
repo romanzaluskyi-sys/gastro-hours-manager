@@ -216,6 +216,14 @@ const poprzedniMiesiac = (h) => {
         date: zaDni(6), start_time: "12:00", end_time: "20:00", ...opubGielda },
       { id: "g3", user_id: "u4", user_name: "Dorota", lokal: "Ceglana", stanowisko: "Kucharz",
         date: zaDni(5), start_time: "08:00", end_time: "16:00", ...opubGielda },
+      // 0.60.1 — Filip jest z Bułki, dziś wg grafiku tutaj, na stanowisku,
+      // którego Ceglana nie ma w słowniku (grafik przypisuje stanowisko PO
+      // NAZWIE). Gosia odwrotnie: z Ceglanej, dziś w grafiku w Bułce, której ten
+      // tablet nie obsługuje. Obie sytuacje wcześniej blokowały wybór.
+      { id: "g4", user_id: "u7", user_name: "Filip", lokal: "Ceglana", stanowisko: "Burgery",
+        date: zaDni(0), start_time: "23:30", end_time: "23:59", ...opubGielda },
+      { id: "g5", user_id: "u8", user_name: "Gosia", lokal: "Bułka i Jacek", stanowisko: "Kasa",
+        date: zaDni(0), start_time: "23:30", end_time: "23:59", ...opubGielda },
     ];
 
     function Harness() {
@@ -275,6 +283,10 @@ const poprzedniMiesiac = (h) => {
           default_lokal: "Ceglana", default_stanowisko: "Kucharz", kiosk_pin: "654321" },
         // Czeka na decyzję kierownika: ma mieć plakietkę "na próbę" na liście
         // i skrócony zestaw zakładek po wejściu (bez Grafiku).
+        { id: "u7", name: "Filip", role: "open", active: true, archived: false,
+          default_lokal: "Bułka i Jacek", default_stanowisko: "Burgery" },
+        { id: "u8", name: "Gosia", role: "open", active: true, archived: false,
+          default_lokal: "Ceglana", default_stanowisko: "Kelner" },
         { id: "u5", name: "Na Próbę", role: "open", active: true, archived: false,
           default_lokal: "Ceglana", default_stanowisko: "Kelner", email: "",
           probny_status: "oczekuje", probny_od: "2026-09-19", probny_przez: "Tablet Ceglana" },
@@ -388,8 +400,9 @@ const poprzedniMiesiac = (h) => {
         // 0.58.0: osoby w grupach wg stanu na dziś. W tej atrapie nikt nie ma
         // dziś grafiku ani odbicia, więc pusta grupa ma się NIE pokazać.
         const grupy = [...document.querySelectorAll("#app main h3")].map((e) => e.textContent.trim());
-        sprawdz("grupa „Pozostali” jest, pustych grup nie ma",
-          grupy.length === 1 && grupy[0].startsWith("Pozostali"), JSON.stringify(grupy));
+        sprawdz("grupy: „Dziś w grafiku” i „Pozostali”, pustej „Na zmianie” nie ma",
+          grupy.length === 2 && grupy[0].startsWith("Dziś w grafiku") && grupy[1].startsWith("Pozostali"),
+          JSON.stringify(grupy));
         sprawdz("osoba na próbę ma plakietkę na liście", widac("na próbę · czeka na kierownika"));
 
         // Układ tabletu (0.47.0): od 768 px osoby stoją po trzy w rzędzie.
@@ -626,6 +639,43 @@ const poprzedniMiesiac = (h) => {
         sprawdz("„Wniosek o wolne” otwiera formularz wolnego, nie problemu",
           widac("Wyślij wniosek"), (document.getElementById("app").innerText || "").slice(0, 160));
         klik("Pulpit"); await czekaj(200);
+        klik("Zmień"); await czekaj(300);
+        klik("Cezary"); await czekaj(300);
+        // --- lokal i stanowisko z dzisiejszego grafiku (0.60.1) ---
+        const zakladkaZmiana = async () => {
+          [...document.querySelectorAll("#app nav button")]
+            .find((b) => b.textContent.replace(/▪/g, "").trim() === "Zmiana")
+            .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          await czekaj(300);
+        };
+        const selekty = () => [...document.querySelectorAll("#app main select")];
+        const opcje = (sel) => [...sel.options].map((o) => o.value);
+        klik("Zmień"); await czekaj(300);
+        klik("Filip"); await czekaj(300);
+        await zakladkaZmiana();
+        {
+          const [lok, stan] = selekty();
+          sprawdz("stanowisko z grafiku spoza słownika lokalu: jest na liście i wybrane",
+            !!stan && stan.value === "Burgery" && opcje(stan).includes("Burgery") && lok.value === "Ceglana",
+            stan ? `${lok.value} / ${stan.value} [${opcje(stan)}]` : "brak selectów");
+        }
+        klik("Zmień"); await czekaj(300);
+        klik("Gosia"); await czekaj(300);
+        await zakladkaZmiana();
+        {
+          const [lok] = selekty();
+          sprawdz("lokal z grafiku spoza tabletu da się wybrać, domyślnie zostaje lokal tabletu",
+            !!lok && lok.value === "Ceglana" && opcje(lok).includes("Bułka i Jacek"),
+            lok ? `${lok.value} [${opcje(lok)}]` : "brak selectów");
+          if (lok) {
+            Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value").set.call(lok, "Bułka i Jacek");
+            lok.dispatchEvent(new Event("change", { bubbles: true }));
+            await czekaj(300);
+            const stan = selekty()[1];
+            sprawdz("po wyborze lokalu z grafiku — stanowisko z grafiku",
+              !!stan && stan.value === "Kasa", stan ? `${stan.value} [${opcje(stan)}]` : "");
+          }
+        }
         klik("Zmień"); await czekaj(300);
         klik("Cezary"); await czekaj(300);
         sprawdz("Pulpit na zmianie: licznik i „Zakończ zmianę ›” prowadzące do Zmiany",
