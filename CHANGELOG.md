@@ -5,6 +5,32 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.62.0 — 2026-09-29
+
+- **Grafik pracownika — nowy wygląd według makiety** (Tablet Służbowy i
+  prywatny telefon). Piąty krok przebudowy ekranów pracownika; giełda działa
+  tak samo jak dotąd.
+  - **Tydzień / Miesiąc** jako przełącznik, tydzień strzałkami („28 wrz – 4
+    paź”), obok **„Ja / Cały lokal”**.
+  - Nad listą: godziny w tygodniu, godziny miesiąca (przy etacie wobec
+    normy) i zielony znaczek **„N do wzięcia”** — przewija do oferty albo
+    przenosi do tygodnia, w którym jest.
+  - **Pasek siedmiu dni** z kreską przy dniu ze zmianą (bursztynową, gdy w
+    innym lokalu) i zieloną kropką przy ofercie — dotknięcie przewija do dnia.
+  - **Wolne dni pod rząd zwinięte w jeden wiersz** („pn 28 – sob 3 · wolne”).
+  - **Zwarta karta zmiany**: stanowisko, godziny, liczba godzin, mały przycisk
+    **„⇄ Giełda”** (w ostatnich 12 h — kłódka), „inny lokal”, **„Z tobą”** z
+    imionami (pierwsze trzy, reszta pod „+N”).
+  - **Giełda rozwija się w samej karcie z paskiem kroków**: Sposób → Komu / Z
+    kim → Na którą → „Sprawdź i wyślij” z podsumowaniem.
+  - **Oferty stoją w dniu, którego dotyczą** (zielona, przerywana ramka) z
+    „Wezmę tę zmianę”; gdy masz już zmianę tego dnia — ostrzeżenie.
+  - **Miesiąc jako kalendarz**: dzień ze zmianą na czarno z liczbą godzin, w
+    innym lokalu na bursztynowo; wybrany dzień pod spodem z „Zobacz w
+    tygodniu, z kim pracujesz”. Nad kalendarzem zmiany i godziny, przy etacie
+    wobec normy.
+  - Na tablecie dni tygodnia w trzech kolumnach.
+
 ## 0.61.0 — 2026-09-29
 
 - **Raport pracownika — nowy wygląd według makiety** (Tablet Służbowy i

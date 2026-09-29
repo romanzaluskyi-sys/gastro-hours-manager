@@ -20,6 +20,10 @@ import {
   Mail,
   ArrowLeftRight,
   AlertTriangle,
+  Users,
+  User,
+  Lock,
+  MapPin,
 } from "lucide-react";
 import { api } from "../api/supabase";
 import { sendToGoogleSheets, toLocalYMD } from "../api/googleSheets";
@@ -48,7 +52,6 @@ import SladPoprawki from "./manager/SladPoprawki";
 import { opisPoprawki } from "../utils/dziennik";
 import { wartoscPolaTekst } from "../utils/pola";
 import {
-  getDayOfWeek,
   odmianaZmian, getMonthName,
   getAvailableYears,
   formatNotificationText,
@@ -624,6 +627,10 @@ export const EmployeeSessionScreens = ({
   const [tydzienOffset, setTydzienOffset] = useState(0);
   const [miesiacOffset, setMiesiacOffset] = useState(0);
   const [grafikWszyscy, setGrafikWszyscy] = useState(false);
+  // Karty zmian z rozwiniętą listą „Z tobą” (po id zmiany) i dzień wybrany w
+  // kalendarzu miesiąca (0.62.0).
+  const [grafikRozwiniete, setGrafikRozwiniete] = useState({});
+  const [grafikDzienMiesiaca, setGrafikDzienMiesiaca] = useState(null);
   // Który wpis czeka na potwierdzenie wystawienia na giełdę. Duży przycisk
   // na całą szerokość pod każdą zmianą zjadał ekran, więc domyślnie jest
   // mały link z boku, a pełny przycisk pojawia się dopiero po kliknięciu.
@@ -2984,7 +2991,11 @@ export const EmployeeSessionScreens = ({
   }
 
   // ==========================================
-  // EKRAN: GRAFIK
+  // EKRAN: GRAFIK — układ z makiety właściciela (0.62.0, EmployeeScheduleMobile
+  // / EmployeeScheduleTablet). Logika giełdy bez zmian (utils/swaps.ts); nowe
+  // są: pasek siedmiu dni, zwinięte wolne dni, zwarte karty zmian z „Z tobą”,
+  // kreator giełdy z paskiem kroków, oferty w dniu, którego dotyczą, i
+  // kalendarz miesiąca z wybranym dniem.
   // ==========================================
   // Pionowa lista dni, nie siatka — siatka kierownika (7 kolumn x N osób)
   // na telefonie jest nieczytelna. Pracownika interesuje przede wszystkim
@@ -2992,6 +3003,13 @@ export const EmployeeSessionScreens = ({
   if (screen === "GRAFIK") {
     const bazowy = addDaysYMD(mondayOf(dzisYMD), tydzienOffset * 7);
     const dniTygodnia = [0, 1, 2, 3, 4, 5, 6].map((i) => addDaysYMD(bazowy, i));
+    const MIES_K = ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"];
+    const DN = ["nd", "pn", "wt", "śr", "czw", "pt", "sob"];
+    const dzienKrotko = (ymd) => {
+      const d = new Date(ymd + "T00:00:00");
+      return `${DN[d.getDay()]} ${d.getDate()} ${MIES_K[d.getMonth()]}`;
+    };
+    const h1 = (n) => String(Math.round((n || 0) * 10) / 10).replace(".", ",");
     // Swobodna nawigacja sprawia, że łatwo trafić na tydzień, którego kierownik
     // jeszcze nie wysłał. Bez tego siedem dni z napisem "Wolne" czyta się jak
     // "nie masz zmian", a prawda brzmi "grafiku jeszcze nie ma" — to dwie różne
@@ -3020,14 +3038,17 @@ export const EmployeeSessionScreens = ({
         ? `${miesiacPrefix}-01` > granicaWstecz
         : addDaysYMD(bazowy, -7) >= granicaWstecz;
     const naDzis = grafikWidok === "miesiac" ? miesiacOffset === 0 : tydzienOffset === 0;
-    const dd = (ymd) => `${ymd.slice(8, 10)}.${ymd.slice(5, 7)}`;
+    const etykietaTygodnia = (() => {
+      const a = new Date(dniTygodnia[0] + "T00:00:00");
+      const b = new Date(dniTygodnia[6] + "T00:00:00");
+      return a.getMonth() === b.getMonth()
+        ? `${a.getDate()}–${b.getDate()} ${MIES_K[b.getMonth()]}`
+        : `${a.getDate()} ${MIES_K[a.getMonth()]} – ${b.getDate()} ${MIES_K[b.getMonth()]}`;
+    })();
     const etykietaZakresu =
       grafikWidok === "miesiac"
         ? `${getMonthName(miesiacData.getMonth())} ${miesiacData.getFullYear()}`
-        : `${dd(dniTygodnia[0])} – ${dd(dniTygodnia[6])}`;
-    const mojeWMiesiacu = mojGrafik
-      .filter((s) => s.date.startsWith(miesiacPrefix))
-      .sort((a, b) => a.date.localeCompare(b.date));
+        : etykietaTygodnia;
 
     const wolneNa = (dateStr) =>
       (absences || []).find(
@@ -3040,322 +3061,639 @@ export const EmployeeSessionScreens = ({
             : a.user_name === employee.name)
       );
 
-    const renderDzien = (dateStr) => {
-      const moje = mojGrafik.filter((s) => s.date === dateStr);
-      const wolne = wolneNa(dateStr);
-      const lokalDnia = moje[0]?.lokal || effectiveAssignment.lokal;
-      const wszyscyDnia = publishedShiftsOnDay(planShifts, lokalDnia, dateStr);
-      const inni = wszyscyDnia.filter(
-        (s) => !moje.some((m) => String(m.id) === String(s.id))
-      );
-      const przejeteDnia = mojePrzejete.filter(({ ps }) => ps.date === dateStr);
+    // Godziny miesiąca: fakt do wczoraj + grafik od dziś — ta sama prognoza co
+    // w Raporcie („Z grafikiem wyjdzie”), żeby dwa ekrany nie mówiły co innego.
+    const godzinyMiesiaca = (rok, mies) => {
+      const r = faktIPlanMiesiaca({ shifts, planShifts, user: employee, rok, mies });
+      return r.fakt + r.plan;
+    };
+    const etat = naEtacie(employee);
+    const umowaOpis = etat ? "etat" : typUmowy(employee) === "zlecenie" ? "zlecenie" : "";
+    const opisNormy = (godz, norma) => {
+      const d = Math.round((godz - norma) * 10) / 10;
+      return d > 0 ? `+${h1(d)} h ponad normą` : d < 0 ? `do normy brakuje ${h1(-d)} h` : "równo z normą";
+    };
 
+    const stanowiskoZnak = (lokal, stanowisko) => (
+      <span
+        className="text-[11px] font-extrabold px-1.5 py-0.5 rounded text-[#171714] bg-[#ECEBE6] flex-shrink-0"
+        style={stanowiskoBadgeStyle(stanowiskaOptions, lokal, stanowisko) || {}}
+      >
+        {stanowiskoShort(stanowiskaOptions, lokal, stanowisko)}
+      </span>
+    );
+    const ofertyWDniu = (d) => mojeOferty.filter(({ ps }) => ps && ps.date === d);
+
+    // --- kreator giełdy w samej karcie, z paskiem kroków ---
+    const renderKreator = (s) => {
+      const kandydaci = swapTyp
+        ? kandydaciNaZmiane({ users, planShifts, absences, planShift: s, author: employee, typ: swapTyp })
+        : [];
+      const zmianyKandydata =
+        swapTyp === "zamiana" && swapTarget
+          ? zmianyDoZamiany({ planShifts, absences, kandydat: swapTarget, author: employee, mojaZmiana: s })
+          : [];
+      const kroki =
+        swapTyp === "zamiana"
+          ? ["Sposób", "Z kim", "Na którą", "Wyślij"]
+          : swapTyp === "oddanie"
+          ? ["Sposób", "Komu", "Wyślij"]
+          : swapTyp === "gielda"
+          ? ["Sposób", "Wyślij"]
+          : ["Sposób", "…"];
+      const krok = !swapTyp
+        ? 0
+        : swapTyp === "gielda"
+        ? 1
+        : !swapTarget
+        ? 1
+        : swapTyp === "zamiana" && !swapWzajemna
+        ? 2
+        : kroki.length - 1;
+      const wstecz = () => {
+        if (swapWzajemna) return setSwapWzajemna(null);
+        if (swapTarget) return setSwapTarget(null);
+        setSwapTyp(null);
+      };
+      const IKONY_TYPOW = { gielda: Users, oddanie: User, zamiana: ArrowLeftRight };
+      const opcjaCls =
+        "w-full min-h-[60px] grid grid-cols-[36px_1fr_20px] gap-x-2 items-center text-left border-2 border-[#DEDCD4] hover:border-[#171714] rounded-lg bg-white px-3 py-2.5 disabled:opacity-45 disabled:border-dashed";
+      const naglowekKroku = "text-[13px] font-extrabold tracking-[.06em] uppercase text-[#6E6E66] mt-0.5";
       return (
-        <div key={dateStr} className="mb-4">
-          <div className="flex items-baseline justify-between">
-            <span className="font-['Archivo'] font-extrabold text-[15px] text-[#171714]">
-              {opisDnia(dateStr)}
-            </span>
-            {dateStr === dzisYMD && (
-              <span className="text-[11px] font-extrabold px-2 py-0.5 rounded bg-[#DE3A22] text-white">
-                DZIŚ
+        <div className="border-t-[1.5px] border-[#DEDCD4] mt-1.5 pt-2.5 flex flex-col gap-2">
+          <div className="flex gap-1">
+            {kroki.map((k, i) => (
+              <span
+                key={k + i}
+                className={`flex-1 text-[11px] font-extrabold text-center pt-1.5 border-t-[3px] ${
+                  i < krok
+                    ? "border-[#171714] text-[#171714]"
+                    : i === krok
+                    ? "border-[#DE3A22] text-[#171714]"
+                    : "border-[#DEDCD4] text-[#6E6E66]"
+                }`}
+              >
+                {k}
+              </span>
+            ))}
+          </div>
+          {krok > 0 && (
+            <button onClick={wstecz} className="self-start flex items-center gap-1 text-[15px] font-bold text-[#171714]">
+              <ChevronLeft size={18} /> Wróć
+            </button>
+          )}
+          {!swapTyp &&
+            TYPY_WYMIANY.map((t) => {
+              const Ikona = IKONY_TYPOW[t.key] || ArrowLeftRight;
+              return (
+                <button
+                  key={t.key}
+                  onClick={() => {
+                    setSwapTyp(t.key);
+                    setSwapTarget(null);
+                    setSwapWzajemna(null);
+                  }}
+                  className={opcjaCls}
+                >
+                  <span className="row-span-2 w-9 h-9 rounded-lg bg-[#F6F5F1] flex items-center justify-center">
+                    <Ikona size={20} />
+                  </span>
+                  <b className="text-[17px] text-[#171714]">{t.label}</b>
+                  <ChevronRight size={20} className="row-span-2 col-start-3 row-start-1 text-[#6E6E66]" />
+                  <span className="col-start-2 text-[14px] text-[#6E6E66]">{t.opis}</span>
+                </button>
+              );
+            })}
+          {swapTyp && swapTyp !== "gielda" && !swapTarget && (
+            <>
+              <h3 className={naglowekKroku}>
+                {swapTyp === "zamiana" ? "Z kim się zamieniasz?" : "Komu oddajesz?"}
+              </h3>
+              {kandydaci.length === 0 ? (
+                <p className="text-[14px] text-[#6E6E66]">
+                  Nikt inny nie może wziąć tej zmiany — brak wolnych osób z tym stanowiskiem.
+                </p>
+              ) : (
+                kandydaci.map((u) => (
+                  <button key={u.id} onClick={() => setSwapTarget(u)} className={opcjaCls}>
+                    <span className="row-span-2 w-9 h-9 rounded-full bg-[#DEDCD4] flex items-center justify-center text-[12px] font-extrabold text-[#171714]">
+                      {u.name.slice(0, 2)}
+                    </span>
+                    <b className="text-[17px] text-[#171714]">{u.name}</b>
+                    <ChevronRight size={20} className="row-span-2 col-start-3 row-start-1 text-[#6E6E66]" />
+                    <small className="col-start-2 text-[14px] text-[#6E6E66]">{u.default_stanowisko || ""}</small>
+                  </button>
+                ))
+              )}
+            </>
+          )}
+          {swapTyp === "zamiana" && swapTarget && !swapWzajemna && (
+            <>
+              <h3 className={naglowekKroku}>Którą zmianę {swapTarget.name} bierzesz?</h3>
+              <p className="text-[13px] text-[#6E6E66]">
+                {swapTarget.name} dostaje Twoją: {dzienKrotko(s.date)} {trimTime(s.start_time)}–{trimTime(s.end_time)}
+              </p>
+              {zmianyKandydata.length === 0 ? (
+                <p className="text-[14px] text-[#6E6E66]">
+                  {swapTarget.name} nie ma zmiany, którą mógłbyś/mogłabyś wziąć — albo masz
+                  wtedy własną, albo to nie Twoje stanowisko.
+                </p>
+              ) : (
+                zmianyKandydata.map((p2) => (
+                  <button key={p2.id} onClick={() => setSwapWzajemna(p2)} className={opcjaCls}>
+                    <span className="row-span-2 flex items-center">{stanowiskoZnak(p2.lokal, p2.stanowisko)}</span>
+                    <b className="text-[17px] text-[#171714]">
+                      {dzienKrotko(p2.date)} · {trimTime(p2.start_time)}–{trimTime(p2.end_time)}
+                    </b>
+                    <ChevronRight size={20} className="row-span-2 col-start-3 row-start-1 text-[#6E6E66]" />
+                    <small className="col-start-2 text-[14px] text-[#6E6E66]">
+                      {p2.stanowisko} · {p2.lokal}
+                    </small>
+                  </button>
+                ))
+              )}
+            </>
+          )}
+          {krok === kroki.length - 1 && swapTyp && (
+            <>
+              <h3 className={naglowekKroku}>Sprawdź i wyślij</h3>
+              <div className="flex flex-col gap-2 bg-[#F6F5F1] rounded-lg p-3">
+                <div>
+                  <span className="block text-[11px] font-bold uppercase tracking-wider text-[#6E6E66]">
+                    {swapTyp === "zamiana" ? "Oddajesz" : "Twoja zmiana"}
+                  </span>
+                  <b className="block text-[16px] text-[#171714]">
+                    {dzienKrotko(s.date)} · {trimTime(s.start_time)}–{trimTime(s.end_time)}
+                  </b>
+                </div>
+                {swapWzajemna && (
+                  <div>
+                    <span className="block text-[11px] font-bold uppercase tracking-wider text-[#6E6E66]">Dostajesz</span>
+                    <b className="block text-[16px] text-[#171714]">
+                      {dzienKrotko(swapWzajemna.date)} · {trimTime(swapWzajemna.start_time)}–
+                      {trimTime(swapWzajemna.end_time)}
+                    </b>
+                  </div>
+                )}
+                <div>
+                  <span className="block text-[11px] font-bold uppercase tracking-wider text-[#6E6E66]">
+                    {swapTyp === "gielda" ? "Widzą" : swapTyp === "oddanie" ? "Przejmuje" : "Z osobą"}
+                  </span>
+                  <b className="block text-[16px] text-[#171714]">
+                    {swapTyp === "gielda" ? "wszyscy, którzy mogą wziąć tę zmianę" : swapTarget?.name}
+                  </b>
+                </div>
+              </div>
+              <button
+                onClick={() =>
+                  handleOfferSwap(s, { typ: swapTyp, target: swapTarget, wzajemnaShift: swapWzajemna })
+                }
+                className="w-full min-h-[48px] rounded-lg bg-[#DE3A22] text-white font-['Archivo'] font-extrabold text-[16px]"
+              >
+                {swapTyp === "gielda"
+                  ? "Wystaw na giełdę"
+                  : swapTyp === "oddanie"
+                  ? `Oddaj: ${swapTarget.name}`
+                  : `Wyślij propozycję do: ${swapTarget.name}`}
+              </button>
+              <p className="text-[13px] text-[#6E6E66]">Każdą wymianę zatwierdza kierownik.</p>
+            </>
+          )}
+          <button onClick={zamknijKreatorWymiany} className="self-start text-[16px] font-bold underline text-[#6E6E66] py-1.5">
+            Anuluj
+          </button>
+        </div>
+      );
+    };
+
+    // --- karta mojej zmiany ---
+    const renderKarta = (s, inni) => {
+      const oferta = activeSwapFor(shiftSwaps, s.id);
+      const minela = s.date < dzisYMD;
+      const innyLokal = s.lokal !== employee.default_lokal;
+      const rozwiniete = !!grafikRozwiniete[s.id];
+      const pokazani = rozwiniete ? inni : inni.slice(0, 3);
+      return (
+        <div
+          key={s.id}
+          className={`bg-white border-2 rounded-xl px-3 py-2.5 flex flex-col gap-1 ${
+            minela ? "opacity-60 border-[#DEDCD4]" : "border-[#171714]"
+          } ${innyLokal ? "border-l-[6px] border-l-[#8A5300]" : ""} ${oferta ? "border-dashed" : ""}`}
+        >
+          <div className="flex items-center gap-2">
+            {stanowiskoZnak(s.lokal, s.stanowisko)}
+            <b className="flex-1 font-['Archivo'] text-[20px] font-extrabold tabular-nums text-[#171714]">
+              {trimTime(s.start_time)}–{trimTime(s.end_time)}
+            </b>
+            <span className="text-[14px] font-extrabold tabular-nums text-[#6E6E66]">{h1(shiftHours(s))} h</span>
+            {!oferta && canOfferSwap(s) && swapConfirmId !== s.id && (
+              <button
+                onClick={() => setSwapConfirmId(s.id)}
+                aria-label="Giełda: oddaj lub zamień"
+                className="ml-1 inline-flex items-center gap-1 h-9 px-3 rounded-full border-[1.5px] border-[#DEDCD4] hover:border-[#171714] bg-white text-[14px] font-extrabold text-[#171714]"
+              >
+                <ArrowLeftRight size={14} /> Giełda
+              </button>
+            )}
+            {/* Brak przycisku wygląda jak awaria, jeśli nie wiadomo dlaczego
+                go nie ma — kłódka z podpisem mówi, że minął limit 12 h. */}
+            {!oferta && !canOfferSwap(s) && hoursUntilStart(s) > 0 && (
+              <span
+                className="ml-1 w-[30px] h-[30px] flex items-center justify-center text-[#6E6E66]"
+                title={`Mniej niż ${SWAP_MIN_HOURS} h do startu — giełda zamknięta`}
+              >
+                <Lock size={15} />
               </span>
             )}
           </div>
-          <div className={ruleSoftCls} />
-
-          {moje.length > 0 ? (
-            <div className="mt-2.5 space-y-2">
-              {moje.map((s) => {
-                const style = stanowiskoBadgeStyle(
-                  stanowiskaOptions,
-                  s.lokal,
-                  s.stanowisko
-                );
-                const oferta = activeSwapFor(shiftSwaps, s.id);
-                return (
-                  <div
-                    key={s.id}
-                    className={`border-[2.5px] border-[#171714] rounded p-3.5 ${
-                      oferta ? SWAP_TLO[oferta.status] || "" : ""
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="px-1.5 py-0.5 rounded text-[11px] font-extrabold"
-                        style={style || { backgroundColor: "#E7E7E2", color: "#171714" }}
-                      >
-                        {stanowiskoShort(stanowiskaOptions, s.lokal, s.stanowisko)}
-                      </span>
-                      <span className="font-['Archivo'] font-extrabold text-[18px]">
-                        {trimTime(s.start_time)} – {trimTime(s.end_time)}
-                      </span>
-                      {!oferta && canOfferSwap(s) && swapConfirmId !== s.id && (
-                        <button
-                          onClick={() => setSwapConfirmId(s.id)}
-                          className="ml-auto border-2 border-[#B7B6AE] rounded px-2.5 py-1 text-[12px] font-bold text-[#6E6E66]"
-                        >
-                          na giełdę
-                        </button>
-                      )}
-                      {/* Brak przycisku wygląda jak awaria, jeśli nie wiadomo
-                          dlaczego go nie ma — mówimy wprost, że minął limit
-                          12 h. Dla zmian już rozpoczętych nic nie piszemy,
-                          tam to oczywiste. */}
-                      {!oferta &&
-                        !canOfferSwap(s) &&
-                        hoursUntilStart(s) > 0 && (
-                          <span className="ml-auto text-[11px] text-[#8F8E86]">
-                            za późno na giełdę
-                          </span>
-                        )}
-                    </div>
-                    <div className="text-[13px] text-[#6E6E66] mt-0.5">
-                      {s.stanowisko} · {s.lokal}
-                      {s.lokal !== employee.default_lokal && (
-                        <span className="ml-1.5 text-[11px] font-extrabold px-1.5 py-0.5 rounded bg-[#FAEAE6] text-[#8A3A2B]">
-                          INNY LOKAL
-                        </span>
-                      )}
-                    </div>
-                    {inni.length > 0 && (
-                      <div className="text-[13px] text-[#6E6E66] mt-2">
-                        <span className="font-semibold">Z tobą: </span>
-                        {inni
-                          .map(
-                            (o) =>
-                              `${o.user_name} (${stanowiskoShort(
-                                stanowiskaOptions,
-                                o.lokal,
-                                o.stanowisko
-                              )})`
-                          )
-                          .join(", ")}
-                      </div>
-                    )}
-                    {(() => {
-                      if (oferta) {
-                        return (
-                          <div className="mt-2.5 flex items-center gap-2 flex-wrap">
-                            <span className="text-[12px] font-extrabold px-2 py-1 rounded bg-[#E7E7E2] text-[#6E6E66]">
-                              {statusLabelFor(oferta)}
-                            </span>
-                            {oferta.taker_user_name && (
-                              <span className="text-[13px] text-[#6E6E66]">
-                                przejmuje: {oferta.taker_user_name}
-                              </span>
-                            )}
-                            {oferta.status === "na_gieldzie" && (
-                              <button
-                                onClick={() => handleWithdrawSwap(oferta)}
-                                className="text-[13px] font-bold underline text-[#6E6E66]"
-                              >
-                                Wycofaj
-                              </button>
-                            )}
-                          </div>
-                        );
-                      }
-                      if (!canOfferSwap(s) || swapConfirmId !== s.id) return null;
-                      // Kreator wymiany. Jedna kropka wejścia ("na giełdę"),
-                      // a dopiero za nią trzy drogi — wystawić wszystkim,
-                      // oddać jednej osobie, zamienić się. Dla pracownika to
-                      // ta sama decyzja "nie mogę tego dnia", więc trzy
-                      // osobne przyciski w wierszu zmiany byłyby trzema
-                      // pytaniami zamiast jednego.
-                      const kandydaci = swapTyp
-                        ? kandydaciNaZmiane({
-                            users,
-                            planShifts,
-                            absences,
-                            planShift: s,
-                            author: employee,
-                            typ: swapTyp,
-                          })
-                        : [];
-                      const zmianyKandydata =
-                        swapTyp === "zamiana" && swapTarget
-                          ? zmianyDoZamiany({
-                              planShifts,
-                              absences,
-                              kandydat: swapTarget,
-                              author: employee,
-                              mojaZmiana: s,
-                            })
-                          : [];
-                      const gotowe =
-                        swapTyp === "gielda" ||
-                        (swapTyp === "oddanie" && swapTarget) ||
-                        (swapTyp === "zamiana" && swapTarget && swapWzajemna);
-                      return (
-                        <div className="mt-2.5">
-                          {!swapTyp && (
-                            <div className="space-y-1.5">
-                              {TYPY_WYMIANY.map((t) => (
-                                <button
-                                  key={t.key}
-                                  onClick={() => {
-                                    setSwapTyp(t.key);
-                                    setSwapTarget(null);
-                                    setSwapWzajemna(null);
-                                  }}
-                                  className="w-full border-2 border-[#B7B6AE] rounded p-2.5 text-left"
-                                >
-                                  <span className="block text-[14px] font-extrabold text-[#171714]">
-                                    {t.label}
-                                  </span>
-                                  <span className="block text-[12px] text-[#6E6E66]">
-                                    {t.opis}
-                                  </span>
-                                </button>
-                              ))}
-                            </div>
-                          )}
-
-                          {swapTyp && swapTyp !== "gielda" && !swapTarget && (
-                            <div>
-                              <div className={`${sectionLabelCls} mb-1.5`}>
-                                {swapTyp === "zamiana" ? "Z kim się zamieniasz" : "Komu oddajesz"}
-                              </div>
-                              {kandydaci.length === 0 ? (
-                                <div className="text-[13px] text-[#8F8E86] italic">
-                                  Nikt inny nie może wziąć tej zmiany — brak wolnych
-                                  osób z tym stanowiskiem.
-                                </div>
-                              ) : (
-                                <div className="space-y-1.5">
-                                  {kandydaci.map((u) => (
-                                    <button
-                                      key={u.id}
-                                      onClick={() => setSwapTarget(u)}
-                                      className="w-full border-2 border-[#B7B6AE] rounded p-2.5 text-left text-[14px] font-bold"
-                                    >
-                                      {u.name}
-                                      <span className="block text-[12px] font-normal text-[#6E6E66]">
-                                        {u.default_stanowisko || ""}
-                                      </span>
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                          {swapTyp === "zamiana" && swapTarget && !swapWzajemna && (
-                            <div>
-                              <div className={`${sectionLabelCls} mb-1.5`}>
-                                Którą zmianę bierzesz od: {swapTarget.name}
-                              </div>
-                              {zmianyKandydata.length === 0 ? (
-                                <div className="text-[13px] text-[#8F8E86] italic">
-                                  {swapTarget.name} nie ma zmiany, którą mógłbyś/mogłabyś
-                                  wziąć — albo masz wtedy własną, albo to nie Twoje
-                                  stanowisko.
-                                </div>
-                              ) : (
-                                <div className="space-y-1.5">
-                                  {zmianyKandydata.map((p2) => (
-                                    <button
-                                      key={p2.id}
-                                      onClick={() => setSwapWzajemna(p2)}
-                                      className="w-full border-2 border-[#B7B6AE] rounded p-2.5 text-left"
-                                    >
-                                      <span className="block text-[14px] font-extrabold">
-                                        {opisDnia(p2.date)} · {trimTime(p2.start_time)}–
-                                        {trimTime(p2.end_time)}
-                                      </span>
-                                      <span className="block text-[12px] text-[#6E6E66]">
-                                        {p2.stanowisko} · {p2.lokal}
-                                      </span>
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                          {gotowe && (
-                            <button
-                              onClick={() =>
-                                handleOfferSwap(s, {
-                                  typ: swapTyp,
-                                  target: swapTarget,
-                                  wzajemnaShift: swapWzajemna,
-                                })
-                              }
-                              className="w-full border-[2.5px] border-[#171714] rounded py-2.5 text-[14px] font-extrabold mt-2"
-                            >
-                              {swapTyp === "gielda"
-                                ? "Wystaw na giełdę"
-                                : swapTyp === "oddanie"
-                                ? `Oddaj: ${swapTarget.name}`
-                                : `Wyślij propozycję do: ${swapTarget.name}`}
-                            </button>
-                          )}
-
-                          <button
-                            onClick={zamknijKreatorWymiany}
-                            className="mt-1.5 text-[13px] font-bold underline text-[#6E6E66]"
-                          >
-                            Anuluj
-                          </button>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                );
-              })}
+          <div className="flex flex-wrap items-center gap-1.5 text-[15px] text-[#6E6E66]">
+            {s.stanowisko} · {s.lokal}
+            {innyLokal && (
+              <span className="inline-flex items-center gap-1 text-[12px] font-extrabold px-1.5 py-0.5 rounded-md bg-[#FDF0D8] text-[#8A5300]">
+                <MapPin size={12} /> inny lokal
+              </span>
+            )}
+          </div>
+          {inni.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+              <span className="text-[12px] font-extrabold uppercase tracking-[.05em] text-[#6E6E66] mr-0.5">Z tobą</span>
+              {pokazani.map((o) => (
+                <span
+                  key={o.id}
+                  className="inline-flex items-center gap-1 h-7 pl-0.5 pr-2 rounded-full bg-[#F6F5F1] text-[13px] font-bold text-[#171714]"
+                >
+                  <i className="not-italic w-[22px] h-[22px] rounded-full bg-[#ECEBE6] text-[10px] flex items-center justify-center uppercase">
+                    {(o.user_name || "").slice(0, 2)}
+                  </i>
+                  {o.user_name}
+                  <small className="text-[11px] font-bold text-[#6E6E66]">
+                    {stanowiskoShort(stanowiskaOptions, o.lokal, o.stanowisko)}
+                  </small>
+                </span>
+              ))}
+              {inni.length > 3 && (
+                <button
+                  onClick={() => setGrafikRozwiniete((p) => ({ ...p, [s.id]: !p[s.id] }))}
+                  className="text-[13px] font-bold underline text-[#171714]"
+                >
+                  {rozwiniete ? "mniej" : `+${inni.length - 3}`}
+                </button>
+              )}
             </div>
-          ) : przejeteDnia.length > 0 ? null : wolne ? (
-            <div className="mt-2.5 flex items-center gap-2">
-              <span
-                className={`px-1.5 py-0.5 rounded text-[11px] font-extrabold ${
-                  wolne.type === "urlop"
-                    ? "bg-[#DE3A22] text-white"
-                    : "bg-[#E7E7E2] text-[#6E6E66]"
-                }`}
-              >
-                {wolne.type === "urlop" ? "URP" : "NIE"}
+          )}
+          {oferta ? (
+            <div className="flex items-center gap-2.5 mt-1 rounded-lg px-2.5 py-2 bg-[#E3EEFB] text-[#1D5FA8] text-[13px] font-bold">
+              <span className="flex-1">
+                <ArrowLeftRight size={14} className="inline -mt-0.5 mr-1" />
+                {statusLabelFor(oferta)}
+                {oferta.taker_user_name ? ` · przejmuje: ${oferta.taker_user_name}` : ""}
+                <small className="block font-medium opacity-85">
+                  {oferta.status !== "na_gieldzie"
+                    ? "czeka na zgodę kierownika"
+                    : oferta.target_user_name
+                    ? "czeka na odpowiedź i zgodę kierownika"
+                    : "czeka na chętnych i zgodę kierownika"}
+                </small>
               </span>
-              <span className="text-[15px] text-[#6E6E66]">
-                {wolne.type === "urlop" ? "Urlop" : "Zgłoszona niedostępność"}
-              </span>
+              {oferta.status === "na_gieldzie" && (
+                <button
+                  onClick={() => handleWithdrawSwap(oferta)}
+                  className="min-h-[36px] px-3 rounded-lg border-2 border-[#171714] bg-white text-[14px] font-bold text-[#171714]"
+                >
+                  Wycofaj
+                </button>
+              )}
             </div>
           ) : (
-            <div className="mt-2.5 text-[15px] text-[#8F8E86] italic">Wolne</div>
-          )}
-
-          {przejeteDnia.map(({ sw, ps }) => (
-            <div
-              key={`p-${sw.id}`}
-              className={`mt-2.5 border-[2.5px] border-[#171714] rounded p-3.5 ${SWAP_TLO.przyjeta}`}
-            >
-              <div className="font-['Archivo'] font-extrabold text-[18px]">
-                {trimTime(ps.start_time)} – {trimTime(ps.end_time)}
-              </div>
-              <div className="text-[13px] text-[#6E6E66] mt-0.5">
-                {ps.stanowisko} · {ps.lokal} · od: {sw.author_user_name}
-              </div>
-              <div className="text-[13px] font-bold mt-1.5">
-                Zgłosiłeś(-aś) się po tę zmianę — czeka na zgodę kierownika.
-              </div>
-            </div>
-          ))}
-
-          {grafikWszyscy && inni.length > 0 && moje.length === 0 && (
-            <div className="mt-2 text-[13px] text-[#6E6E66]">
-              <span className="font-semibold">W lokalu: </span>
-              {inni
-                .map(
-                  (o) =>
-                    `${o.user_name} ${trimTime(o.start_time)}–${trimTime(o.end_time)}`
-                )
-                .join(", ")}
-            </div>
+            canOfferSwap(s) && swapConfirmId === s.id && renderKreator(s)
           )}
         </div>
       );
     };
+
+    // --- oferta z giełdy w dniu, którego dotyczy ---
+    const renderOferta = ({ sw, ps }, mamZmiane) => {
+      const typ = typWymiany(sw);
+      const wz = wzajemnaZmiana(sw, planShifts);
+      return (
+        <div key={sw.id} className="mt-2 bg-[#E2F3E9] border-2 border-dashed border-[#1F7A4A] rounded-xl px-3 py-2.5 flex flex-col gap-1">
+          <div className="flex items-center gap-1.5 text-[13px] text-[#1F7A4A]">
+            <b>{typ === "zamiana" ? "Propozycja zamiany" : typ === "oddanie" ? "Oddane Tobie" : "Do wzięcia"}</b>
+            <span className="ml-auto font-bold text-[#6E6E66]">od: {sw.author_user_name}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            {stanowiskoZnak(ps.lokal, ps.stanowisko)}
+            <b className="flex-1 font-['Archivo'] text-[20px] font-extrabold tabular-nums text-[#171714]">
+              {trimTime(ps.start_time)}–{trimTime(ps.end_time)}
+            </b>
+            <span className="text-[14px] font-extrabold tabular-nums text-[#6E6E66]">{h1(shiftHours(ps))} h</span>
+          </div>
+          <div className="text-[15px] text-[#6E6E66]">
+            {ps.stanowisko} · {ps.lokal}
+          </div>
+          {/* Przy zamianie druga połowa jest równie ważna co pierwsza — bez niej
+              widać tylko, co się dostaje. */}
+          {typ === "zamiana" && (
+            <div className="text-[14px] border-t border-[#1F7A4A]/30 pt-1.5">
+              {wz ? (
+                <>
+                  <b>Oddajesz swoją: </b>
+                  {dzienKrotko(wz.date)} · {trimTime(wz.start_time)}–{trimTime(wz.end_time)} · {wz.stanowisko}
+                </>
+              ) : (
+                <b className="text-[#8A5300]">Zmiana, którą miałbyś/miałabyś oddać, już nie istnieje.</b>
+              )}
+            </div>
+          )}
+          {sw.note && <div className="text-[14px] text-[#6E6E66]">{sw.note}</div>}
+          {mamZmiane && typ !== "zamiana" && (
+            <div className="flex items-center gap-1.5 text-[13px] font-bold text-[#8A5300]">
+              <Clock size={14} /> Masz już zmianę tego dnia — kierownik zobaczy konflikt
+            </div>
+          )}
+          <button
+            onClick={() => handleAcceptSwap(sw)}
+            disabled={typ === "zamiana" && !wz}
+            className="mt-1 w-full min-h-[48px] rounded-lg bg-[#1F7A4A] text-white font-['Archivo'] font-extrabold text-[16px] flex items-center justify-center gap-2 disabled:opacity-40"
+          >
+            <Check size={18} strokeWidth={2.5} />
+            {typ === "zamiana" ? "Zgadzam się na zamianę" : "Wezmę tę zmianę"}
+          </button>
+        </div>
+      );
+    };
+
+    // --- widok tygodnia ---
+    const renderTydzien = () => {
+      const elementy = [];
+      let wolneCiag = [];
+      const zamknijWolne = () => {
+        if (!wolneCiag.length) return;
+        const a = wolneCiag[0];
+        const b = wolneCiag[wolneCiag.length - 1];
+        const maDzis = wolneCiag.includes(dzisYMD);
+        elementy.push(
+          <div
+            key={`w-${a}`}
+            className="flex justify-between items-center px-3.5 py-2.5 border-[1.5px] border-dashed border-[#DEDCD4] rounded-lg text-[14px] text-[#6E6E66] md:col-span-3"
+          >
+            <b className="text-[#171714] font-bold">
+              {wolneCiag.length === 1 ? dzienKrotko(a) : `${dzienKrotko(a)} – ${dzienKrotko(b)}`}
+            </b>
+            <span>
+              wolne{maDzis && <em className="not-italic font-extrabold text-[#DE3A22]"> · dziś</em>}
+            </span>
+          </div>
+        );
+        wolneCiag = [];
+      };
+      dniTygodnia.forEach((d) => {
+        const moje = mojGrafik.filter((s) => s.date === d);
+        const oferty = ofertyWDniu(d);
+        const przejete = mojePrzejete.filter(({ ps }) => ps.date === d);
+        const wolne = wolneNa(d);
+        const lokalDnia = moje[0]?.lokal || effectiveAssignment.lokal;
+        const wszyscyDnia = publishedShiftsOnDay(planShifts, lokalDnia, d);
+        if (!grafikWszyscy && !moje.length && !oferty.length && !przejete.length && !wolne) {
+          wolneCiag.push(d);
+          return;
+        }
+        zamknijWolne();
+        const inni = wszyscyDnia.filter((s) => !moje.some((m) => String(m.id) === String(s.id)));
+        elementy.push(
+          <div key={d} id={`grafik-dzien-${d}`} className="min-w-0">
+            <div className="flex items-center gap-2 mx-0.5 mt-1 mb-1.5">
+              <b className="text-[16px] text-[#171714] first-letter:uppercase">{dzienKrotko(d)}</b>
+              {d === dzisYMD && (
+                <span className="text-[12px] font-extrabold px-2 py-0.5 rounded-full bg-[#DE3A22] text-white">dziś</span>
+              )}
+              {d === addDaysYMD(dzisYMD, 1) && <span className="text-[13px] text-[#6E6E66]">jutro</span>}
+            </div>
+            {grafikWszyscy ? (
+              <div className="bg-white border-2 border-[#DEDCD4] rounded-xl">
+                {wszyscyDnia.length === 0 ? (
+                  <div className="px-3 py-2 text-[14px] text-[#6E6E66]">Nikt nie ma zmiany w {lokalDnia}.</div>
+                ) : (
+                  wszyscyDnia
+                    .slice()
+                    .sort((a, b) => trimTime(a.start_time).localeCompare(trimTime(b.start_time)))
+                    .map((o, i) => {
+                      const ja = moje.some((m) => String(m.id) === String(o.id));
+                      return (
+                        <div
+                          key={o.id}
+                          className={`grid grid-cols-[auto_1fr_auto] gap-2 items-center px-3 py-2 text-[14px] tabular-nums ${
+                            i ? "border-t-[1.5px] border-[#DEDCD4]" : ""
+                          } ${ja ? "bg-[#FFF3EF]" : ""}`}
+                        >
+                          {stanowiskoZnak(o.lokal, o.stanowisko)}
+                          <b className="text-[#171714] truncate">
+                            {o.user_name}
+                            {ja ? " (ty)" : ""}
+                          </b>
+                          <span className="text-[#6E6E66]">
+                            {trimTime(o.start_time)}–{trimTime(o.end_time)}
+                          </span>
+                        </div>
+                      );
+                    })
+                )}
+              </div>
+            ) : (
+              <>
+                {moje.length > 0 && <div className="flex flex-col gap-2">{moje.map((s) => renderKarta(s, inni))}</div>}
+                {!moje.length && wolne && (
+                  <div className="flex items-center gap-2 px-3.5 py-2.5 border-2 border-[#DEDCD4] rounded-lg bg-white text-[15px] text-[#6E6E66]">
+                    <Palmtree size={16} />
+                    {wolne.type === "urlop" ? "Urlop" : "Zgłoszona niedostępność"}
+                  </div>
+                )}
+                {!moje.length && !wolne && !przejete.length && (
+                  <div className="px-3.5 py-2.5 border-[1.5px] border-[#DEDCD4] rounded-lg text-[14px] text-[#6E6E66]">wolne</div>
+                )}
+                {przejete.map(({ sw, ps }) => (
+                  <div
+                    key={`p-${sw.id}`}
+                    className="mt-2 flex items-center gap-2.5 bg-[#E2F3E9] border-2 border-[#1F7A4A] rounded-xl px-3 py-2.5 text-[14px] text-[#1F7A4A]"
+                  >
+                    <Check size={18} strokeWidth={2.5} className="flex-shrink-0" />
+                    <span className="flex-1 text-[#171714]">
+                      <b>Zgłosiłeś(-aś) się do tej zmiany</b>
+                      <br />
+                      {trimTime(ps.start_time)}–{trimTime(ps.end_time)} · {ps.stanowisko} · od:{" "}
+                      {sw.author_user_name} · czeka na zgodę kierownika
+                    </span>
+                  </div>
+                ))}
+                {oferty.map((o) => renderOferta(o, moje.length > 0))}
+              </>
+            )}
+          </div>
+        );
+      });
+      zamknijWolne();
+      return elementy;
+    };
+
+    // --- widok miesiąca ---
+    const renderMiesiac = () => {
+      const rok = miesiacData.getFullYear();
+      const mies = miesiacData.getMonth() + 1;
+      const moje = mojGrafik.filter((s) => s.date.startsWith(miesiacPrefix));
+      const godz = godzinyMiesiaca(rok, mies);
+      const norma = etat ? normaMiesiaca(employee, rok, mies) : null;
+      const pierwszy = (miesiacData.getDay() + 6) % 7;
+      const dni = new Date(rok, mies, 0).getDate();
+      const wybrany =
+        grafikDzienMiesiaca && grafikDzienMiesiaca.startsWith(miesiacPrefix)
+          ? grafikDzienMiesiaca
+          : miesiacOffset === 0
+          ? dzisYMD
+          : `${miesiacPrefix}-01`;
+      const wybraneZmiany = moje.filter((s) => s.date === wybrany);
+      const kafelCls = "bg-white border-2 border-[#DEDCD4] rounded-lg px-2.5 py-2";
+      return (
+        <>
+          {norma != null ? (
+            <>
+              <div className="grid grid-cols-3 gap-2 mb-2">
+                <div className={kafelCls}>
+                  <b className="block text-[17px] tabular-nums">{moje.length}</b>
+                  <span className="text-[12px] text-[#6E6E66]">{odmianaZmian(moje.length)}</span>
+                </div>
+                <div className={kafelCls}>
+                  <b className="block text-[17px] tabular-nums">{h1(godz)} h</b>
+                  <span className="text-[12px] text-[#6E6E66]">z normy {h1(norma)} h · etat</span>
+                </div>
+                <div className={kafelCls}>
+                  <b className={`block text-[17px] tabular-nums ${godz > norma ? "text-[#8A5300]" : ""}`}>
+                    {godz >= norma ? `+${h1(godz - norma)}` : h1(norma - godz)} h
+                  </b>
+                  <span className="text-[12px] text-[#6E6E66]">{godz >= norma ? "ponad normą" : "do normy"}</span>
+                </div>
+              </div>
+              <div className="h-2 rounded-full bg-[#DEDCD4] overflow-hidden mb-3.5">
+                <i
+                  className={`block h-full ${godz > norma ? "bg-[#8A5300]" : "bg-[#171714]"}`}
+                  style={{ width: `${Math.min(100, (godz / norma) * 100)}%` }}
+                />
+              </div>
+            </>
+          ) : (
+            <div className="grid grid-cols-[1fr_2fr] gap-2 mb-3.5">
+              <div className={kafelCls}>
+                <b className="block text-[17px] tabular-nums">{moje.length}</b>
+                <span className="text-[12px] text-[#6E6E66]">{odmianaZmian(moje.length)}</span>
+              </div>
+              <div className={kafelCls}>
+                <b className="block text-[17px] tabular-nums">{h1(godz)} h</b>
+                <span className="text-[12px] text-[#6E6E66]">
+                  {umowaOpis === "zlecenie" ? "umowa zlecenie · bez normy" : "w miesiącu"}
+                </span>
+              </div>
+            </div>
+          )}
+          <div className="grid grid-cols-7 gap-1">
+            {["pn", "wt", "śr", "czw", "pt", "sob", "nd"].map((d) => (
+              <b key={d} className="text-[11px] text-center uppercase text-[#6E6E66]">
+                {d}
+              </b>
+            ))}
+            {Array.from({ length: pierwszy }).map((_, i) => (
+              <span key={`e${i}`} />
+            ))}
+            {Array.from({ length: dni }).map((_, i) => {
+              const ymd = `${miesiacPrefix}-${String(i + 1).padStart(2, "0")}`;
+              const z = moje.filter((s) => s.date === ymd);
+              const godzDnia = z.reduce((a, s) => a + shiftHours(s), 0);
+              const inny = z.some((s) => s.lokal !== employee.default_lokal);
+              return (
+                <button
+                  key={ymd}
+                  onClick={() => setGrafikDzienMiesiaca(ymd)}
+                  className={`aspect-[1/1.05] rounded-lg border-[1.5px] flex flex-col items-center justify-center tabular-nums ${
+                    z.length
+                      ? inny
+                        ? "bg-[#8A5300] border-[#8A5300] text-white"
+                        : "bg-[#171714] border-[#171714] text-white"
+                      : "bg-white border-[#DEDCD4] text-[#171714]"
+                  } ${ymd < dzisYMD ? "opacity-45" : ""} ${
+                    ymd === dzisYMD ? "outline outline-[3px] outline-offset-1 outline-[#DE3A22]" : ""
+                  } ${ymd === wybrany ? "shadow-[0_0_0_3px_#fff,0_0_0_5px_#171714]" : ""}`}
+                >
+                  <em className="not-italic font-extrabold text-[14px]">{i + 1}</em>
+                  {z.length > 0 && <small className="text-[10px] font-extrabold">{h1(godzDnia)}</small>}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex flex-wrap gap-3 text-[12px] text-[#6E6E66] mt-2 mb-3.5">
+            <span className="flex items-center gap-1">
+              <i className="w-3 h-3 rounded-[3px] bg-[#171714]" /> twoja zmiana
+            </span>
+            <span className="flex items-center gap-1">
+              <i className="w-3 h-3 rounded-[3px] bg-[#8A5300]" /> inny lokal
+            </span>
+            <span className="flex items-center gap-1">
+              <i className="w-3 h-3 rounded-[3px] border-2 border-[#DE3A22]" /> dziś
+            </span>
+          </div>
+          <div className="bg-white border-2 border-[#171714] rounded-xl px-3.5 py-3 flex flex-col gap-0.5">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-[#6E6E66]">{dzienKrotko(wybrany)}</span>
+            {wybraneZmiany.length ? (
+              <>
+                {wybraneZmiany.map((s) => (
+                  <div key={s.id}>
+                    <b className="block text-[18px] tabular-nums text-[#171714]">
+                      {trimTime(s.start_time)}–{trimTime(s.end_time)} · {h1(shiftHours(s))} h
+                    </b>
+                    <span className="text-[14px] text-[#6E6E66]">
+                      {s.stanowisko} · {s.lokal}
+                    </span>
+                  </div>
+                ))}
+                <button
+                  onClick={() => {
+                    const pn = mondayOf(wybrany);
+                    const roznica = Math.round(
+                      (new Date(pn + "T00:00:00") - new Date(mondayOf(dzisYMD) + "T00:00:00")) / (7 * 86400000)
+                    );
+                    setTydzienOffset(roznica);
+                    setGrafikWidok("tydzien");
+                  }}
+                  className="self-start mt-1.5 text-[14px] font-bold underline text-[#171714]"
+                >
+                  Zobacz w tygodniu, z kim pracujesz
+                </button>
+              </>
+            ) : (
+              <b className="text-[18px] text-[#171714]">{wolneNa(wybrany) ? (wolneNa(wybrany).type === "urlop" ? "Urlop" : "Niedostępność") : "Wolne"}</b>
+            )}
+          </div>
+          {moje.length === 0 && miesiacPrefix > dzisYMD.slice(0, 7) && (
+            <p className="text-[14px] text-[#6E6E66] mt-3">Kierownik nie wysłał jeszcze grafiku na ten miesiąc.</p>
+          )}
+        </>
+      );
+    };
+
+    const godzTygodnia = mojGrafik
+      .filter((s) => s.date >= dniTygodnia[0] && s.date <= dniTygodnia[6])
+      .reduce((a, s) => a + shiftHours(s), 0);
+    const czwartek = new Date(dniTygodnia[3] + "T00:00:00");
+    const godzMies = godzinyMiesiaca(czwartek.getFullYear(), czwartek.getMonth() + 1);
+    const normaMies = etat ? normaMiesiaca(employee, czwartek.getFullYear(), czwartek.getMonth() + 1) : null;
+    const ofertyTygodnia = mojeOferty.filter(({ ps }) => ps && ps.date >= dniTygodnia[0] && ps.date <= dniTygodnia[6]);
+    const przewinDo = (d) => {
+      const el = document.getElementById(`grafik-dzien-${d}`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+    const segCls = (on) =>
+      `flex-1 min-h-[40px] px-3 rounded-full text-[14px] font-bold ${
+        on ? "bg-[#171714] text-white" : "text-[#171714]"
+      }`;
+    const strzalkaCls =
+      "w-10 h-10 flex-shrink-0 rounded-lg border-2 border-[#171714] bg-white flex items-center justify-center text-[#171714] disabled:opacity-35";
 
     return (
       <Shell
@@ -3368,221 +3706,170 @@ export const EmployeeSessionScreens = ({
         bloki={bloki}
         personName={onBack ? employee.name : null}
         title="Grafik"
+        nowyWyglad
       >
-        <div className="flex gap-1.5 mb-2">
-          {[
-            { key: "tydzien", label: "Tydzień" },
-            { key: "miesiac", label: "Miesiąc" },
-          ].map((o) => (
+        <div className="md:max-w-[1000px] w-full">
+          <div className="flex p-1 rounded-full bg-white border-2 border-[#DEDCD4] mb-3">
+            {[
+              { key: "tydzien", label: "Tydzień" },
+              { key: "miesiac", label: "Miesiąc" },
+            ].map((o) => (
+              <button key={o.key} onClick={() => setGrafikWidok(o.key)} className={segCls(grafikWidok === o.key)}>
+                {o.label}
+              </button>
+            ))}
+          </div>
+          {/* Strzałki zamiast sztywnego "ten / następny": bez nich horyzont
+              kończy się na 14 dniach, a zmiany, której nie widać, nie da się
+              wystawić na giełdę. "Dziś" pokazuje się dopiero, gdy jest po co
+              wracać. */}
+          <div className="flex items-center gap-2 mb-2.5">
             <button
-              key={o.key}
-              onClick={() => setGrafikWidok(o.key)}
-              className={`flex-1 py-2 rounded border-2 text-[13px] font-bold ${
-                grafikWidok === o.key
-                  ? "bg-[#171714] text-white border-[#171714]"
-                  : "bg-white text-[#171714] border-[#B7B6AE]"
-              }`}
+              onClick={() =>
+                grafikWidok === "miesiac" ? setMiesiacOffset((v) => v - 1) : setTydzienOffset((v) => v - 1)
+              }
+              disabled={!mozeWstecz}
+              aria-label="Wcześniej"
+              className={strzalkaCls}
             >
-              {o.label}
+              <ChevronLeft size={20} />
             </button>
-          ))}
-        </div>
-        {/* Strzałki zamiast sztywnego "ten / następny": bez nich horyzont kończy
-            się na 14 dniach, a zmiany, której nie widać, nie da się wystawić na
-            giełdę. "Dziś" pokazuje się dopiero, gdy jest po co wracać — jego
-            brak sam mówi, że stoisz na bieżącym okresie. */}
-        <div className="flex items-center gap-1.5 mb-3">
-          <button
-            onClick={() =>
-              grafikWidok === "miesiac"
-                ? setMiesiacOffset((v) => v - 1)
-                : setTydzienOffset((v) => v - 1)
-            }
-            disabled={!mozeWstecz}
-            aria-label="Wcześniej"
-            className="w-10 h-10 flex-shrink-0 rounded border-2 border-[#B7B6AE] bg-white font-bold text-[#171714] disabled:opacity-35"
-          >
-            ‹
-          </button>
-          <span className="flex-1 text-center font-['Archivo'] font-extrabold text-[15px] text-[#171714]">
-            {etykietaZakresu}
-          </span>
-          {!naDzis && (
+            <b className="font-['Archivo'] text-[16px] font-extrabold text-[#171714] whitespace-nowrap">{etykietaZakresu}</b>
             <button
-              onClick={() => {
-                setTydzienOffset(0);
-                setMiesiacOffset(0);
-              }}
-              className="flex-shrink-0 h-10 px-3 rounded border-2 border-[#171714] bg-white text-[13px] font-bold text-[#171714]"
+              onClick={() =>
+                grafikWidok === "miesiac" ? setMiesiacOffset((v) => v + 1) : setTydzienOffset((v) => v + 1)
+              }
+              aria-label="Później"
+              className={strzalkaCls}
             >
-              Dziś
+              <ChevronRight size={20} />
             </button>
-          )}
-          <button
-            onClick={() =>
-              grafikWidok === "miesiac"
-                ? setMiesiacOffset((v) => v + 1)
-                : setTydzienOffset((v) => v + 1)
-            }
-            aria-label="Później"
-            className="w-10 h-10 flex-shrink-0 rounded border-2 border-[#B7B6AE] bg-white font-bold text-[#171714]"
-          >
-            ›
-          </button>
-        </div>
-
-        {grafikWidok === "miesiac" ? (
-          <>
-            <div className="flex items-baseline justify-between">
-              <span className={sectionLabelCls}>{etykietaZakresu}</span>
-              <span className="font-['Archivo'] font-extrabold text-sm tabular-nums">
-                {mojeWMiesiacu.length} {odmianaZmian(mojeWMiesiacu.length)} ·{" "}
-                {mojeWMiesiacu
-                  .reduce((a, s) => a + shiftHours(s), 0)
-                  .toFixed(1)
-                  .replace(".", ",")}{" "}
-                h
-              </span>
-            </div>
-            <div className={ruleStrongCls} />
-            {mojeWMiesiacu.length === 0 ? (
-              <div className="text-[15px] text-[#8F8E86] italic mt-4">
-                {miesiacPrefix > dzisYMD.slice(0, 7)
-                  ? "Kierownik nie wysłał jeszcze grafiku na ten miesiąc."
-                  : "Brak zmian w tym miesiącu."}
+            {!naDzis && (
+              <button
+                onClick={() => {
+                  setTydzienOffset(0);
+                  setMiesiacOffset(0);
+                }}
+                className="h-10 px-3 rounded-lg border-2 border-[#171714] bg-white text-[14px] font-bold text-[#171714]"
+              >
+                Dziś
+              </button>
+            )}
+            <span className="flex-1" />
+            {grafikWidok === "tydzien" && (
+              <div className="flex p-0.5 rounded-full bg-white border-2 border-[#DEDCD4]">
+                <button onClick={() => setGrafikWszyscy(false)} className={segCls(!grafikWszyscy)}>
+                  Ja
+                </button>
+                <button onClick={() => setGrafikWszyscy(true)} className={`${segCls(grafikWszyscy)} whitespace-nowrap`}>
+                  Cały lokal
+                </button>
               </div>
-            ) : (
-              <div className="mt-3 space-y-2">
-                {mojeWMiesiacu.map((s) => {
-                  const minione = s.date < dzisYMD;
-                  const dzien = new Date(s.date + "T00:00:00");
+            )}
+          </div>
+
+          {grafikWidok === "miesiac" ? (
+            renderMiesiac()
+          ) : (
+            <>
+              <div className="flex items-center gap-2.5 flex-wrap text-[13px] text-[#6E6E66] mx-0.5 mb-2.5">
+                <span>
+                  <b className="text-[#171714] tabular-nums">{h1(godzTygodnia)} h</b> w tygodniu
+                </span>
+                <span className={`hidden sm:inline ${normaMies != null && godzMies > normaMies ? "text-[#8A5300] font-extrabold" : ""}`}>
+                  {getMonthName(czwartek.getMonth()).toLowerCase()}{" "}
+                  <b className={normaMies != null && godzMies > normaMies ? "" : "text-[#171714]"}>
+                    {normaMies != null ? `${h1(godzMies)}/${h1(normaMies)} h` : `${h1(godzMies)} h`}
+                  </b>
+                  {normaMies != null ? ` · ${opisNormy(godzMies, normaMies)}` : umowaOpis ? ` · ${umowaOpis}` : ""}
+                </span>
+                {ofertyTygodnia.length > 0 ? (
+                  <button
+                    onClick={() => przewinDo(ofertyTygodnia[0].ps.date)}
+                    className="ml-auto inline-flex items-center gap-1 h-7 px-2.5 rounded-full bg-[#E2F3E9] text-[#1F7A4A] text-[12px] font-extrabold"
+                  >
+                    <ArrowLeftRight size={14} /> {ofertyTygodnia.length} do wzięcia
+                  </button>
+                ) : mojeOferty.length > 0 ? (
+                  // Oferty są tylko w swoim dniu — gdy żadna nie wypada w tym
+                  // tygodniu, chip prowadzi do tygodnia najbliższej.
+                  <button
+                    onClick={() => {
+                      const pierwsza = mojeOferty
+                        .map(({ ps }) => ps && ps.date)
+                        .filter(Boolean)
+                        .sort()[0];
+                      if (!pierwsza) return;
+                      setTydzienOffset(
+                        Math.round(
+                          (new Date(mondayOf(pierwsza) + "T00:00:00") - new Date(mondayOf(dzisYMD) + "T00:00:00")) /
+                            (7 * 86400000)
+                        )
+                      );
+                    }}
+                    className="ml-auto inline-flex items-center gap-1 h-7 px-2.5 rounded-full bg-[#E2F3E9] text-[#1F7A4A] text-[12px] font-extrabold"
+                  >
+                    <ArrowLeftRight size={14} /> {mojeOferty.length} do wzięcia · inny tydzień
+                  </button>
+                ) : null}
+              </div>
+              <div className="grid grid-cols-7 gap-1 mb-3.5">
+                {dniTygodnia.map((d) => {
+                  const z = mojGrafik.filter((s) => s.date === d);
+                  const inny = z.some((s) => s.lokal !== employee.default_lokal);
+                  const oferta = ofertyWDniu(d).length > 0;
+                  const dt = new Date(d + "T00:00:00");
                   return (
-                    <div
-                      key={s.id}
-                      className={`flex items-center gap-3 rounded border-2 px-3.5 py-2.5 ${
-                        minione
-                          ? "border-[#B7B6AE] text-[#8F8E86]"
-                          : "border-[#171714] text-[#171714]"
+                    <button
+                      key={d}
+                      onClick={() => przewinDo(d)}
+                      className={`relative flex flex-col items-center pt-1 pb-1.5 rounded-lg border-2 bg-white ${
+                        d === dzisYMD ? "border-[#DE3A22]" : z.length ? "border-[#171714]" : "border-[#DEDCD4]"
                       }`}
                     >
-                      <span className="w-[64px] flex-shrink-0">
-                        <span className="block text-[11px] font-bold uppercase tracking-wider leading-none text-[#8F8E86]">
-                          {s.date === dzisYMD ? "dziś" : getDayOfWeek(dzien)}
-                        </span>
-                        <span className="block font-['Archivo'] font-extrabold text-[15px] leading-tight tabular-nums mt-1">
-                          {s.date.slice(8, 10)}.{s.date.slice(5, 7)}
-                        </span>
-                      </span>
-                      <span className="flex-1 min-w-0 text-[14px] tabular-nums">
-                        {trimTime(s.start_time)} – {trimTime(s.end_time)}
-                        <span className="block text-[12.5px] text-[#6E6E66] truncate">
-                          {s.stanowisko} · {s.lokal}
-                        </span>
-                      </span>
-                      <span className="flex-shrink-0 font-['Archivo'] font-extrabold text-[14px] tabular-nums">
-                        {shiftHours(s).toFixed(1).replace(".", ",")} h
-                      </span>
-                    </div>
+                      <small className="text-[11px] font-bold text-[#6E6E66]">{DN[dt.getDay()]}</small>
+                      <b className="text-[16px] text-[#171714]">{dt.getDate()}</b>
+                      <i className={`w-4 h-1 rounded-sm mt-0.5 ${z.length ? (inny ? "bg-[#8A5300]" : "bg-[#171714]") : ""}`} />
+                      {oferta && <i className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#1F7A4A]" />}
+                    </button>
                   );
                 })}
               </div>
-            )}
-          </>
-        ) : (
-          <>
-            <button
-              onClick={() => setGrafikWszyscy((v) => !v)}
-              className="mb-3 text-[13px] font-bold underline text-[#6E6E66] self-start"
-            >
-              {grafikWszyscy ? "Pokaż tylko moje" : "Pokaż wszystkich w lokalu"}
-            </button>
-            {tydzienBezGrafiku && tydzienOffset > 0 && (
-              <div className="mb-3 rounded border-2 border-[#B7B6AE] bg-[#F1F1EE] p-3 text-[13.5px] text-[#6E6E66] leading-relaxed">
-                Grafik na ten tydzień nie został jeszcze wysłany. Dni niżej będą
-                pokazywać się jako wolne, dopóki kierownik go nie opublikuje.
-              </div>
-            )}
-            {dniTygodnia.map(renderDzien)}
-            {mojGrafik.length === 0 && (
-              <div className="text-[13.5px] text-[#6E6E66] leading-relaxed">
-                Kierownik nie wysłał jeszcze grafiku na ten okres. Gdy to zrobi,
-                dostaniesz powiadomienie.
-              </div>
-            )}
-
-            {mojeOferty.length > 0 && (
-              <>
-                <div className={sectionLabelCls}>Do wzięcia</div>
-                <div className={ruleStrongCls} />
-                <div className="mt-3 space-y-2">
-                  {mojeOferty.map(({ sw, ps }) => {
-                    const typ = typWymiany(sw);
-                    const wz = wzajemnaZmiana(sw, planShifts);
-                    return (
-                      <div
-                        key={sw.id}
-                        className={`border-[2.5px] border-[#171714] rounded p-3.5 ${SWAP_TLO.propozycja}`}
-                      >
-                        {typ !== "gielda" && (
-                          <div className="text-[11px] font-extrabold uppercase tracking-wider text-[#8A3A2B] mb-1">
-                            {typ === "zamiana" ? "Propozycja zamiany" : "Oddane Tobie"}
-                          </div>
-                        )}
-                        <div className="font-['Archivo'] font-extrabold text-[16px]">
-                          {opisDnia(ps.date)} · {trimTime(ps.start_time)} –{" "}
-                          {trimTime(ps.end_time)}
-                        </div>
-                        <div className="text-[13px] text-[#6E6E66]">
-                          {ps.stanowisko} · {ps.lokal} · od: {sw.author_user_name}
-                        </div>
-                        {/* Przy zamianie druga połowa jest równie ważna co
-                            pierwsza — bez niej widać tylko, co się dostaje. */}
-                        {typ === "zamiana" && (
-                          <div className="text-[13px] mt-1.5 border-t-2 border-[#B7B6AE] pt-1.5">
-                            {wz ? (
-                              <>
-                                <span className="font-bold">Oddajesz swoją: </span>
-                                {opisDnia(wz.date)} · {trimTime(wz.start_time)}–
-                                {trimTime(wz.end_time)} · {wz.stanowisko}
-                              </>
-                            ) : (
-                              <span className="text-[#8A3A2B] font-bold">
-                                Zmiana, którą miałbyś/miałabyś oddać, już nie istnieje.
-                              </span>
-                            )}
-                          </div>
-                        )}
-                        {sw.note && (
-                          <div className="text-[13px] text-[#6E6E66] mt-1">{sw.note}</div>
-                        )}
-                        <button
-                          onClick={() => handleAcceptSwap(sw)}
-                          disabled={typ === "zamiana" && !wz}
-                          className="mt-2.5 w-full border-[2.5px] border-[#171714] rounded py-2 text-[14px] font-extrabold bg-white disabled:opacity-40"
-                        >
-                          {typ === "zamiana" ? "Zgadzam się na zamianę" : "Wezmę tę zmianę"}
-                        </button>
-                      </div>
-                    );
-                  })}
+              {tydzienBezGrafiku && tydzienOffset > 0 && (
+                <div className="mb-3 rounded-lg border-2 border-[#DEDCD4] bg-white p-3 text-[14px] text-[#6E6E66] leading-relaxed">
+                  Grafik na ten tydzień nie został jeszcze wysłany. Dni niżej będą
+                  pokazywać się jako wolne, dopóki kierownik go nie opublikuje.
                 </div>
-              </>
-            )}
-
-            <div className="mt-6">
-              <button onClick={openWniosekOWolne} className={menuRowCls}>
-                <Flag size={21} className="text-[#171714] flex-shrink-0" />
-                <span className="flex-1 text-base font-semibold text-[#171714]">
-                  Wniosek o wolne
+              )}
+              {/* Na tablecie dni w trzech kolumnach; zwinięte wolne dni zajmują
+                  cały wiersz. */}
+              <div className="flex flex-col gap-2.5 md:grid md:grid-cols-3 md:gap-3 md:items-start">
+                {renderTydzien()}
+              </div>
+              {mojGrafik.length === 0 && (
+                <p className="text-[14px] text-[#6E6E66] leading-relaxed mt-3">
+                  Kierownik nie wysłał jeszcze grafiku na ten okres. Gdy to zrobi,
+                  dostaniesz powiadomienie.
+                </p>
+              )}
+              <button
+                onClick={openWniosekOWolne}
+                className="w-full mt-4 grid grid-cols-[24px_1fr_20px] gap-2.5 items-center text-left px-3.5 py-3 border-2 border-[#171714] rounded-xl bg-white"
+              >
+                <Flag size={20} />
+                <span>
+                  <b className="text-[16px] text-[#171714]">Wniosek o wolne</b>
+                  <small className="block text-[13px] text-[#6E6E66]">urlop lub niedostępność · trafia do kierownika</small>
                 </span>
+                <ChevronRight size={20} className="text-[#6E6E66]" />
               </button>
-              <p className={helperTextCls}>
-                Zmianę można wystawić na giełdę najpóźniej {SWAP_MIN_HOURS} godzin
-                przed jej rozpoczęciem. Zamianę musi zatwierdzić kierownik.
+              <p className="text-[13px] text-[#6E6E66] mt-2.5 mx-0.5">
+                Zmianę można wystawić na giełdę najpóźniej {SWAP_MIN_HOURS} godzin przed
+                rozpoczęciem. Każdą wymianę zatwierdza kierownik.
               </p>
-            </div>
-          </>
-        )}
+            </>
+          )}
+        </div>
       </Shell>
     );
   }

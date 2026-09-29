@@ -389,6 +389,9 @@ const poprzedniMiesiac = (h) => {
       if (!cel) throw new Error("nie znalazłem cyfry: " + c);
       cel.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     };
+    // Przycisk po DOKŁADNYM tekście (bez stubów ikon „▪”).
+    const przyciskTekst = (t) => [...document.querySelectorAll("#app button")]
+      .find((b) => b.textContent.replace(/▪/g, "").trim() === t);
     const wpisz = async (cyfry) => {
       for (const c of cyfry) { klikCyfre(c); await czekaj(30); }
     };
@@ -681,6 +684,66 @@ const poprzedniMiesiac = (h) => {
         sprawdz("Pulpit na zmianie: licznik i „Zakończ zmianę ›” prowadzące do Zmiany",
           /na zmianie od/i.test(document.getElementById("app").innerText) &&
             widac("Zakończ zmianę") && widac("przejdziesz do Zmiany"));
+
+        // --- Grafik pracownika (0.62.0) ---
+        // Bo ma zmianę za 5 dni (10:00–18:00), Cezary jest wtedy wolny i jest
+        // jedynym kandydatem przy „oddaj”. Kreator giełdy idzie w samej karcie,
+        // z paskiem kroków, a oferta pokazuje się adresatowi w jej dniu.
+        const otworzZakladke = async (nazwa) => {
+          [...document.querySelectorAll("#app nav button")]
+            // Na zakładce bywa znaczek z liczbą („Grafik1”).
+            .find((b) => b.textContent.replace(/▪|\d/g, "").trim() === nazwa)
+            .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          await czekaj(300);
+        };
+        // Przycisk, w którym tekst siedzi w <b> albo <small> — `klik` szuka tylko
+        // wśród button/div/span.
+        const klikPrzycisk = async (tekst) => {
+          const b = [...document.querySelectorAll("#app button")]
+            .find((x) => x.textContent.replace(/▪/g, "").includes(tekst));
+          if (!b) throw new Error("nie znalazłem przycisku: " + tekst);
+          b.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          await czekaj(250);
+        };
+        const doTygodniaZ = async (tekst) => {
+          for (let i = 0; i < 3 && !widac(tekst); i++) {
+            document.querySelector('#app [aria-label="Później"]')
+              .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            await czekaj(250);
+          }
+        };
+        klik("Zmień"); await czekaj(300);
+        klik("Bo"); await czekaj(300);
+        await otworzZakladke("Grafik");
+        await doTygodniaZ("10:00–18:00");
+        sprawdz("Grafik: karta zmiany z przyciskiem „Giełda”",
+          widac("10:00–18:00") && !!przyciskTekst("Giełda"));
+        sprawdz("Grafik: siedem dni w pasku nad listą",
+          [...document.querySelectorAll("#app main .grid-cols-7 > button")].length === 7);
+        przyciskTekst("Giełda").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(250);
+        sprawdz("giełda: pasek kroków i trzy sposoby",
+          widac("Sposób") && widac("Wystaw na giełdę") && widac("Oddaj konkretnej osobie") && widac("Zamień się"));
+        await klikPrzycisk("Oddaj konkretnej osobie");
+        sprawdz("giełda: „Komu oddajesz?” z wolnym kucharzem", /komu oddajesz\?/i.test(document.getElementById("app").innerText) && widac("Cezary"));
+        await klikPrzycisk("Cezary");
+        sprawdz("giełda: podsumowanie przed wysłaniem", /sprawdź i wyślij/i.test(document.getElementById("app").innerText) && widac("Oddaj: Cezary"));
+        const przedOfertą = window.__zapisy.length;
+        await klikPrzycisk("Oddaj: Cezary"); await czekaj(150);
+        const oferta = window.__zapisy.slice(przedOfertą).find((z) => z[0] === "shift_swaps");
+        sprawdz("giełda: oferta zapisana i skierowana do Cezarego",
+          !!oferta && oferta[1].target_user_name === "Cezary",
+          JSON.stringify(window.__zapisy.slice(przedOfertą).map((z) => z[0])));
+        sprawdz("po wysłaniu karta ma status i „Wycofaj”", !!przyciskTekst("Wycofaj"));
+        await klikPrzycisk("Miesiąc");
+        sprawdz("Miesiąc: kalendarz z wybranym dniem", /zobacz w tygodniu|wolne|urlop/i.test(document.getElementById("app").innerText) &&
+          [...document.querySelectorAll("#app main .grid-cols-7 > button")].length >= 28);
+        klik("Zmień"); await czekaj(300);
+        klik("Cezary"); await czekaj(300);
+        await otworzZakladke("Grafik");
+        await doTygodniaZ("Oddane Tobie");
+        sprawdz("adresat widzi ofertę w jej dniu: „Oddane Tobie” · „Wezmę tę zmianę”",
+          widac("Oddane Tobie") && widac("Wezmę tę zmianę"));
       } catch (e) {
         sprawdz("przebieg bez wyjątku", false, e.message);
       }

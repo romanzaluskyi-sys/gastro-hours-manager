@@ -23,6 +23,15 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.62.0",
+    date: "2026-09-29",
+    items: [
+      "Grafik pracownika: pasek siedmiu dni, wolne dni zwinięte w jeden wiersz, zwarte karty zmian z „Z tobą”.",
+      "Giełda w samej karcie z paskiem kroków (sposób → komu → na którą → wyślij); oferty w dniu, którego dotyczą.",
+      "Miesiąc jako kalendarz z godzinami w dniu i normą przy etacie; „Ja / Cały lokal” w tygodniu.",
+    ],
+  },
+  {
     version: "0.61.0",
     date: "2026-09-29",
     items: [

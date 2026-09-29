@@ -939,6 +939,24 @@ kierownika). Rzeczy, których nie widać:
   zlecenie, bez danych, zlecenie bez grafiku) i ma `meta viewport` — bez niego
   telefon renderował układ tabletu.
 
+⚠️ **Grafik pracownika — układ z makiety (0.62.0, EmployeeScheduleMobile /
+EmployeeScheduleTablet).** Logika giełdy bez zmian (utils/swaps.ts, te same
+handlery i stany kreatora: `swapConfirmId`/`swapTyp`/`swapTarget`/
+`swapWzajemna`). Rzeczy, których nie widać:
+- **Godziny miesiąca = `faktIPlanMiesiaca` (fakt + plan)** — ta sama liczba co
+  „Z grafikiem wyjdzie” w Raporcie. Miesiąc w linii nad paskiem to miesiąc
+  CZWARTKU oglądanego tygodnia (tydzień ISO).
+- **Oferty tylko w swoim dniu** (makieta: bez stałej kolumny). Gdy żadna nie
+  wypada w oglądanym tygodniu, znaczek „do wzięcia · inny tydzień” przenosi do
+  tygodnia najbliższej.
+- **„Cały lokal”** pokazuje każdy dzień tygodnia (bez zwijania wolnych) jako
+  listę osób z lokalu, w którym tego dnia pracuję (albo z mojego lokalu).
+- Nagłówek zostaje wspólny („‹ Zmień · imię · Grafik”) — makieta miała tu
+  osobny wariant „GRAFIK nad dużym imieniem”; jedna rama dla wszystkich
+  zakładek jest ważniejsza.
+- `harness-kiosk.html` przechodzi giełdę: Bo oddaje zmianę Cezaremu (kroki,
+  podsumowanie, zapis `shift_swaps`), Cezary widzi „Oddane Tobie” w jej dniu.
+
 **Blokada PIN-em na kiosku** — zaimplementowana (patrz niżej, Schemat
 Supabase i sekcja "Panel kierownika"), TYLKO w `KioskDashboard.tsx`.
 Pracownik z ustawionym `kiosk_pin` dostaje ekran z klawiaturą numeryczną
