@@ -254,7 +254,26 @@ const poprzedniMiesiac = (h) => {
       );
       const [shiftSwaps, setShiftSwaps] = useState([]);
       const [issues, setIssues] = useState([]);
-      const [notifications, setNotifications] = useState([]);
+      // Wiadomości Filipa (0.65.0): dwie nowe (grafik, brak odbicia z crona),
+      // trzy stare — zamiana zatwierdzona, wniosek odrzucony i wiersz sprzed
+      // kolumny `message` (edycja zmiany).
+      const [notifications, setNotifications] = useState(() => {
+        const temu = (dni, h) => { const d = new Date(); d.setDate(d.getDate() - dni); d.setHours(h, 5, 0, 0); return d.toISOString(); };
+        const f = { audience: "employee", user_name: "Filip" };
+        return [
+          { id: "w1", ...f, type: "grafik", is_read: false, created_at: temu(0, 9),
+            message: "Grafik na ten tydzień został zaktualizowany." },
+          { id: "w2", ...f, type: "odbicie", is_read: false, created_at: temu(1, 7),
+            message: "Wczoraj (28.09) miałeś(-aś) zmianę w grafiku w lokalu Ceglana, ale nie ma jej wśród odbitych godzin. Kierownik potwierdzi ją w systemie — jeśli godziny były inne, powiedz mu o tym." },
+          { id: "w3", ...f, type: "swap", is_read: true, created_at: temu(3, 12),
+            message: "Roman zatwierdził(a) zamianę — pracujesz 2026-10-02 10:00–18:00 w lokalu Ceglana." },
+          { id: "w4", ...f, type: "absence_resolved", is_read: true, created_at: temu(4, 15),
+            message: "Roman odrzucił(a) Twój wniosek o urlop (19.10.2026–20.10.2026)." },
+          { id: "w5", user_name: "Filip", action: "edit", actor_name: "Roman", shift_date: "2026-09-20",
+            old_start: "08:00", old_end: "14:00", new_start: "08:00", new_end: "16:00",
+            is_read: true, created_at: temu(6, 18) },
+        ];
+      });
       // Zadania: trzy bloki — dla wszystkich, z pomiarem i tylko dla kucharza.
       // Ostatni sprawdza przełącznik "Twoje stanowisko / Wszystkie", który na
       // tablecie jest jedyną drogą do cudzej checklisty.
@@ -891,6 +910,33 @@ const poprzedniMiesiac = (h) => {
         await otworzZakladke("Zadania");
         sprawdz("Zadania w dzień wolny: „Nie masz dziś zmiany” zamiast pustej listy",
           widac("Nie masz dziś zmiany"));
+
+        // --- Wiadomości (0.65.0) ---
+        klik("Zmień"); await czekaj(300);
+        klik("Filip"); await czekaj(300);
+        await otworzZakladke("Więcej");
+        await klikPrzycisk("Wiadomości");
+        await czekaj(300);
+        const karty = () => [...document.querySelectorAll("#app [data-wiadomosc]")];
+        sprawdz("Wiadomości: dwie nowe wyróżnione i pasek „2 nowe wiadomości”",
+          karty().filter((k) => k.dataset.nowa).length === 2 && widac("2 nowe wiadomości"));
+        sprawdz("wejście oznacza w bazie jako przeczytane — znaczek przy „Więcej” gaśnie",
+          ![...document.querySelectorAll("#app nav button")].some((b) => /Więcej\s*\d/.test(b.textContent.replace(/▪/g, ""))));
+        sprawdz("typy: tytuły i plakietki stanu (zatwierdzone / odrzucone / do sprawdzenia)",
+          widac("Grafik zaktualizowany") && widac("Brak odbicia") && widac("Zamiana zatwierdzona") &&
+            widac("Wniosek o wolne odrzucony") && widac("Kierownik zmienił Twoją zmianę") &&
+            widac("zatwierdzone") && widac("odrzucone") && widac("do sprawdzenia"));
+        sprawdz("dni: „Dziś” i „Wczoraj” nad kartami", /dziś/i.test(tekstApp()) && /wczoraj/i.test(tekstApp()));
+        document.querySelector('#app [data-filtr-wiadomosci="gie"]').dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(200);
+        sprawdz("filtr „Giełda” zostawia samą zamianę", karty().length === 1 && widac("Zamiana zatwierdzona"));
+        document.querySelector('#app [data-filtr-wiadomosci="all"]').dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(200);
+        await klikPrzycisk("Przeczytane");
+        sprawdz("„Przeczytane” zdejmuje wyróżnienie", karty().filter((k) => k.dataset.nowa).length === 0 && !widac("nowe wiadomości"));
+        await klikPrzycisk("Popraw zmianę");
+        sprawdz("„Popraw zmianę” przy braku odbicia otwiera korektę z listą zmian",
+          !!document.querySelector("#app [data-zmiany-nie-ma]"));
       } catch (e) {
         sprawdz("przebieg bez wyjątku", false, e.message);
       }

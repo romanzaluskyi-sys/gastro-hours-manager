@@ -23,6 +23,15 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.65.0",
+    date: "2026-09-29",
+    items: [
+      "Wiadomości pracownika: filtry (Grafik, Giełda, Korekty i wolne), podział na dni, godzina bez sekund.",
+      "Karta z ikoną i kolorem rodzaju, krótkim tytułem i plakietką: zatwierdzone / odrzucone / do sprawdzenia.",
+      "Akcja w wiadomości: „Zobacz grafik”, „Popraw zmianę” (przy braku odbicia wyróżnione); nowe z czerwoną kropką i paskiem „Przeczytane”.",
+    ],
+  },
+  {
     version: "0.64.0",
     date: "2026-09-29",
     items: [

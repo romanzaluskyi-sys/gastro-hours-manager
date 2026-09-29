@@ -1002,6 +1002,26 @@ których nie widać:
   `shift_id`, korekta z listy, zakres wolnego klikany od tyłu, zlecenie bez
   urlopu — Gosia ma `typ_umowy: "zlecenie"`).
 
+⚠️ **Wiadomości — układ z makiety (0.65.0, EmployeeMessagesMobile /
+EmployeeMessagesTablet).** Rzeczy, których nie widać:
+- **Rodzaj wiadomości liczy `opisWiadomosci(n)`** (poziom modułu w
+  `employeeSessionShared.tsx`): kategoria filtra, ton, ikona, tytuł, akcja.
+  Typy w bazie są ogólne (`swap` = propozycja I zatwierdzenie), więc ton i
+  tytuł idą z dopasowania TREŚCI, którą piszą `utils/swaps.ts`,
+  `corrections.ts`, `absences.ts`, `odbicia.ts`, `porzucone.ts` i crony.
+  ⚠️ **Zmieniając tam zdanie albo dokładając typ, dopisz przypadek w
+  `opisWiadomosci`** — nieznane spada na „Wiadomość”, nie znika.
+- **„Przeczytane” w bazie dalej przy WEJŚCIU** (znaczek przy „Więcej” i
+  koperta na liście osób gasną od razu, jak przed 0.65.0). Wyróżnienie „nowa”
+  trzyma `noweWiadomosci` — lista nieprzeczytanych w chwili wejścia — do
+  dotknięcia karty albo „Przeczytane”.
+- **Filtr pokazuje się tylko dla rodzaju, który jest na liście.** Filtra
+  „Zgłoszenia” z makiety nie ma: odpowiedzi na zgłoszenie problemu nie idą
+  dziś do pracownika żadną wiadomością. Terminy sanepid/umowa są tylko we
+  „Wszystkie”.
+- **Akcje** tylko przy włączonym bloku: „Zobacz grafik” (GRAFIK), „Popraw
+  zmianę” (RAPORT — otwiera Zgłoś na liście zmian przez `zgTypNaWejscie`).
+
 **Blokada PIN-em na kiosku** — zaimplementowana (patrz niżej, Schemat
 Supabase i sekcja "Panel kierownika"), TYLKO w `KioskDashboard.tsx`.
 Pracownik z ustawionym `kiosk_pin` dostaje ekran z klawiaturą numeryczną

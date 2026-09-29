@@ -22,6 +22,7 @@ import {
   AlertTriangle,
   EyeOff,
   Plus,
+  X,
   Users,
   User,
   Lock,
@@ -299,6 +300,61 @@ export const checkboxRowCls = (checked) =>
 // każdym ticku. Trzymaj Shell na poziomie modułu. `onBack` jest opcjonalny:
 // gdy go brak (osobiste konto, nie ma do czego "wracać"), przycisk "<
 // Zmień" po prostu się nie renderuje.
+// Wiadomość pracownika → kategoria filtra, ton (kolor koła i plakietka),
+// ikona, krótki tytuł i akcja (0.65.0, makieta EmployeeMessages). Typy w
+// bazie są ogólne — `swap` to i propozycja, i zatwierdzenie — więc ton i tytuł
+// doprecyzowujemy po TREŚCI, którą piszą utils/swaps.ts, corrections.ts,
+// absences.ts, odbicia.ts, porzucone.ts i crony. ⚠️ Zmieniając tam zdanie,
+// sprawdź dopasowanie tutaj. Nieznana treść spada na ogólny opis — wiadomość
+// nigdy nie znika.
+export const opisWiadomosci = (n) => {
+  const t = n.message || "";
+  const typ = n.type || (n.action ? "edycja" : "");
+  const w = (kat, ton, ikona, tytul, akcja = null) => ({ kat, ton, ikona, tytul, akcja });
+  switch (typ) {
+    case "grafik":
+      return /koliduje/.test(t)
+        ? w("grafik", "warn", "grafik", "Zmiana koliduje z Twoim wnioskiem", "grafik")
+        : w("grafik", "info", "grafik", "Grafik zaktualizowany", "grafik");
+    case "swap":
+    case "swap_accepted":
+      if (/zatwierdził\(a\) zamianę/.test(t)) return w("gie", "ok", "gielda", "Zamiana zatwierdzona", "grafik");
+      if (/nie zgodził\(a\) się/.test(t)) return w("gie", "no", "gielda", "Zamiana odrzucona");
+      if (/proponuje zamianę|chce oddać Ci/.test(t)) return w("gie", "info", "gielda", "Propozycja dla Ciebie", "grafik");
+      if (/zgodził\(a\) się na zamianę/.test(t)) return w("gie", "info", "gielda", "Zgoda na zamianę");
+      if (/zgłosił\(a\) się po Twoją/.test(t)) return w("gie", "info", "gielda", "Ktoś chce wziąć Twoją zmianę");
+      if (/nieaktualna|wycofał\(a\)/.test(t)) return w("gie", "info", "gielda", "Oferta nieaktualna");
+      return w("gie", "info", "gielda", "Giełda zmian");
+    case "correction_resolved":
+      return /poprawił\(a\)/.test(t)
+        ? w("kor", "reply", "odpowiedz", "Kierownik poprawił Twoją korektę")
+        : w("kor", "ok", "korekta", "Korekta zatwierdzona");
+    case "correction_query":
+      return w("kor", "warn", "odpowiedz", "Kierownik pyta o korektę", "korekta");
+    case "absence_resolved":
+      if (/odrzucił\(a\)/.test(t)) return w("kor", "no", "wolne", "Wniosek o wolne odrzucony");
+      if (/zapisał\(a\) Ci urlop/.test(t)) return w("kor", "ok", "wolne", "Kierownik wpisał Ci urlop");
+      if (/zapisał\(a\) Ci dni niedostępności/.test(t)) return w("kor", "info", "wolne", "Kierownik wpisał Ci niedostępność");
+      return w("kor", "ok", "wolne", /o urlop/.test(t) ? "Urlop zatwierdzony" : "Wniosek o wolne zatwierdzony");
+    case "odbicie":
+      return /dopisana/.test(t)
+        ? w("kor", "ok", "korekta", "Zmiana dopisana z grafiku")
+        : w("kor", "warn", "uwaga", "Brak odbicia", "korekta");
+    case "porzucona":
+      if (/zapisał\(a\) ją/.test(t)) return w("kor", "ok", "korekta", "Koniec zmiany zapisany");
+      if (/odrzucona/.test(t)) return w("kor", "no", "uwaga", "Zmiana bez końca odrzucona", "korekta");
+      return w("kor", "warn", "uwaga", "Zmiana bez zakończenia", "korekta");
+    case "sanepid":
+      return w("inne", "warn", "dokument", "Termin książeczki sanepid");
+    case "umowa":
+      return w("inne", "warn", "dokument", "Termin umowy");
+    case "edycja":
+      return w("kor", "info", "korekta", n.action === "delete" ? "Kierownik usunął Twoją zmianę" : "Kierownik zmienił Twoją zmianę");
+    default:
+      return w("inne", "info", "dokument", "Wiadomość");
+  }
+};
+
 export const Shell = ({
   screen,
   setScreen,
@@ -672,6 +728,11 @@ export const EmployeeSessionScreens = ({
   const [zgShiftId, setZgShiftId] = useState("none");
   const [zgText, setZgText] = useState("");
   const [zgSaving, setZgSaving] = useState(false);
+  // Wiadomości nieprzeczytane W CHWILI WEJŚCIA (0.65.0). W bazie oznaczamy je
+  // od razu, jak dotąd (znaczek i koperta na liście osób mają zgasnąć), a ta
+  // lista trzyma wyróżnienie „nowa” do dotknięcia karty albo „Przeczytane”.
+  const [noweWiadomosci, setNoweWiadomosci] = useState([]);
+  const [katWiadomosci, setKatWiadomosci] = useState("all");
   const [zgPrefillShiftId, setZgPrefillShiftId] = useState(null);
   // Typ formularza Zgłoś wybrany PRZED wejściem na ekran (skrót „Wniosek o
   // wolne”) — patrz reset przy wejściu na ekran ZGLOS.
@@ -964,6 +1025,8 @@ export const EmployeeSessionScreens = ({
     const unreadIds = myNotifications
       .filter((n) => !n.is_read)
       .map((n) => n.id);
+    setNoweWiadomosci(unreadIds);
+    setKatWiadomosci("all");
     if (unreadIds.length === 0) return;
     api
       .patchByFilter("notifications", `id=in.(${unreadIds.join(",")})`, {
@@ -4870,10 +4933,155 @@ export const EmployeeSessionScreens = ({
     );
   }
 
+  // ==========================================
+  // EKRAN: WIADOMOSCI — układ z makiety właściciela (0.65.0,
+  // EmployeeMessagesMobile / EmployeeMessagesTablet): filtry, dni, karta z
+  // ikoną typu, plakietką stanu i akcją. Treść jak dotąd z
+  // formatNotificationText; rodzaj — opisWiadomosci (poziom modułu).
+  // ==========================================
   if (screen === "WIADOMOSCI") {
-    const sortedNotifications = [...myNotifications].sort(
-      (a, b) => new Date(b.created_at) - new Date(a.created_at)
-    );
+    const MIES_Z = ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"];
+    const KATEGORIE = [
+      ["grafik", "Grafik"],
+      ["gie", "Giełda"],
+      ["kor", "Korekty i wolne"],
+    ];
+    const IKONY_WIAD = {
+      grafik: CalendarDays,
+      gielda: ArrowLeftRight,
+      korekta: Flag,
+      wolne: Palmtree,
+      uwaga: AlertTriangle,
+      odpowiedz: Mail,
+      dokument: FileText,
+    };
+    const KOLO = {
+      info: "bg-[#DEDCD4] text-[#171714]",
+      ok: "bg-[#E2F3E9] text-[#1F7A4A]",
+      no: "bg-[#FBEAE6] text-[#DE3A22]",
+      warn: "bg-[#FDF0D8] text-[#8A5300]",
+      reply: "bg-[#E6EEF6] text-[#1A4F6A]",
+    };
+    const PLAKIETKA = {
+      ok: [Check, "zatwierdzone", "bg-[#E2F3E9] text-[#1F7A4A]"],
+      no: [X, "odrzucone", "bg-[#FBEAE6] text-[#DE3A22]"],
+      warn: [AlertTriangle, "do sprawdzenia", "bg-[#FDF0D8] text-[#8A5300]"],
+    };
+    const AKCJE = {
+      grafik: bloki.includes("GRAFIK") && ["Zobacz grafik", () => setScreen("GRAFIK")],
+      korekta: bloki.includes("RAPORT") && [
+        "Popraw zmianę",
+        () => {
+          zgTypNaWejscie.current = "correction";
+          setZgPrefillShiftId(null);
+          setScreen("ZGLOS");
+        },
+      ],
+    };
+    const dzisYMDw = toLocalYMD(new Date());
+    const wczoraj = new Date();
+    wczoraj.setDate(wczoraj.getDate() - 1);
+    const wczorajYMD = toLocalYMD(wczoraj);
+    const etykietaDnia = (d) => {
+      const ymd = toLocalYMD(d);
+      if (ymd === dzisYMDw) return "Dziś";
+      if (ymd === wczorajYMD) return "Wczoraj";
+      return `${d.getDate()} ${MIES_Z[d.getMonth()]}${
+        d.getFullYear() !== new Date().getFullYear() ? ` ${d.getFullYear()}` : ""
+      }`;
+    };
+    const wszystkie = [...myNotifications]
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      .map((n) => ({ n, o: opisWiadomosci(n), nowa: noweWiadomosci.includes(n.id) }));
+    // Filtry tylko dla rodzajów, które są na liście — pusty filtr to martwy
+    // przycisk. „Wszystkie” zawsze pierwsze.
+    const filtry = [["all", "Wszystkie"], ...KATEGORIE.filter(([k]) => wszystkie.some((x) => x.o.kat === k))];
+    const kat = filtry.some(([k]) => k === katWiadomosci) ? katWiadomosci : "all";
+    const widoczne = wszystkie.filter((x) => kat === "all" || x.o.kat === kat);
+    const ileNowych = widoczne.filter((x) => x.nowa).length;
+    const noweTekst = (k) =>
+      k === 1
+        ? "1 nowa wiadomość"
+        : k % 10 >= 2 && k % 10 <= 4 && !(k % 100 >= 12 && k % 100 <= 14)
+        ? `${k} nowe wiadomości`
+        : `${k} nowych wiadomości`;
+    const przeczytana = (id) => setNoweWiadomosci((prev) => prev.filter((x) => x !== id));
+
+    let dzien = null;
+    const elementy = [];
+    widoczne.forEach(({ n, o, nowa }) => {
+      const kiedy = n.created_at ? new Date(n.created_at) : null;
+      const etykieta = kiedy ? etykietaDnia(kiedy) : "Wcześniej";
+      if (etykieta !== dzien) {
+        dzien = etykieta;
+        elementy.push(
+          <h3
+            key={`d:${etykieta}`}
+            className="text-[13px] font-extrabold tracking-[.05em] uppercase text-[#6E6E66] mt-4 mb-2 mx-0.5"
+          >
+            {etykieta}
+          </h3>
+        );
+      }
+      const Ikona = IKONY_WIAD[o.ikona] || Bell;
+      const plakietka = PLAKIETKA[o.ton];
+      const akcja = o.akcja && AKCJE[o.akcja];
+      elementy.push(
+        <div
+          key={n.id}
+          onClick={() => nowa && przeczytana(n.id)}
+          data-wiadomosc={n.id}
+          data-nowa={nowa ? "1" : undefined}
+          className={`relative grid grid-cols-[44px_1fr] gap-3 px-3.5 py-3 border-2 rounded-lg bg-white mb-2 ${
+            nowa ? "border-[#171714]" : "border-[#DEDCD4]"
+          }`}
+        >
+          <span className={`w-11 h-11 rounded-full flex items-center justify-center ${KOLO[o.ton] || KOLO.info}`}>
+            <Ikona size={22} />
+          </span>
+          <div className="min-w-0">
+            <div className="flex justify-between items-baseline gap-2">
+              <b className={`text-[18px] leading-[23px] text-[#171714] ${nowa ? "font-extrabold" : "font-bold"}`}>
+                {o.tytul}
+              </b>
+              {kiedy && (
+                <time className={`text-[14px] text-[#6E6E66] tabular-nums flex-none ${nowa ? "pr-4" : ""}`}>
+                  {fmtHHMM(kiedy)}
+                </time>
+              )}
+            </div>
+            {plakietka && (
+              <span
+                className={`inline-flex items-center gap-1 text-[13px] font-extrabold px-2 py-0.5 rounded-md mt-1 ${plakietka[2]}`}
+              >
+                {React.createElement(plakietka[0], { size: 14 })}
+                {plakietka[1]}
+              </span>
+            )}
+            <p className="text-[16px] leading-[22px] mt-1.5 text-[#171714]">
+              {formatNotificationText(n, showEmployeeNameInMessages)}
+            </p>
+            {akcja && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  przeczytana(n.id);
+                  akcja[1]();
+                }}
+                className={`mt-2.5 inline-flex items-center gap-1 min-h-[44px] px-3.5 rounded-lg border-2 border-[#171714] text-[15px] font-extrabold ${
+                  o.ton === "warn" ? "bg-[#171714] text-white" : "bg-white text-[#171714]"
+                }`}
+              >
+                {akcja[0]} <ChevronRight size={18} />
+              </button>
+            )}
+          </div>
+          {nowa && <i className="absolute top-4 right-3 w-2.5 h-2.5 rounded-full bg-[#DE3A22]" aria-label="nowa" />}
+        </div>
+      );
+    });
+
     return (
       <Shell
         screen={screen}
@@ -4886,34 +5094,64 @@ export const EmployeeSessionScreens = ({
         personName={onBack ? employee.name : null}
         title="Wiadomości"
         showBell={false}
+        nowyWyglad
       >
-        {sortedNotifications.length === 0 && (
-          <div className="text-center py-10 text-[#8F8E86]">
-            <Bell className="mx-auto mb-2 opacity-40" size={40} />
-            Brak powiadomień
-          </div>
-        )}
-        {sortedNotifications.map((n) => (
-          <div
-            key={n.id}
-            className={`flex gap-3.5 py-4 pl-4 pr-[18px] border-l-4 rounded-sm mb-3.5 ${
-              n.is_read
-                ? "border-[#8F8E86] bg-[#F1F1EE]"
-                : "border-[#DE3A22] bg-[#FDF1EE]"
-            }`}
-          >
-            <div>
-              <div className="text-base leading-snug text-[#171714]">
-                {formatNotificationText(n, showEmployeeNameInMessages)}
-              </div>
-              {n.created_at && (
-                <div className="text-[13px] text-[#8F8E86] mt-2">
-                  {new Date(n.created_at).toLocaleString("pl-PL")}
+        <div className="w-full md:max-w-[720px] md:mx-auto">
+          {wszystkie.length === 0 ? (
+            <div className="text-center py-12 text-[#6E6E66]">
+              <Bell className="mx-auto mb-2 opacity-40" size={40} />
+              <p className="text-[16px]">Brak wiadomości.</p>
+              <p className="text-[14px] mt-1">Tu przyjdą zmiany w grafiku, odpowiedzi na korekty i wnioski.</p>
+            </div>
+          ) : (
+            <>
+              {filtry.length > 2 && (
+                // Na telefonie przewijane w bok (od krawędzi do krawędzi), na
+                // tablecie jeden rząd.
+                <div className="flex gap-1.5 overflow-x-auto -mx-3.5 px-3.5 pb-1 mb-2.5 md:mx-0 md:px-0 md:flex-wrap [scrollbar-width:none]">
+                  {filtry.map(([k, nazwa]) => {
+                    const ile = wszystkie.filter((x) => x.nowa && (k === "all" || x.o.kat === k)).length;
+                    const on = kat === k;
+                    return (
+                      <button
+                        key={k}
+                        type="button"
+                        onClick={() => setKatWiadomosci(k)}
+                        data-filtr-wiadomosci={k}
+                        className={`flex-none min-h-[44px] px-3.5 rounded-full border-2 text-[15px] font-bold inline-flex items-center gap-1.5 ${
+                          on ? "bg-[#171714] border-[#171714] text-white" : "bg-white border-[#B7B6AE] text-[#171714]"
+                        }`}
+                      >
+                        {nazwa}
+                        {ile > 0 && (
+                          <i className="not-italic min-w-[20px] h-5 rounded-full bg-[#DE3A22] text-white text-[12px] font-extrabold flex items-center justify-center px-1">
+                            {ile}
+                          </i>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
-            </div>
-          </div>
-        ))}
+              {ileNowych > 0 && (
+                <div className="flex justify-between items-center gap-2 px-3 py-2 rounded-lg bg-[#FBEAE6] mb-1">
+                  <span className="text-[15px] font-extrabold text-[#DE3A22] whitespace-nowrap">{noweTekst(ileNowych)}</span>
+                  <button
+                    type="button"
+                    onClick={() => setNoweWiadomosci([])}
+                    className="inline-flex items-center gap-1 text-[14px] font-bold underline text-[#171714] whitespace-nowrap"
+                  >
+                    <Check size={16} /> Przeczytane
+                  </button>
+                </div>
+              )}
+              {elementy}
+              {widoczne.length === 0 && (
+                <p className="text-center text-[#6E6E66] py-8">Brak wiadomości w tej kategorii.</p>
+              )}
+            </>
+          )}
+        </div>
       </Shell>
     );
   }

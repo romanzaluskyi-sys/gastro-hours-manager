@@ -5,6 +5,27 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.65.0 — 2026-09-29
+
+- **Wiadomości — nowy wygląd według makiety** (Tablet Służbowy i prywatny
+  telefon). Ósmy krok przebudowy ekranów pracownika.
+  - **Filtry**: Wszystkie · Grafik · Giełda · Korekty i wolne — z liczbą
+    nowych. Pokazują się tylko te, w których coś jest; na telefonie
+    przewijane w bok.
+  - **Podział na dni** („Dziś”, „Wczoraj”, „22 wrz”) i sama godzina, bez
+    sekund.
+  - **Karta**: ikona rodzaju w kolorowym kole (szare — informacja, zielone —
+    zatwierdzone, czerwone — odrzucone, pomarańczowe — do sprawdzenia,
+    niebieskie — odpowiedź kierownika), krótki tytuł („Zamiana
+    zatwierdzona”, „Brak odbicia”, „Wniosek o wolne odrzucony”…), plakietka
+    stanu i dotychczasowa treść pod spodem.
+  - **Akcja w wiadomości**: „Zobacz grafik ›” przy grafiku i propozycjach
+    zamiany, „Popraw zmianę ›” przy braku odbicia i zmianie bez zakończenia
+    (czarna, wyróżniona).
+  - **Nowe** mają czarną ramkę, pogrubiony tytuł i czerwoną kropkę, a nad
+    listą pasek „2 nowe wiadomości · Przeczytane”. Znaczek przy „Więcej”
+    gaśnie jak dotąd od razu po wejściu.
+
 ## 0.64.0 — 2026-09-29
 
 - **Zgłoś — nowy wygląd według makiety** (Tablet Służbowy i prywatny
