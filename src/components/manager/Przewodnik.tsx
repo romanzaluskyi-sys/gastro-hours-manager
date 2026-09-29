@@ -23,6 +23,15 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.61.0",
+    date: "2026-09-29",
+    items: [
+      "Raport pracownika: podsumowanie miesiąca na górze — przy etacie pasek z normą, ponad/do normy i „z grafikiem wyjdzie”.",
+      "Zlecenie: „bez normy” i ile grafiku już przepracowano; miesiąc strzałkami, bez pola „Pracownik”.",
+      "Zmiany tygodniami z sumą tygodnia, duża flaga korekty ze statusem, na końcu „Jeszcze w grafiku”.",
+    ],
+  },
+  {
     version: "0.60.1",
     date: "2026-09-29",
     items: [

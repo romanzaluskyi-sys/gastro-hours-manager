@@ -920,6 +920,25 @@ faktycznej”) — świadomie jej NIE wdrożono: obowiązuje ustalenie właścic
   zacząć zmiany tak, jak ją zaplanowano. Domyślny lokal dalej z urządzenia,
   domyślne stanowisko: grafik → karta → pierwsze (`domyslneStanowisko`).
 
+⚠️ **Raport — układ z makiety (0.61.0, EmployeeReportMobile /
+EmployeeReportTablet).** Podsumowanie na górze zamiast stopki; liczby zamiast
+jednego zdania z `podsumowanieMiesiaca` (ta funkcja dalej obsługuje Moją Pracę
+kierownika). Rzeczy, których nie widać:
+- **„Ponad/do normy” liczy się z FAKTU** (`raportTotal`, z urlopem), a „Z
+  grafikiem wyjdzie” z `faktIPlanMiesiaca` (fakt do wczoraj + grafik od dziś)
+  — ta sama prognoza co w Mojej Pracy.
+- **Norma tylko przy etacie z wymiarem i nie w pustym zamkniętym miesiącu**
+  (`pokazNorme`) — ta sama zasada co w `podsumowanieMiesiaca`.
+- **Pasek „% grafiku” przy zleceniu tylko w trwającym miesiącu i gdy grafik
+  ma coś jeszcze** — „100% grafiku” w zamkniętym miesiącu nic nie mówi.
+- **Status flagi = korekta (`issues`) z `shift_id` tej zmiany**: otwarta →
+  „czeka”, rozwiązana → „korekta rozpatrzona”.
+- **„Jeszcze w grafiku”: od jutra, a dziś tylko gdy dzisiejszej zmiany nikt
+  nie zaczął** — inaczej ten sam dzień stałby dwa razy.
+- `harness-raport.html` jest od 0.61.0 AUTOMATYCZNY (5 osób: etat, pół etatu,
+  zlecenie, bez danych, zlecenie bez grafiku) i ma `meta viewport` — bez niego
+  telefon renderował układ tabletu.
+
 **Blokada PIN-em na kiosku** — zaimplementowana (patrz niżej, Schemat
 Supabase i sekcja "Panel kierownika"), TYLKO w `KioskDashboard.tsx`.
 Pracownik z ustawionym `kiosk_pin` dostaje ekran z klawiaturą numeryczną
@@ -1547,7 +1566,8 @@ odpadają. Zamiast tego dwa pliki w katalogu głównym, uruchamiane przez
   pokazuje nazwę produktu, nazwę najemcy i znak — czyli dokładnie to, co
   najłatwiej po cichu zepsuć zmianą w `config.ts`;
 - `harness-raport.html` — montuje `PersonalDashboard` (osobisty telefon) z
-  atrapą Supabase i przełącznikiem czterech osób: pełny etat, pół etatu,
+  atrapą Supabase i przełącznikiem pięciu osób (od 0.61.0 klikany
+  automatycznie): pełny etat, pół etatu,
   zlecenie, konto bez żadnych danych o umowie. Powstał dla normy w Raporcie —
   każda liczba w tym bloku ma przypadek, w którym jej NIE MA, i wtedy blok ma
   zniknąć, a nie pokazać "null h";

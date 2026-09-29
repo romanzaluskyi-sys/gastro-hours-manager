@@ -54,7 +54,12 @@ import {
   formatNotificationText,
 } from "../utils/format";
 import { stanowiskoShort, stanowiskoBadgeStyle } from "../utils/stanowiska";
-import { podsumowanieMiesiaca, normaMiesiaca } from "../utils/umowy";
+import {
+  normaMiesiaca,
+  naEtacie,
+  typUmowy,
+  typUmowyLabel,
+} from "../utils/umowy";
 import {
   offerSwap,
   withdrawSwap,
@@ -838,11 +843,11 @@ export const EmployeeSessionScreens = ({
     .filter((s) => s.is_urlop)
     .reduce((acc, s) => acc + (s.end_time ? (s.end_time - s.start_time) / 3600000 : 0), 0);
 
-  // Zdanie o miesiącu (norma przy etacie, grafik przy zleceniu) liczy
-  // `podsumowanieMiesiaca` w utils/umowy.ts — ten sam kod obsługuje Moją Pracę
-  // kierownika, żeby oba ekrany nie mogły powiedzieć czegoś innego o tym samym
-  // miesiącu. Rozbicie na fakt i plan robi `faktIPlanMiesiaca`: dzień
-  // dzisiejszy należy do planu, także wtedy, gdy zmiana właśnie trwa.
+  // Rozbicie miesiąca na fakt i plan robi `faktIPlanMiesiaca` — to samo, z
+  // czego Moja Praca kierownika liczy `podsumowanieMiesiaca`, więc prognoza „z
+  // grafikiem” jest w obu miejscach ta sama. Dzień dzisiejszy należy do planu,
+  // także wtedy, gdy zmiana właśnie trwa. Od 0.61.0 Raport pokazuje liczby
+  // (norma, ponad/do normy, z grafikiem) zamiast jednego zdania.
   const raportRozbicie = faktIPlanMiesiaca({
     shifts,
     planShifts,
@@ -850,15 +855,6 @@ export const EmployeeSessionScreens = ({
     rok: raportYear,
     mies: raportMonth + 1,
   });
-  const raportPodsumowanie = podsumowanieMiesiaca({
-    user: employee,
-    przepracowane: raportRozbicie.fakt,
-    zaplanowane: raportRozbicie.plan,
-    rok: raportYear,
-    mies: raportMonth + 1,
-    biezacy: raportRozbicie.biezacy,
-  });
-
   const recentShiftsForZgloszenie = shifts
     .filter((s) => s.user_id === employee.id)
     .sort((a, b) => b.start_time - a.start_time)
@@ -3592,9 +3588,411 @@ export const EmployeeSessionScreens = ({
   }
 
   // ==========================================
-  // EKRAN: RAPORT
+  // EKRAN: RAPORT — układ z makiety właściciela (0.61.0, EmployeeReportMobile
+  // / EmployeeReportTablet). Podsumowanie miesiąca stoi NA GÓRZE (zamiast
+  // stopki), zależnie od umowy; lista zmian tygodniami z sumą tygodnia, flaga
+  // korekty 48 px przy każdej zmianie, na końcu „Jeszcze w grafiku”.
   // ==========================================
   if (screen === "RAPORT") {
+    const h1 = (n) => (Math.round((n || 0) * 10) / 10).toFixed(1).replace(".", ",");
+    const DNI = ["Nd", "Pn", "Wt", "Śr", "Cz", "Pt", "Sb"];
+    const MIES_D = ["stycznia", "lutego", "marca", "kwietnia", "maja", "czerwca", "lipca",
+      "sierpnia", "września", "października", "listopada", "grudnia"];
+    const dzis = new Date();
+    const biezacyMies = raportYear === dzis.getFullYear() && raportMonth === dzis.getMonth();
+    const zamkniety = raportYear < dzis.getFullYear() ||
+      (raportYear === dzis.getFullYear() && raportMonth < dzis.getMonth());
+    const najwczesniejszyRok = Math.min(...getAvailableYears());
+    const mozeWstecz = raportYear > najwczesniejszyRok || raportMonth > 0;
+    const mozeDalej = !biezacyMies && !(raportYear > dzis.getFullYear());
+    const przesunMiesiac = (o) => {
+      const d = new Date(raportYear, raportMonth + o, 1);
+      setRaportMonth(d.getMonth());
+      setRaportYear(d.getFullYear());
+    };
+    const umowa = typUmowy(employee);
+    const etat = naEtacie(employee);
+    const norma = etat ? normaMiesiaca(employee, raportYear, raportMonth + 1) : null;
+    // ⚠️ Zamknięty miesiąc bez ANI JEDNEJ zmiany nie dostaje normy — ta sama
+    // zasada co w podsumowanieMiesiaca (utils/umowy.ts): „do normy zabrakło
+    // 176 h” za miesiąc, w którym systemu jeszcze nie było, to alarm o niczym.
+    const pokazNorme = norma != null && (biezacyMies || raportTotal > 0);
+    // Prognoza „z grafikiem” — fakt do wczoraj + grafik od dziś (to samo
+    // rozbicie, którym liczy podsumowanieMiesiaca), tylko w trwającym miesiącu.
+    const prognoza = raportRozbicie.biezacy ? raportRozbicie.fakt + raportRozbicie.plan : null;
+    const zGrafiku = prognoza != null && raportRozbicie.plan > 0.05;
+    const doPlanu = zGrafiku ? Math.max(0, prognoza - raportTotal) : 0;
+
+    // Korekta wysłana do tej zmiany — czeka albo rozpatrzona.
+    const korektaZmiany = (s) =>
+      (issues || [])
+        .filter((i) => i.type === "correction" && String(i.shift_id) === String(s.id))
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0] || null;
+
+    const renderPodsumowanie = () => {
+      const roznica = pokazNorme ? Math.round((raportTotal - norma) * 10) / 10 : 0;
+      const skala = pokazNorme ? Math.max(raportTotal + doPlanu, norma) * 1.04 : 1;
+      const wszystko = raportTotal + doPlanu;
+      const procentGrafiku = wszystko > 0 ? (raportTotal / wszystko) * 100 : 100;
+      const faktCls = "flex justify-between items-baseline gap-2.5 pt-2 border-t border-[#DEDCD4]";
+      return (
+        <section className="bg-white border-2 border-[#171714] rounded-xl px-4 pt-3.5 pb-3 mb-2.5">
+          <div className="flex justify-between items-end gap-2.5">
+            <div>
+              <span className="block text-[13px] font-extrabold tracking-[.05em] uppercase text-[#6E6E66]">
+                {zamkniety ? "Przepracowane · zamknięty miesiąc" : "Przepracowane do dziś"}
+              </span>
+              <b className="block font-['Archivo'] text-[40px] leading-[44px] font-extrabold tabular-nums tracking-[-.01em] text-[#171714]">
+                {h1(raportTotal)}
+                <small className="text-[20px] font-extrabold"> godz.</small>
+              </b>
+            </div>
+            <div className="text-right pb-1">
+              <b className="block text-[24px] font-extrabold text-[#171714]">
+                {raportShifts.filter((s) => !s.is_urlop).length}
+              </b>
+              <span className="text-[13px] text-[#6E6E66]">zmian</span>
+            </div>
+          </div>
+          {pokazNorme ? (
+            <>
+              <div className="relative h-3.5 bg-[#DEDCD4] rounded-full mt-3.5 mb-[30px]">
+                <i
+                  className="absolute inset-y-0 left-0 bg-[#171714] rounded-l-full"
+                  style={{ width: `${(Math.min(raportTotal, norma) / skala) * 100}%` }}
+                />
+                {roznica > 0 && (
+                  <i
+                    className="absolute inset-y-0 bg-[#8A5300]"
+                    style={{ left: `${(norma / skala) * 100}%`, width: `${(roznica / skala) * 100}%` }}
+                  />
+                )}
+                {doPlanu > 0 && (
+                  <i
+                    className="absolute inset-y-0 opacity-55 rounded-r-full"
+                    style={{
+                      left: `${(raportTotal / skala) * 100}%`,
+                      width: `${(doPlanu / skala) * 100}%`,
+                      background: "repeating-linear-gradient(135deg,#6E6E66 0 3px,transparent 3px 7px)",
+                    }}
+                  />
+                )}
+                <em
+                  className="absolute -top-[5px] -bottom-[5px] w-[3px] -ml-[1.5px] bg-[#DE3A22] not-italic"
+                  style={{ left: `${(norma / skala) * 100}%` }}
+                >
+                  {/* Podpis przy krawędzi paska wyrównany do kreski, żeby nie
+                      wychodził poza kartę (norma blisko prawego końca). */}
+                  <span
+                    className={`absolute top-[26px] whitespace-nowrap text-[13px] font-bold text-[#DE3A22] ${
+                      norma / skala > 0.75
+                        ? "right-0"
+                        : norma / skala < 0.25
+                        ? "left-0"
+                        : "left-1/2 -translate-x-1/2"
+                    }`}
+                  >
+                    norma {h1(norma).replace(",0", "")} h
+                  </span>
+                </em>
+              </div>
+              <div className="grid gap-2 mt-3">
+                <div className={faktCls}>
+                  <span className="text-[15px] text-[#6E6E66]">
+                    {roznica > 0
+                      ? `Ponad normą ${h1(norma).replace(",0", "")} h`
+                      : roznica < 0
+                      ? `Do normy ${h1(norma).replace(",0", "")} h brakuje`
+                      : "Dokładnie w normie"}
+                  </span>
+                  <b className={`text-[18px] font-extrabold whitespace-nowrap ${roznica > 0 ? "text-[#8A5300]" : "text-[#171714]"}`}>
+                    {roznica > 0 ? `+${h1(roznica)}` : h1(Math.abs(roznica))} h
+                  </b>
+                </div>
+                {zGrafiku && (
+                  <div className={faktCls}>
+                    <span className="text-[15px] text-[#6E6E66]">Z grafikiem wyjdzie {h1(prognoza)} h</span>
+                    <b
+                      className={`text-[18px] font-extrabold whitespace-nowrap ${
+                        prognoza - norma > 0.05 ? "text-[#8A5300]" : "text-[#171714]"
+                      }`}
+                    >
+                      {prognoza - norma > 0.05
+                        ? `+${h1(prognoza - norma)} h`
+                        : prognoza - norma < -0.05
+                        ? `−${h1(norma - prognoza)} h`
+                        : "±0 h"}
+                    </b>
+                  </div>
+                )}
+                {raportUrlop > 0 && (
+                  <div className={faktCls}>
+                    <span className="text-[15px] text-[#6E6E66]">W tym urlop</span>
+                    <b className="text-[18px] font-extrabold whitespace-nowrap text-[#171714]">{h1(raportUrlop)} h</b>
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Bez normy: ile grafiku już przepracowano. Pasek tylko w
+                  trwającym miesiącu i gdy grafik ma coś jeszcze — inaczej
+                  „100% grafiku” nic nie mówi. */}
+              {zGrafiku && (
+                <>
+                  <div className="relative h-3.5 bg-[#DEDCD4] rounded-full mt-3.5 mb-1.5 overflow-hidden">
+                    <i className="absolute inset-y-0 left-0 bg-[#171714]" style={{ width: `${procentGrafiku}%` }} />
+                    <i
+                      className="absolute inset-y-0 opacity-55"
+                      style={{
+                        left: `${procentGrafiku}%`,
+                        right: 0,
+                        background: "repeating-linear-gradient(135deg,#6E6E66 0 3px,transparent 3px 7px)",
+                      }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-[14px] font-bold text-[#6E6E66] tabular-nums">
+                    <span>{Math.round(procentGrafiku)}% grafiku</span>
+                    <span>
+                      {h1(raportTotal)} z {h1(wszystko)} h
+                    </span>
+                  </div>
+                </>
+              )}
+              {(umowa || zGrafiku || raportUrlop > 0 || raportShifts.length > 0) && (
+                <div className="grid gap-2 mt-3">
+                  {umowa && (
+                    <div className={faktCls}>
+                      <span className="text-[15px] text-[#6E6E66]">{typUmowyLabel(umowa)}</span>
+                      <b className="text-[18px] font-extrabold whitespace-nowrap text-[#171714]">bez normy</b>
+                    </div>
+                  )}
+                  {zGrafiku ? (
+                    <div className={faktCls}>
+                      <span className="text-[15px] text-[#6E6E66]">
+                        W grafiku jeszcze {h1(doPlanu)} h · razem
+                      </span>
+                      <b className="text-[18px] font-extrabold whitespace-nowrap text-[#171714]">{h1(wszystko)} h</b>
+                    </div>
+                  ) : (
+                    raportShifts.filter((s) => !s.is_urlop && s.end_time).length > 0 && (
+                      <div className={faktCls}>
+                        <span className="text-[15px] text-[#6E6E66]">Średnio na zmianę</span>
+                        <b className="text-[18px] font-extrabold whitespace-nowrap text-[#171714]">
+                          {h1(
+                            (raportTotal - raportUrlop) /
+                              raportShifts.filter((s) => !s.is_urlop && s.end_time).length
+                          )}{" "}
+                          h
+                        </b>
+                      </div>
+                    )
+                  )}
+                  {raportUrlop > 0 && (
+                    <div className={faktCls}>
+                      <span className="text-[15px] text-[#6E6E66]">W tym urlop</span>
+                      <b className="text-[18px] font-extrabold whitespace-nowrap text-[#171714]">{h1(raportUrlop)} h</b>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </section>
+      );
+    };
+
+    // Kolumny: data · stanowisko i godziny · suma · flaga.
+    const kolumnyCls = "grid grid-cols-[54px_1fr_44px_48px] md:grid-cols-[90px_1fr_80px_60px] gap-2 md:gap-2.5";
+    const dzisYMDr = toLocalYMD(dzis);
+    const wiersz = (s, zaplanowana = false) => {
+      const data = zaplanowana ? new Date(s.date + "T00:00:00") : s.start_time;
+      const dd = `${String(data.getDate()).padStart(2, "0")}.${String(data.getMonth() + 1).padStart(2, "0")}`;
+      const dow = data.getDay();
+      const weekend = dow === 0 || dow === 6;
+      const korekta = zaplanowana || s.is_urlop ? null : korektaZmiany(s);
+      const czeka = korekta && korekta.status !== "rozwiazane";
+      const lokal = zaplanowana ? s.lokal : s.lokal;
+      const godziny = zaplanowana
+        ? shiftHours(s)
+        : s.end_time
+        ? (s.end_time - s.start_time) / 3600000
+        : null;
+      return (
+        <div
+          key={(zaplanowana ? "p:" : "") + s.id}
+          className={`${kolumnyCls} items-center min-h-[64px] py-2 px-0.5 border-b border-[#DEDCD4] ${
+            czeka ? "bg-[#FDF0D8]" : zaplanowana ? "" : "bg-white"
+          }`}
+        >
+          <div>
+            <b className={`block text-[18px] leading-[22px] font-extrabold tabular-nums ${zaplanowana ? "text-[#6E6E66]" : "text-[#171714]"}`}>
+              {dd}
+            </b>
+            <span className={`text-[15px] font-bold ${weekend ? "text-[#DE3A22]" : "text-[#6E6E66]"}`}>
+              {DNI[dow]}
+            </span>
+          </div>
+          <div className="min-w-0 flex flex-wrap items-center gap-x-1.5 md:gap-x-2 gap-y-1">
+            <span
+              className="text-[12px] md:text-[13px] font-extrabold px-1.5 py-0.5 rounded-md text-[#6E6E66] bg-[#ECEBE6]"
+              style={s.is_urlop ? {} : stanowiskoBadgeStyle(stanowiskaOptions, lokal, s.stanowisko) || {}}
+            >
+              {s.is_urlop ? "URL" : stanowiskoShort(stanowiskaOptions, lokal, s.stanowisko)}
+            </span>
+            <b className={`text-[17px] md:text-[18px] font-semibold tabular-nums whitespace-nowrap ${zaplanowana ? "text-[#6E6E66]" : "text-[#171714]"}`}>
+              {s.is_urlop ? (
+                "Urlop"
+              ) : zaplanowana ? (
+                `${trimTime(s.start_time)} – ${trimTime(s.end_time)}`
+              ) : (
+                <>
+                  {fmtHHMM(s.start_time)} –{" "}
+                  {s.end_time ? fmtHHMM(s.end_time) : <span className="text-[#DE3A22] font-bold">trwa</span>}
+                </>
+              )}
+            </b>
+            {zaplanowana ? (
+              <small className="basis-full text-[13px] font-bold text-[#6E6E66]">
+                w grafiku · jeszcze nie przepracowane
+              </small>
+            ) : czeka ? (
+              <small className="basis-full flex items-center gap-1 text-[13px] font-bold text-[#8A5300]">
+                <Flag size={14} /> korekta wysłana · czeka
+              </small>
+            ) : korekta ? (
+              <small className="basis-full flex items-center gap-1 text-[13px] font-bold text-[#1F7A4A]">
+                <Check size={14} /> korekta rozpatrzona
+              </small>
+            ) : null}
+          </div>
+          <div className="text-right">
+            <b className={`block text-[20px] leading-[22px] font-extrabold tabular-nums ${zaplanowana ? "text-[#6E6E66]" : "text-[#171714]"}`}>
+              {godziny != null ? h1(godziny) : "–"}
+            </b>
+            <span className="hidden md:inline text-[12px] text-[#6E6E66]">godz.</span>
+          </div>
+          {zaplanowana || s.is_urlop ? (
+            <span />
+          ) : (
+            <button
+              onClick={() => openZgloszenie(s.id)}
+              aria-label={`Zgłoś korektę zmiany ${dd}`}
+              title={czeka ? "Korekta już wysłana" : "Coś się nie zgadza? Zgłoś korektę"}
+              className={`w-12 md:w-[52px] h-12 rounded-lg border-2 flex items-center justify-center ${
+                czeka
+                  ? "bg-[#FDF0D8] border-[#8A5300] text-[#8A5300]"
+                  : "bg-white border-[#171714] text-[#171714]"
+              }`}
+            >
+              <Flag size={22} fill={czeka ? "currentColor" : "none"} />
+            </button>
+          )}
+        </div>
+      );
+    };
+
+    // Tygodnie pn–nd, przycięte do miesiąca: „21–27 września”.
+    const ostatniDzienMies = new Date(raportYear, raportMonth + 1, 0).getDate();
+    const tygodnie = [];
+    raportShifts.forEach((s) => {
+      const d = s.start_time.getDate();
+      const pn = d - ((s.start_time.getDay() + 6) % 7);
+      const etykieta = `${Math.max(1, pn)}–${Math.min(pn + 6, ostatniDzienMies)} ${MIES_D[raportMonth]}`;
+      let t = tygodnie[tygodnie.length - 1];
+      if (!t || t.etykieta !== etykieta) {
+        t = { etykieta, zmiany: [], suma: 0 };
+        tygodnie.push(t);
+      }
+      t.zmiany.push(s);
+      if (s.end_time) t.suma += (s.end_time - s.start_time) / 3600000;
+    });
+    // Jeszcze w grafiku: od jutra, a dziś tylko wtedy, gdy dzisiejszej zmiany
+    // jeszcze nikt nie zaczął — inaczej ten sam dzień stałby dwa razy.
+    const zaczeteDzis = raportShifts.some((s) => toLocalYMD(s.start_time) === dzisYMDr);
+    const jeszczeWGrafiku =
+      biezacyMies && bloki.includes("GRAFIK")
+        ? publishedShiftsFor(planShifts, employee)
+            .filter(
+              (p) =>
+                p.date.slice(0, 7) === dzisYMDr.slice(0, 7) &&
+                (p.date > dzisYMDr || (p.date === dzisYMDr && !zaczeteDzis))
+            )
+            .sort((a, b) =>
+              a.date === b.date
+                ? trimTime(a.start_time).localeCompare(trimTime(b.start_time))
+                : a.date.localeCompare(b.date)
+            )
+        : [];
+
+    const nawigacjaMiesiaca = (
+      <div className="grid grid-cols-[52px_1fr_52px] gap-2 items-center mb-3">
+        <button
+          onClick={() => przesunMiesiac(-1)}
+          disabled={!mozeWstecz}
+          aria-label="Poprzedni miesiąc"
+          className="h-[52px] rounded-lg border-2 border-[#171714] bg-white flex items-center justify-center text-[#171714] disabled:opacity-35"
+        >
+          <ChevronLeft size={24} />
+        </button>
+        <div className="text-center">
+          <b className="block font-['Archivo'] text-[22px] leading-[26px] font-extrabold text-[#171714]">
+            {getMonthName(raportMonth)} {raportYear}
+          </b>
+          {umowa && <span className="text-[14px] text-[#6E6E66]">{typUmowyLabel(umowa).toLowerCase()}</span>}
+        </div>
+        <button
+          onClick={() => przesunMiesiac(1)}
+          disabled={!mozeDalej}
+          aria-label="Następny miesiąc"
+          className="h-[52px] rounded-lg border-2 border-[#171714] bg-white flex items-center justify-center text-[#171714] disabled:opacity-35"
+        >
+          <ChevronRight size={24} />
+        </button>
+      </div>
+    );
+    const podpowiedz = (
+      <p className="flex items-center gap-2.5 text-[14px] leading-[19px] text-[#6E6E66] mt-1 mb-3.5 mx-0.5">
+        <span className="w-9 h-8 rounded-lg border-2 border-[#171714] bg-white flex items-center justify-center text-[#171714] flex-shrink-0">
+          <Flag size={18} />
+        </span>
+        Godzina się nie zgadza? Kliknij flagę przy zmianie — otworzy się zgłoszenie korekty.
+      </p>
+    );
+    const lista = (
+      <div>
+        <div className={`${kolumnyCls} px-0.5 pb-1.5 text-[12px] font-extrabold tracking-[.06em] uppercase text-[#6E6E66] border-b-2 border-[#171714]`}>
+          <span>Data</span>
+          <span className="whitespace-nowrap">Stanowisko · od – do</span>
+          <span className="text-right">Godz.</span>
+          <span />
+        </div>
+        {raportShifts.length === 0 && jeszczeWGrafiku.length === 0 && (
+          <div className="text-center py-8 text-[#6E6E66] text-[15px]">Brak zmian w tym miesiącu.</div>
+        )}
+        {tygodnie.map((t) => (
+          <div key={t.etykieta}>
+            <div className="flex justify-between items-baseline pt-3.5 pb-1.5 px-0.5 text-[14px] font-extrabold text-[#6E6E66]">
+              <span>{t.etykieta}</span>
+              <b className="text-[15px] text-[#171714] tabular-nums">{h1(t.suma)} h</b>
+            </div>
+            <div className="border-t border-[#DEDCD4]">{t.zmiany.map((s) => wiersz(s))}</div>
+          </div>
+        ))}
+        {jeszczeWGrafiku.length > 0 && (
+          <div>
+            <div className="flex justify-between items-baseline pt-3.5 pb-1.5 px-0.5 mt-2 border-t-2 border-dashed border-[#171714] text-[14px] font-extrabold text-[#6E6E66]">
+              <span>Jeszcze w grafiku</span>
+              <b className="text-[15px] text-[#171714] tabular-nums">
+                {h1(jeszczeWGrafiku.reduce((a, p) => a + shiftHours(p), 0))} h
+              </b>
+            </div>
+            {jeszczeWGrafiku.map((p) => wiersz(p, true))}
+          </div>
+        )}
+      </div>
+    );
+
     return (
       <Shell
         screen={screen}
@@ -3606,152 +4004,20 @@ export const EmployeeSessionScreens = ({
         bloki={bloki}
         personName={onBack ? employee.name : null}
         title="Raport"
-        footer={
-          <div className="flex-shrink-0 border-t-[2.5px] border-[#171714] bg-white px-5 pt-[18px] pb-[22px] flex items-end justify-between gap-3">
-            <div className="min-w-0">
-              <span className={sectionLabelCls}>
-                {employee.name} · {getMonthName(raportMonth)}
-              </span>
-              {/* Norma mieszka w stopce, przy sumie godzin, a nie w osobnej
-                  ramce — pracownik i tak patrzy tu na jedną liczbę, a dwa
-                  miejsca mówiące o tym samym miesiącu zawsze wyglądają, jakby
-                  się nie zgadzały. */}
-              {raportPodsumowanie.opis && (
-                <div className="text-[12px] text-[#6E6E66] leading-snug mt-0.5">
-                  {raportPodsumowanie.opis}
-                </div>
-              )}
-              {raportUrlop > 0 && (
-                <div className="text-[12px] text-[#6E6E66]">
-                  urlop {raportUrlop.toFixed(1).replace(".", ",")} h · bez urlopu{" "}
-                  {(raportTotal - raportUrlop).toFixed(1).replace(".", ",")} h
-                </div>
-              )}
-            </div>
-            <div className="text-right flex-shrink-0">
-              <div className="font-['Archivo'] font-extrabold text-[28px] text-[#171714] tabular-nums leading-none">
-                {raportTotal.toFixed(1).replace(".", ",")} godz.
-              </div>
-              {raportPodsumowanie.pod && (
-                <div className="text-[12px] text-[#6E6E66] tabular-nums mt-1">
-                  {raportPodsumowanie.pod}
-                </div>
-              )}
-            </div>
-          </div>
-        }
+        nowyWyglad
       >
-        <span className={fieldLabelCls}>Pracownik</span>
-        <div className={staticBoxCls}>
-          <span className={selectValCls}>
-            {employee.name} · {employee.default_stanowisko || ""}
-          </span>
-        </div>
-        <div className="grid grid-cols-2 gap-3 mt-3.5">
-          <div className={selectWrapCls}>
-            <select
-              value={raportMonth}
-              onChange={(e) => setRaportMonth(Number(e.target.value))}
-              className={selectElCls}
-            >
-              {Array.from({ length: 12 }).map((_, i) => (
-                <option key={i} value={i}>
-                  {getMonthName(i)}
-                </option>
-              ))}
-            </select>
-            <ChevronDown size={16} className={selectChevronCls} />
+        {/* Na tablecie miesiąc i podsumowanie po lewej (przyklejone), lista
+            po prawej w karcie. Osobę wybiera się przez „Zmień”, nie polem. */}
+        <div className="md:grid md:grid-cols-[380px_1fr] md:gap-6 md:items-start">
+          <div className="md:sticky md:top-0" data-raport-podsumowanie>
+            {nawigacjaMiesiaca}
+            {renderPodsumowanie()}
+            {podpowiedz}
           </div>
-          <div className={selectWrapCls}>
-            <select
-              value={raportYear}
-              onChange={(e) => setRaportYear(Number(e.target.value))}
-              className={selectElCls}
-            >
-              {getAvailableYears().map((y) => (
-                <option key={y} value={y}>
-                  {y}
-                </option>
-              ))}
-            </select>
-            <ChevronDown size={16} className={selectChevronCls} />
+          <div className="md:bg-white md:border-2 md:border-[#DEDCD4] md:rounded-xl md:px-4 md:pt-2.5 md:pb-1.5" data-raport-lista>
+            {lista}
           </div>
         </div>
-        <div className="flex gap-2 mt-5 pb-2.5 border-b-[1.5px] border-[#B7B6AE]">
-          <span className="w-[54px] flex-shrink-0 mr-3 text-[10.5px] font-bold tracking-wider uppercase text-[#8F8E86]">
-            Data
-          </span>
-          <span className="w-11 flex-shrink-0 text-[10.5px] font-bold tracking-wider uppercase text-[#8F8E86]">
-            St.
-          </span>
-          <span className="flex-1 text-[10.5px] font-bold tracking-wider uppercase text-[#8F8E86]">
-            Od – Do
-          </span>
-          <span className="w-[74px] flex-shrink-0 text-right text-[10.5px] font-bold tracking-wider uppercase text-[#8F8E86]">
-            Godz.
-          </span>
-          <span className="w-9 flex-shrink-0" />
-        </div>
-        {raportShifts.length === 0 && (
-          <div className="text-center py-8 text-[#8F8E86] text-sm">
-            Brak zmian w tym miesiącu.
-          </div>
-        )}
-        {raportShifts.map((s) => (
-          <div
-            key={s.id}
-            className="flex items-center gap-2 py-[15px] border-b border-[#B7B6AE]"
-          >
-            <span className="w-[54px] flex-shrink-0 mr-3 font-['Archivo'] font-extrabold text-[14.5px] text-[#171714]">
-              {String(s.start_time.getDate()).padStart(2, "0")}.
-              {String(s.start_time.getMonth() + 1).padStart(2, "0")}
-              <span className="text-[#8F8E86] font-semibold ml-1">
-                {getDayOfWeek(s.start_time)}
-              </span>
-            </span>
-            <span
-              className="w-11 flex-shrink-0 text-[11px] font-bold text-center rounded px-1 py-0.5 text-[#6E6E66]"
-              style={
-                s.is_urlop
-                  ? {}
-                  : stanowiskoBadgeStyle(stanowiskaOptions, s.lokal, s.stanowisko) || {}
-              }
-            >
-              {s.is_urlop
-                ? "URL"
-                : stanowiskoShort(stanowiskaOptions, s.lokal, s.stanowisko)}
-            </span>
-            <span className="flex-1 text-[13.5px] text-[#171714] tabular-nums">
-              {s.is_urlop ? (
-                <span className="font-bold text-[#8A3A2B]">Urlop</span>
-              ) : (
-                <>
-                  {fmtHHMM(s.start_time)} –{" "}
-                  {s.end_time ? (
-                    fmtHHMM(s.end_time)
-                  ) : (
-                    <span className="text-[#DE3A22] font-bold">Trwa</span>
-                  )}
-                </>
-              )}
-            </span>
-            <span className="w-[74px] flex-shrink-0 text-right font-['Archivo'] font-extrabold text-[15px] text-[#171714] tabular-nums">
-              {s.end_time
-                ? ((s.end_time - s.start_time) / 3600000).toFixed(1).replace(".", ",")
-                : "-"}
-            </span>
-            {s.is_urlop ? (
-              <span className="w-9 h-[30px] flex-shrink-0" />
-            ) : (
-              <button
-                onClick={() => openZgloszenie(s.id)}
-                className="w-9 h-[30px] flex-shrink-0 border-2 border-[#B7B6AE] rounded flex items-center justify-center text-[#6E6E66]"
-              >
-                <Flag size={14} />
-              </button>
-            )}
-          </div>
-        ))}
       </Shell>
     );
   }

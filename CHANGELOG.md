@@ -5,6 +5,29 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.61.0 — 2026-09-29
+
+- **Raport pracownika — nowy wygląd według makiety** (Tablet Służbowy i
+  prywatny telefon). Czwarty krok przebudowy ekranów pracownika.
+  - **Miesiąc zmienia się dużymi strzałkami**, pod nazwą miesiąca rodzaj umowy.
+    Pola „Pracownik” już nie ma — osobę wybiera się przez „Zmień”.
+  - **Podsumowanie stoi na górze** (zamiast paska na dole): duża liczba godzin
+    i liczba zmian.
+    - **Umowa o pracę**: pasek z czerwoną kreską normy, „Do normy 176 h
+      brakuje X h” albo „Ponad normą +X h” i „Z grafikiem wyjdzie …”
+      (przyszłe zmiany zakreskowane na pasku).
+    - **Zlecenie**: „bez normy”, a w trwającym miesiącu pasek „ile grafiku już
+      przepracowane” i ile jeszcze stoi w grafiku.
+    - Konto bez danych o umowie dostaje same godziny — bez normy.
+  - **Zmiany pogrupowane tygodniami** z sumą tygodnia; weekend na czerwono,
+    stanowisko w kolorze.
+  - **Flaga korekty 48 px** przy każdej zmianie — otwiera zgłoszenie z wpisaną
+    zmianą. Po wysłaniu wiersz jest podświetlony i ma „korekta wysłana ·
+    czeka”, po decyzji kierownika — „korekta rozpatrzona”.
+  - Na końcu **„Jeszcze w grafiku”** — zaplanowane zmiany do końca miesiąca,
+    wyszarzone.
+  - Na tablecie podsumowanie po lewej, lista zmian po prawej.
+
 ## 0.60.1 — 2026-09-29
 
 - **Zmiana — lokal i stanowisko z dzisiejszego grafiku zawsze są do wybrania.**
