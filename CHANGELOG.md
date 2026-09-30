@@ -5,6 +5,15 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.66.1 — 2026-09-30
+
+- **„Zgłoś problem” znowu się wysyła.** Na Tablecie Służbowym każde
+  zgłoszenie problemu, a na prywatnym telefonie każde anonimowe, kończyło się
+  komunikatem „Błąd połączenia: new row violates row-level security policy”.
+  Korekty i wnioski o wolne działały. Zgłoszenie dochodzi teraz do kierownika,
+  a tablet dalej nie widzi cudzych zgłoszeń (bywa w nich skarga na kogoś z tej
+  samej sali).
+
 ## 0.66.0 — 2026-09-29
 
 - **Więcej — nowy wygląd według makiety** (Tablet Służbowy i prywatny

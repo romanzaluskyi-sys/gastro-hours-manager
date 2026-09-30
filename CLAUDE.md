@@ -547,7 +547,9 @@ src/
   types.ts                   — (jeszcze nie istnieje — miejsce na wspólne typy przy przyszłej migracji)
   api/
     supabase.ts               — obiekt `api` (get z paginacją/post/patch/
-                                  delete/patchByFilter/rpc). `rpc` istnieje po
+                                  delete/patchByFilter/rpc/dodajBezOdczytu —
+                                  zapis bez RETURNING, patrz "Tablet a
+                                  `issues`" niżej). `rpc` istnieje po
                                   to, żeby zadać bazie pytanie BEZ pobierania
                                   danych, na których opiera się odpowiedź —
                                   i rozróżnia błąd wywołania od odpowiedzi "nie" 
@@ -2662,9 +2664,17 @@ Postgres sprawdza zwracany wiersz polityką SELECT. Polityka z `0033` nie
 pokazywała tabletowi zgłoszeń jego ludzi, więc korekta wysłana z tabletu była
 odrzucana w CAŁOŚCI — `with check (true)` tego nie ratuje. `0037` wpuszcza
 rolę `kiosk` do KOREKT osób z jej lokalu; zgłoszenia problemów zostają poza
-zasięgiem tabletu, a ich nieanonimowa wersja z tabletu ma ten sam problem —
-to osobna decyzja. **Każda nowa tabela, do której tablet pisze w imieniu
-pracownika, potrzebuje SELECT dla tabletu na tych wierszach.**
+zasięgiem tabletu. ⚠️ **Zgłoszenie problemu zapisuje się od 0.66.1 przez
+`api.dodajBezOdczytu`** (`Prefer: return=minimal`, bez RETURNING, więc bez
+sprawdzania SELECT-em). Do 0.66.0 szło `api.post` i padało z „new row violates
+row-level security policy" — na tablecie zawsze, a ANONIMOWE także na
+prywatnym telefonie (wiersza bez `user_id` nie widzi nikt poza kierownikiem).
+Świadomie nie poszerzyliśmy odczytu: w zgłoszeniu bywa skarga na kogoś z tej
+samej sali. Id nadaje przeglądarka (`nowyUuid`), a lokalnie trzymamy tylko
+zgłoszenie pod imieniem z prywatnego telefonu — reszty ta sesja i tak nie
+zobaczy po pollu. **Każda nowa tabela, do której tablet pisze w imieniu
+pracownika, potrzebuje SELECT dla tabletu na tych wierszach — albo zapisu
+przez `dodajBezOdczytu`.**
 
 ⚠️ Kontrola jest w przeglądarce. Twardy zamek (trigger na `shifts`) — razem z
 zawężeniem `shifts` w Etapie 3c-2.

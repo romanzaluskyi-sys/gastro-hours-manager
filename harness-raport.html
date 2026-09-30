@@ -66,6 +66,12 @@ const API_STUB = stub(`
     },
     delete: async () => true,
     patchByFilter: async () => true,
+    // Zapis bez oddawania wiersza (return=minimal) — jak w prawdziwym api.
+    dodajBezOdczytu: async (tabela, dane) => {
+      window.__zapisy.push([tabela, dane]);
+      (window.__tabele[tabela] = window.__tabele[tabela] || []).push({ ...dane });
+      return true;
+    },
   };
 `);
 

@@ -303,6 +303,21 @@ export const checkboxRowCls = (checked) =>
 // każdym ticku. Trzymaj Shell na poziomie modułu. `onBack` jest opcjonalny:
 // gdy go brak (osobiste konto, nie ma do czego "wracać"), przycisk "<
 // Zmień" po prostu się nie renderuje.
+// uuid v4 nadawany w przeglądarce — dla zapisów bez oddawania wiersza
+// (api.dodajBezOdczytu). `crypto.randomUUID` bywa niedostępne na starszych
+// tabletach, stąd zapas na getRandomValues.
+const nowyUuid = () => {
+  try {
+    if (crypto.randomUUID) return crypto.randomUUID();
+  } catch (e) {}
+  const b = new Uint8Array(16);
+  crypto.getRandomValues(b);
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = [...b].map((x) => x.toString(16).padStart(2, "0")).join("");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+};
+
 // Wiadomość pracownika → kategoria filtra, ton (kolor koła i plakietka),
 // ikona, krótki tytuł i akcja (0.65.0, makieta EmployeeMessages). Typy w
 // bazie są ogólne — `swap` to i propozycja, i zatwierdzenie — więc ton i tytuł
@@ -1468,7 +1483,12 @@ export const EmployeeSessionScreens = ({
     if (!zgText.trim()) return showMsg("Opisz zgłoszenie!", "error");
     setZgSaving(true);
     try {
-      const issue = await api.post("issues", {
+      // Id nadajemy sami, bo zapis nie oddaje wiersza (dodajBezOdczytu) — a
+      // wiersz trzymany lokalnie musi mieć to samo id co w bazie, inaczej
+      // poll pokazałby go dwa razy.
+      const issue = {
+        id: nowyUuid(),
+        created_at: new Date().toISOString(),
         user_id: zgAnon ? null : employee.id,
         user_name: zgAnon ? null : employee.name,
         // Kategoria na początku treści — `issues` nie ma na nią kolumny.
@@ -1479,8 +1499,15 @@ export const EmployeeSessionScreens = ({
         // shift_id to uuid (string) w bazie — nie rzutować na liczbę.
         // ⚠️ Anonimowe BEZ zmiany: data i godzina zmiany wskazują osobę.
         shift_id: !zgAnon && zgShiftId && zgShiftId !== "none" ? zgShiftId : null,
-      });
-      setIssues([...issues, issue]);
+      };
+      const doBazy = { ...issue };
+      delete doBazy.created_at;
+      await api.dodajBezOdczytu("issues", doBazy);
+      // Lokalnie tylko to, co ta sesja zobaczy też po odświeżeniu: własne
+      // zgłoszenie pod imieniem na PRYWATNYM telefonie. Tablet (onBack) nie
+      // widzi zgłoszeń problemów swoich ludzi, a anonimowego nie widzi nikt
+      // poza kierownikiem — dopisane tu zniknęłyby przy najbliższym pollu.
+      if (!zgAnon && !onBack) setIssues([...(issues || []), issue]);
       setZgText("");
       setZgKategoria(null);
       setZgShiftId("none");

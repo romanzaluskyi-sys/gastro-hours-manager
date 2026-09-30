@@ -68,6 +68,12 @@ const API_STUB = stub(`
     },
     delete: async () => true,
     patchByFilter: async () => true,
+    // Zapis bez oddawania wiersza (return=minimal) — jak w prawdziwym api.
+    dodajBezOdczytu: async (tabela, dane) => {
+      window.__zapisy.push([tabela, dane, "bez-odczytu"]);
+      (window.__tabele[tabela] = window.__tabele[tabela] || []).push({ ...dane });
+      return true;
+    },
     // ⚠️ Odpowiedzi ustawia TEST, nie atrapa. PIN blokady sprawdza od 0.42.1
     // baza (RPC \`sprawdz_kiosk_pin\`), więc tablet nie ma już z czego
     // wywnioskować odpowiedzi sam — i dokładnie o to chodziło.
@@ -844,7 +850,11 @@ const poprzedniMiesiac = (h) => {
         await klikPrzycisk("Sprzęt / awaria");
         document.querySelector("#app [data-wyslij-zgloszenie]").dispatchEvent(new MouseEvent("click", { bubbles: true }));
         await czekaj(300);
-        const anon = (ostatniZapis("issues") || [])[1] || {};
+        const zapisAnon = ostatniZapis("issues") || [];
+        const anon = zapisAnon[1] || {};
+        // ⚠️ Tablet nie widzi zgłoszeń problemów (RLS), więc INSERT … RETURNING
+        // odrzucał cały zapis. Zgłoszenie ma iść BEZ oddawania wiersza.
+        sprawdz("zgłoszenie problemu idzie zapisem bez odczytu (RLS tabletu)", zapisAnon[2] === "bez-odczytu");
         sprawdz("anonimowe zgłoszenie: bez imienia i bez shift_id, kategoria w treści",
           anon.is_anonymous === true && anon.shift_id === null && anon.user_id === null &&
             /^Sprzęt \/ awaria: Nie da się/.test(anon.issue_text || ""),

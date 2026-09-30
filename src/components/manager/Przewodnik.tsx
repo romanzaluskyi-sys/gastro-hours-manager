@@ -23,6 +23,13 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.66.1",
+    date: "2026-09-30",
+    items: [
+      "Zgłoś problem działa na Tablecie Służbowym i anonimowo — do tej pory kończyło się błędem „row-level security”.",
+    ],
+  },
+  {
     version: "0.66.0",
     date: "2026-09-29",
     items: [

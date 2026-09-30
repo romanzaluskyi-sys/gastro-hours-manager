@@ -121,6 +121,8 @@ const API_STUB = stub(`
       const l = window.__tabele[t] || []; const i = l.findIndex((w) => w.id === id);
       const w = { ...(l[i] || {}), id, ...d }; if (i >= 0) l[i] = w; return w; },
     delete: async () => true, patchByFilter: async () => true,
+    dodajBezOdczytu: async (t, d) => { window.__zapisy.push([t, d]);
+      (window.__tabele[t] = window.__tabele[t] || []).push({ ...d }); return true; },
   };
 `);
 
