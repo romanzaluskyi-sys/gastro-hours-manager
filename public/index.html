@@ -16,6 +16,24 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- iPhone (Safari): pola daty i godziny mają tam własną minimalną
+         szerokość i wychodziły poza kartę mimo w-full (Moja praca, 0.69.1).
+         Tylko iOS — `-webkit-touch-callout` zna wyłącznie Safari na iOS. Pole
+         dalej jest widocznym <input> i otwiera systemowy wybór godziny. -->
+    <style>
+      @supports (-webkit-touch-callout: none) {
+        input[type="date"], input[type="time"] {
+          -webkit-appearance: none;
+          appearance: none;
+          min-width: 0;
+          max-width: 100%;
+        }
+        input[type="date"]::-webkit-date-and-time-value,
+        input[type="time"]::-webkit-date-and-time-value {
+          text-align: left;
+        }
+      }
+    </style>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>

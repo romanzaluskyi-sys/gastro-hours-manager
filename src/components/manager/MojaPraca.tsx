@@ -387,7 +387,7 @@ export default function MojaPraca({
                   value={date}
                   max={dzisYMD}
                   onChange={(e) => setDate(e.target.value)}
-                  className="w-full h-12 bg-white border-2 border-[#171714] rounded-lg px-3 text-[16px] font-bold text-[#171714]"
+                  className="block w-full min-w-0 h-12 bg-white border-2 border-[#171714] rounded-lg px-3 text-[16px] font-bold text-[#171714]"
                 />
               </label>
               <div className="grid grid-cols-1 min-[420px]:grid-cols-2 xl:grid-cols-1 gap-2.5 mt-3.5">

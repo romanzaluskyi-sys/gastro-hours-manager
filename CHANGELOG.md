@@ -5,6 +5,13 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.69.1 — 2026-09-30
+
+- **Zmiana (tablet, telefon):** w ramce „Do końca zmiany” czas nie łamie się
+  już na dwie linie („min” spadało pod spód na wąskim telefonie).
+- **iPhone:** pola daty i godziny mieszczą się w karcie (w Mojej pracy
+  wychodziły poza jej prawą krawędź).
+
 ## 0.69.0 — 2026-09-30
 
 - **Moja praca — nowy wygląd według makiety.** Zapis godzin, raport i grafik

@@ -23,6 +23,14 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.69.1",
+    date: "2026-09-30",
+    items: [
+      "Zmiana: czas „Do końca zmiany” nie łamie się na dwie linie na wąskim telefonie.",
+      "iPhone: pola daty i godziny nie wychodzą poza kartę (Moja praca).",
+    ],
+  },
+  {
     version: "0.69.0",
     date: "2026-09-30",
     items: [
