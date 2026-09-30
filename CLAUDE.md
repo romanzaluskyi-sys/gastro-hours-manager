@@ -1274,6 +1274,28 @@ grupowanie i stany. Rzeczy, których nie widać:
 `Pracownicy.tsx`). Do lokalu należy osoba z `default_lokal` ALBO z
 `allowed_lokale` — tablety mają pusty `default_lokal`.
 
+⚠️ **Moja praca — układ z makiety właściciela (0.69.0, MyWorkDesktop /
+MyWorkMobile).** `manager/MojaPraca.tsx`: z lewej zapis zmiany (od `xl`
+przyklejony), z prawej miesiąc — JEDNA lista „grafik vs faktycznie” zamiast
+osobnego raportu i grafiku. Rzeczy, których nie widać:
+- **Zapis zmiany bez zmian w logice** (kolizje w stanie i w bazie, arkusz
+  Google). Kafle idą za `tryb_wpisu` lokalu (`regulyWpisu`), ale okien
+  tolerancji kierownik NIE ma — to on rozstrzyga korekty. „Zaczynam teraz”
+  zawsze na dziś; dzień wybiera się tylko przy „Cała zmiana”. Duża godzina to
+  `PoleGodziny` (widoczne pole), nie przezroczysty input z makiety.
+- **Parowanie jak w Rejestrze**: per dzień, i-ta zmiana z i-tym wpisem
+  OPUBLIKOWANEGO grafiku (`publishedShiftsFor`), różnica od 15 min. Urlop
+  osobnym wierszem, bez parowania.
+- **„Brak zapisu” tylko w dniach, które minęły** — dziś załatwia karta z
+  lewej. Kafel „Bez zapisu godzin” i filtr liczą te same wiersze (sprawdza
+  `harness-panel.html`).
+- **„Dopisz” = `onDopisz` → `WpisGodzinModal`** z `user_id` kierownika i
+  dniem z grafiku. Okno przy nowym wpisie dla WSKAZANEJ osoby samo bierze
+  godziny z jej grafiku i nie otwiera listy osób. Zapis idzie
+  `zapiszWpisGodzin` (kolizje, `shift_edits` `manual_add`).
+- Zdanie o normie (`podsumowanieMiesiaca`) zostało pod kaflami — makieta go
+  nie ma, ale to ta sama liczba co w Raporcie pracownika.
+
 **Zatwierdzanie zmian** (`ZatwierdzanieZmian.tsx` + `utils/corrections.ts`)
 — kolejka decyzji dla `issues.type === "correction"` (patrz "Zgłoszenia i
 powiadomienia" niżej — ta funkcja jest już w pełni zaimplementowana i

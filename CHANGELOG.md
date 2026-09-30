@@ -5,6 +5,23 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.69.0 — 2026-09-30
+
+- **Moja praca — nowy wygląd według makiety.** Zapis godzin, raport i grafik
+  kierownika w jednym widoku.
+  - **Z lewej zapis zmiany**: najbliższa zmiana z grafiku, kafle „Zaczynam
+    teraz” / „Cała zmiana” (jak u pracownika — lokal może wymusić jeden
+    sposób), lokal i stanowisko (domyślnie z dzisiejszego grafiku), duża
+    godzina i przycisk z godziną w nazwie. Na komputerze karta stoi w miejscu
+    przy przewijaniu miesiąca.
+  - **Z prawej miesiąc**: strzałki między miesiącami, kafle Przepracowane /
+    W grafiku / **Bez zapisu godzin**, a pod nimi JEDNA lista „grafik vs
+    faktycznie” zamiast osobnego raportu i grafiku: pasek zielony — zgodnie,
+    czarny — inaczej niż grafik albo poza grafikiem, bursztynowy — brak zapisu.
+  - **„Dopisz”** przy dniu z grafiku bez zapisu otwiera okno wpisu z Twoim
+    imieniem i godzinami z grafiku; ołówek poprawia zapisany wpis. Filtr „Bez
+    zapisu” pokazuje same braki.
+
 ## 0.68.0 — 2026-09-30
 
 - **Konfiguracja grafiku — nowy wygląd według makiety.** Te same ustawienia,

@@ -198,6 +198,14 @@ const planTygodnia = [
   // ktoś zapomniał zamknąć.
   { id: "g8", user_id: "u0", user_name: "Roman", lokal: "Bułka i Jacek",
     stanowisko: "Kucharz", date: dniTygodnia[4], start_time: "06:00", end_time: "14:00", ...opub },
+  // Moja praca (0.69.0): pięć dni temu Roman był w grafiku i nic nie zapisał
+  // („brak zapisu” → Dopisz), sześć dni temu zapisał godzinę dłużej niż plan.
+  { id: "gR-brak", user_id: "u0", user_name: "Roman", lokal: "Bułka i Jacek",
+    stanowisko: "Kucharz", date: ymd(new Date(Date.now() - 5 * 86400000)),
+    start_time: "10:00", end_time: "18:00", ...opub },
+  { id: "gR-diff", user_id: "u0", user_name: "Roman", lokal: "Bułka i Jacek",
+    stanowisko: "Kucharz", date: ymd(new Date(Date.now() - 6 * 86400000)),
+    start_time: "10:00", end_time: "18:00", ...opub },
   // Zmiana z grafiku BEZ odbicia, zawsze cztery dni temu — kolejka „Był w
   // grafiku, nie odbił” patrzy tylko w przeszłość (do 14 dni), a reszta planu
   // wisi na bieżącym tygodniu. We wtorek z tego tygodnia minął jeden dzień i
@@ -508,6 +516,13 @@ const poprzedniMiesiac = (h) => {
             ? [{ id: "sh0", user_id: "u0", user_name: "Roman", lokal: "Bułka i Jacek",
                  stanowisko: "Kucharz", start_time: godz(6), end_time: null }]
             : []),
+          // Moja praca: fakt do planu gR-diff — 10:00–19:00, czyli +1,0 h.
+          (() => {
+            const od = new Date(Date.now() - 6 * 86400000); od.setHours(10, 0, 0, 0);
+            const doG = new Date(od); doG.setHours(19, 0, 0, 0);
+            return { id: "shR", user_id: "u0", user_name: "Roman", lokal: "Bułka i Jacek",
+                     stanowisko: "Kucharz", start_time: od, end_time: doG };
+          })(),
           { id: "sh1", user_id: "u1", user_name: "Ala", lokal: "Bułka i Jacek", stanowisko: "Kucharz",
             start_time: godz(8), end_time: godz(16) },
           // Bo w poprzednim miesiącu — żeby bilans okresu miał zamknięty miesiąc.
@@ -1654,6 +1669,71 @@ const poprzedniMiesiac = (h) => {
         }
       } catch (e) {
         if (e !== null) sprawdz("Grafik: przebieg bez wyjątku", false, e.message);
+      }
+
+      // ----------------------------------------------------------------
+      // Moja praca według makiety (0.69.0): zapis zmiany z lewej, miesiąc
+      // „grafik vs faktycznie” z prawej, brak zapisu → Dopisz (okno wpisu z
+      // godzinami z grafiku, bez wyboru osoby).
+      // ----------------------------------------------------------------
+      try {
+        const kk = (el) => el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        klik("Moja praca"); await czekaj(400);
+        const M = () => document.querySelector("#app [data-moja-praca]");
+        sprawdz("Moja praca: karta zapisu i miesiąc", !!M() && !!M().querySelector("[data-karta-zmiany]") && !!M().querySelector("[data-miesiac-pracy]"));
+        sprawdz("najbliższa zmiana z grafiku kierownika", !!M().querySelector("[data-najblizsza-zmiana]") && /Kucharz · Bułka i Jacek|Brak zmian/.test(M().querySelector("[data-najblizsza-zmiana]").textContent));
+        const brakYMD = ymd(new Date(Date.now() - 5 * 86400000));
+        const diffYMD = ymd(new Date(Date.now() - 6 * 86400000));
+        // Pięć dni temu bywa w poprzednim miesiącu — wtedy cofamy się o miesiąc.
+        if (brakYMD.slice(0, 7) !== ymd(new Date()).slice(0, 7)) {
+          kk(M().querySelector('[aria-label="Poprzedni miesiąc"]')); await czekaj(300);
+        }
+        const wBrak = M().querySelector(`[data-wiersz-dnia="${brakYMD}"]`);
+        sprawdz("plan bez odbicia w minionym dniu = „brak zapisu” z „Dopisz”",
+          !!wBrak && wBrak.getAttribute("data-status") === "miss" && !!wBrak.querySelector("[data-dopisz]"),
+          wBrak ? wBrak.outerHTML.slice(0, 200) : "brak wiersza");
+        const wDiff = M().querySelector(`[data-wiersz-dnia="${diffYMD}"]`);
+        if (diffYMD.slice(0, 7) === brakYMD.slice(0, 7)) {
+          sprawdz("fakt o godzinę dłuższy niż grafik = „inaczej niż grafik” (+1,0)",
+            !!wDiff && wDiff.getAttribute("data-status") === "diff" && /9,0/.test(wDiff.textContent) && /\+1,0/.test(wDiff.textContent),
+            wDiff ? wDiff.textContent : "brak wiersza");
+        }
+        const braki = M().querySelectorAll('[data-status="miss"]').length;
+        const kafel = M().querySelector("[data-kafel-brak]");
+        sprawdz("kafel „Bez zapisu godzin” liczy te same wiersze co lista",
+          !!kafel && new RegExp("^Bez zapisu godzin" + braki + " ").test(kafel.textContent), (kafel ? kafel.textContent : "brak") + " / " + braki);
+        kk(M().querySelector('[data-filtr-dni="braki"]')); await czekaj(200);
+        sprawdz("filtr „Bez zapisu” zostawia same braki",
+          M().querySelectorAll("[data-wiersz-dnia]").length === braki && M().querySelectorAll('[data-status="miss"]').length === braki);
+        kk(M().querySelector(`[data-dopisz="${brakYMD}"]`)); await czekaj(300);
+        const okno = [...document.querySelectorAll("#app form, #app [role=dialog]")].find((x) => /Pracownik/.test(x.textContent) || /Zapisz/.test(x.textContent));
+        const czasy = okno ? [...okno.querySelectorAll("input")].map((i) => i.value) : [];
+        sprawdz("„Dopisz” otwiera okno wpisu: Roman, dzień i godziny z grafiku",
+          !!okno && czasy.includes("Roman") && czasy.includes(brakYMD) && czasy.includes("10:00") && czasy.includes("18:00"),
+          JSON.stringify(czasy));
+        const zamknijOkno = document.querySelector('#app button[aria-label="Zamknij"]');
+        if (zamknijOkno) kk(zamknijOkno);
+        await czekaj(150);
+        kk(M().querySelector('[data-filtr-dni="wszystkie"]')); await czekaj(150);
+        // Zapis zmiany: „Cała zmiana” z godzinami idzie do shifts dla kierownika.
+        kk(M().querySelector('[data-sposob-wpisu="cala"]')); await czekaj(150);
+        const karta = M().querySelector("[data-karta-zmiany]");
+        const godziny = [...karta.querySelectorAll('input[type="time"]')];
+        const setTime = (el, v) => {
+          Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, v);
+          el.dispatchEvent(new Event("input", { bubbles: true }));
+        };
+        setTime(godziny[0], "06:00"); setTime(godziny[1], "07:00");
+        await czekaj(100);
+        sprawdz("„Cała zmiana”: Razem 1,0 godz.", /1,0 godz\./.test(karta.textContent));
+        const przed = window.__zapisy.length;
+        kk(karta.querySelector("[data-zapisz-zmiane]")); await czekaj(500);
+        const zap = window.__zapisy.slice(przed).find((z) => z[0] === "shifts");
+        sprawdz("zapis całej zmiany kierownika do shifts",
+          !!zap && zap[1].user_id === "u0" && zap[1].lokal === "Bułka i Jacek" && zap[1].stanowisko === "Kucharz" && zap[1].godzin === 1,
+          JSON.stringify(zap));
+      } catch (e) {
+        if (e !== null) sprawdz("Moja praca: przebieg bez wyjątku", false, e.message);
       }
 
       // ----------------------------------------------------------------

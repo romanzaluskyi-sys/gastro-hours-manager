@@ -2094,6 +2094,17 @@ const ManagerDashboard = ({
             planShifts={planShifts}
             showMsg={showMsg}
             onEditShift={openEditShift}
+            onDopisz={(plan) =>
+              setEditingShift({
+                id: null,
+                user_id: currentUser.id,
+                user_name: currentUser.name,
+                lokal: plan.lokal,
+                stanowisko: plan.stanowisko,
+                start_time: new Date(plan.date + "T00:00:00"),
+                end_time: null,
+              })
+            }
           />
         )}
 

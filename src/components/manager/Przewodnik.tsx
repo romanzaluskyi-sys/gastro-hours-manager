@@ -23,6 +23,15 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.69.0",
+    date: "2026-09-30",
+    items: [
+      "Moja praca: z lewej zapis zmiany (najbliższa zmiana, Zaczynam teraz / Cała zmiana), z prawej miesiąc.",
+      "Jedna lista „grafik vs faktycznie” z kolorowym paskiem: zgodnie, inaczej niż grafik, brak zapisu.",
+      "„Dopisz” przy dniu bez zapisu otwiera okno wpisu z godzinami z grafiku; filtr „Bez zapisu”.",
+    ],
+  },
+  {
     version: "0.68.0",
     date: "2026-09-30",
     items: [

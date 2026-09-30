@@ -91,17 +91,27 @@ export default function WpisGodzinModal({
   onDelete, // (shift) => void — usunięcie z "Cofnij" robi rodzic
 }) {
   const nowy = !shift?.id;
-  const [form, setForm] = useState(() => ({
-    userId: shift?.user_id || "",
-    q: shift?.user_name || "",
-    date: toLocalYMD(shift?.start_time || new Date()),
-    lokal: shift?.lokal || lokale[0]?.name || "",
-    stanowisko: shift?.stanowisko || "",
-    start: shift?.id ? hhmm(shift.start_time) : "",
-    end: shift?.end_time ? hhmm(shift.end_time) : "",
-    reason: "",
-  }));
-  const [listaOsob, setListaOsob] = useState(nowy);
+  const [form, setForm] = useState(() => {
+    const date = toLocalYMD(shift?.start_time || new Date());
+    const lokal = shift?.lokal || lokale[0]?.name || "";
+    // Nowy wpis dla WSKAZANEJ już osoby („Dopisz” w Mojej pracy) — godziny z
+    // jej grafiku tego dnia, tak jak po wybraniu osoby z listy.
+    const p =
+      nowy && shift?.user_id
+        ? planOsoby(planShifts, { id: shift.user_id, name: shift.user_name }, date, lokal)
+        : null;
+    return {
+      userId: shift?.user_id || "",
+      q: shift?.user_name || "",
+      date,
+      lokal,
+      stanowisko: shift?.stanowisko || "",
+      start: shift?.id ? hhmm(shift.start_time) : p ? trimTime(p.start_time) : "",
+      end: shift?.end_time ? hhmm(shift.end_time) : p ? trimTime(p.end_time) : "",
+      reason: "",
+    };
+  });
+  const [listaOsob, setListaOsob] = useState(nowy && !shift?.user_id);
   const [blad, setBlad] = useState(null);
   const [zapisuje, setZapisuje] = useState(false);
   const ustaw = (zmiany) => {
