@@ -5,6 +5,30 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.68.0 — 2026-09-30
+
+- **Konfiguracja grafiku — nowy wygląd według makiety.** Te same ustawienia,
+  czytelniej ułożone; nic nie zmienia się w tym, jak liczy się obsada i budżet.
+  - **Trzy zakładki**: Obsada · Budżet · Wyjątki (z liczbą nadchodzących).
+    Godziny otwarcia są w karcie obok Obsady.
+  - **Wersje zestawów jako chipy** („od wrz 2026 · obowiązuje” › „od paź
+    2026”), „Nowy zestaw od…” z wyborem „Kopia bieżącego” / „Pusty”.
+    Usunięcie w menu ⋯ — przed kliknięciem widać, co się stanie.
+  - **Obsada: siatka dni × godziny** — w każdej godzinie suma ludzi ze
+    wszystkich wymagań, odcienie zieleni, os·h na dzień, godziny poza otwarciem
+    zakreskowane. Pod spodem **wymagania wg stanowisk** z os·h na tydzień,
+    „start przed otwarciem”, edycja i dodawanie w miejscu: dni kaflami, − / +,
+    podgląd „najwięcej 3 osoby”.
+  - **Budżet**: tabela tygodnia — utarg, średnia z Pulsu z „Użyj”, % kosztu,
+    **budżet pracy w zł i ≈ godzinach** (średni koszt godziny z Pracowników) i
+    **ile wymaga obsada** — „mieści się · X h zapasu” albo „+X h ponad”. Przy
+    przycisku widać, co zmieniono. Budżet na konkretne dni — niżej, jak dotąd.
+  - **Wyjątki**: data jako kafel, nazwa i tagi (godziny, wymagania, budżet,
+    „lokal zamknięty”), edycja w miejscu z obsadą tego dnia, kalendarz miesiąca
+    obok. Nowy wyjątek: „Obsada jak zwykle” albo „Lokal zamknięty”.
+  - Na telefonie: zakładki na całą szerokość, siatka w wersji kompaktowej,
+    budżet jako karta na dzień, nowy wyjątek jako arkusz od dołu.
+
 ## 0.67.0 — 2026-09-30
 
 - **Odpowiedź na zgłoszenie.** W Skrzynce przy zgłoszeniu pod imieniem jest

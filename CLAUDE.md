@@ -713,8 +713,11 @@ src/
                                     przepisać na następcę albo zdjąć
       GrafikZmianaModal.tsx         PANEL przypisania zmiany (kandydaci, uwagi) +
                                     modal blokady — patrz 5g
-      GrafikWymagania.tsx           wymagania obsady, godziny otwarcia, wyjątki,
-                                    budżet (czwarty podwidok)
+      GrafikWymagania.tsx           Konfiguracja grafiku: zakładki Obsada
+                                    (wymagania + godziny otwarcia), Budżet,
+                                    Wyjątki — patrz 5h
+      grafikKonfigWspolne.tsx       klocki Konfiguracji (pasek wersji, zakładki,
+                                    siatka liczona ileWGodzinie/osGodzinDnia)
       GrafikBudzet.tsx              trzy karty nad siatką + wiersze układu
                                     "Wg budżetu". ⚠️ NIE rysuje nagłówka dni —
                                     ten zostaje w GrafikTydzien i jest wspólny
@@ -3748,6 +3751,38 @@ nie widać:
   widok jednego dnia z tej samej arytmetyki (`mobilnyDzien` w LokalSection).
 - Kolor znacznika stanowiska to PEŁNY `stanowiska.kolor` z białym tekstem —
   pierwsze miejsce, które go używa (reszta aplikacji: jasny odcień).
+
+### 5h. Konfiguracja grafiku — układ z makiety właściciela (0.68.0)
+
+ScheduleConfigObsada / ScheduleConfigBudget / ScheduleConfigExceptions /
+ScheduleConfigNewException / ScheduleConfigMobile. Pliki: `GrafikWymagania.tsx`
+(host, Obsada, Wyjątki), `GrafikBudzetKonfiguracja.tsx` (Budżet),
+`grafikKonfigWspolne.tsx` (klocki). ⚠️ Prośba właściciela: **nowy wygląd, bez
+nowych funkcji** — zapis idzie tymi samymi wywołaniami co przed 0.68.0.
+Rzeczy, których nie widać:
+- **Trzy zakładki zamiast czterech przycisków**; godziny otwarcia to karta z
+  boku Obsady („Zmień” → 7 wierszy). Wersje zestawów to chipy (oś czasu),
+  usuwanie w menu ⋯ z paskiem potwierdzenia, który mówi SKUTEK (dawny
+  `window.confirm` z tym samym tekstem).
+- **Siatka dni × godziny, os·h, „start przed otwarciem” i podgląd „najwięcej N
+  osób” są LICZONE** (`ileWGodzinie`, `osGodzinDnia`) z tych samych wymagań i
+  niczego nie zapisują. Wymagania się sumują — siatka pokazuje to bez słów.
+- ⚠️ **Wyjątek BEZ własnych wymagań dalej znaczy „obsada jak zwykle”**
+  (`getRulesForDate`). Makieta miała „Zacznij od: wymagań z miesiąca / od zera
+  / zamknięty” — „od zera” znaczyłoby inaczej niż baza, a kopia wymagań to nowa
+  funkcja. Są dwa warianty: „Obsada jak zwykle” i „Lokal zamknięty”.
+- **Budżet na konkretny dzień zostaje w zakładce Budżet** (makieta: w
+  Wyjątkach). To osobna tabela (`grafik_budzet_dni`), niezwiązana z wyjątkiem
+  godzin; w Wyjątkach widać go tylko jako tag przy pozycji.
+- **„Budżet pracy ≈ h” dzieli przez średni koszt godziny osób z
+  `default_lokal` tego lokalu** (`kosztGodziny`, ta sama reguła co w Grafiku).
+  Bez stawek w kartach — sam budżet w zł, bez statusu „mieści się”. „Obsada
+  wymaga” = zestaw wymagań obowiązujący w czasie oglądanego celu.
+- **Świadomie NIE ma z makiety**: „Święta i niedziele handlowe → Dodaj / Dodaj
+  wszystkie 2026” i „Kopiuj na kolejny miesiąc” w menu ⋯ (to samo robi „Nowy
+  zestaw od…” z kopią). Nowe funkcje — tylko na prośbę.
+- `harness-panel.html` przechodzi Obsadę (siatka, grupy, pułapka `null` =
+  cały tydzień, dodanie z − / +), Wyjątki i Budżet (7 dni, „Zmieniono”, zapis).
 
 ### 5d. Grafik — świadomie NIE zrobione
 - Potwierdzenia odczytu grafiku przez pracownika ("przeczytało 12 z 14").

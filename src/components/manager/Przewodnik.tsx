@@ -23,6 +23,15 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.68.0",
+    date: "2026-09-30",
+    items: [
+      "Konfiguracja grafiku: zakładki Obsada · Budżet · Wyjątki, wersje zestawów jako chipy, godziny otwarcia w karcie z boku.",
+      "Obsada: siatka dni × godziny (ile osób w którą godzinę, os·h), wymagania wg stanowisk, dodawanie w miejscu z − / + i podglądem.",
+      "Budżet: budżet pracy w zł i godzinach obok tego, czego wymaga obsada. Wyjątki: lista z kaflem daty, edycja w miejscu, kalendarz.",
+    ],
+  },
+  {
     version: "0.67.0",
     date: "2026-09-30",
     items: [

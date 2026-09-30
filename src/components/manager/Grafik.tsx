@@ -395,6 +395,9 @@ export default function Grafik({
       {view === "konfiguracja" ? (
         <GrafikWymagania
           lokal={lokalKonfiguracji}
+          lokale={lokale}
+          users={users}
+          onZamknij={() => setView("tydzien")}
           activeStanowiska={activeStanowiska}
           staffingRules={staffingRules}
           setStaffingRules={setStaffingRules}

@@ -1562,6 +1562,95 @@ const poprzedniMiesiac = (h) => {
           const zamknijSzkic = document.querySelector('#app [data-szkic-grafiku] button[aria-label="Zamknij"]');
           if (zamknijSzkic) zamknijSzkic.dispatchEvent(new MouseEvent("click", { bubbles: true }));
           await czekaj(100);
+
+          // --- Konfiguracja grafiku (0.68.0): Obsada · Budżet · Wyjątki ---
+          const K = () => document.querySelector("#app [data-konfiguracja-grafiku]");
+          const kk = (el) => el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          const wartosc = (el, v) => {
+            const proto = el.tagName === "SELECT" ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
+            Object.getOwnPropertyDescriptor(proto, "value").set.call(el, v);
+            el.dispatchEvent(new Event(el.tagName === "SELECT" ? "change" : "input", { bubbles: true }));
+          };
+          // Lokal konfiguracji idzie za górnym paskiem (przy „Cała sieć” — select).
+          const naLokal = async (nazwa) => {
+            const tab = [...document.querySelectorAll("#app header button")].find((x) => x.textContent.trim() === nazwa);
+            if (tab) kk(tab);
+            else {
+              const sel = [...G().querySelectorAll("select")].find((x) => [...x.options].some((o) => o.value === nazwa));
+              if (sel) wartosc(sel, nazwa);
+            }
+            await czekaj(300);
+          };
+          kk([...G().querySelectorAll("button")].find((b) => /^Konfiguracja/.test(b.title || "")));
+          await czekaj(300);
+          await naLokal("Ceglana");
+          sprawdz("Konfiguracja: trzy zakładki Obsada · Budżet · Wyjątki",
+            !!K() && K().querySelectorAll("[data-zakladka-konfiguracji]").length === 3);
+          const pn = K().querySelector('[data-siatka-dzien="1"]');
+          const komorkaPn10 = pn && [...pn.querySelectorAll("i")].find((i) => /10:00/.test(i.title));
+          sprawdz("siatka dni × godziny sumuje wymagania (Pn 10:00 = 2, os·h 21,0)",
+            !!komorkaPn10 && komorkaPn10.textContent === "2" && /21,0/.test(pn.textContent),
+            pn ? pn.textContent : "brak wiersza");
+          sprawdz("wymagania pogrupowane po stanowisku, drugie z „+”",
+            !!K().querySelector('[data-grupa-stanowiska="Kucharz"]') && !!K().querySelector('[data-grupa-stanowiska="Kelner"]') &&
+              /\+1/.test(K().querySelector('[data-grupa-stanowiska="Kucharz"]').textContent));
+          // Pułapka: wymaganie bez dni (null = codziennie) musi wrócić do
+          // formularza jako pełny tydzień.
+          kk(K().querySelector('[data-wymaganie="sr3"] [aria-label="Edytuj wymaganie"]'));
+          await czekaj(200);
+          const dniForm = [...K().querySelectorAll('[data-formularz-wymagania="zestaw"] button[aria-pressed]')];
+          sprawdz("edycja wymagania bez dni: cały tydzień zaznaczony",
+            dniForm.length === 7 && dniForm.every((b) => b.getAttribute("aria-pressed") === "true"));
+          kk([...K().querySelectorAll('[data-formularz-wymagania="zestaw"] button')].find((b) => b.textContent.trim() === "Anuluj"));
+          await czekaj(150);
+          kk(K().querySelector('[data-dodaj-wymaganie="Kelner"]'));
+          await czekaj(150);
+          const fw = () => K().querySelector('[data-formularz-wymagania="zestaw"]');
+          const [od, doG] = fw().querySelectorAll('input[type="time"]');
+          wartosc(od, "15:00"); wartosc(doG, "19:00");
+          kk(fw().querySelector('[aria-label="Więcej osób"]'));
+          await czekaj(150);
+          sprawdz("formularz: − / + i podgląd sumy z innymi wymaganiami",
+            fw().querySelector("[data-ile-osob]").textContent === "2" &&
+              /najwięcej\s*3 osoby/.test((fw().querySelector("[data-podglad-wymagania]") || {}).textContent || ""),
+            (fw().querySelector("[data-podglad-wymagania]") || {}).textContent);
+          const przedWym = window.__zapisy.length;
+          kk(fw().querySelector("[data-zapisz-wymaganie]"));
+          await czekaj(300);
+          const nowaReg = window.__zapisy.slice(przedWym).find((z) => z[0] === "staffing_rules");
+          sprawdz("„Dodaj” zapisuje wymaganie jak dotąd (set, dni, liczba osób)",
+            !!nowaReg && nowaReg[1].stanowisko === "Kelner" && nowaReg[1].required_count === 2 &&
+              nowaReg[1].set_id === "zs1" && nowaReg[1].days_of_week === "1,2,3,4,5,6,0", JSON.stringify(nowaReg));
+          // Wyjątki
+          kk(K().querySelector('[data-zakladka-konfiguracji="wyjatki"]'));
+          await czekaj(200);
+          const pokazMin = [...K().querySelectorAll("button")].find((b) => /Pokaż minione/.test(b.textContent));
+          if (pokazMin && !K().querySelector('[data-wyjatek="wy1"]')) { kk(pokazMin); await czekaj(150); }
+          sprawdz("Wyjątki: pozycja z kaflem daty, nazwą i tagami", /Wesele na sali/.test((K().querySelector('[data-wyjatek="wy1"]') || {}).textContent || "") &&
+            /1 wymaganie/.test(K().querySelector('[data-wyjatek="wy1"]').textContent));
+          kk(K().querySelector('[data-wyjatek="wy1"] button[aria-expanded]'));
+          await czekaj(150);
+          sprawdz("rozwinięty wyjątek: edycja w miejscu i obsada tego dnia",
+            !!K().querySelector("[data-zapisz-wyjatek]") && !!K().querySelector("[data-dodaj-wymaganie-wyjatku]") &&
+              !!K().querySelector("[data-kalendarz-wyjatkow]"));
+          // Budżet — cel jest w Bułce i Jacku.
+          await naLokal("Bułka i Jacek");
+          kk(K().querySelector('[data-zakladka-konfiguracji="budzet"]'));
+          await czekaj(200);
+          const dniBud = K().querySelectorAll("[data-tabela-budzetu] [data-dzien-budzetu]");
+          sprawdz("Budżet: tabela 7 dni z budżetem pracy i obsadą", dniBud.length === 7 &&
+            /zł/.test(K().querySelector('[data-tabela-budzetu] [data-dzien-budzetu="6"]').textContent));
+          const sbUtarg = K().querySelector('[data-tabela-budzetu] [data-dzien-budzetu="6"] input');
+          wartosc(sbUtarg, "14000");
+          await czekaj(150);
+          sprawdz("zmiana celu: „Zmieniono: Sb …” przy przycisku", /Sb/.test((K().querySelector("[data-zmiany-celu]") || {}).textContent || ""));
+          const przedCel = window.__zapisy.length;
+          kk(K().querySelector("[data-zapisz-cel]"));
+          await czekaj(300);
+          const celPatch = window.__zapisy.slice(przedCel).find((z) => z[0] === "grafik_budzet_cele" && z[1] === "bc6");
+          sprawdz("„Zapisz cel” zapisuje sobotę jak dotąd", !!celPatch && celPatch[2].oczekiwany_utarg === 14000, JSON.stringify(window.__zapisy.slice(przedCel)));
+          kk([...G().querySelectorAll("button")].find((b) => /^Konfiguracja/.test(b.title || "")));
+          await czekaj(200);
         }
       } catch (e) {
         if (e !== null) sprawdz("Grafik: przebieg bez wyjątku", false, e.message);
