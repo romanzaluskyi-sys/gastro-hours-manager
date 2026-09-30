@@ -251,7 +251,7 @@ export function PoleGodziny({ wartosc, teraz = null, onZmiana, etykieta, onTeraz
           onBlur={() => setZamrozona(null)}
           onChange={(e) => onZmiana(e.target.value)}
           aria-label={etykieta}
-          className={`w-full h-[76px] border-[2.5px] border-[#171714] rounded-lg bg-white pl-14 ${
+          className={`block w-full min-w-0 h-[76px] border-[2.5px] border-[#171714] rounded-lg bg-white pl-14 ${
             teraz != null ? "pr-20" : "pr-4"
           } font-['Archivo'] font-extrabold text-[44px] tracking-[-.01em] text-[#171714] tabular-nums cursor-pointer`}
           {...reszta}
@@ -2183,10 +2183,16 @@ export const EmployeeSessionScreens = ({
                   po ? "border-[#8A5300] bg-[#FDF0D8] text-[#8A5300]" : "border-[#171714] bg-white"
                 }`}
               >
-                <span className={`text-[15px] font-bold ${po ? "" : "text-[#6E6E66]"}`}>
+                <span className={`min-w-0 text-[15px] leading-tight font-bold ${po ? "" : "text-[#6E6E66]"}`}>
                   {po ? "Ponad grafik" : "Do końca zmiany"}
                 </span>
-                <b className={`font-['Archivo'] text-[26px] font-extrabold tabular-nums ${po ? "" : "text-[#171714]"}`}>
+                {/* Czas nigdy się nie łamie („min” spadało do drugiej linii na
+                    wąskim telefonie) — zawija się najwyżej podpis z lewej. */}
+                <b
+                  className={`flex-shrink-0 whitespace-nowrap font-['Archivo'] text-[22px] min-[380px]:text-[26px] font-extrabold tabular-nums ${
+                    po ? "" : "text-[#171714]"
+                  }`}
+                >
                   {po ? "+" : ""}
                   {czasTrwania(zostalo)}
                 </b>

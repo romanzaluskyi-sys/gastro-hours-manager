@@ -1293,6 +1293,11 @@ osobnego raportu i grafiku. Rzeczy, których nie widać:
   dniem z grafiku. Okno przy nowym wpisie dla WSKAZANEJ osoby samo bierze
   godziny z jej grafiku i nie otwiera listy osób. Zapis idzie
   `zapiszWpisGodzin` (kolizje, `shift_edits` `manual_add`).
+- ⚠️ **iPhone (Safari) daje polom `date`/`time` własną minimalną szerokość**
+  i `w-full` ich nie mieści w karcie. Reguła w `public/index.html` (tylko iOS,
+  `@supports (-webkit-touch-callout: none)`) zdejmuje wygląd systemowy i
+  `min-width` — dotyczy KAŻDEGO takiego pola w aplikacji (0.69.1). Harnessy
+  tego pliku nie ładują, więc tego nie sprawdzą.
 - Zdanie o normie (`podsumowanieMiesiaca`) zostało pod kaflami — makieta go
   nie ma, ale to ta sama liczba co w Raporcie pracownika.
 
