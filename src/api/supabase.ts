@@ -74,6 +74,28 @@ export const api = {
     if (!res.ok) throw new Error(json.message || "Błąd zapisu");
     return json[0];
   },
+  // ⚠️ Zapis BEZ oddawania wiersza (`return=minimal`). Zwykły `post` to
+  // INSERT … RETURNING, a Postgres sprawdza zwracany wiersz polityką SELECT —
+  // gdy piszący nie może go ZOBACZYĆ, odrzuca CAŁY zapis ("new row violates
+  // row-level security policy"). Tak jest ze zgłoszeniem problemu: tablet nie
+  // widzi zgłoszeń swoich ludzi (świadomie — bywa w nich skarga na kogoś z tej
+  // samej sali), a zgłoszenia anonimowego nie widzi nikt poza kierownikiem.
+  // Zamiast poszerzać odczyt, nie prosimy o wiersz z powrotem.
+  dodajBezOdczytu: async (table, data) => {
+    const res = await wyslij(
+      `${SUPABASE_URL}/rest/v1/${table}`,
+      { method: "POST", body: JSON.stringify(data) },
+      { Prefer: "return=minimal" }
+    );
+    if (!res.ok) {
+      let json = {};
+      try {
+        json = await res.json();
+      } catch (e) {}
+      throw new Error(json.message || `Błąd zapisu (${res.status})`);
+    }
+    return true;
+  },
   patch: async (table, id, data) => {
     const res = await wyslij(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`, {
       method: "PATCH",

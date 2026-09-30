@@ -10,15 +10,16 @@
 // Wyjątek nadpisuje POLE PO POLU: można zmienić sam utarg i zostawić procent z
 // zestawu. Ta sama tabela zasila olówek w siatce "Wg budżetu" — dzień zmieniony
 // tam pokazuje się tutaj i odwrotnie, bo to jedna rzecz, a nie dwie.
+//
+// ⚠️ Układ z makiety właściciela (0.68.0, ScheduleConfigBudget /
+// ScheduleConfigMobile). Zapis bez zmian. Kolumny „Budżet pracy” i „Obsada
+// wymaga” są LICZONE i niczego nie zapisują: budżet w godzinach = utarg × % ÷
+// średni koszt godziny osób z tego lokalu (`kosztGodziny`, ta sama reguła co w
+// Grafiku), obsada = osobogodziny zestawu wymagań obowiązującego w tym czasie.
+// Budżet na konkretne dni zostaje TUTAJ (makieta przenosiła go do Wyjątków),
+// bo w bazie to osobna tabela, niezwiązana z wyjątkiem godzin i obsady.
 import React, { useState } from "react";
-import { Plus, Trash2, Copy, History } from "lucide-react";
-import {
-  sectionCardCls,
-  sectionHeaderCls,
-  btnPrimaryCls,
-  btnSecondaryCls,
-  statLabelCls,
-} from "./designTokens";
+import { AlertTriangle, Check, History, Plus, Trash2 } from "lucide-react";
 import {
   utworzZestaw,
   usunZestaw,
@@ -29,34 +30,26 @@ import {
   findBudzetSetForDate,
   wierszeZestawu,
   sredniUtargDnia,
+  kosztGodziny,
   zl,
 } from "../../utils/budzet";
-import { addDaysYMD, toLocalYMD } from "../../utils/grafik";
-
-const DNI = [
-  { idx: 1, label: "Pon" },
-  { idx: 2, label: "Wt" },
-  { idx: 3, label: "Śr" },
-  { idx: 4, label: "Czw" },
-  { idx: 5, label: "Pt" },
-  { idx: 6, label: "Sob" },
-  { idx: 0, label: "Nd" },
-];
-
-// ⚠️ Safari i Firefox degradują <input type="month"> do zwykłego tekstu, więc
-// miesiąc wybiera się dwoma <select> — ta sama ostrożność co w GrafikWymagania.
-const MIESIACE = [
-  "Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec",
-  "Lipiec", "Sierpień", "Wrzesień", "Październik", "Listopad", "Grudzień",
-];
-
-const monthLabel = (ymd) =>
-  ymd ? new Date(ymd + "T00:00:00").toLocaleDateString("pl-PL", { month: "long", year: "numeric" }) : "";
-
-const dataLabel = (ymd) =>
-  ymd ? new Date(ymd + "T00:00:00").toLocaleDateString("pl-PL", { day: "numeric", month: "long", year: "numeric" }) : "";
-
-const inputCls = "w-full p-2 border-[2px] border-[#171714] rounded bg-white text-right";
+import { addDaysYMD, toLocalYMD, findRuleSetForDate } from "../../utils/grafik";
+import {
+  etykietaCls,
+  poleCls,
+  notaCls,
+  btnObrysCls,
+  btnGlownyCls,
+  ikonaBtnCls,
+  dodajCls,
+  DNI,
+  f1,
+  miesiacKrotko,
+  kafelDaty,
+  osGodzinDnia,
+  Panel,
+  PasekWersji,
+} from "./grafikKonfigWspolne";
 
 const doPola = (v) => (v == null || v === "" ? "" : String(v).replace(".", ","));
 const zPola = (v) => {
@@ -75,64 +68,87 @@ const pustyWyjatek = () => ({
 
 export default function GrafikBudzetKonfiguracja({
   lokal,
+  lokale,
+  users,
   budzetCele,
   setBudzetCele,
   budzetDni,
   setBudzetDni,
+  staffingRules,
+  staffingRuleSets,
   dayLogs,
   currentUser,
   showMsg,
 }) {
   const dzis = toLocalYMD(new Date());
-  const nastepny = new Date();
-  nastepny.setDate(1);
-  nastepny.setMonth(nastepny.getMonth() + 1);
-
   const [wybranyOd, setWybranyOd] = useState(null);
-  const [nowyRok, setNowyRok] = useState(nastepny.getFullYear());
-  const [nowyMiesiac, setNowyMiesiac] = useState(nastepny.getMonth());
   const [draft, setDraft] = useState(null);
   const [zapisuje, setZapisuje] = useState(false);
   const [wyjatek, setWyjatek] = useState(null);
 
   const zestawy = budzetSetyLokalu(budzetCele, lokal);
-  // Domyślnie pokazujemy zestaw obowiązujący DZIŚ, a nie po prostu najnowszy —
-  // kierownik może mieć przygotowany zestaw na przyszły miesiąc, który jeszcze
-  // nie działa (ta sama zasada co przy wymaganiach obsady).
+  // Domyślnie zestaw obowiązujący DZIŚ, a nie najnowszy — kierownik może mieć
+  // przygotowany zestaw na przyszły miesiąc, który jeszcze nie działa.
   const obowiazujacy = findBudzetSetForDate(budzetCele, lokal, dzis);
-  const aktywnyOd =
-    (zestawy.includes(wybranyOd) && wybranyOd) || obowiazujacy || zestawy[0] || null;
+  const aktywnyOd = (zestawy.includes(wybranyOd) && wybranyOd) || obowiazujacy || zestawy[0] || null;
   const wiersze = aktywnyOd ? wierszeZestawu(budzetCele, lokal, aktywnyOd) : [];
 
-  const rows =
-    draft ||
-    DNI.map((d) => {
-      const w = wiersze.find((r) => Number(r.day_of_week) === d.idx);
-      return {
-        day_of_week: d.idx,
-        id: w ? w.id : null,
-        oczekiwany_utarg: doPola(w && w.oczekiwany_utarg),
-        cel_koszt_pct: doPola(w && w.cel_koszt_pct),
-      };
-    });
+  const zapisane = DNI.map((d) => {
+    const w = wiersze.find((r) => Number(r.day_of_week) === d.idx);
+    return {
+      day_of_week: d.idx,
+      id: w ? w.id : null,
+      oczekiwany_utarg: doPola(w && w.oczekiwany_utarg),
+      cel_koszt_pct: doPola(w && w.cel_koszt_pct),
+    };
+  });
+  const rows = draft || zapisane;
+  const ustaw = (idx, patch) => setDraft(rows.map((r) => (r.day_of_week === idx ? { ...r, ...patch } : r)));
 
-  const ustaw = (idx, patch) =>
-    setDraft(rows.map((r) => (r.day_of_week === idx ? { ...r, ...patch } : r)));
+  // Co zmieniono względem zapisanego — „Sb 28%, Pt 4 500 zł”.
+  const zmiany = draft
+    ? draft.flatMap((r) => {
+        const z = zapisane.find((x) => x.day_of_week === r.day_of_week);
+        const d = DNI.find((x) => x.idx === r.day_of_week).label;
+        const out = [];
+        if (zPola(r.oczekiwany_utarg) !== zPola(z.oczekiwany_utarg))
+          out.push(`${d} ${zPola(r.oczekiwany_utarg) == null ? "utarg —" : zl(zPola(r.oczekiwany_utarg))}`);
+        if (zPola(r.cel_koszt_pct) !== zPola(z.cel_koszt_pct))
+          out.push(`${d} ${zPola(r.cel_koszt_pct) == null ? "% —" : `${doPola(zPola(r.cel_koszt_pct))}%`}`);
+        return out;
+      })
+    : [];
 
-  const utworz = async (kopiuj) => {
-    const obowiazujeOd = `${nowyRok}-${String(nowyMiesiac + 1).padStart(2, "0")}-01`;
+  // Średni koszt godziny osób z tego lokalu — z kart w Pracownikach, ta sama
+  // reguła co koszt w Grafiku (stawka / wynagrodzenie ÷ norma, z narzutem).
+  const teraz = new Date();
+  const lokalRow = (lokale || []).find((l) => l.name === lokal);
+  const koszty = (users || [])
+    .filter(
+      (u) =>
+        u.active !== false &&
+        !u.archived &&
+        u.role !== "kiosk" &&
+        u.probny_status !== "oczekuje" &&
+        u.default_lokal === lokal
+    )
+    .map((u) => kosztGodziny(u, lokalRow, teraz.getFullYear(), teraz.getMonth() + 1))
+    .filter((k) => k != null && k > 0);
+  const sredniKoszt = koszty.length ? koszty.reduce((s, k) => s + k, 0) / koszty.length : null;
+
+  // Obsada: zestaw wymagań obowiązujący w czasie oglądanego celu.
+  const dataObsady = aktywnyOd && aktywnyOd > dzis ? aktywnyOd : dzis;
+  const zestawObsady = findRuleSetForDate(staffingRuleSets, lokal, dataObsady);
+  const regulyObsady = (staffingRules || []).filter((r) => zestawObsady && r.set_id === zestawObsady.id);
+
+  const utworz = async (obowiazujeOd, kopiuj) => {
     if (zestawy.includes(obowiazujeOd)) {
       showMsg("Zestaw na ten miesiąc już istnieje.", "error");
       return;
     }
     setZapisuje(true);
     try {
-      const nowe = await utworzZestaw({
-        lokal,
-        obowiazujeOd,
-        zrodlo: kopiuj ? wiersze : null,
-        autor: currentUser?.name,
-      });
+      const nowe = await utworzZestaw({ lokal, obowiazujeOd, zrodlo: kopiuj ? wiersze : null, autor: currentUser?.name });
       setBudzetCele([...(budzetCele || []), ...nowe]);
       setWybranyOd(obowiazujeOd);
       setDraft(null);
@@ -144,26 +160,18 @@ export default function GrafikBudzetKonfiguracja({
   };
 
   // ⚠️ Kasowanie zestawu OBOWIĄZUJĄCEGO zmienia liczby w siatce od razu: dni
-  // spadają na zestaw wcześniejszy albo — gdy nie ma żadnego — tracą cel i cała
-  // warstwa budżetu milknie. Mówimy o tym wprost, zanim zapytamy.
+  // spadają na zestaw wcześniejszy albo tracą cel i cała warstwa budżetu
+  // milknie. Pasek potwierdzenia mówi to, zanim ktoś kliknie.
+  const wczesniejszy = aktywnyOd ? zestawy.filter((od) => od !== aktywnyOd && od <= dzis).sort().reverse()[0] : null;
+  const skutek = !aktywnyOd
+    ? ""
+    : aktywnyOd !== obowiazujacy
+    ? "Ten zestaw jeszcze nie obowiązuje, więc w siatce nic się nie zmieni."
+    : wczesniejszy
+    ? `Od teraz wróci cel z „od ${miesiacKrotko(wczesniejszy)}”. Budżet na konkretne dni zostaje.`
+    : "To jedyny obowiązujący zestaw — lokal zostanie bez celu, a widok „Wg budżetu” przestanie pokazywać liczby.";
   const usun = async () => {
     if (!aktywnyOd) return;
-    const wczesniejszy = zestawy
-      .filter((od) => od !== aktywnyOd && od <= dzis)
-      .sort()
-      .reverse()[0];
-    const skutek =
-      aktywnyOd !== obowiazujacy
-        ? "Ten zestaw jeszcze nie obowiązuje, więc w siatce nic się nie zmieni."
-        : wczesniejszy
-        ? `Od teraz obowiązywać będzie zestaw od ${monthLabel(wczesniejszy)}.`
-        : "To jedyny obowiązujący zestaw — po usunięciu lokal zostanie bez celu finansowego, a widok „Wg budżetu” przestanie pokazywać liczby.";
-    if (
-      !window.confirm(
-        `Usunąć zestaw celów od ${monthLabel(aktywnyOd)}?\n\n${skutek}\n\nWyjątki na konkretne dni zostają — kasuje się je osobno. Tego nie da się cofnąć.`
-      )
-    )
-      return;
     setZapisuje(true);
     try {
       await usunZestaw({ cele: budzetCele, setCele: setBudzetCele, lokal, obowiazujeOd: aktywnyOd });
@@ -180,21 +188,18 @@ export default function GrafikBudzetKonfiguracja({
     if (!aktywnyOd) return;
     setZapisuje(true);
     try {
-      const zapisane = [];
+      const nowe = [];
       for (const r of rows) {
         const wiersz = wiersze.find((w) => Number(w.day_of_week) === r.day_of_week);
         if (!wiersz) continue;
-        zapisane.push(
+        nowe.push(
           await zapiszCel({
             wiersz,
-            patch: {
-              oczekiwany_utarg: zPola(r.oczekiwany_utarg),
-              cel_koszt_pct: zPola(r.cel_koszt_pct),
-            },
+            patch: { oczekiwany_utarg: zPola(r.oczekiwany_utarg), cel_koszt_pct: zPola(r.cel_koszt_pct) },
           })
         );
       }
-      const mapa = new Map(zapisane.map((x) => [x.id, x]));
+      const mapa = new Map(nowe.map((x) => [x.id, x]));
       setBudzetCele((budzetCele || []).map((c) => mapa.get(c.id) || c));
       setDraft(null);
       showMsg("Zapisano cel finansowy.");
@@ -204,17 +209,16 @@ export default function GrafikBudzetKonfiguracja({
     setZapisuje(false);
   };
 
-  // --- WYJĄTKI ----------------------------------------------------------
-  const wyjatkiLokalu = (budzetDni || [])
-    .filter((d) => d.lokal === lokal)
-    .sort((a, b) => (a.date < b.date ? 1 : -1));
+  // --- BUDŻET NA KONKRETNE DNI ---------------------------------------------
+  const dniLokalu = (budzetDni || []).filter((d) => d.lokal === lokal).sort((a, b) => (a.date < b.date ? -1 : 1));
+  const nadchodzaceDni = dniLokalu.filter((d) => d.date >= dzis);
 
   const zapiszWyjatek = async (e) => {
     e.preventDefault();
     const od = wyjatek.date_from;
     const doDnia = wyjatek.date_to || od;
     if (!od) {
-      showMsg("Podaj datę wyjątku.", "error");
+      showMsg("Podaj datę.", "error");
       return;
     }
     if (doDnia < od) {
@@ -224,19 +228,18 @@ export default function GrafikBudzetKonfiguracja({
     const u = zPola(wyjatek.oczekiwany_utarg);
     const p = zPola(wyjatek.cel_koszt_pct);
     if (u == null && p == null) {
-      showMsg("Wpisz utarg albo procent — inaczej wyjątek niczego nie zmienia.", "error");
+      showMsg("Wpisz utarg albo procent — inaczej ten dzień niczym się nie różni.", "error");
       return;
     }
     setZapisuje(true);
     try {
-      // Zakres rozpisujemy na pojedyncze dni. Dzięki temu "który dzień jest
-      // zmieniony" ma jedną, trywialną odpowiedź — i w tej liście, i w siatce,
-      // gdzie olówek pisze do tych samych wierszy.
+      // Zakres rozpisujemy na pojedyncze dni — „który dzień jest zmieniony” ma
+      // wtedy jedną odpowiedź, i tu, i w siatce, gdzie olówek pisze do tych
+      // samych wierszy.
       let biezaca = od;
       let lista = budzetDni || [];
       // ⚠️ Kolejny dzień liczy `addDaysYMD`, a NIE `toISOString().slice(0,10)` —
-      // to drugie zamienia lokalną północ na czas UTC i w Polsce cofa datę o
-      // jeden dzień (błąd #2 w CLAUDE.md).
+      // to drugie cofa w Polsce datę o dzień (błąd #2 w CLAUDE.md).
       while (biezaca <= doDnia) {
         await zapiszNadpisanieDnia({
           lokal,
@@ -253,9 +256,9 @@ export default function GrafikBudzetKonfiguracja({
       }
       setBudzetDni(lista);
       setWyjatek(null);
-      showMsg("Zapisano wyjątek budżetu.");
+      showMsg("Zapisano budżet na wybrane dni.");
     } catch (err) {
-      showMsg(`Błąd zapisu wyjątku: ${err.message || "nieznany błąd"}`, "error");
+      showMsg(`Błąd zapisu: ${err.message || "nieznany błąd"}`, "error");
     }
     setZapisuje(false);
   };
@@ -268,281 +271,355 @@ export default function GrafikBudzetKonfiguracja({
     }
   };
 
+  // --- wiersz dnia: liczby wspólne dla tabeli i kart na telefonie ---
+  const liczDzien = (r) => {
+    const utarg = zPola(r.oczekiwany_utarg);
+    const pct = zPola(r.cel_koszt_pct);
+    const budzetZl = utarg != null && pct != null ? (utarg * pct) / 100 : null;
+    const budzetH = budzetZl != null && sredniKoszt ? budzetZl / sredniKoszt : null;
+    const obsadaH = osGodzinDnia(regulyObsady, r.day_of_week);
+    const ponad = budzetH != null && obsadaH > budzetH + 0.05;
+    const historia = sredniUtargDnia(dayLogs, lokal, r.day_of_week);
+    const daleko = historia && utarg ? Math.abs(historia.kwota - utarg) / utarg > 0.4 : false;
+    return { utarg, pct, budzetZl, budzetH, obsadaH, ponad, historia, daleko };
+  };
+  const poleKwotyCls = `${poleCls} !h-11 !w-[110px] text-right`;
+  const pH = (x) => (x == null ? "—" : `${f1(x)} h`);
+
+  const status = (l) =>
+    l.budzetH == null ? (
+      <span className="text-[14px] text-[#6E6E66]">—</span>
+    ) : l.ponad ? (
+      <span className="inline-flex items-center gap-1 text-[14px] font-extrabold text-[#8A5300] whitespace-nowrap">
+        <AlertTriangle size={16} /> +{f1(l.obsadaH - l.budzetH)} h ponad
+      </span>
+    ) : (
+      <span className="inline-flex items-center gap-1 text-[14px] font-bold text-[#1F7A4A] whitespace-nowrap">
+        <Check size={16} /> mieści się · {f1(l.budzetH - l.obsadaH)} h zapasu
+      </span>
+    );
+
+  const przyciskHistorii = (r, l) =>
+    l.historia ? (
+      <span className="inline-flex flex-col">
+        <button
+          type="button"
+          onClick={() => ustaw(r.day_of_week, { oczekiwany_utarg: String(l.historia.kwota) })}
+          className={`inline-flex items-center gap-1.5 h-9 pl-2.5 pr-1 rounded-full border-[1.5px] bg-white text-[14px] font-bold ${
+            l.daleko ? "border-[#8A5300]" : "border-[#B7B6AE]"
+          }`}
+          title={`Średnia z ${l.historia.zIlu} ostatnich takich dni w Pulsie — wstawia liczbę do pola, nic nie zapisuje`}
+          data-uzyj-historii={r.day_of_week}
+        >
+          <History size={15} className="text-[#6E6E66]" />
+          {zl(l.historia.kwota)}
+          <span className="bg-[#171714] text-white rounded-full px-2.5 py-0.5 text-[12px]">Użyj</span>
+        </button>
+        {l.daleko && (
+          <small className="text-[12px] font-bold text-[#8A5300] mt-0.5 ml-1">
+            {l.historia.kwota < l.utarg ? "dużo niżej niż cel" : "dużo wyżej niż cel"}
+          </small>
+        )}
+      </span>
+    ) : (
+      <span className="text-[14px] text-[#6E6E66]">brak historii</span>
+    );
+
+  const tabela = () => {
+    let sumaUtarg = 0;
+    let sumaBudzetH = 0;
+    let sumaObsada = 0;
+    let saBudzety = false;
+    const wiersze = rows.map((r) => {
+      const l = liczDzien(r);
+      sumaUtarg += l.utarg || 0;
+      sumaObsada += l.obsadaH;
+      if (l.budzetH != null) {
+        saBudzety = true;
+        sumaBudzetH += l.budzetH;
+      }
+      return { r, l, d: DNI.find((x) => x.idx === r.day_of_week) };
+    });
+    return (
+      <>
+        {/* Tablet/komputer: tabela. */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="w-full border-collapse" data-tabela-budzetu>
+            <thead>
+              <tr className="bg-[#F1F0EC] text-left">
+                {["Dzień", "Oczekiwany utarg", "Średnia z Pulsu", "% kosztu pracy", "Budżet pracy", "Obsada wymaga", ""].map((t) => (
+                  <th key={t} className="px-3 py-2.5 text-[12px] font-extrabold tracking-[0.05em] uppercase text-[#6E6E66]">
+                    {t}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {wiersze.map(({ r, l, d }) => (
+                <tr key={r.day_of_week} className={`border-t-[1.5px] border-[#ECEBE6] ${l.ponad ? "bg-[#FDF0D8]" : ""}`} data-dzien-budzetu={r.day_of_week}>
+                  <th className="px-3 py-2.5 text-left text-[17px] font-extrabold w-[50px]">{d.label}</th>
+                  <td className="px-3 py-2.5 whitespace-nowrap">
+                    <input
+                      value={r.oczekiwany_utarg}
+                      onChange={(e) => ustaw(r.day_of_week, { oczekiwany_utarg: e.target.value })}
+                      className={poleKwotyCls}
+                      placeholder="—"
+                      inputMode="decimal"
+                      aria-label={`${d.pelna} — oczekiwany utarg`}
+                    />
+                    <i className="not-italic ml-1.5 text-[#6E6E66]">zł</i>
+                  </td>
+                  <td className="px-3 py-2.5">{przyciskHistorii(r, l)}</td>
+                  <td className="px-3 py-2.5 whitespace-nowrap">
+                    <input
+                      value={r.cel_koszt_pct}
+                      onChange={(e) => ustaw(r.day_of_week, { cel_koszt_pct: e.target.value })}
+                      className={`${poleCls} !h-11 !w-16 text-right`}
+                      placeholder="—"
+                      inputMode="decimal"
+                      aria-label={`${d.pelna} — procent kosztu pracy`}
+                    />
+                    <i className="not-italic ml-1.5 text-[#6E6E66]">%</i>
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <b className="block text-[16px] tabular-nums">{l.budzetZl != null ? zl(l.budzetZl) : "—"}</b>
+                    {l.budzetH != null && <small className="text-[13px] text-[#6E6E66]">≈ {f1(l.budzetH)} h</small>}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <b className="text-[16px] tabular-nums">{pH(l.obsadaH)}</b>
+                  </td>
+                  <td className="px-3 py-2.5">{status(l)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="bg-[#F1F0EC] border-t-[1.5px] border-[#DEDCD4]">
+                <th className="px-3 py-2.5 text-left text-[15px]">Tydzień</th>
+                <td className="px-3 py-2.5">
+                  <b>{zl(sumaUtarg)}</b>
+                </td>
+                <td />
+                <td />
+                <td className="px-3 py-2.5">
+                  <b>{saBudzety ? `≈ ${f1(sumaBudzetH)} h` : "—"}</b>
+                </td>
+                <td className="px-3 py-2.5">
+                  <b>{pH(sumaObsada)}</b>
+                </td>
+                <td />
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        {/* Telefon: karta na dzień. */}
+        <div className="md:hidden flex flex-col gap-2 p-3">
+          {wiersze.map(({ r, l, d }) => (
+            <div
+              key={r.day_of_week}
+              className={`border-[2px] rounded-xl p-3 flex flex-col gap-2 ${l.ponad ? "border-[#8A5300] bg-[#FDF0D8]" : "border-[#ECEBE6] bg-white"}`}
+              data-dzien-budzetu={r.day_of_week}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <b className="text-[17px]">{d.pelna}</b>
+                {l.ponad && (
+                  <em className="not-italic inline-flex items-center gap-1 text-[13px] font-extrabold text-[#8A5300]">
+                    <AlertTriangle size={15} /> obsada ponad budżet
+                  </em>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="flex flex-col">
+                  <span className={etykietaCls}>Utarg</span>
+                  <span className="flex items-center gap-1.5">
+                    <input
+                      value={r.oczekiwany_utarg}
+                      onChange={(e) => ustaw(r.day_of_week, { oczekiwany_utarg: e.target.value })}
+                      className={`${poleCls} !h-11 w-full text-right`}
+                      placeholder="—"
+                      inputMode="decimal"
+                    />
+                    <i className="not-italic text-[#6E6E66]">zł</i>
+                  </span>
+                </label>
+                <label className="flex flex-col">
+                  <span className={etykietaCls}>Koszt pracy</span>
+                  <span className="flex items-center gap-1.5">
+                    <input
+                      value={r.cel_koszt_pct}
+                      onChange={(e) => ustaw(r.day_of_week, { cel_koszt_pct: e.target.value })}
+                      className={`${poleCls} !h-11 w-full text-right`}
+                      placeholder="—"
+                      inputMode="decimal"
+                    />
+                    <i className="not-italic text-[#6E6E66]">%</i>
+                  </span>
+                </label>
+              </div>
+              <div>{przyciskHistorii(r, l)}</div>
+              <div className="flex justify-between text-[14px] text-[#6E6E66]">
+                <span>
+                  Budżet <b className="text-[#171714]">{l.budzetH != null ? pH(l.budzetH) : l.budzetZl != null ? zl(l.budzetZl) : "—"}</b>
+                </span>
+                <span>
+                  Obsada <b className="text-[#171714]">{pH(l.obsadaH)}</b>
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </>
+    );
+  };
+
   return (
     <>
-      <div className={sectionCardCls}>
-        <div className={sectionHeaderCls}>
-          <span>Cel finansowy — dni tygodnia</span>
-        </div>
+      <PasekWersji
+        etykieta="Zestaw budżetu"
+        wersje={zestawy}
+        aktywna={aktywnyOd}
+        obowiazujaca={obowiazujacy}
+        dzis={dzis}
+        onWybierz={(od) => {
+          setDraft(null);
+          setWybranyOd(od);
+        }}
+        onUtworz={utworz}
+        onUsun={usun}
+        skutekUsuniecia={skutek}
+        opisKopii="7 dni"
+        zapisuje={zapisuje}
+      />
 
-        <div className="p-4 flex flex-wrap items-end gap-3 border-b-[2px] border-[#171714]">
-          <div>
-            <label className={statLabelCls}>Wersja celu</label>
-            <select
-              value={aktywnyOd || ""}
-              onChange={(e) => {
-                setDraft(null);
-                setWybranyOd(e.target.value);
-              }}
-              className="p-2 border-[2px] border-[#171714] rounded bg-white min-w-[240px]"
-              disabled={zestawy.length === 0}
-            >
-              {zestawy.length === 0 && <option value="">brak zestawów</option>}
-              {zestawy.map((od) => (
-                <option key={od} value={od}>
-                  Od {monthLabel(od)}
-                  {od === obowiazujacy ? " (obowiązuje dziś)" : ""}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={statLabelCls}>Nowy zestaw od miesiąca</label>
-            <div className="flex gap-2">
-              <select
-                value={nowyMiesiac}
-                onChange={(e) => setNowyMiesiac(Number(e.target.value))}
-                className="p-2 border-[2px] border-[#171714] rounded bg-white"
-              >
-                {MIESIACE.map((m, i) => (
-                  <option key={m} value={i}>
-                    {m}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={nowyRok}
-                onChange={(e) => setNowyRok(Number(e.target.value))}
-                className="p-2 border-[2px] border-[#171714] rounded bg-white"
-              >
-                {[nastepny.getFullYear() - 1, nastepny.getFullYear(), nastepny.getFullYear() + 1].map(
-                  (r) => (
-                    <option key={r} value={r}>
-                      {r}
-                    </option>
-                  )
-                )}
-              </select>
-            </div>
-          </div>
-          <button onClick={() => utworz(false)} disabled={zapisuje} className={btnSecondaryCls}>
-            <Plus size={15} className="inline -mt-0.5 mr-1" /> Pusty
-          </button>
-          <button
-            onClick={() => utworz(true)}
-            disabled={zapisuje || wiersze.length === 0}
-            className={btnPrimaryCls}
-            title={
-              wiersze.length === 0
-                ? "Nie ma jeszcze zestawu, z którego można kopiować"
-                : "Skopiuje wszystkie wartości z oglądanego zestawu"
-            }
-          >
-            <Copy size={15} className="inline -mt-0.5 mr-1" /> Kopiuj bieżący
-          </button>
-          <button
-            onClick={usun}
-            disabled={zapisuje || !aktywnyOd}
-            className="bg-white text-[#DE3A22] font-['Archivo'] font-bold text-sm px-4 py-2.5 rounded border-[2px] border-[#DE3A22] hover:bg-[#FAEAE6] disabled:opacity-40"
-            title="Usuwa oglądany zestaw celów (siedem dni tygodnia)"
-          >
-            <Trash2 size={15} className="inline -mt-0.5 mr-1" /> Usuń zestaw
-          </button>
-        </div>
-
+      <Panel
+        tytul="Cel na typowy dzień tygodnia"
+        prawa={
+          <span className="text-[14px] text-[#6E6E66]">
+            {sredniKoszt ? (
+              <>
+                średni koszt godziny pracy: <b className="text-[#171714]">{zl(sredniKoszt)}/h</b> · z Pracowników ({koszty.length})
+              </>
+            ) : (
+              "brak stawek w kartach — budżet tylko w zł"
+            )}
+          </span>
+        }
+        dane={{ "data-cel-budzetu": aktywnyOd || "" }}
+      >
         {zestawy.length === 0 ? (
-          <p className="p-4 text-[#6E6E66] text-sm">
-            Ten lokal nie ma jeszcze celu finansowego. Utwórz pusty zestaw — zestaw
-            obowiązuje od swojego miesiąca aż do pojawienia się nowszego, więc każdy
-            kolejny miesiąc wypełniać trzeba tylko wtedy, gdy coś się zmienia.
+          <p className={`${notaCls} px-3.5 md:px-[18px] py-4 m-0`}>
+            Ten lokal nie ma jeszcze celu finansowego. Utwórz zestaw („Nowy zestaw od…” wyżej) — obowiązuje od swojego miesiąca, aż
+            pojawi się nowszy.
           </p>
         ) : (
           <>
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="bg-[#F1F1EE] text-left">
-                  <th className="px-4 py-2 text-[11px] font-bold tracking-wider uppercase text-[#8F8E86]">
-                    Dzień
-                  </th>
-                  <th className="px-4 py-2 text-[11px] font-bold tracking-wider uppercase text-[#8F8E86]">
-                    Oczekiwany utarg
-                  </th>
-                  <th className="px-4 py-2 text-[11px] font-bold tracking-wider uppercase text-[#8F8E86]">
-                    Docelowy % kosztu pracy
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => {
-                  const historia = sredniUtargDnia(dayLogs, lokal, r.day_of_week);
-                  return (
-                    <tr key={r.day_of_week} className="border-t-[2px] border-[#E7E7E2]">
-                      <td className="px-4 py-2 font-['Archivo'] font-bold text-[14px]">
-                        {DNI.find((d) => d.idx === r.day_of_week).label}
-                      </td>
-                      <td className="px-4 py-2">
-                        <div className="flex items-center gap-2">
-                          <input
-                            value={r.oczekiwany_utarg}
-                            onChange={(e) =>
-                              ustaw(r.day_of_week, { oczekiwany_utarg: e.target.value })
-                            }
-                            className={`${inputCls} max-w-[160px]`}
-                            placeholder="—"
-                            inputMode="decimal"
-                          />
-                          <span className="text-[13px] text-[#6E6E66]">zł</span>
-                          {historia && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                ustaw(r.day_of_week, {
-                                  oczekiwany_utarg: String(historia.kwota),
-                                })
-                              }
-                              className="text-[12px] text-[#6E6E66] underline hover:text-[#171714]"
-                              title={`Średnia z ${historia.zIlu} ostatnich takich dni w Pulsie — wstawia liczbę do pola, nic nie zapisuje`}
-                            >
-                              <History size={12} className="inline -mt-0.5 mr-0.5" />
-                              z historii: {zl(historia.kwota)}
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-2">
-                        <div className="flex items-center gap-2">
-                          <input
-                            value={r.cel_koszt_pct}
-                            onChange={(e) =>
-                              ustaw(r.day_of_week, { cel_koszt_pct: e.target.value })
-                            }
-                            className={`${inputCls} max-w-[110px]`}
-                            placeholder="—"
-                            inputMode="decimal"
-                          />
-                          <span className="text-[13px] text-[#6E6E66]">%</span>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-
-            <div className="p-4 border-t-[2px] border-[#171714] flex flex-wrap items-center gap-3">
-              <button onClick={zapisz} disabled={zapisuje || !draft} className={btnPrimaryCls}>
+            {tabela()}
+            <div className="flex flex-wrap items-center gap-3 px-3.5 md:px-[18px] py-3.5 border-t-[2px] border-[#B7B6AE]">
+              <button type="button" onClick={zapisz} disabled={zapisuje || !draft} className={btnGlownyCls} data-zapisz-cel>
                 Zapisz cel
               </button>
               {draft && (
-                <button onClick={() => setDraft(null)} className={btnSecondaryCls}>
+                <button type="button" onClick={() => setDraft(null)} className={btnObrysCls}>
                   Anuluj
                 </button>
               )}
-              <p className="text-[12px] text-[#6E6E66] leading-snug flex-1 min-w-[280px]">
-                Oczekiwany utarg to Twój szacunek na typowy dzień tygodnia, nie cel
-                odgórny. Docelowy % kosztu pracy może różnić się dzień do dnia — wyżej w
-                spokojny wtorek, gdzie koszty stałe ważą więcej, niżej w sobotę, gdzie
-                wyższy utarg pozwala na niższy procent. Obu używa Grafik w widoku „Wg
-                budżetu”; tam da się je nadpisać na konkretny dzień.
+              {zmiany.length > 0 && (
+                <span className="text-[14px] font-bold text-[#8A5300]" data-zmiany-celu>
+                  Zmieniono: {zmiany.join(", ")}
+                </span>
+              )}
+              <p className={`${notaCls} basis-full m-0`}>
+                Budżet pracy = utarg × % kosztu{sredniKoszt ? ", w godzinach ÷ średni koszt godziny" : ""}. Grafik pokazuje go w widoku
+                „Wg budżetu”; na konkretny dzień nadpiszesz go niżej albo ołówkiem w siatce.
               </p>
             </div>
           </>
         )}
-      </div>
+      </Panel>
 
-      <div className={sectionCardCls}>
-        <div className={sectionHeaderCls}>
-          <span>Wyjątki — konkretne dni</span>
-          <button
-            onClick={() => setWyjatek(wyjatek ? null : pustyWyjatek())}
-            className="text-[13px] font-bold text-[#DE3A22] hover:opacity-70"
-          >
-            {wyjatek ? "Anuluj" : "+ Dodaj wyjątek"}
+      <Panel
+        tytul="Budżet na konkretne dni"
+        prawa={
+          <button type="button" onClick={() => setWyjatek(wyjatek ? null : pustyWyjatek())} className={dodajCls} data-dodaj-budzet-dnia>
+            <Plus size={17} /> {wyjatek ? "Anuluj" : "Dodaj dzień"}
           </button>
-        </div>
-
+        }
+      >
         {wyjatek && (
           <form
             onSubmit={zapiszWyjatek}
-            className="p-4 border-b-[2px] border-[#171714] bg-[#F1F1EE] grid md:grid-cols-4 gap-3 items-end"
+            className="grid grid-cols-2 md:grid-cols-[1fr_1fr_1fr_1fr_auto] gap-3 items-end p-3.5 border-b-[1.5px] border-[#DEDCD4] bg-[#F1F0EC]"
           >
-            <div>
-              <label className={statLabelCls}>Od dnia</label>
-              <input
-                type="date"
-                value={wyjatek.date_from}
-                onChange={(e) => setWyjatek({ ...wyjatek, date_from: e.target.value })}
-                className="w-full p-2 border-[2px] border-[#171714] rounded"
-                required
-              />
-            </div>
-            <div>
-              <label className={statLabelCls}>Do dnia (puste = jeden dzień)</label>
-              <input
-                type="date"
-                value={wyjatek.date_to}
-                onChange={(e) => setWyjatek({ ...wyjatek, date_to: e.target.value })}
-                className="w-full p-2 border-[2px] border-[#171714] rounded"
-              />
-            </div>
-            <div>
-              <label className={statLabelCls}>Utarg (zł)</label>
+            <label className="flex flex-col min-w-0">
+              <span className={etykietaCls}>Od dnia</span>
+              <input type="date" value={wyjatek.date_from} onChange={(e) => setWyjatek({ ...wyjatek, date_from: e.target.value })} className={`${poleCls} w-full`} required />
+            </label>
+            <label className="flex flex-col min-w-0">
+              <span className={etykietaCls}>Do dnia (puste = jeden)</span>
+              <input type="date" value={wyjatek.date_to} onChange={(e) => setWyjatek({ ...wyjatek, date_to: e.target.value })} className={`${poleCls} w-full`} />
+            </label>
+            <label className="flex flex-col min-w-0">
+              <span className={etykietaCls}>Utarg (zł)</span>
               <input
                 value={wyjatek.oczekiwany_utarg}
                 onChange={(e) => setWyjatek({ ...wyjatek, oczekiwany_utarg: e.target.value })}
-                className={inputCls}
-                placeholder="bez zmian"
+                className={`${poleCls} w-full text-right`}
+                placeholder="jak zwykle"
                 inputMode="decimal"
               />
-            </div>
-            <div className="flex items-end gap-2">
-              <div className="flex-1">
-                <label className={statLabelCls}>Cel (%)</label>
-                <input
-                  value={wyjatek.cel_koszt_pct}
-                  onChange={(e) => setWyjatek({ ...wyjatek, cel_koszt_pct: e.target.value })}
-                  className={inputCls}
-                  placeholder="bez zmian"
-                  inputMode="decimal"
-                />
-              </div>
-              <button type="submit" disabled={zapisuje} className={btnPrimaryCls}>
-                Zapisz
-              </button>
-            </div>
+            </label>
+            <label className="flex flex-col min-w-0">
+              <span className={etykietaCls}>Koszt pracy (%)</span>
+              <input
+                value={wyjatek.cel_koszt_pct}
+                onChange={(e) => setWyjatek({ ...wyjatek, cel_koszt_pct: e.target.value })}
+                className={`${poleCls} w-full text-right`}
+                placeholder="jak zwykle"
+                inputMode="decimal"
+              />
+            </label>
+            <button type="submit" disabled={zapisuje} className={`${btnGlownyCls} col-span-2 md:col-span-1`}>
+              Zapisz
+            </button>
           </form>
         )}
-
-        {wyjatkiLokalu.length === 0 ? (
-          <p className="p-4 text-[#6E6E66] text-sm">
-            Brak wyjątków. Wyjątek zmienia utarg albo procent na konkretny dzień —
-            sylwester, koncert w mieście, remont ulicy. To te same wiersze, które
-            powstają po kliknięciu w liczbę w siatce „Wg budżetu”.
+        {nadchodzaceDni.length === 0 ? (
+          <p className={`${notaCls} px-3.5 md:px-[18px] py-3.5 m-0`}>
+            Brak nadchodzących dni z innym budżetem — sylwester, koncert w mieście, remont ulicy. To te same wiersze, które powstają po
+            kliknięciu w liczbę w siatce „Wg budżetu”.
           </p>
         ) : (
-          wyjatkiLokalu.map((w) => (
-            <div
-              key={w.id}
-              className="px-4 py-2.5 border-t-[2px] border-[#E7E7E2] flex flex-wrap items-center gap-x-4 gap-y-1"
-            >
-              <span className="font-['Archivo'] font-bold text-[14px]">{dataLabel(w.date)}</span>
-              <span className="text-[13px] text-[#6E6E66]">
-                {w.oczekiwany_utarg != null ? `utarg ${zl(w.oczekiwany_utarg)}` : "utarg bez zmian"}
-                {" · "}
-                {w.cel_koszt_pct != null ? `cel ${w.cel_koszt_pct}%` : "cel bez zmian"}
-              </span>
-              {w.autor && <span className="text-[12px] text-[#8F8E86]">wpisał: {w.autor}</span>}
-              <button
-                onClick={() => usunWyjatek(w)}
-                className="ml-auto text-[#DE3A22] hover:opacity-70"
-                title="Usuń wyjątek — dzień wróci do wartości z zestawu"
+          nadchodzaceDni.map((w) => {
+            const [dzien, pod] = kafelDaty(w.date);
+            return (
+              <div
+                key={w.id}
+                className="grid grid-cols-[76px_1fr_auto] gap-3.5 items-center px-3.5 md:px-[18px] py-2.5 border-b-[1.5px] border-[#ECEBE6] last:border-b-0"
+                data-budzet-dnia={w.date}
               >
-                <Trash2 size={16} />
-              </button>
-            </div>
-          ))
+                <span className="text-center border-[2px] border-[#171714] rounded-[10px] py-1">
+                  <b className="block text-[16px] leading-[22px]">{dzien}</b>
+                  <small className="text-[13px] font-bold text-[#6E6E66]">{pod}</small>
+                </span>
+                <span className="min-w-0 text-[15px]">
+                  <b>{w.oczekiwany_utarg != null ? zl(w.oczekiwany_utarg) : "utarg jak zwykle"}</b>
+                  {" · "}
+                  {w.cel_koszt_pct != null ? `${w.cel_koszt_pct}% kosztu` : "% jak zwykle"}
+                  {w.autor && <small className="block text-[13px] text-[#6E6E66]">wpisał(a): {w.autor}</small>}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => usunWyjatek(w)}
+                  className={`${ikonaBtnCls} !text-[#DE3A22] hover:!border-[#DE3A22]`}
+                  title="Usuń — dzień wróci do wartości z zestawu"
+                  aria-label="Usuń budżet dnia"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            );
+          })
         )}
-      </div>
+      </Panel>
     </>
   );
 }

@@ -56,7 +56,7 @@ export const NAV_ITEMS = [
   },
   { key: "puls", label: "Puls", shortLabel: "Puls", Icon: BookOpen },
   { key: "godziny", label: "Rejestr Godzin", shortLabel: "Rejestr", Icon: FileText },
-  { key: "moja_praca", label: "Moja Praca", Icon: User },
+  { key: "moja_praca", label: "Moja praca", Icon: User },
   { key: "aktywni", label: "Aktywni", shortLabel: "Aktywni", Icon: Clock },
   // Skrzynka (0.51.0) zastąpiła Zgłoszenia i Powiadomienia — w TYM miejscu,
   // po Aktywnych (ustalenie właściciela; makieta stawiała ją przed Grafikiem).

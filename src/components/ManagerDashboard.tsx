@@ -17,6 +17,7 @@ import {
 import { api } from "../api/supabase";
 import { ustawHasloPracownika } from "../api/auth";
 import { sendToGoogleSheets } from "../api/googleSheets";
+import { createEmployeeNotification } from "../api/notifications";
 import {
   getShort,
   getDayOfWeek,
@@ -1067,6 +1068,23 @@ const ManagerDashboard = ({
     setIssues((prev) => prev.map((iss) => (iss.id === i.id ? i : iss)));
   };
 
+  // Odpowiedź na zgłoszenie problemu (0.67.0) — do tej pory pracownik pisał i
+  // nie dowiadywał się niczego, a na tablecie nie widzi nawet statusu (RLS,
+  // patrz api.dodajBezOdczytu). Treść żyje tylko w wiadomości: `issues` nie ma
+  // kolumny na odpowiedź, a wiadomość i tak jest tym, co pracownik przeczyta.
+  // Temat skracamy — pełne zgłoszenie autor zna.
+  const odpowiedzNaZgloszenie = async (issue, tekst, zamknij) => {
+    if (!issue.user_name) throw new Error("Zgłoszenie anonimowe — nie ma komu odpowiedzieć.");
+    const temat = (issue.issue_text || "").trim();
+    const krotko = temat.length > 60 ? `${temat.slice(0, 57)}…` : temat;
+    await createEmployeeNotification(
+      issue.user_name,
+      `${currentUser.name} odpowiedział(a) na Twoje zgłoszenie „${krotko}”: ${tekst.trim()}`,
+      "issue_reply"
+    );
+    if (zamknij && issue.status === "nowe") await resolveIssue(issue.id);
+  };
+
   // "Utwórz zadanie" w Skrzynce — od 0.56.0 trafia do "Moich zadań"
   // (`zadania_moje`, utils/mojeZadania.ts), a nie do `tasks`: sprawa ze
   // zgłoszenia jest jednorazowa, a zadanie bez bloku wracało codziennie jak
@@ -2076,6 +2094,17 @@ const ManagerDashboard = ({
             planShifts={planShifts}
             showMsg={showMsg}
             onEditShift={openEditShift}
+            onDopisz={(plan) =>
+              setEditingShift({
+                id: null,
+                user_id: currentUser.id,
+                user_name: currentUser.name,
+                lokal: plan.lokal,
+                stanowisko: plan.stanowisko,
+                start_time: new Date(plan.date + "T00:00:00"),
+                end_time: null,
+              })
+            }
           />
         )}
 
@@ -2114,6 +2143,7 @@ const ManagerDashboard = ({
             startowaZakladka={skrzynkaStart}
             onResolveAbsence={handleResolveAbsence}
             onResolveIssue={resolveIssue}
+            onReplyIssue={odpowiedzNaZgloszenie}
             onCreateTaskFromIssue={handleCreateTaskFromIssue}
             onMarkRead={oznaczPrzeczytane}
             onOpenPuls={goToPuls}

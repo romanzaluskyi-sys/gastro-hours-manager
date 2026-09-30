@@ -23,6 +23,65 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.69.0",
+    date: "2026-09-30",
+    items: [
+      "Moja praca: z lewej zapis zmiany (najbliższa zmiana, Zaczynam teraz / Cała zmiana), z prawej miesiąc.",
+      "Jedna lista „grafik vs faktycznie” z kolorowym paskiem: zgodnie, inaczej niż grafik, brak zapisu.",
+      "„Dopisz” przy dniu bez zapisu otwiera okno wpisu z godzinami z grafiku; filtr „Bez zapisu”.",
+    ],
+  },
+  {
+    version: "0.68.0",
+    date: "2026-09-30",
+    items: [
+      "Konfiguracja grafiku: zakładki Obsada · Budżet · Wyjątki, wersje zestawów jako chipy, godziny otwarcia w karcie z boku.",
+      "Obsada: siatka dni × godziny (ile osób w którą godzinę, os·h), wymagania wg stanowisk, dodawanie w miejscu z − / + i podglądem.",
+      "Budżet: budżet pracy w zł i godzinach obok tego, czego wymaga obsada. Wyjątki: lista z kaflem daty, edycja w miejscu, kalendarz.",
+    ],
+  },
+  {
+    version: "0.67.0",
+    date: "2026-09-30",
+    items: [
+      "Skrzynka: „Odpowiedz” przy zgłoszeniu pod imieniem — odpowiedź trafia do Wiadomości pracownika, zgłoszenie domyślnie się zamyka.",
+      "Pracownik widzi ją jako „Odpowiedź na Twoje zgłoszenie” z filtrem „Zgłoszenia”. Anonimowym nie da się odpowiedzieć.",
+    ],
+  },
+  {
+    version: "0.66.1",
+    date: "2026-09-30",
+    items: [
+      "Zgłoś problem działa na Tablecie Służbowym i anonimowo — do tej pory kończyło się błędem „row-level security”.",
+    ],
+  },
+  {
+    version: "0.66.0",
+    date: "2026-09-29",
+    items: [
+      "Więcej pracownika: duże wiersze Zgłoś (z liczbą spraw, które czekają), Wiadomości, Wróć do listy osób.",
+      "Na dole urządzenie („Tablet Służbowy · lokal” / „Twój telefon”), ostrzeżenie i „Wyloguj” z potwierdzeniem — domyślnie „Nie, zostaw zalogowany”.",
+    ],
+  },
+  {
+    version: "0.65.0",
+    date: "2026-09-29",
+    items: [
+      "Wiadomości pracownika: filtry (Grafik, Giełda, Korekty i wolne), podział na dni, godzina bez sekund.",
+      "Karta z ikoną i kolorem rodzaju, krótkim tytułem i plakietką: zatwierdzone / odrzucone / do sprawdzenia.",
+      "Akcja w wiadomości: „Zobacz grafik”, „Popraw zmianę” (przy braku odbicia wyróżnione); nowe z czerwoną kropką i paskiem „Przeczytane”.",
+    ],
+  },
+  {
+    version: "0.64.0",
+    date: "2026-09-29",
+    items: [
+      "Zgłoś: trzy duże kafle — Popraw zmianę, Wolne, Zgłoś problem; przycisk wysyłki na dole, pod kciukiem.",
+      "Popraw zmianę: lista zmian z 3 tygodni, zmienione pole podświetlone z „było”, wyliczenie godzin po poprawce, powód jednym dotknięciem.",
+      "Wolne: kalendarz od–do z kropką przy dniach ze zmianą; na zleceniu tylko niedostępność. Problem: kategoria, anonimowo bez wyboru zmiany; „Moje zgłoszenia” ze statusem.",
+    ],
+  },
+  {
     version: "0.63.0",
     date: "2026-09-29",
     items: [

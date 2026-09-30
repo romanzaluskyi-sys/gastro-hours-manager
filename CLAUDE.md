@@ -547,7 +547,9 @@ src/
   types.ts                   — (jeszcze nie istnieje — miejsce na wspólne typy przy przyszłej migracji)
   api/
     supabase.ts               — obiekt `api` (get z paginacją/post/patch/
-                                  delete/patchByFilter/rpc). `rpc` istnieje po
+                                  delete/patchByFilter/rpc/dodajBezOdczytu —
+                                  zapis bez RETURNING, patrz "Tablet a
+                                  `issues`" niżej). `rpc` istnieje po
                                   to, żeby zadać bazie pytanie BEZ pobierania
                                   danych, na których opiera się odpowiedź —
                                   i rozróżnia błąd wywołania od odpowiedzi "nie" 
@@ -711,8 +713,11 @@ src/
                                     przepisać na następcę albo zdjąć
       GrafikZmianaModal.tsx         PANEL przypisania zmiany (kandydaci, uwagi) +
                                     modal blokady — patrz 5g
-      GrafikWymagania.tsx           wymagania obsady, godziny otwarcia, wyjątki,
-                                    budżet (czwarty podwidok)
+      GrafikWymagania.tsx           Konfiguracja grafiku: zakładki Obsada
+                                    (wymagania + godziny otwarcia), Budżet,
+                                    Wyjątki — patrz 5h
+      grafikKonfigWspolne.tsx       klocki Konfiguracji (pasek wersji, zakładki,
+                                    siatka liczona ileWGodzinie/osGodzinDnia)
       GrafikBudzet.tsx              trzy karty nad siatką + wiersze układu
                                     "Wg budżetu". ⚠️ NIE rysuje nagłówka dni —
                                     ten zostaje w GrafikTydzien i jest wspólny
@@ -812,8 +817,8 @@ dashboardy przez wspólny komponent `EmployeeSessionScreens` w
   `EmployeeSessionScreens` z `onBack` ustawionym na powrót do tej listy —
   stąd w nagłówku każdego ekranu przycisk "< Zmień" (bez stosu "wstecz",
   zawsze prosto do listy — świadoma decyzja z sesji projektowej), a w
-  "Więcej" wiersz "Wróć do listy osób" i notatka "Uwaga" o tym, że
-  urządzenie zostaje zalogowane na stałe.
+  "Więcej" wiersz "Wróć do listy osób" i ostrzeżenie o tym, że
+  urządzenie zostaje zalogowane na stałe (od 0.66.0 — patrz „Więcej” niżej).
 - **`PersonalDashboard.tsx`** (osobisty telefon, role `closed`/`open`,
   `closed_dashboard`) — `currentUser` to już konkretna osoba, więc od razu
   `EmployeeSessionScreens` BEZ `onBack` — nagłówki bez "< Zmień", "Więcej"
@@ -833,9 +838,8 @@ w `EmployeeSessionScreens` — NIE reużywa samego komponentu `TimeEntryForm`,
 bo ten renderuje własny picker pracownika, którego tu nie chcemy.
 **Zadania**: placeholder "w budowie" — moduł Zadania z Roadmapy punkt 2
 jeszcze nie istnieje, świadomie NIE ma fałszywego, nieinteraktywnego
-checklisty. **Więcej**: Grafik-placeholder, Zgłoś, Wiadomości, mały
-podkreślony link "Wyloguj" (nie duży przycisk — na kiosku wylogowanie
-wymaga ponownego Email+PIN, na koncie osobistym to zwykłe wylogowanie).
+checklisty. **Więcej**: opis tego akapitu jest historyczny (zakładki
+Zadania i Więcej przebudowano później — patrz „układ z makiety” niżej).
 
 Reużywa bez zmian: `findOverlappingShift`, `getTodaysShiftsForUser`,
 `sendToGoogleSheets`, formattery z `utils/format.ts`, oraz ten sam wzorzec
@@ -864,8 +868,9 @@ razu wpuszcza go do jego sesji. Pełny opis: "Pracownik na próbę" niżej.
 
 ⚠️ **Ekran startowy — układ z makiety właściciela (0.58.0, KioskStartMobile /
 KioskStartTablet).** Przebudowa ekranów pracownika idzie BLOK PO BLOKU (prośba
-właściciela) — to jest pierwszy; ekrany sesji (`employeeSessionShared.tsx`)
-mają jeszcze stary wygląd. Rzeczy, których nie widać:
+właściciela) — to był pierwszy; ostatni (Więcej) wszedł w 0.66.0 i od tej
+wersji wszystkie ekrany pracownika mają nowy wygląd (poza „Zamknięciem dnia”,
+które jest ekranem Pulsu). Rzeczy, których nie widać:
 - **Grupy liczą się z `stanDnia`** — tego samego, co liczniki nad listą: Na
   zmianie (`na_zmianie`), Dziś w grafiku (`oczekiwany`), Pozostali
   (`zakonczyl` + `wolne`). Pusta grupa się nie rysuje.
@@ -971,6 +976,69 @@ handlery i stany kreatora: `swapConfirmId`/`swapTyp`/`swapTarget`/
   nakładany, a 15 px zabrałoby wąskiemu wierszowi miejsce.
 - Komórka miesiąca bez zmiany, ale z zatwierdzonym urlopem / niedostępnością
   (`wolneNa`), ma własny kolor i podpis — zmiana w grafiku ma pierwszeństwo.
+
+⚠️ **Zgłoś — układ z makiety (0.64.0, EmployeeRequestsMobile /
+EmployeeRequestsTablet).** Zapis bez zmian (`handleSendKorekta` /
+`handleSendAbsence` / `handleSendZgloszenie`), zmienił się wybór. Rzeczy,
+których nie widać:
+- **`zgCorrectionShiftId = null` znaczy „jeszcze nie wybrano”** — ekran
+  pokazuje listę zmian z 3 tygodni. Zmianę z chorągiewki Raportu szukamy w
+  CAŁYM `shifts` (Raport sięga starszych miesięcy), nie tylko w tej liście.
+- **Powód korekty i kategoria problemu idą na POCZĄTEK `issue_text`** —
+  `issues` nie ma na nie kolumn. Kierownik czyta je w Skrzynce jak treść.
+- ⚠️ **Anonimowe zgłoszenie zapisuje się BEZ `shift_id`** (do 0.63.0 szło z
+  nim): data i godzina zmiany wskazują osobę. Ekran przy „Anonimowo” chowa
+  wybór zmiany, a zapis i tak zeruje pole.
+- **Urlop tylko przy umowie o pracę** (`moznaUrlop`): zlecenie i B2B widzą samą
+  niedostępność. Konto BEZ danych o umowie dostaje oba — brak danych to nie
+  powód, żeby zabrać urlop.
+- **Kalendarz wolnego trzyma dni w kolejności kliknięć** (`zgAbsStart`,
+  `zgAbsEnd`), porządkuje je dopiero zapis. Dni minione są wyłączone. Kropka
+  „masz zmianę” tylko z blokiem GRAFIK (prywatny telefon bez grafiku jej nie
+  pokaże).
+- **Świadomie NIE ma z makiety**: „Tylko część dnia” przy niedostępności
+  (`absences` nie ma godzin, a Grafik blokuje dzień w całości — zapis
+  „16–21” w notatce kłamałby o dostępności) i zdjęcia przy problemie (brak
+  miejsca na pliki).
+- Typ spoza bloków lokalu (prywatny telefon) reset ekranu zamienia na pierwszy
+  dostępny — wcześniej wejście z „Więcej” dawało „Zgłoś problem”, nawet gdy
+  lokal go wyłączył.
+- `harness-kiosk.html` przechodzi wszystkie trzy drogi (anonimowo bez
+  `shift_id`, korekta z listy, zakres wolnego klikany od tyłu, zlecenie bez
+  urlopu — Gosia ma `typ_umowy: "zlecenie"`).
+
+⚠️ **Wiadomości — układ z makiety (0.65.0, EmployeeMessagesMobile /
+EmployeeMessagesTablet).** Rzeczy, których nie widać:
+- **Rodzaj wiadomości liczy `opisWiadomosci(n)`** (poziom modułu w
+  `employeeSessionShared.tsx`): kategoria filtra, ton, ikona, tytuł, akcja.
+  Typy w bazie są ogólne (`swap` = propozycja I zatwierdzenie), więc ton i
+  tytuł idą z dopasowania TREŚCI, którą piszą `utils/swaps.ts`,
+  `corrections.ts`, `absences.ts`, `odbicia.ts`, `porzucone.ts` i crony.
+  ⚠️ **Zmieniając tam zdanie albo dokładając typ, dopisz przypadek w
+  `opisWiadomosci`** — nieznane spada na „Wiadomość”, nie znika.
+- **„Przeczytane” w bazie dalej przy WEJŚCIU** (znaczek przy „Więcej” i
+  koperta na liście osób gasną od razu, jak przed 0.65.0). Wyróżnienie „nowa”
+  trzyma `noweWiadomosci` — lista nieprzeczytanych w chwili wejścia — do
+  dotknięcia karty albo „Przeczytane”.
+- **Filtr pokazuje się tylko dla rodzaju, który jest na liście.** „Zgłoszenia”
+  to odpowiedzi kierownika na zgłoszenie problemu (`type = 'issue_reply'`, od
+  0.67.0). Terminy sanepid/umowa są tylko we „Wszystkie”.
+- **Akcje** tylko przy włączonym bloku: „Zobacz grafik” (GRAFIK), „Popraw
+  zmianę” (RAPORT — otwiera Zgłoś na liście zmian przez `zgTypNaWejscie`).
+
+⚠️ **Więcej — układ z makiety (0.66.0, EmployeeMoreMobile /
+EmployeeMoreTablet).**
+- **„Wyloguj” to duży czerwony obrys i ZAWSZE pyta drugi raz** (arkusz,
+  czarną akcją domyślną jest „Nie, zostaw zalogowany”). Wylogowany tablet
+  gaśnie dla całego lokalu do czasu, aż kierownik wpisze dane kiosku —
+  dlatego ostrzeżenie i pytanie stoją tuż obok.
+- **Tekst ostrzeżenia zależy od `onBack`** (wspólny tablet / własny
+  telefon). Prop `deviceNote` z KioskDashboard usunięty.
+- **„N czeka” przy Zgłoś liczy te same sprawy co „Moje zgłoszenia”**:
+  korekty i zgłoszenia pod imieniem bez rozstrzygnięcia + własne wnioski o
+  wolne `pending`. Anonimowe się nie liczą.
+- „Zamknięcie dnia” (prawo `puls_do`) zostało jako wiersz, choć makieta go
+  nie ma — to istniejąca funkcja.
 
 **Blokada PIN-em na kiosku** — zaimplementowana (patrz niżej, Schemat
 Supabase i sekcja "Panel kierownika"), TYLKO w `KioskDashboard.tsx`.
@@ -1169,6 +1237,13 @@ Informacje / Archiwum, filtr typu Wnioski / Zgłoszenia / System.
   sklejone w jedną pozycję z „×N"; starsze idą do Archiwum. Archiwum ma też
   rozwiązane zgłoszenia i wnioski rozstrzygnięte w ostatnich 60 dniach.
 - **Zgłoszenie anonimowe ma treść ukrytą do „Pokaż"** — bywa o innej osobie.
+- ⚠️ **„Odpowiedz" przy zgłoszeniu pod imieniem (0.67.0)** wysyła pracownikowi
+  wiadomość `type = 'issue_reply'` (`odpowiedzNaZgloszenie` w
+  ManagerDashboard) i domyślnie zamyka zgłoszenie. Treść odpowiedzi żyje TYLKO
+  w wiadomości — `issues` nie ma na nią kolumny, więc Archiwum nie pokaże, co
+  odpisano. Anonimowe nie ma przycisku: nie ma komu odpowiedzieć. To jedyna
+  informacja zwrotna dla osoby z tabletu — tablet nie widzi zgłoszeń problemów
+  (RLS), więc i ich statusu.
 - Stare klucze `zgloszenia`/`powiadomienia` przekierowuje `setTab` w
   ManagerDashboard (dzwonek → Skrzynka na Informacjach). `Zgloszenia.tsx`
   i powiązany blok zostały w repo nieużywane — do usunięcia po okresie
@@ -1198,6 +1273,28 @@ grupowanie i stany. Rzeczy, których nie widać:
 ⚠️ **Pracownicy idą za `selectedLokal` z górnego paska** (`wybranyLokal` w
 `Pracownicy.tsx`). Do lokalu należy osoba z `default_lokal` ALBO z
 `allowed_lokale` — tablety mają pusty `default_lokal`.
+
+⚠️ **Moja praca — układ z makiety właściciela (0.69.0, MyWorkDesktop /
+MyWorkMobile).** `manager/MojaPraca.tsx`: z lewej zapis zmiany (od `xl`
+przyklejony), z prawej miesiąc — JEDNA lista „grafik vs faktycznie” zamiast
+osobnego raportu i grafiku. Rzeczy, których nie widać:
+- **Zapis zmiany bez zmian w logice** (kolizje w stanie i w bazie, arkusz
+  Google). Kafle idą za `tryb_wpisu` lokalu (`regulyWpisu`), ale okien
+  tolerancji kierownik NIE ma — to on rozstrzyga korekty. „Zaczynam teraz”
+  zawsze na dziś; dzień wybiera się tylko przy „Cała zmiana”. Duża godzina to
+  `PoleGodziny` (widoczne pole), nie przezroczysty input z makiety.
+- **Parowanie jak w Rejestrze**: per dzień, i-ta zmiana z i-tym wpisem
+  OPUBLIKOWANEGO grafiku (`publishedShiftsFor`), różnica od 15 min. Urlop
+  osobnym wierszem, bez parowania.
+- **„Brak zapisu” tylko w dniach, które minęły** — dziś załatwia karta z
+  lewej. Kafel „Bez zapisu godzin” i filtr liczą te same wiersze (sprawdza
+  `harness-panel.html`).
+- **„Dopisz” = `onDopisz` → `WpisGodzinModal`** z `user_id` kierownika i
+  dniem z grafiku. Okno przy nowym wpisie dla WSKAZANEJ osoby samo bierze
+  godziny z jej grafiku i nie otwiera listy osób. Zapis idzie
+  `zapiszWpisGodzin` (kolizje, `shift_edits` `manual_add`).
+- Zdanie o normie (`podsumowanieMiesiaca`) zostało pod kaflami — makieta go
+  nie ma, ale to ta sama liczba co w Raporcie pracownika.
 
 **Zatwierdzanie zmian** (`ZatwierdzanieZmian.tsx` + `utils/corrections.ts`)
 — kolejka decyzji dla `issues.type === "correction"` (patrz "Zgłoszenia i
@@ -2598,9 +2695,17 @@ Postgres sprawdza zwracany wiersz polityką SELECT. Polityka z `0033` nie
 pokazywała tabletowi zgłoszeń jego ludzi, więc korekta wysłana z tabletu była
 odrzucana w CAŁOŚCI — `with check (true)` tego nie ratuje. `0037` wpuszcza
 rolę `kiosk` do KOREKT osób z jej lokalu; zgłoszenia problemów zostają poza
-zasięgiem tabletu, a ich nieanonimowa wersja z tabletu ma ten sam problem —
-to osobna decyzja. **Każda nowa tabela, do której tablet pisze w imieniu
-pracownika, potrzebuje SELECT dla tabletu na tych wierszach.**
+zasięgiem tabletu. ⚠️ **Zgłoszenie problemu zapisuje się od 0.66.1 przez
+`api.dodajBezOdczytu`** (`Prefer: return=minimal`, bez RETURNING, więc bez
+sprawdzania SELECT-em). Do 0.66.0 szło `api.post` i padało z „new row violates
+row-level security policy" — na tablecie zawsze, a ANONIMOWE także na
+prywatnym telefonie (wiersza bez `user_id` nie widzi nikt poza kierownikiem).
+Świadomie nie poszerzyliśmy odczytu: w zgłoszeniu bywa skarga na kogoś z tej
+samej sali. Id nadaje przeglądarka (`nowyUuid`), a lokalnie trzymamy tylko
+zgłoszenie pod imieniem z prywatnego telefonu — reszty ta sesja i tak nie
+zobaczy po pollu. **Każda nowa tabela, do której tablet pisze w imieniu
+pracownika, potrzebuje SELECT dla tabletu na tych wierszach — albo zapisu
+przez `dodajBezOdczytu`.**
 
 ⚠️ Kontrola jest w przeglądarce. Twardy zamek (trigger na `shifts`) — razem z
 zawężeniem `shifts` w Etapie 3c-2.
@@ -3668,6 +3773,38 @@ nie widać:
   widok jednego dnia z tej samej arytmetyki (`mobilnyDzien` w LokalSection).
 - Kolor znacznika stanowiska to PEŁNY `stanowiska.kolor` z białym tekstem —
   pierwsze miejsce, które go używa (reszta aplikacji: jasny odcień).
+
+### 5h. Konfiguracja grafiku — układ z makiety właściciela (0.68.0)
+
+ScheduleConfigObsada / ScheduleConfigBudget / ScheduleConfigExceptions /
+ScheduleConfigNewException / ScheduleConfigMobile. Pliki: `GrafikWymagania.tsx`
+(host, Obsada, Wyjątki), `GrafikBudzetKonfiguracja.tsx` (Budżet),
+`grafikKonfigWspolne.tsx` (klocki). ⚠️ Prośba właściciela: **nowy wygląd, bez
+nowych funkcji** — zapis idzie tymi samymi wywołaniami co przed 0.68.0.
+Rzeczy, których nie widać:
+- **Trzy zakładki zamiast czterech przycisków**; godziny otwarcia to karta z
+  boku Obsady („Zmień” → 7 wierszy). Wersje zestawów to chipy (oś czasu),
+  usuwanie w menu ⋯ z paskiem potwierdzenia, który mówi SKUTEK (dawny
+  `window.confirm` z tym samym tekstem).
+- **Siatka dni × godziny, os·h, „start przed otwarciem” i podgląd „najwięcej N
+  osób” są LICZONE** (`ileWGodzinie`, `osGodzinDnia`) z tych samych wymagań i
+  niczego nie zapisują. Wymagania się sumują — siatka pokazuje to bez słów.
+- ⚠️ **Wyjątek BEZ własnych wymagań dalej znaczy „obsada jak zwykle”**
+  (`getRulesForDate`). Makieta miała „Zacznij od: wymagań z miesiąca / od zera
+  / zamknięty” — „od zera” znaczyłoby inaczej niż baza, a kopia wymagań to nowa
+  funkcja. Są dwa warianty: „Obsada jak zwykle” i „Lokal zamknięty”.
+- **Budżet na konkretny dzień zostaje w zakładce Budżet** (makieta: w
+  Wyjątkach). To osobna tabela (`grafik_budzet_dni`), niezwiązana z wyjątkiem
+  godzin; w Wyjątkach widać go tylko jako tag przy pozycji.
+- **„Budżet pracy ≈ h” dzieli przez średni koszt godziny osób z
+  `default_lokal` tego lokalu** (`kosztGodziny`, ta sama reguła co w Grafiku).
+  Bez stawek w kartach — sam budżet w zł, bez statusu „mieści się”. „Obsada
+  wymaga” = zestaw wymagań obowiązujący w czasie oglądanego celu.
+- **Świadomie NIE ma z makiety**: „Święta i niedziele handlowe → Dodaj / Dodaj
+  wszystkie 2026” i „Kopiuj na kolejny miesiąc” w menu ⋯ (to samo robi „Nowy
+  zestaw od…” z kopią). Nowe funkcje — tylko na prośbę.
+- `harness-panel.html` przechodzi Obsadę (siatka, grupy, pułapka `null` =
+  cały tydzień, dodanie z − / +), Wyjątki i Budżet (7 dni, „Zmieniono”, zapis).
 
 ### 5d. Grafik — świadomie NIE zrobione
 - Potwierdzenia odczytu grafiku przez pracownika ("przeczytało 12 z 14").

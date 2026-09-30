@@ -5,6 +5,132 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.69.0 — 2026-09-30
+
+- **Moja praca — nowy wygląd według makiety.** Zapis godzin, raport i grafik
+  kierownika w jednym widoku.
+  - **Z lewej zapis zmiany**: najbliższa zmiana z grafiku, kafle „Zaczynam
+    teraz” / „Cała zmiana” (jak u pracownika — lokal może wymusić jeden
+    sposób), lokal i stanowisko (domyślnie z dzisiejszego grafiku), duża
+    godzina i przycisk z godziną w nazwie. Na komputerze karta stoi w miejscu
+    przy przewijaniu miesiąca.
+  - **Z prawej miesiąc**: strzałki między miesiącami, kafle Przepracowane /
+    W grafiku / **Bez zapisu godzin**, a pod nimi JEDNA lista „grafik vs
+    faktycznie” zamiast osobnego raportu i grafiku: pasek zielony — zgodnie,
+    czarny — inaczej niż grafik albo poza grafikiem, bursztynowy — brak zapisu.
+  - **„Dopisz”** przy dniu z grafiku bez zapisu otwiera okno wpisu z Twoim
+    imieniem i godzinami z grafiku; ołówek poprawia zapisany wpis. Filtr „Bez
+    zapisu” pokazuje same braki.
+
+## 0.68.0 — 2026-09-30
+
+- **Konfiguracja grafiku — nowy wygląd według makiety.** Te same ustawienia,
+  czytelniej ułożone; nic nie zmienia się w tym, jak liczy się obsada i budżet.
+  - **Trzy zakładki**: Obsada · Budżet · Wyjątki (z liczbą nadchodzących).
+    Godziny otwarcia są w karcie obok Obsady.
+  - **Wersje zestawów jako chipy** („od wrz 2026 · obowiązuje” › „od paź
+    2026”), „Nowy zestaw od…” z wyborem „Kopia bieżącego” / „Pusty”.
+    Usunięcie w menu ⋯ — przed kliknięciem widać, co się stanie.
+  - **Obsada: siatka dni × godziny** — w każdej godzinie suma ludzi ze
+    wszystkich wymagań, odcienie zieleni, os·h na dzień, godziny poza otwarciem
+    zakreskowane. Pod spodem **wymagania wg stanowisk** z os·h na tydzień,
+    „start przed otwarciem”, edycja i dodawanie w miejscu: dni kaflami, − / +,
+    podgląd „najwięcej 3 osoby”.
+  - **Budżet**: tabela tygodnia — utarg, średnia z Pulsu z „Użyj”, % kosztu,
+    **budżet pracy w zł i ≈ godzinach** (średni koszt godziny z Pracowników) i
+    **ile wymaga obsada** — „mieści się · X h zapasu” albo „+X h ponad”. Przy
+    przycisku widać, co zmieniono. Budżet na konkretne dni — niżej, jak dotąd.
+  - **Wyjątki**: data jako kafel, nazwa i tagi (godziny, wymagania, budżet,
+    „lokal zamknięty”), edycja w miejscu z obsadą tego dnia, kalendarz miesiąca
+    obok. Nowy wyjątek: „Obsada jak zwykle” albo „Lokal zamknięty”.
+  - Na telefonie: zakładki na całą szerokość, siatka w wersji kompaktowej,
+    budżet jako karta na dzień, nowy wyjątek jako arkusz od dołu.
+
+## 0.67.0 — 2026-09-30
+
+- **Odpowiedź na zgłoszenie.** W Skrzynce przy zgłoszeniu pod imieniem jest
+  **„Odpowiedz”**: pole na odpowiedź i „Zamknij zgłoszenie” (zaznaczone).
+  Odpowiedź trafia do Wiadomości pracownika jako niebieska karta
+  **„Odpowiedź na Twoje zgłoszenie”**, z nowym filtrem „Zgłoszenia”. Do tej
+  pory pracownik wysyłał problem i nie dowiadywał się niczego — a na Tablecie
+  Służbowym nie widział nawet, czy zgłoszenie rozwiązano.
+- Zgłoszenie anonimowe nie ma „Odpowiedz” — nie ma komu odpowiedzieć.
+
+## 0.66.1 — 2026-09-30
+
+- **„Zgłoś problem” znowu się wysyła.** Na Tablecie Służbowym każde
+  zgłoszenie problemu, a na prywatnym telefonie każde anonimowe, kończyło się
+  komunikatem „Błąd połączenia: new row violates row-level security policy”.
+  Korekty i wnioski o wolne działały. Zgłoszenie dochodzi teraz do kierownika,
+  a tablet dalej nie widzi cudzych zgłoszeń (bywa w nich skarga na kogoś z tej
+  samej sali).
+
+## 0.66.0 — 2026-09-29
+
+- **Więcej — nowy wygląd według makiety** (Tablet Służbowy i prywatny
+  telefon). Ostatni krok przebudowy — wszystkie ekrany pracownika mają już
+  nowy wygląd.
+  - **Duże wiersze z ikoną i podpisem**: Zgłoś („popraw zmianę · wolne ·
+    problem · 2 czeka”), Zamknięcie dnia (gdy ktoś ma to prawo), Wiadomości
+    (z liczbą nowych), Wróć do listy osób (tylko tablet, przerywana ramka).
+  - **Na dole urządzenie**: „Tablet Służbowy · lokal” albo „Twój telefon ·
+    konto”, pomarańczowe ostrzeżenie (tablet: zalogowany na stałe, ponowne
+    logowanie danymi kiosku; żeby oddać tablet — „Wróć do listy osób”) i
+    wersja aplikacji. Na tablecie lista po lewej, urządzenie po prawej.
+  - **„Wyloguj urządzenie” pyta drugi raz**: domyślnie „Nie, zostaw
+    zalogowany”, wylogowanie to osobny, czerwony przycisk. Wcześniej jedno
+    dotknięcie małego linku od razu wylogowywało tablet całego lokalu.
+
+## 0.65.0 — 2026-09-29
+
+- **Wiadomości — nowy wygląd według makiety** (Tablet Służbowy i prywatny
+  telefon). Ósmy krok przebudowy ekranów pracownika.
+  - **Filtry**: Wszystkie · Grafik · Giełda · Korekty i wolne — z liczbą
+    nowych. Pokazują się tylko te, w których coś jest; na telefonie
+    przewijane w bok.
+  - **Podział na dni** („Dziś”, „Wczoraj”, „22 wrz”) i sama godzina, bez
+    sekund.
+  - **Karta**: ikona rodzaju w kolorowym kole (szare — informacja, zielone —
+    zatwierdzone, czerwone — odrzucone, pomarańczowe — do sprawdzenia,
+    niebieskie — odpowiedź kierownika), krótki tytuł („Zamiana
+    zatwierdzona”, „Brak odbicia”, „Wniosek o wolne odrzucony”…), plakietka
+    stanu i dotychczasowa treść pod spodem.
+  - **Akcja w wiadomości**: „Zobacz grafik ›” przy grafiku i propozycjach
+    zamiany, „Popraw zmianę ›” przy braku odbicia i zmianie bez zakończenia
+    (czarna, wyróżniona).
+  - **Nowe** mają czarną ramkę, pogrubiony tytuł i czerwoną kropkę, a nad
+    listą pasek „2 nowe wiadomości · Przeczytane”. Znaczek przy „Więcej”
+    gaśnie jak dotąd od razu po wejściu.
+
+## 0.64.0 — 2026-09-29
+
+- **Zgłoś — nowy wygląd według makiety** (Tablet Służbowy i prywatny
+  telefon). Siódmy krok przebudowy ekranów pracownika.
+  - **Trzy duże kafle**: Popraw zmianę, Wolne, Zgłoś problem. Przycisk
+    „Wyślij …” na telefonie stoi nad dolnym paskiem, na tablecie pod
+    formularzem. Na telefonie imię stoi nad tytułem, żeby „Wniosek o wolne”
+    się nie ucinał.
+  - **Popraw zmianę**: zamiast listy rozwijanej — **Twoje zmiany z ostatnich
+    3 tygodni** (z „czeka” przy już zgłoszonej) i **„Zmiany nie ma na
+    liście”** (data, lokal, stanowisko). Z chorągiewki w Raporcie zmiana jest
+    od razu wybrana („z Raportu”). Zmienione pole godziny jest podświetlone z
+    „było 16:00”, pod spodem **„Po poprawce 13,5 h · +5,5 h”**. Powód jednym
+    dotknięciem, komentarz opcjonalny. Dzień, lokal i stanowisko dalej da się
+    poprawić („Inny dzień, lokal albo stanowisko?”). Wysłanie korekty, w której
+    nic się nie zmieniło, mówi o tym wprost.
+  - **Wolne**: **kalendarz** — dotknij pierwszy dzień, potem ostatni; kropka =
+    masz tego dnia zmianę. Podsumowanie „5–9 października · 5 dni”, przy
+    urlopie „5 dni roboczych = 40 h”, i ostrzeżenie, gdy w wybranych dniach
+    stoją zmiany z grafiku. **Na zleceniu (i B2B) urlopu nie ma** — zostaje
+    sama niedostępność. Dni minione są wyłączone.
+  - **Zgłoś problem**: kto zgłasza jako dwa kafle (pod imieniem / anonimowo),
+    **kategoria** chipami. **Anonimowo nie wybiera się zmiany** — i zmiana nie
+    idzie już z anonimowym zgłoszeniem do bazy (data i godzina zmiany
+    wskazywały osobę).
+  - **Moje zgłoszenia** — korekty, zgłoszenia i wnioski o wolne ze statusem
+    (czeka / rozpatrzona / zatwierdzony / odrzucony): na tablecie stale z
+    prawej, na telefonie pod listą zmian.
+
 ## 0.63.0 — 2026-09-29
 
 - **Zadania pracownika — nowy wygląd według makiety** (Tablet Służbowy i
