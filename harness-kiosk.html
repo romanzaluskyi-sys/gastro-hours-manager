@@ -275,6 +275,8 @@ const poprzedniMiesiac = (h) => {
             message: "Roman zatwierdził(a) zamianę — pracujesz 2026-10-02 10:00–18:00 w lokalu Ceglana." },
           { id: "w4", ...f, type: "absence_resolved", is_read: true, created_at: temu(4, 15),
             message: "Roman odrzucił(a) Twój wniosek o urlop (19.10.2026–20.10.2026)." },
+          { id: "w6", ...f, type: "issue_reply", is_read: true, created_at: temu(5, 10),
+            message: "Roman odpowiedział(a) na Twoje zgłoszenie „Zepsuta zmywarka”: serwis jutro o 9:00." },
           { id: "w5", user_name: "Filip", action: "edit", actor_name: "Roman", shift_date: "2026-09-20",
             old_start: "08:00", old_end: "14:00", new_start: "08:00", new_end: "16:00",
             is_read: true, created_at: temu(6, 18) },
@@ -940,6 +942,10 @@ const poprzedniMiesiac = (h) => {
         document.querySelector('#app [data-filtr-wiadomosci="gie"]').dispatchEvent(new MouseEvent("click", { bubbles: true }));
         await czekaj(200);
         sprawdz("filtr „Giełda” zostawia samą zamianę", karty().length === 1 && widac("Zamiana zatwierdzona"));
+        document.querySelector('#app [data-filtr-wiadomosci="zgl"]').dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(200);
+        sprawdz("filtr „Zgłoszenia”: odpowiedź kierownika na zgłoszenie",
+          karty().length === 1 && widac("Odpowiedź na Twoje zgłoszenie"));
         document.querySelector('#app [data-filtr-wiadomosci="all"]').dispatchEvent(new MouseEvent("click", { bubbles: true }));
         await czekaj(200);
         await klikPrzycisk("Przeczytane");

@@ -23,6 +23,14 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.67.0",
+    date: "2026-09-30",
+    items: [
+      "Skrzynka: „Odpowiedz” przy zgłoszeniu pod imieniem — odpowiedź trafia do Wiadomości pracownika, zgłoszenie domyślnie się zamyka.",
+      "Pracownik widzi ją jako „Odpowiedź na Twoje zgłoszenie” z filtrem „Zgłoszenia”. Anonimowym nie da się odpowiedzieć.",
+    ],
+  },
+  {
     version: "0.66.1",
     date: "2026-09-30",
     items: [

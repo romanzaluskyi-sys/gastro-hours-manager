@@ -25,6 +25,7 @@ import {
   Info,
   Lock,
   Palmtree,
+  Send,
   X,
 } from "lucide-react";
 import { countWorkdays, URLOP_HOURS_PER_DAY } from "../../utils/absences";
@@ -181,6 +182,8 @@ export const zbierzSprawy = ({
         lokalZadania: lokal,
         akcje: [
           ...(otwarte ? [{ id: "rozwiaz", etykieta: "Rozwiązane", glowna: true }] : []),
+          // Anonimowemu nie ma komu odpowiedzieć (brak user_name).
+          ...(anonim ? [] : [{ id: "odpowiedz", etykieta: "Odpowiedz" }]),
           ...(zadanie ? [] : [{ id: "zadanie", etykieta: "Utwórz zadanie" }]),
         ],
       });
@@ -329,7 +332,19 @@ const IKONA = {
 
 // Na poziomie modułu (błąd #10 w CLAUDE.md) — w pozycji siedzi pole tytułu
 // zadania, które inaczej traciłoby fokus przy każdym renderze rodzica.
-function Pozycja({ s, teraz, pokazane, onPokaz, onAkcja, formularzZadania, ustawFormularz, onZapiszZadanie }) {
+function Pozycja({
+  s,
+  teraz,
+  pokazane,
+  onPokaz,
+  onAkcja,
+  formularzZadania,
+  ustawFormularz,
+  onZapiszZadanie,
+  odpowiedz,
+  ustawOdpowiedz,
+  onWyslijOdpowiedz,
+}) {
   const [Ikona, ikonaCls] = IKONA[s.rodzaj] || IKONA.sys;
   const arch = s.box === "arch";
   return (
@@ -405,8 +420,46 @@ function Pozycja({ s, teraz, pokazane, onPokaz, onAkcja, formularzZadania, ustaw
           </div>
         )}
       </div>
-      {(s.akcje || []).length > 0 && formularzZadania == null && (
-        <div className="col-span-3 md:col-span-1 md:col-start-4 flex gap-2 md:self-start md:justify-end">
+      {odpowiedz != null && (
+        <div className="col-span-3 md:col-start-3 md:col-span-2 flex flex-col gap-2" data-odpowiedz-na={s.klucz}>
+          <textarea
+            value={odpowiedz.tekst}
+            onChange={(e) => ustawOdpowiedz({ ...odpowiedz, tekst: e.target.value })}
+            rows={3}
+            autoFocus
+            placeholder={`Odpowiedź dla: ${s.kto} — pojawi się w Wiadomościach.`}
+            className="w-full px-3 py-2.5 border-[2px] border-[#171714] rounded-md text-[15px]"
+            aria-label="Odpowiedź na zgłoszenie"
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            {s.issue?.status === "nowe" && (
+              <label className="flex items-center gap-2 text-[15px] text-[#171714] mr-auto">
+                <input
+                  type="checkbox"
+                  checked={odpowiedz.zamknij}
+                  onChange={(e) => ustawOdpowiedz({ ...odpowiedz, zamknij: e.target.checked })}
+                  className="w-5 h-5"
+                />
+                Zamknij zgłoszenie
+              </label>
+            )}
+            <button
+              type="button"
+              className={btnGlownyCls}
+              disabled={!odpowiedz.tekst.trim() || odpowiedz.wysylanie}
+              onClick={onWyslijOdpowiedz}
+              data-wyslij-odpowiedz
+            >
+              <Send size={17} /> {odpowiedz.wysylanie ? "Wysyłanie…" : "Wyślij odpowiedź"}
+            </button>
+            <button type="button" className={btnObrysCls} onClick={() => ustawOdpowiedz(null)}>
+              Anuluj
+            </button>
+          </div>
+        </div>
+      )}
+      {(s.akcje || []).length > 0 && formularzZadania == null && odpowiedz == null && (
+        <div className="col-span-3 md:col-span-1 md:col-start-4 flex flex-wrap gap-2 md:self-start md:justify-end">
           {s.akcje.map((a) => (
             <button
               key={a.id}
@@ -418,6 +471,7 @@ function Pozycja({ s, teraz, pokazane, onPokaz, onAkcja, formularzZadania, ustaw
               {["zatwierdz_wolne", "rozwiaz", "puls"].includes(a.id) && <Check size={17} />}
               {a.id === "odrzuc_wolne" && <X size={17} />}
               {a.id === "zadanie" && <ClipboardPlus size={17} />}
+              {a.id === "odpowiedz" && <Send size={17} />}
               {a.etykieta}
               {a.id === "rozstrzygnij" && <ArrowRight size={17} />}
             </button>
@@ -433,6 +487,7 @@ export default function Skrzynka({
   startowaZakladka = "todo",
   onResolveAbsence,
   onResolveIssue,
+  onReplyIssue,
   onCreateTaskFromIssue,
   onMarkRead,
   onOpenPuls,
@@ -444,6 +499,7 @@ export default function Skrzynka({
   const [rodzaj, setRodzaj] = useState("all");
   const [pokazane, setPokazane] = useState({});
   const [zadanieDla, setZadanieDla] = useState(null); // { klucz, tytul }
+  const [odpowiedzDla, setOdpowiedzDla] = useState(null); // { klucz, tekst, zamknij, wysylanie }
   const teraz = new Date();
 
   const wolne = async (absence, decyzja) => {
@@ -498,6 +554,10 @@ export default function Skrzynka({
     }
     if (id === "rozwiaz")
       return decyduj([{ klucz: s.klucz, zadanie: ["rozwiaz", [s.issue]] }], `Rozwiązane: zgłoszenie · ${s.kto}`);
+    if (id === "odpowiedz") {
+      setZadanieDla(null);
+      return setOdpowiedzDla({ klucz: s.klucz, tekst: "", zamknij: s.issue?.status === "nowe", wysylanie: false });
+    }
     if (id === "zadanie") return setZadanieDla({ klucz: s.klucz, tytul: (s.issue.issue_text || "").slice(0, 80) });
     if (id === "puls") return onOpenPuls(s.lokal, s.pulsDzien);
     if (id === "rozstrzygnij") return onGoToApprovals();
@@ -593,6 +653,19 @@ export default function Skrzynka({
               onZapiszZadanie={async () => {
                 await onCreateTaskFromIssue(s.issue, zadanieDla.tytul, s.lokalZadania || fallbackLokal);
                 setZadanieDla(null);
+              }}
+              odpowiedz={odpowiedzDla?.klucz === s.klucz ? odpowiedzDla : null}
+              ustawOdpowiedz={setOdpowiedzDla}
+              onWyslijOdpowiedz={async () => {
+                setOdpowiedzDla({ ...odpowiedzDla, wysylanie: true });
+                try {
+                  await onReplyIssue(s.issue, odpowiedzDla.tekst, odpowiedzDla.zamknij);
+                  showMsg(`Odpowiedź wysłana: ${s.kto}.`);
+                  setOdpowiedzDla(null);
+                } catch (e) {
+                  showMsg(e.message || "Nie udało się wysłać odpowiedzi.", "error");
+                  setOdpowiedzDla((o) => (o ? { ...o, wysylanie: false } : o));
+                }
               }}
             />
           ))}

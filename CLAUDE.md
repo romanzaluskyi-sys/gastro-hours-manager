@@ -1017,10 +1017,9 @@ EmployeeMessagesTablet).** Rzeczy, których nie widać:
   koperta na liście osób gasną od razu, jak przed 0.65.0). Wyróżnienie „nowa”
   trzyma `noweWiadomosci` — lista nieprzeczytanych w chwili wejścia — do
   dotknięcia karty albo „Przeczytane”.
-- **Filtr pokazuje się tylko dla rodzaju, który jest na liście.** Filtra
-  „Zgłoszenia” z makiety nie ma: odpowiedzi na zgłoszenie problemu nie idą
-  dziś do pracownika żadną wiadomością. Terminy sanepid/umowa są tylko we
-  „Wszystkie”.
+- **Filtr pokazuje się tylko dla rodzaju, który jest na liście.** „Zgłoszenia”
+  to odpowiedzi kierownika na zgłoszenie problemu (`type = 'issue_reply'`, od
+  0.67.0). Terminy sanepid/umowa są tylko we „Wszystkie”.
 - **Akcje** tylko przy włączonym bloku: „Zobacz grafik” (GRAFIK), „Popraw
   zmianę” (RAPORT — otwiera Zgłoś na liście zmian przez `zgTypNaWejscie`).
 
@@ -1235,6 +1234,13 @@ Informacje / Archiwum, filtr typu Wnioski / Zgłoszenia / System.
   sklejone w jedną pozycję z „×N"; starsze idą do Archiwum. Archiwum ma też
   rozwiązane zgłoszenia i wnioski rozstrzygnięte w ostatnich 60 dniach.
 - **Zgłoszenie anonimowe ma treść ukrytą do „Pokaż"** — bywa o innej osobie.
+- ⚠️ **„Odpowiedz" przy zgłoszeniu pod imieniem (0.67.0)** wysyła pracownikowi
+  wiadomość `type = 'issue_reply'` (`odpowiedzNaZgloszenie` w
+  ManagerDashboard) i domyślnie zamyka zgłoszenie. Treść odpowiedzi żyje TYLKO
+  w wiadomości — `issues` nie ma na nią kolumny, więc Archiwum nie pokaże, co
+  odpisano. Anonimowe nie ma przycisku: nie ma komu odpowiedzieć. To jedyna
+  informacja zwrotna dla osoby z tabletu — tablet nie widzi zgłoszeń problemów
+  (RLS), więc i ich statusu.
 - Stare klucze `zgloszenia`/`powiadomienia` przekierowuje `setTab` w
   ManagerDashboard (dzwonek → Skrzynka na Informacjach). `Zgloszenia.tsx`
   i powiązany blok zostały w repo nieużywane — do usunięcia po okresie

@@ -5,6 +5,16 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.67.0 — 2026-09-30
+
+- **Odpowiedź na zgłoszenie.** W Skrzynce przy zgłoszeniu pod imieniem jest
+  **„Odpowiedz”**: pole na odpowiedź i „Zamknij zgłoszenie” (zaznaczone).
+  Odpowiedź trafia do Wiadomości pracownika jako niebieska karta
+  **„Odpowiedź na Twoje zgłoszenie”**, z nowym filtrem „Zgłoszenia”. Do tej
+  pory pracownik wysyłał problem i nie dowiadywał się niczego — a na Tablecie
+  Służbowym nie widział nawet, czy zgłoszenie rozwiązano.
+- Zgłoszenie anonimowe nie ma „Odpowiedz” — nie ma komu odpowiedzieć.
+
 ## 0.66.1 — 2026-09-30
 
 - **„Zgłoś problem” znowu się wysyła.** Na Tablecie Służbowym każde

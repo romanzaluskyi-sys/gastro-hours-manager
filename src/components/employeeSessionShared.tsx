@@ -347,6 +347,8 @@ export const opisWiadomosci = (n) => {
       return /poprawił\(a\)/.test(t)
         ? w("kor", "reply", "odpowiedz", "Kierownik poprawił Twoją korektę")
         : w("kor", "ok", "korekta", "Korekta zatwierdzona");
+    case "issue_reply":
+      return w("zgl", "reply", "odpowiedz", "Odpowiedź na Twoje zgłoszenie");
     case "correction_query":
       return w("kor", "warn", "odpowiedz", "Kierownik pyta o korektę", "korekta");
     case "absence_resolved":
@@ -5101,6 +5103,7 @@ export const EmployeeSessionScreens = ({
       ["grafik", "Grafik"],
       ["gie", "Giełda"],
       ["kor", "Korekty i wolne"],
+      ["zgl", "Zgłoszenia"],
     ];
     const IKONY_WIAD = {
       grafik: CalendarDays,

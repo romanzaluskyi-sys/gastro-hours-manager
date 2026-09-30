@@ -919,6 +919,25 @@ const poprzedniMiesiac = (h) => {
         await czekaj(6600);
         const patch = window.__zapisy.slice(przed).find((z) => z[0] === "issues" && z[1] === "i2");
         sprawdz("po 6 s zgłoszenie jest rozwiązane", !!patch && patch[2].status === "rozwiazane", JSON.stringify(patch));
+        // 0.67.0: odpowiedź na zgłoszenie idzie do Wiadomości pracownika i
+        // domyślnie zamyka zgłoszenie. Anonimowemu nie ma komu odpowiedzieć.
+        sprawdz("anonimowe zgłoszenie bez „Odpowiedz”",
+          !!anonim && !anonim.querySelector('[data-akcja="odpowiedz"]'));
+        const ekspres = () => document.querySelector('#app [data-sprawa-skrzynki="zgl:i3"]');
+        klikX(ekspres().querySelector('[data-akcja="odpowiedz"]')); await czekaj(200);
+        const pole = document.querySelector('#app [data-odpowiedz-na="zgl:i3"] textarea');
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set.call(pole, "Serwis będzie jutro o 9:00.");
+        pole.dispatchEvent(new Event("input", { bubbles: true }));
+        await czekaj(100);
+        const przedOdp = window.__zapisy.length;
+        klikX(document.querySelector("#app [data-wyslij-odpowiedz]")); await czekaj(400);
+        const odp = window.__zapisy.slice(przedOdp);
+        const wiad = odp.find((z) => z[0] === "notifications" && z[1].type === "issue_reply");
+        sprawdz("„Odpowiedz”: wiadomość do pracownika z treścią i tematem zgłoszenia",
+          !!wiad && wiad[1].user_name === "Ewa" && /Serwis będzie jutro/.test(wiad[1].message) &&
+            /Zepsuty ekspres/.test(wiad[1].message), JSON.stringify(odp));
+        sprawdz("…i domyślnie zamyka zgłoszenie",
+          odp.some((z) => z[0] === "issues" && z[1] === "i3" && z[2].status === "rozwiazane"));
         sprawdz("Puls nie wisi w „Do zrobienia” (bez czerwonego znaczka)",
           !document.querySelector('#app [data-lista-skrzynki] [data-sprawa-skrzynki^="puls:"]'));
         klikX(document.querySelector('#app [data-zakladka-skrzynki="info"]')); await czekaj(200);
