@@ -500,6 +500,17 @@ api/                         — root-level, POZA src/ — funkcje Vercel Cron
     check-porzucone.js         — codzienne przypomnienie o zmianach bez
                                  odbitego końca (pracownik + kierownik),
                                  patrz "Zmiany bez zakończenia" niżej
+    wyslij-maile.js            — kopia wiadomości pracownika na e-mail (wołane
+                                 z pg_cron co 5 min), patrz "Powiadomienia e-mail"
+    raport-kierownika.js       — raport dnia / tygodnia dla kierowników
+  _lib/                        — wspólne dla funkcji wysyłających maile
+                                 (podkreślenie = Vercel nie robi z tego
+                                 endpointów): czas.js (Europe/Warsaw), baza.js,
+                                 poczta.js (Brevo, linki, podpis), szablon.js
+                                 (klocki HTML), wiadomosci.js (mail pracownika),
+                                 raport.js + raportMail.js (raport kierownika)
+  email/
+    ustawienia.js              — "Ustawienia powiadomień" z linku w mailu
   admin/
     ustaw-haslo.js             — zmiana PIN-u pracownika RAZEM z hasłem jego
                                  konta w Auth; wymaga SUPABASE_SERVICE_KEY,
@@ -620,6 +631,8 @@ src/
                                   zadania_moje, migracja 0038) — JEDYNE
                                   miejsce, które do niej pisze (Zadania,
                                   Skrzynka, Puls)
+    linki.ts                    `?otworz=` z linków w mailach — patrz
+                                  "Powiadomienia e-mail"
     pola.ts                     definicja PÓL do wpisania (parsePola,
                                   polaSzablonu, pozaNormaPola, opisNormy,
                                   slugKlucza) — wspólna dla dziennika i dla
@@ -1482,6 +1495,96 @@ działa" — zwykle następnego dnia, bez wersji, bez ekranu, bez treści błęd
   ostatnie"** — drugie zapytanie w `ostatnie-bledy.sql`. Błąd, który zdarzył
   się raz, zwykle był jednorazowy.
 
+## Powiadomienia e-mail — od 0.70.0
+
+Kopia wiadomości z aplikacji na e-mail dla każdego, kto ma adres w karcie.
+Makiety właściciela z 2026-10-01: dziewięć maili pracownika i raport
+tygodniowy kierownika. Dostawca: **Brevo** (darmowe ~300/dzień, osobne konto
+na klienta w modelu silo). Migracja `0039`.
+
+| Kto | Co | Skąd | Kiedy |
+|---|---|---|---|
+| pracownik | kopia KAŻDEJ wiadomości `audience = employee` | `api/cron/wyslij-maile.js` | co 5 min — **pg_cron w Supabase**, nie Vercel |
+| kierownik | raport dnia (wczoraj), w poniedziałek ZAMIAST niego tygodnia | `api/cron/raport-kierownika.js` | Vercel Cron `0 5 * * *` (UTC) |
+
+Kierownik NIE dostaje pojedynczych maili — decyzja właściciela: dziennie i
+tygodniowo, zbiorczo. Wiadomości `audience = manager` trafiają do raportu dnia
+jako „Co się działo”.
+
+⚠️ **Wysyła serwer, po wierszach `notifications`, nigdy przeglądarka.**
+Wiadomości powstają i we froncie, i w cronach — jedyne wspólne miejsce to
+tabela. Klucz Brevo nie może być w paczce, a tablet gubi wi-fi.
+
+⚠️ **Kolejka = `notifications.email_at is null`.** Każdy obsłużony wiersz
+dostaje `email_at` i `email_info` (`wysłano` / `pominięto: …` / `błąd: …`).
+Migracja oznacza wszystko, co już było, jako obsłużone — bez tego pierwszy
+przebieg wysłałby ludziom wiadomości sprzed tygodni. Wiadomość musi „odleżeć”
+2 min (`ODSTEP_MIN`), bo publikacja grafiku SKLEJA kolejne wysyłki w jeden
+wiersz (`upsertGrafikNotification`); starsza niż doba już nie wychodzi. Wiersz
+sklejony PO wysłaniu maila nie dostaje drugiego maila — to świadome (13.09
+Kamila dostała pięć wiadomości o grafiku w 22 minuty).
+
+⚠️ **Odbiorca po IMIENIU** (tak `notifications` wskazuje pracownika): aktywny,
+nie tablet, z adresem, bez `email_powiadomienia = false`. Dwie osoby o tym
+samym imieniu i różnych adresach → NIE wysyłamy (`pominięto: kilka osób…`).
+
+⚠️ **`notifications.dane` (jsonb) to szczegóły TYLKO dla maila** —
+`{ wiersze: [{ e, w, bylo }], cytat, odpowiedz: { kto, tekst }, autor }`.
+Aplikacja dalej czyta `message`. Wypełniają je: korekty, wolne, giełda,
+odpowiedź na zgłoszenie, cron `check-odbicia`. `createEmployeeNotification`
+przyjmuje je czwartym argumentem i przy bazie bez `0039` zapisuje wiadomość
+bez nich (inaczej PostgREST odrzuciłby cały wiersz). Grafik szczegółów nie
+niesie — `wyslij-maile` dociąga najbliższe zmiany z `grafik_shifts` w chwili
+wysyłki.
+
+⚠️ **Rodzaj maila rozpoznaje `api/_lib/wiadomosci.js` TAK SAMO jak
+`opisWiadomosci` w `employeeSessionShared.tsx`** (typ + treść). Zmieniając
+zdanie w utils/swaps.ts, corrections.ts, absences.ts… popraw oba miejsca.
+Nieznany typ wychodzi jako „Wiadomość” z treścią.
+
+⚠️ **Raport liczy reguły PRZEPISANE z `src/utils`** (koszt godziny, norma,
+cel dnia, kolejki „Do decyzji”, bez odbicia, bez zakończenia) — z `api/` nie
+wolno importować z `src/`. **`harness-email.html` liczy te same przypadki
+OBOMA kodami** i porównuje. Zmieniając regułę w `src/utils`, popraw
+`api/_lib/raport.js` i puść harness. „Wymaga decyzji” w mailu = te same
+kolejki co znaczek „Zatwierdzanie zmian”, tylko „bez odbicia” stoi osobno
+(jak w makiecie).
+
+⚠️ **Strefa czasowa: funkcje Vercela chodzą w UTC.** Każde „dziś”, „wczoraj” i
+godzina przechodzą przez `api/_lib/czas.js` (Europe/Warsaw). Nie używaj tam
+`new Date().getDate()` ani `toISOString().slice(0, 10)`.
+
+⚠️ **Klocki maila (`api/_lib/szablon.js`) to tabele ze stylami w elementach**
+— Gmail wycina `<style>` i `<svg>`, Outlook rysuje Wordem. Znak Shiftro jest
+złożony z trzech `<div>`. Każdy tekst od człowieka przez `esc()`.
+
+**Linki z maila** — `?otworz=grafik` itd. `src/utils/linki.ts` zapamiętuje cel
+przy starcie (przed logowaniem), czyści adres i oddaje go RAZ: ManagerDashboard
+(zakładka startowa) i `EmployeeSessionScreens` (tylko bez `onBack` — na
+wspólnym tablecie wybrana osoba nie musi być adresatem maila). Słownik celów
+jest w trzech miejscach: `linki.ts`, `wiadomosci.js` (CTA), `raportMail.js`.
+
+**Wyłączenie:** przełącznik „Powiadomienia e-mail” w karcie pracownika albo
+link „Ustawienia powiadomień” z maila (`api/email/ustawienia.js`, bez
+logowania, podpis HMAC z `CRON_SECRET`). ⚠️ GET niczego nie zmienia — skanery
+linków w skrzynkach otwierają każdy link; zmiana tylko POST-em (formularz albo
+Gmail „Wypisz”, `List-Unsubscribe-Post`). Docelowo ten przełącznik ma być też
+na ekranie „Więcej” pracownika (prośba właściciela) — kolumna ta sama.
+Podgląd raportu bez wysyłki: `/api/cron/raport-kierownika?u=<id>&t=<podpis>`
+(ten sam podpis co w linku ustawień), opcjonalnie `&rodzaj=tydzien&dzis=…`.
+
+**Konfiguracja:** `BREVO_API_KEY`, `EMAIL_FROM`, `APP_URL` w Vercelu i
+harmonogram w bazie — `docs/NOWY-KLIENT.md` i
+`docs/sql/tools/email-harmonogram.sql` (sekret w Vault, nie w treści zadania).
+
+**Świadomie NIE ma (jeszcze):** maila „Możesz wziąć dodatkową zmianę” do
+wszystkich uprawnionych przy wystawieniu na giełdę (dziś wiadomość dostaje
+tylko kierownik — nowa wiadomość = nowa decyzja), maila „Twoja zmiana w sobotę
+się zmieniła” per zmiana (publikacja grafiku to jedna wiadomość na osobę), w
+raporcie: braków obsady w najbliższym tygodniu (arytmetyka wymagań z
+`utils/grafik.ts`), spóźnień ponad tolerancję (aplikacja nie ma takiego progu)
+i „zmian w opublikowanym grafiku”.
+
 ## Pogoda — zaimplementowane 2026-09-03
 
 Mały wskaźnik pogody (ikona + temperatura) w pasku górnym Panelu
@@ -1732,6 +1835,10 @@ odpadają. Zamiast tego dwa pliki w katalogu głównym, uruchamiane przez
 - `harness-wpisy.html` — okna tolerancji wpisu godzin: lokal bez ustawień
   niczego nie odrzuca, granice okna co do minuty, godzina wpisana po północy,
   i to, kiedy zmiana czekająca na kierownika przestaje być trwającą;
+- `harness-email.html` — e-maile: ładuje kod z `api/` (CommonJS) z atrapą
+  Supabase i Brevo, porównuje reguły raportu z `src/utils` na tych samych
+  danych, przechodzi oba endpointy i stronę ustawień, a na dole pokazuje
+  podgląd wszystkich maili;
 - `harness-bledy.html` — dziennik błędów: limit zapisów na sesję, odsiewanie
   powtórzeń, komplet pól wiersza i to, czy `ErrorBoundary` pokazuje ekran
   zamiast białej strony. `fetch` jest podmieniony, nic nie leci do sieci.

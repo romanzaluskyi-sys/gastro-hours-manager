@@ -4,7 +4,7 @@
 // materializuje godziny urlopu w shifts — nie duplikuj tej logiki w
 // employeeSessionShared.tsx, ZatwierdzanieZmian.tsx ani Pracownicy.tsx.
 import { api } from "../api/supabase";
-import { createEmployeeNotification } from "../api/notifications";
+import { createEmployeeNotification, opisDnia } from "../api/notifications";
 
 export const URLOP_HOURS_PER_DAY = 8;
 // 09:00–17:00 lokalnie — dowolna stała godzina, liczy się tylko różnica 8h
@@ -32,6 +32,23 @@ export const countWorkdays = (startDate, endDate) => {
     cursor.setDate(cursor.getDate() + 1);
   }
   return count;
+};
+
+// Wiersze do e-maila (0.70.0): dni i rodzaj ("Urlop · 2 dni = 16 h"). Dni
+// robocze, nie kalendarzowe — ta sama liczba, którą kierownik widzi w kolejce.
+const dzienDni = (n) => (n === 1 ? "dzień" : "dni");
+const wierszeWolnego = (type, startDate, endDate) => {
+  const dni = countWorkdays(startDate, endDate);
+  const zakres =
+    startDate === endDate ? opisDnia(startDate) : `${opisDnia(startDate)} – ${opisDnia(endDate)}`;
+  const rodzaj =
+    type === "urlop"
+      ? `Urlop · ${dni} ${dzienDni(dni)} = ${dni * URLOP_HOURS_PER_DAY} h`
+      : "Niedostępność (bez godzin)";
+  return [
+    { e: "Dni", w: zakres },
+    { e: "Rodzaj", w: rodzaj },
+  ];
 };
 
 const fmtPL = (dateStr) =>
@@ -129,7 +146,9 @@ export const resolveAbsenceRequest = async ({ absence, user, editorName, decisio
       decision === "approved"
         ? `${editorName} zatwierdził(a) Twój wniosek o ${rodzaj} (${zakres}).`
         : `${editorName} odrzucił(a) Twój wniosek o ${rodzaj} (${zakres}).`;
-    await createEmployeeNotification(absence.user_name, msg, "absence_resolved");
+    await createEmployeeNotification(absence.user_name, msg, "absence_resolved", {
+      wiersze: wierszeWolnego(absence.type, absence.start_date, absence.end_date),
+    });
   }
 
   return { absence: updated, createdShifts };
@@ -164,7 +183,8 @@ export const addUrlopDirectly = async ({ user, startDate, endDate, editorName, n
   await createEmployeeNotification(
     user.name,
     `${editorName} zapisał(a) Ci urlop na ${fmtPL(startDate)}–${fmtPL(endDate)}.`,
-    "absence_resolved"
+    "absence_resolved",
+    { wiersze: wierszeWolnego("urlop", startDate, endDate) }
   );
 
   return { absence, createdShifts };
@@ -200,7 +220,8 @@ export const addNiedostepnoscDirectly = async ({
     `${editorName} zapisał(a) Ci dni niedostępności: ${fmtPL(startDate)}–${fmtPL(
       endDate
     )}.`,
-    "absence_resolved"
+    "absence_resolved",
+    { wiersze: wierszeWolnego("niedostepnosc", startDate, endDate) }
   );
   return { absence };
 };

@@ -826,6 +826,29 @@ export default function Pracownicy({
                     />
                   </Pole>
                 </div>
+                {/* Kopia wiadomości na e-mail (0.70.0, migracja 0039). Domyślnie
+                    włączona — adres w karcie wpisuje się po to, żeby dało się
+                    napisać. Tę samą kolumnę zmienia sama osoba linkiem
+                    "Ustawienia powiadomień" z każdego maila. Tablet nie dostaje
+                    maili wcale (to nie człowiek). */}
+                {!tablet && (
+                  <div className="mt-3">
+                    <Przelacznik
+                      wlaczony={editingUser.email_powiadomienia !== false}
+                      etykieta="Powiadomienia e-mail"
+                      onZmiana={(v) => ustaw({ email_powiadomienia: v })}
+                    />
+                    <p className={podpisCls}>
+                      {!editingUser.email
+                        ? "Bez adresu e-mail nic nie wyjdzie — wiadomości są tylko w aplikacji."
+                        : editingUser.email_powiadomienia === false
+                        ? "Wyłączone — wiadomości tylko w aplikacji."
+                        : ["admin", "manager", "manager_lokalu"].includes(editingUser.role)
+                        ? "Kopia wiadomości i raport: codziennie rano raport dnia, w poniedziałek tygodniowy."
+                        : "Kopia wiadomości z aplikacji: grafik, zamiany, korekty, wnioski o wolne."}
+                    </p>
+                  </div>
+                )}
               </Sekcja>
 
               {/* --- Miejsce pracy --- */}

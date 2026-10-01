@@ -1,0 +1,554 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sprawdzian e-maili</title>
+<style>
+  body { font: 14px/1.6 ui-monospace, Menlo, monospace; padding: 24px; background: #FBFAF9; color: #17120F; }
+  h1 { font: 700 18px/1.2 system-ui, sans-serif; }
+  h2 { font: 700 15px/1.2 system-ui, sans-serif; margin: 28px 0 8px; }
+  .ok { color: #2C6A4F; } .zle { color: #DE3A22; font-weight: 700; }
+  pre { background: #F1EEEB; padding: 10px; overflow-x: auto; }
+  .galeria { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 16px; }
+  .galeria figure { margin: 0; }
+  .galeria figcaption { font: 600 12px system-ui, sans-serif; color: #6E6E66; margin-bottom: 4px; }
+  .galeria iframe { width: 100%; height: 760px; border: 1px solid #DDD; background: #fff; }
+</style>
+<h1>Sprawdzian e-maili (api/_lib, api/cron/wyslij-maile, api/cron/raport-kierownika)</h1>
+<p>Kod serwerowy (CommonJS) ładowany w przeglądarce. <code>fetch</code> jest podmieniony — nic nie leci
+do Supabase ani do Brevo. Reguły liczenia porównywane z <code>src/utils</code> na tych samych danych.</p>
+<div id="out">ładowanie…</div>
+<h2>Podgląd maili</h2>
+<div id="galeria" class="galeria"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js"></script>
+<script>
+const out = document.getElementById("out");
+const log = (txt, cls = "") => {
+  const d = document.createElement("div");
+  d.className = cls; d.textContent = txt; out.appendChild(d);
+};
+let zdanych = 0, oblanych = 0;
+const sprawdz = (nazwa, warunek, szczegol = "") => {
+  if (warunek) { zdanych++; log("  OK   " + nazwa, "ok"); }
+  else { oblanych++; log("  ŹLE  " + nazwa + (szczegol ? " — " + szczegol : ""), "zle"); }
+};
+const galeria = (podpis, html) => {
+  const f = document.createElement("figure");
+  const c = document.createElement("figcaption"); c.textContent = podpis;
+  const i = document.createElement("iframe"); i.srcdoc = html;
+  f.appendChild(c); f.appendChild(i);
+  document.getElementById("galeria").appendChild(f);
+};
+
+// --- loader ES (src/) — ten sam co w harness-budzet.html ----------------
+const cache = new Map();
+async function zaladuj(sciezka) {
+  if (cache.has(sciezka)) return cache.get(sciezka);
+  const p = new Promise(async (resolve, reject) => {
+    try {
+      let kod = null;
+      for (const ext of [".ts", ".tsx", ""]) {
+        const r = await fetch(sciezka + ext + "?cb=" + Date.now());
+        if (r.ok) { kod = await r.text(); break; }
+      }
+      if (kod === null) throw new Error("nie znaleziono " + sciezka);
+      const specyfikatory = [...kod.matchAll(/from\s+"(\.[^"]+)"/g)].map((m) => m[1]);
+      const baza = sciezka.slice(0, sciezka.lastIndexOf("/"));
+      const mapa = {};
+      for (const s of specyfikatory) {
+        mapa[s] = await zaladuj(new URL(baza + "/" + s, location.origin).pathname);
+      }
+      kod = kod.replace(/from\s+"(\.[^"]+)"/g, (m, s) => `from "${mapa[s]}"`);
+      const js = Babel.transform(kod, { presets: [["typescript", { allExtensions: true, isTSX: true }]] }).code;
+      resolve(URL.createObjectURL(new Blob([js], { type: "text/javascript" })));
+    } catch (e) { reject(e); }
+  });
+  cache.set(sciezka, p);
+  return p;
+}
+
+// --- loader CommonJS (api/) ---------------------------------------------
+// `require` zna tylko ścieżki względne i "crypto"; process.env i Buffer są
+// podane z zewnątrz, bo moduły czytają zmienne przy ładowaniu.
+const ENV = {
+  SUPABASE_URL: "https://baza.test",
+  SUPABASE_SERVICE_KEY: "klucz-serwisowy",
+  CRON_SECRET: "sekret",
+  BREVO_API_KEY: "klucz-brevo",
+  EMAIL_FROM: "powiadomienia@shiftro.pl",
+  APP_URL: "https://app.test/",
+  REACT_APP_TENANT: "Gastro Test",
+};
+const cryptoStub = {
+  createHmac: (alg, klucz) => ({
+    update: (t) => ({ digest: () => btoa(unescape(encodeURIComponent(`${klucz}|${t}`))) }),
+  }),
+  timingSafeEqual: (a, b) => a.s === b.s,
+};
+const BufferStub = { from: (s) => ({ s: String(s), length: String(s).length }) };
+const cjsCache = new Map();
+async function cjs(sciezka) {
+  if (cjsCache.has(sciezka)) return cjsCache.get(sciezka);
+  const kod = await (await fetch(sciezka + "?cb=" + Date.now())).text();
+  const baza = sciezka.slice(0, sciezka.lastIndexOf("/"));
+  const mapa = {};
+  for (const [, d] of kod.matchAll(/require\("(\.[^"]+)"\)/g)) {
+    mapa[d] = await cjs(new URL(baza + "/" + d + (d.endsWith(".js") ? "" : ".js"), location.origin).pathname);
+  }
+  const module = { exports: {} };
+  const req = (n) => (n === "crypto" ? cryptoStub : mapa[n]);
+  new Function("module", "exports", "require", "process", "Buffer", kod)(
+    module, module.exports, req, { env: ENV }, BufferStub
+  );
+  cjsCache.set(sciezka, module.exports);
+  return module.exports;
+}
+
+// --- atrapa Supabase i Brevo --------------------------------------------
+const stan = { tabele: {}, maile: [], patche: [], raporty: new Set(), brevo: () => ({ status: 201 }) };
+const odp = (status, body) =>
+  new Response(status === 204 ? null : typeof body === "string" ? body : JSON.stringify(body), { status });
+window.fetch = ((prawdziwy) => async (url, opcje = {}) => {
+  const u = new URL(url, location.origin);
+  if (u.origin === location.origin) return prawdziwy(url, opcje);
+  const metoda = opcje.method || "GET";
+  if (u.host === "api.brevo.com") {
+    const body = JSON.parse(opcje.body);
+    const r = stan.brevo(body);
+    if (r.status < 300) stan.maile.push(body);
+    return odp(r.status, r.status < 300 ? { messageId: "m" + stan.maile.length } : { message: "odmowa" });
+  }
+  const tabela = u.pathname.split("/rest/v1/")[1];
+  const wiersze = stan.tabele[tabela] || [];
+  const p = u.searchParams;
+  if (metoda === "GET") {
+    let w = wiersze;
+    // Filtry, od których zależy wynik w endpointach; reszta zawęża już kod.
+    for (const [k, v] of p.entries()) {
+      if (["select", "order", "limit", "or"].includes(k)) continue;
+      if (v === "is.null") w = w.filter((r) => r[k] == null);
+      else if (v === "not.is.null") w = w.filter((r) => r[k] != null);
+      else if (v.startsWith("eq.")) w = w.filter((r) => String(r[k]) === v.slice(3));
+      else if (v.startsWith("gte.")) w = w.filter((r) => r[k] == null || String(r[k]) >= v.slice(4));
+      else if (v.startsWith("lte.")) w = w.filter((r) => r[k] == null || String(r[k]) <= v.slice(4));
+      else if (v.startsWith("lt.")) w = w.filter((r) => r[k] == null || String(r[k]) < v.slice(3));
+    }
+    if (tabela === "notifications" && p.get("email_at") === "is.null") {
+      w = w.filter((r) => r.audience == null || r.audience === "employee");
+    }
+    return odp(200, w);
+  }
+  if (metoda === "PATCH") {
+    const body = JSON.parse(opcje.body);
+    stan.patche.push({ tabela, filtr: u.search, body });
+    const id = (p.get("id") || "").replace(/^eq\./, "");
+    wiersze.filter((r) => !id || String(r.id) === id).forEach((r) => {
+      if (tabela === "notifications" && !id) {
+        // masowe zamknięcie starych — tylko wiersze z email_at null i starsze
+        const granica = (p.getAll("created_at")[0] || "").replace(/^lt\./, "");
+        if (r.email_at || !(r.created_at < granica)) return;
+      }
+      if (p.get("email_at") === "is.null" && r.email_at) return;
+      Object.assign(r, body);
+    });
+    return odp(204, "");
+  }
+  if (metoda === "POST" && tabela === "email_raporty") {
+    const body = JSON.parse(opcje.body);
+    const klucz = `${body.user_id}|${body.rodzaj}|${body.okres}`;
+    if (stan.raporty.has(klucz)) return odp(409, { message: "duplicate key" });
+    stan.raporty.add(klucz);
+    return odp(201, "");
+  }
+  return odp(400, { message: `atrapa nie zna ${metoda} ${tabela}` });
+})(window.fetch.bind(window));
+
+const zadanie = (query = {}, auth = "Bearer sekret") => ({
+  method: "GET",
+  query,
+  headers: auth ? { authorization: auth } : {},
+});
+const odpowiedz = () => {
+  const r = { kod: null, json: null, tresc: null, naglowki: {} };
+  r.status = (k) => { r.kod = k; return r; };
+  r.json = (j) => { r.json = j; return r; };
+  r.send = (t) => { r.tresc = t; return r; };
+  r.setHeader = (k, v) => { r.naglowki[k] = v; };
+  return r;
+};
+
+// --- dane: mała sieć -----------------------------------------------------
+const teraz = new Date();
+const minutTemu = (m) => new Date(teraz.getTime() - m * 60000).toISOString();
+const w = (dzien, godz) => `${dzien}T${godz}:00+02:00`; // wrzesień: czas letni
+
+const LOKALE = [
+  { id: "l1", name: "Ceglana", narzut_umowa: 20, narzut_zlecenie: 0, archived: false },
+  { id: "l2", name: "Sunset", archived: false },
+];
+const USERS = [
+  { id: "k1", name: "Roman", role: "admin", active: true, email: "roman@test.pl" },
+  { id: "k2", name: "Ola", role: "manager_lokalu", allowed_lokale: "Sunset", active: true, email: "ola@test.pl" },
+  { id: "k3", name: "Bez Maila", role: "manager_lokalu", allowed_lokale: "Ceglana", active: true, email: "" },
+  { id: "p1", name: "Ala Nowak", role: "open", active: true, email: "ala@test.pl", default_lokal: "Ceglana",
+    typ_umowy: "zlecenie", stawka: 30 },
+  { id: "p2", name: "Bo", role: "open", active: true, email: "bo@zly", default_lokal: "Ceglana",
+    typ_umowy: "umowa_o_prace", wymiar_etatu: 1, wynagrodzenie_mies: 8800 },
+  { id: "p3", name: "Cela", role: "closed", active: true, email: "cela@test.pl", default_lokal: "Sunset",
+    typ_umowy: "zlecenie", stawka: 25 },
+  { id: "t1", name: "Tablet Ceglana", role: "kiosk", active: true, email: "tablet@test.pl", allowed_lokale: "Ceglana" },
+  { id: "e1", name: "Ewa", role: "open", active: true, email: "ewa1@test.pl", default_lokal: "Ceglana" },
+  { id: "e2", name: "Ewa", role: "open", active: true, email: "ewa2@test.pl", default_lokal: "Sunset" },
+  { id: "f1", name: "Fryderyk", role: "open", active: true, email: "fr@test.pl", email_powiadomienia: false },
+  { id: "g1", name: "Gosia", role: "open", active: true, email: "" },
+];
+
+(async () => {
+  try {
+    out.textContent = "";
+    const C = await cjs("/api/_lib/czas.js");
+    const R = await cjs("/api/_lib/raport.js");
+    const RM = await cjs("/api/_lib/raportMail.js");
+    const W = await cjs("/api/_lib/wiadomosci.js");
+    const S = await cjs("/api/_lib/szablon.js");
+    const wyslijMaile = await cjs("/api/cron/wyslij-maile.js");
+    const raportKierownika = await cjs("/api/cron/raport-kierownika.js");
+    const ustawienia = await cjs("/api/email/ustawienia.js");
+    log("moduły api/ załadowane (CommonJS)", "ok");
+    const U = await import(await zaladuj("/src/utils/umowy"));
+    const B = await import(await zaladuj("/src/utils/budzet"));
+    const K = await import(await zaladuj("/src/utils/kalendarz"));
+    const O = await import(await zaladuj("/src/utils/odbicia"));
+    const P = await import(await zaladuj("/src/utils/porzucone"));
+    log("moduły src/utils załadowane (do porównania)", "ok");
+
+    // --- czas ---------------------------------------------------------
+    log(""); log("— czas po polsku —");
+    sprawdz("1:30 w nocy (UTC 23:30 poprzedniego dnia) to już nowy dzień w Polsce",
+      C.ymd("2026-09-30T23:30:00Z") === "2026-10-01", C.ymd("2026-09-30T23:30:00Z"));
+    sprawdz("godzina w Polsce", C.hhmm("2026-09-30T06:30:00Z") === "08:30");
+    sprawdz("chwila: 08:30 latem = 06:30 UTC", C.chwila("2026-09-30", "08:30").toISOString() === "2026-09-30T06:30:00.000Z");
+    sprawdz("chwila: 08:30 zimą = 07:30 UTC", C.chwila("2026-11-30", "08:30").toISOString() === "2026-11-30T07:30:00.000Z");
+    sprawdz("poniedziałek tygodnia", C.poniedzialek("2026-10-01") === "2026-09-28");
+    sprawdz("numer tygodnia ISO (22.09.2026 = 39)", C.numerTygodnia("2026-09-22") === 39);
+    sprawdz("numer tygodnia ISO (1.01.2027 = 53)", C.numerTygodnia("2027-01-01") === 53, C.numerTygodnia("2027-01-01"));
+    sprawdz("krótka data", C.krotkaData("2026-10-01") === "czw 1 paź");
+    sprawdz("zakres dat w miesiącu", C.zakresDat("2026-09-22", "2026-09-28") === "22–28 września 2026");
+    sprawdz("zmiana przez północ = 9 h", C.godzinyPlanu({ start_time: "18:00", end_time: "03:00" }) === 9);
+    sprawdz("kwoty grupowane jak zl() w aplikacji", C.zl(74500) === B.zl(74500) && C.zl(1260) === B.zl(1260));
+    sprawdz("odmiana", C.odmiana(1, ["zmiana", "zmiany", "zmian"]) === "zmiana" &&
+      C.odmiana(3, ["zmiana", "zmiany", "zmian"]) === "zmiany" &&
+      C.odmiana(12, ["zmiana", "zmiany", "zmian"]) === "zmian" &&
+      C.odmiana(22, ["zmiana", "zmiany", "zmian"]) === "zmiany");
+
+    // --- zgodność z src/utils -----------------------------------------
+    log(""); log("— te same reguły co w aplikacji —");
+    const T = R._test;
+    let normy = true;
+    for (const rok of [2026, 2027]) for (let m = 1; m <= 12; m++) {
+      if (T.wymiarCzasuPracy(rok, m) !== K.wymiarCzasuPracy(rok, m)) normy = false;
+    }
+    sprawdz("norma miesiąca 2026–2027 = wymiarCzasuPracy (24 miesiące)", normy);
+    const osoby = [
+      ...USERS,
+      { id: "x1", etat: "pełny", wymiar_etatu: 0.5, wynagrodzenie_mies: 3000 },
+      { id: "x2", typ_umowy: "b2b", stawka: "45,5" },
+      { id: "x3", typ_umowy: "umowa_o_prace", wymiar_etatu: 1, stawka: 28 },
+    ];
+    let koszty = true; let gdzie = "";
+    for (const os of osoby) for (const l of [...LOKALE, null]) for (const m of [2, 9, 12]) {
+      const a = T.kosztGodziny(os, l, 2026, m), b = B.kosztGodziny(os, l, 2026, m);
+      if (!(a === b || (a != null && b != null && Math.abs(a - b) < 1e-9))) { koszty = false; gdzie = `${os.id} ${m}: ${a} vs ${b}`; }
+    }
+    sprawdz("koszt godziny = kosztGodziny z utils/budzet.ts (wszystkie osoby × lokale × miesiące)", koszty, gdzie);
+    const CELE = [
+      { lokal: "Ceglana", obowiazuje_od: "2026-09-01", day_of_week: 2, oczekiwany_utarg: 2800, cel_koszt_pct: 25 },
+      { lokal: "Ceglana", obowiazuje_od: "2026-10-01", day_of_week: 2, oczekiwany_utarg: 3100, cel_koszt_pct: null },
+    ];
+    const DNI_B = [{ lokal: "Ceglana", date: "2026-10-06", oczekiwany_utarg: null, cel_koszt_pct: 22 }];
+    let cele = true;
+    for (const d of ["2026-09-22", "2026-09-23", "2026-10-06", "2026-10-13", "2026-08-25"]) {
+      const a = T.celDnia(CELE, DNI_B, "Ceglana", d);
+      const b = B.celDnia({ cele: CELE, budzetDni: DNI_B }, "Ceglana", d);
+      if (JSON.stringify(a) !== JSON.stringify(b && { utarg: b.utarg, pct: b.pct })) cele = false;
+    }
+    sprawdz("cel dnia = celDnia z utils/budzet.ts (zestawy, wyjątek pole po polu, brak)", cele);
+
+    // Kolejki liczone na tych samych danych. Godziny w środku dnia, żeby
+    // wynik nie zależał od strefy przeglądarki (CI chodzi w UTC).
+    const dzis = "2026-09-28";
+    const PLAN = [
+      { id: "g1", user_id: "p1", user_name: "Ala Nowak", lokal: "Ceglana", stanowisko: "Kelner", date: "2026-09-22", start_time: "08:00", end_time: "16:00", published_at: "x" },
+      { id: "g2", user_id: "p2", user_name: "Bo", lokal: "Ceglana", stanowisko: "Kucharz", date: "2026-09-22", start_time: "10:00", end_time: "20:00", published_at: "x" },
+      { id: "g3", user_id: "p3", user_name: "Cela", lokal: "Sunset", stanowisko: "Bar", date: "2026-09-22", start_time: "12:00", end_time: "18:00", published_at: "x" },
+      { id: "g4", user_id: "p1", user_name: "Ala Nowak", lokal: "Ceglana", stanowisko: "Kelner", date: "2026-09-23", start_time: "08:00", end_time: "16:00", published_at: "x" },
+      { id: "g5", user_id: "p2", user_name: "Bo", lokal: "Ceglana", stanowisko: "Kucharz", date: "2026-09-24", start_time: "10:00", end_time: "18:00", published_at: "x" },
+      { id: "g6", user_id: "p3", user_name: "Cela", lokal: "Sunset", stanowisko: "Bar", date: "2026-09-25", start_time: "12:00", end_time: "18:00", published_at: null },
+      { id: "g7", user_id: "p3", user_name: "Cela", lokal: "Sunset", stanowisko: "Bar", date: "2026-10-06", start_time: "12:00", end_time: "18:00", published_at: "x" },
+    ];
+    const SHIFTS = [
+      { id: "s1", user_id: "p1", user_name: "Ala Nowak", lokal: "Ceglana", start_time: w("2026-09-22", "08:00"), end_time: w("2026-09-22", "16:00") },
+      { id: "s2", user_id: "p2", user_name: "Bo", lokal: "Ceglana", start_time: w("2026-09-22", "10:00"), end_time: w("2026-09-22", "20:00") },
+      { id: "s3", user_id: "p3", user_name: "Cela", lokal: "Sunset", start_time: w("2026-09-22", "12:00"), end_time: w("2026-09-22", "18:00") },
+      // Bo 24.09 — urlop, nie odbicie
+      { id: "s4", user_id: "p2", user_name: "Bo", lokal: "Ceglana", start_time: w("2026-09-24", "09:00"), end_time: w("2026-09-24", "17:00"), is_urlop: true },
+      // Cela odbiła start 26.09 i nie odbiła końca — dawno po progu
+      { id: "s5", user_id: "p3", user_name: "Cela", lokal: "Sunset", start_time: w("2026-09-26", "12:00"), end_time: null },
+    ];
+    const ABS = [
+      { id: "a1", user_id: "p2", user_name: "Bo", lokal: "Ceglana", start_date: "2026-09-24", end_date: "2026-09-24", type: "urlop", status: "approved" },
+      { id: "a2", user_id: "p2", user_name: "Bo", lokal: "Ceglana", start_date: "2026-10-12", end_date: "2026-10-13", type: "urlop", status: "pending" },
+      { id: "a3", user_id: "p1", user_name: "Ala Nowak", lokal: "Ceglana", start_date: "2026-09-30", end_date: "2026-10-01", type: "urlop", status: "approved" },
+    ];
+    const bezA = T.zmianyBezOdbicia({ plan: PLAN, shifts: SHIFTS, users: USERS, absences: ABS, dzis, lokalOk: () => true })
+      .map((x) => x.plan.id).sort().join(",");
+    const bezB = O.zmianyBezOdbicia({
+      planShifts: PLAN,
+      shifts: SHIFTS.map((s) => ({ ...s, start_time: new Date(s.start_time), end_time: s.end_time && new Date(s.end_time) })),
+      users: USERS, absences: ABS, dzis, lokalOk: () => true,
+    }).map((x) => x.plan.id).sort().join(",");
+    sprawdz("zmiany bez odbicia = zmianyBezOdbicia z utils/odbicia.ts", bezA === bezB && bezA === "g4", `${bezA} vs ${bezB}`);
+    const chwilaTestu = new Date("2026-09-28T10:00:00Z");
+    const porA = SHIFTS.filter((s) => T.czyPorzucona({ shift: s, plan: PLAN, lokale: LOKALE, users: USERS, teraz: chwilaTestu })).map((s) => s.id).join(",");
+    const porB = P.zmianyPorzucone({
+      shifts: SHIFTS.map((s) => ({ ...s, start_time: new Date(s.start_time), end_time: s.end_time && new Date(s.end_time) })),
+      planShifts: PLAN, lokale: LOKALE, users: USERS, now: chwilaTestu,
+    }).map((p) => p.shift.id).join(",");
+    sprawdz("zmiany bez zakończenia = zmianyPorzucone z utils/porzucone.ts", porA === porB && porA === "s5", `${porA} vs ${porB}`);
+
+    // --- raport tygodnia: liczby policzone ręcznie --------------------
+    log(""); log("— raport tygodnia (22–28.09) —");
+    const DANE = {
+      lokale: LOKALE, users: USERS, shifts: SHIFTS, plan: PLAN,
+      dayLogs: [
+        { lokal: "Ceglana", date: "2026-09-22", obrot: 3000, status: "zamkniety" },
+        { lokal: "Sunset", date: "2026-09-22", obrot: "1000", status: "otwarty" },
+      ],
+      cele: CELE, budzetDni: [],
+      issues: [
+        { id: "i1", type: "correction", status: "nowe", shift_id: "s3", user_id: "p3", user_name: "Cela", proposed_lokal: "Sunset" },
+        { id: "i2", type: "problem", status: "nowe", is_anonymous: true, created_at: w("2026-09-23", "12:00") },
+        { id: "i3", type: "correction", status: "nowe", shift_id: "s5", proposed_end_time: "20:00", user_name: "Cela" },
+      ],
+      absences: ABS,
+      swaps: [{ id: "w1", status: "przyjeta", lokal: "Ceglana", typ: "zamiana", created_at: w("2026-09-23", "12:00") }],
+      wyjatki: [{ lokal: "Ceglana", date_from: "2026-10-03", date_to: "2026-10-03", zamkniete: true, note: "Remont" }],
+      powiadomienia: [],
+    };
+    const roman = USERS[0], ola = USERS[1];
+    const mR = R.policz({ dane: DANE, kierownik: roman, rodzaj: "tydzien", dzis, teraz: chwilaTestu });
+    sprawdz("okres: ubiegły pon–ndz", mR.od === "2026-09-21" && mR.doDnia === "2026-09-27", `${mR.od}–${mR.doDnia}`);
+    sprawdz("utarg sieci 4000 zł (tekst \"1000\" też jest liczbą)", mR.razem.utarg === 4000, mR.razem.utarg);
+    // Ceglana: Ala 8 h × 30 = 240, Bo 10 h × (8800/176 × 1,2 = 60) = 600 → 840; Sunset: Cela 6 h × 25 = 150.
+    sprawdz("koszt pracy (840 + 150) / 4000 = 24,75%", Math.abs(mR.razem.kosztPct - 24.75) < 1e-9, mR.razem.kosztPct);
+    sprawdz("utarg vs cel tylko z dni porównywalnych: 3000 / 2800 = +7,1%",
+      Math.abs(mR.razem.vsCel - 7.142857) < 1e-4, mR.razem.vsCel);
+    sprawdz("cel kosztu ważony = 25% (tylko Ceglana ma cel)", mR.razem.celPct === 25, mR.razem.celPct);
+    sprawdz("godziny fakt 24 h (urlop się nie liczy)", mR.razem.godziny === 24, mR.razem.godziny);
+    sprawdz("godziny grafiku 46 h (8+10+6+8+8+6, także niewysłane — jak w Pulsie)", mR.razem.godzinyPlan === 46, mR.razem.godzinyPlan);
+    sprawdz("zmiany: 4 (z otwartą, bez urlopu)", mR.razem.zmian === 4, mR.razem.zmian);
+    sprawdz("bez zapisu w tygodniu: Ala 23.09", mR.bezZapisuWOkresie === 1 && mR.bezOdbiciaOsoby["Ala Nowak"] === 1);
+    // Ceglana 22.09: 840 / 3000 = 28% > 25%; budżet h = 0,25 × 3000 / (840 / 18) = 16,07 h.
+    sprawdz("dzień ponad budżet: Ceglana wtorek, 18 h przy budżecie 16,1 h",
+      mR.ponadBudzet.length === 1 && mR.ponadBudzet[0].lokal === "Ceglana" && Math.abs(mR.ponadBudzet[0].budzetH - 16.0714) < 1e-3,
+      JSON.stringify(mR.ponadBudzet.map((k) => [k.lokal, k.budzetH])));
+    // i3 (prośba o koniec zmiany s5) to korekta — liczy się RAZ, jako korekta,
+    // a s5 wypada z "bez zakończenia" (ten sam filtr co znaczek w menu).
+    sprawdz("decyzje Romana: korekty 2, wolne 1, zamiana 1 (s5 liczona raz — jako korekta)",
+      mR.decyzjiRazem === 4 && JSON.stringify(mR.decyzje) === JSON.stringify([["korekty", 2], ["wolne", 1], ["zamiana", 1]]),
+      JSON.stringify(mR.decyzje));
+    sprawdz("zgłoszenie anonimowe liczone", mR.problemy.length === 1);
+    sprawdz("słupek wtorku bez celu — Sunset nie ma planu, a ma utarg",
+      mR.perDzien[1].utarg === 4000 && mR.perDzien[1].cel === null);
+    sprawdz("słupek z celem, gdy plan ma każdy lokal z utargiem",
+      R.policz({ dane: { ...DANE, dayLogs: [DANE.dayLogs[0]] }, kierownik: roman, rodzaj: "tydzien", dzis, teraz: chwilaTestu }).perDzien[1].cel === 2800);
+    sprawdz("najbliższy tydzień: urlop Ali i zamknięta Ceglana", mR.urlopy.length === 1 && mR.wyjatkiBliskie.length === 1);
+    sprawdz("grafik na 5–11.10 opublikowany (Cela 6.10)", mR.opublikowaneNast === 1);
+
+    const mO = R.policz({ dane: DANE, kierownik: ola, rodzaj: "tydzien", dzis, teraz: chwilaTestu });
+    sprawdz("Ola widzi tylko Sunset", mO.lokaleZakresu.join() === "Sunset" && mO.zakresNazwa === "Sunset");
+    sprawdz("Ola: utarg 1000, koszt 15%", mO.razem.utarg === 1000 && Math.abs(mO.razem.kosztPct - 15) < 1e-9);
+    sprawdz("Ola: tylko korekty z Sunset (wolne i zamiana są z Ceglanej)", mO.decyzjiRazem === 2, JSON.stringify(mO.decyzje));
+    sprawdz("Ola: nie widzi braków Ceglanej", mO.bezOdbiciaRazem === 0);
+
+    const mailT = RM.mailRaportu(mR, roman);
+    sprawdz("temat tygodnia", mailT.temat === "Raport tygodnia 39 · Dobry tydzień: utarg 7% ponad cel", mailT.temat);
+    sprawdz("zdanie o koszcie mówi, którego lokalu dotyczy", mailT.html.includes("Koszt pracy ponad cel w lokalu Ceglana."));
+    sprawdz("raport ma sekcje z makiety",
+      ["Wymaga uwagi", "Utarg dzień po dniu", "Lokale", "Grafik i zmiany", "Ludzie", "Najbliższy tydzień"].every((s) => mailT.html.includes(s)));
+    sprawdz("link „Zatwierdź” prowadzi do zakładki", mailT.html.includes("https://app.test/?otworz=zatwierdzanie"));
+    sprawdz("link ustawień z podpisem", /\/api\/email\/ustawienia\?u=k1&amp;t=/.test(mailT.html));
+    galeria("Raport tygodnia — Roman (Cała sieć)", mailT.html);
+    galeria("Raport tygodnia — Ola (Sunset)", RM.mailRaportu(mO, ola).html);
+
+    // --- raport dnia -------------------------------------------------
+    log(""); log("— raport dnia —");
+    const mD = R.policz({
+      dane: { ...DANE, powiadomienia: [
+        { audience: "manager", lokal: "Ceglana", type: "swap_offer", message: "Ala wystawiła zmianę na giełdę.", created_at: new Date(teraz - 3600000).toISOString() },
+        { audience: "manager", lokal: "Ceglana", type: "swap_offer", message: "Ala wystawiła zmianę na giełdę.", created_at: new Date(teraz - 7200000).toISOString() },
+        { audience: "manager", lokal: "Sunset", type: "x", message: "stare", created_at: new Date(teraz - 30 * 3600000).toISOString() },
+      ] },
+      kierownik: roman, rodzaj: "dzien", dzis: "2026-09-23", teraz,
+    });
+    sprawdz("raport dnia = wczoraj", mD.od === "2026-09-22" && mD.doDnia === "2026-09-22");
+    sprawdz("Puls niezamknięty wczoraj: Sunset", mD.pulsOtwarty.join() === "Sunset", mD.pulsOtwarty.join());
+    sprawdz("powiadomienia z doby sklejone ×2, starsze pominięte", mD.informacje.length === 1 && mD.informacje[0].ile === 2);
+    const mailD = RM.mailRaportu(mD, roman);
+    sprawdz("temat dnia", mailD.temat.startsWith("Wczoraj: utarg 7% ponad plan"), mailD.temat);
+    galeria("Raport dnia — Roman", mailD.html);
+    sprawdz("pusty dzień nie idzie mailem",
+      R.czyPusty(R.policz({ dane: { ...DANE, issues: [], absences: [], swaps: [], shifts: [], plan: [] }, kierownik: roman, rodzaj: "dzien", dzis: "2026-09-23", teraz })));
+
+    // --- maile pracownika: szablony ----------------------------------
+    log(""); log("— maile pracownika —");
+    const ala = USERS[3];
+    const PRZYKLADY = [
+      ["Grafik", { type: "grafik", message: "Grafik zaktualizowany — masz zmiany na 1 października – 3 października. Sprawdź zakładkę Grafik." }],
+      ["Prośba o zamianę", { type: "swap", message: "Anastazja proponuje zamianę: bierzesz 2026-10-10 08:30–21:00, oddajesz swoją 2026-10-06 08:30–21:00.",
+        dane: { autor: "Anastazja", wiersze: [{ e: "Oddajesz", w: "wt 6 paź · 08:30–21:00" }, { e: "Dostajesz", w: "sob 10 paź · 08:30–21:00" }] } }],
+      ["Zamiana zatwierdzona", { type: "swap", message: "Roman zatwierdził(a) zamianę — oddajesz 2026-10-06 08:30–21:00, pracujesz 2026-10-10 08:30–21:00.",
+        dane: { wiersze: [{ e: "Było", w: "wt 6 paź · 08:30–21:00" }, { e: "Jest", w: "sob 10 paź · 08:30–21:00" }, { e: "Zatwierdził(a)", w: "Roman" }] } }],
+      ["Korekta zatwierdzona", { type: "correction_resolved", message: "Roman zatwierdził(a) Twoją poprawkę zmiany z dnia 21.09.2026 (08:30–21:00).",
+        dane: { wiersze: [{ e: "Zmiana", w: "pon 21 wrz" }, { e: "Godziny", w: "08:30–21:00", bylo: "08:30–13:32" }, { e: "Razem", w: "12,5 h (+7,5 h)" }] } }],
+      ["Wniosek o wolne odrzucony", { type: "absence_resolved", message: "Roman odrzucił(a) Twój wniosek o urlop (19.10.2026–20.10.2026).",
+        dane: { wiersze: [{ e: "Dni", w: "pon 19 paź – wt 20 paź" }, { e: "Rodzaj", w: "Urlop · 2 dni = 16 h" }] } }],
+      ["Brak zapisu godzin", { type: "odbicie", message: "Wczoraj (29.09.2026) miałeś(-aś) zmianę w grafiku w lokalu Ceglana…",
+        dane: { wiersze: [{ e: "Zmiana z grafiku", w: "wt 29 wrz · 11:00–21:00" }, { e: "Lokal", w: "Ceglana" }] } }],
+      ["Odpowiedź na zgłoszenie", { type: "issue_reply", message: "Roman odpowiedział(a) na Twoje zgłoszenie „Zepsuta zmywarka”: Serwis przyjdzie jutro o 9:00.",
+        dane: { cytat: "Zepsuta zmywarka <script>alert(1)<\/script>", odpowiedz: { kto: "Roman", tekst: "Serwis przyjdzie jutro o 9:00. Dzięki, że dałaś znać!" } } }],
+      ["Edycja zmiany (stare pola)", { action: "edit", actor_name: "Roman", shift_date: "2026-09-21", old_start: "08:30", old_end: "13:32", new_start: "08:30", new_end: "21:00", lokal: "Ceglana" }],
+      ["Nieznany typ", { type: "cos_nowego", message: "Zwykła wiadomość." }],
+    ];
+    const GRAFIK_ALI = [
+      { date: "2026-10-01", start_time: "08:30:00", end_time: "21:00:00", lokal: "Ceglana", stanowisko: "Burgery i naleśniki" },
+      { date: "2026-10-03", start_time: "10:00", end_time: "18:00", lokal: "Ceglana", stanowisko: "Kelner" },
+      { date: "2026-11-02", start_time: "10:00", end_time: "18:00", lokal: "Ceglana", stanowisko: "Kelner" },
+    ];
+    for (const [nazwa, n] of PRZYKLADY) {
+      const m = W.mailPracownika({ n, user: ala, grafik: GRAFIK_ALI, dzis: "2026-09-30" });
+      galeria(`Pracownik — ${nazwa}`, m.html);
+      if (nazwa === "Grafik") {
+        sprawdz("grafik: tytuł z miesiącem najbliższej zmiany", m.temat === "Grafik na październik jest gotowy", m.temat);
+        sprawdz("grafik: „Masz 2 zmiany w październiku”", m.html.includes("<b>2 zmiany</b> w październiku"));
+        sprawdz("grafik: najbliższa i suma miesiąca (12,5 + 8 = 20,5 h)",
+          m.html.includes("czw 1 paź · 08:30–21:00") && m.html.includes("20,5"));
+        sprawdz("grafik: imię w powitaniu", m.html.includes("Cześć Ala,"));
+      }
+      if (nazwa === "Odpowiedź na zgłoszenie") {
+        sprawdz("treść od ludzi jest escapowana", !m.html.includes("<script>alert") && m.html.includes("&lt;script&gt;"));
+        sprawdz("przycisk do Wiadomości", m.html.includes("?otworz=wiadomosci"));
+      }
+      if (nazwa === "Korekta zatwierdzona") {
+        sprawdz("korekta: stara wartość przekreślona", /line-through[^>]*>08:30–13:32/.test(m.html));
+        sprawdz("wersja tekstowa ma „było → jest”", m.tekst.includes("Godziny: 08:30–13:32 → 08:30–21:00"));
+      }
+      if (nazwa === "Prośba o zamianę") sprawdz("prośba: autor w tytule", m.temat === "Anastazja chce się z Tobą zamienić", m.temat);
+      if (nazwa === "Nieznany typ") sprawdz("nieznany typ wychodzi z treścią", m.html.includes("Zwykła wiadomość."));
+    }
+
+    // --- endpoint: wyslij-maile ---------------------------------------
+    log(""); log("— api/cron/wyslij-maile —");
+    stan.tabele = {
+      users: USERS.map((u) => ({ ...u })),
+      notifications: [
+        { id: "n1", audience: "employee", user_name: "Ala Nowak", type: "grafik", message: "Grafik zaktualizowany — masz zmiany.", created_at: minutTemu(10) },
+        { id: "n2", audience: null, user_name: "Bo", type: "correction_resolved", message: "Roman zatwierdził(a)…", created_at: minutTemu(9) },
+        { id: "n3", audience: "employee", user_name: "Cela", type: "issue_reply", message: "odp", created_at: minutTemu(8) },
+        { id: "n4", audience: "employee", user_name: "Tablet Ceglana", type: "x", message: "x", created_at: minutTemu(8) },
+        { id: "n5", audience: "employee", user_name: "Ewa", type: "x", message: "x", created_at: minutTemu(8) },
+        { id: "n6", audience: "employee", user_name: "Fryderyk", type: "x", message: "x", created_at: minutTemu(8) },
+        { id: "n7", audience: "employee", user_name: "Gosia", type: "x", message: "x", created_at: minutTemu(8) },
+        { id: "n8", audience: "employee", user_name: "Cela", type: "x", message: "świeża", created_at: minutTemu(0.5) },
+        { id: "n9", audience: "employee", user_name: "Cela", type: "x", message: "stara", created_at: minutTemu(60 * 30) },
+        { id: "n10", audience: "manager", lokal: "Ceglana", type: "x", message: "dla kierownika", created_at: minutTemu(8) },
+        { id: "n11", audience: "employee", user_name: "Ala Nowak", type: "x", message: "już wysłana", created_at: minutTemu(8), email_at: minutTemu(5) },
+      ],
+      grafik_shifts: [{ id: "x", user_id: "p1", published_at: "x", deleted_at: null, ...GRAFIK_ALI[0] }],
+    };
+    stan.brevo = (body) => (body.to[0].email === "bo@zly" ? { status: 400 } : { status: 201 });
+    const nr = (id) => stan.tabele.notifications.find((n) => n.id === id);
+
+    let r = odpowiedz();
+    await wyslijMaile(zadanie({}, "Bearer zly"), r);
+    sprawdz("zły sekret = 401", r.kod === 401);
+    r = odpowiedz();
+    await wyslijMaile(zadanie(), r);
+    sprawdz("przebieg OK", r.kod === 200, JSON.stringify(r.json));
+    const adresy = stan.maile.map((m) => m.to[0].email).sort().join(",");
+    sprawdz("wysłane do Ali i Celi", adresy === "ala@test.pl,cela@test.pl", adresy);
+    sprawdz("nadawca z nazwą klienta", stan.maile[0] && stan.maile[0].sender.name === "Shiftro · Gastro Test");
+    sprawdz("nagłówek List-Unsubscribe", stan.maile[0] && /api\/email\/ustawienia/.test(stan.maile[0].headers["List-Unsubscribe"]));
+    sprawdz("n1 oznaczona „wysłano”", nr("n1").email_info === "wysłano" && !!nr("n1").email_at);
+    sprawdz("Bo: odmowa Brevo 400 = błąd trwały, nie ponawiamy", /^błąd: Brevo 400/.test(nr("n2").email_info || "") && !!nr("n2").email_at, nr("n2").email_info);
+    sprawdz("tablet pominięty", nr("n4").email_info === "pominięto: brak aktywnego konta");
+    sprawdz("dwie Ewy — nie zgadujemy", nr("n5").email_info === "pominięto: kilka osób o tym imieniu");
+    sprawdz("wyłączone e-maile", nr("n6").email_info === "pominięto: e-maile wyłączone");
+    sprawdz("brak adresu", nr("n7").email_info === "pominięto: brak adresu e-mail");
+    sprawdz("świeża (< 2 min) czeka", !nr("n8").email_at);
+    sprawdz("starsza niż doba zamknięta bez maila", nr("n9").email_info === "pominięto: starsze niż doba");
+    sprawdz("powiadomienie kierownika nie idzie do pracownika", !nr("n10").email_at);
+    sprawdz("już wysłana nie idzie drugi raz", nr("n11").email_info === undefined);
+    const mailAli = stan.maile.find((m) => m.to[0].email === "ala@test.pl");
+    sprawdz("mail o grafiku dociągnął grafik z bazy", mailAli && mailAli.htmlContent.includes("08:30–21:00"));
+
+    stan.brevo = () => ({ status: 503 });
+    nr("n8").created_at = minutTemu(5);
+    r = odpowiedz();
+    await wyslijMaile(zadanie(), r);
+    sprawdz("awaria Brevo 503: wiersz zostaje w kolejce z opisem", !nr("n8").email_at && /ponowię/.test(nr("n8").email_info || ""), nr("n8").email_info);
+    stan.brevo = () => ({ status: 201 });
+
+    // --- endpoint: raport-kierownika ----------------------------------
+    log(""); log("— api/cron/raport-kierownika —");
+    stan.maile = [];
+    stan.tabele = {
+      lokale: LOKALE, users: USERS, shifts: SHIFTS, grafik_shifts: PLAN, day_logs: DANE.dayLogs,
+      grafik_budzet_cele: CELE, grafik_budzet_dni: [], issues: DANE.issues, absences: ABS,
+      shift_swaps: DANE.swaps, grafik_wyjatki: DANE.wyjatki, notifications: [],
+    };
+    r = odpowiedz();
+    await raportKierownika(zadanie(), r);
+    const doKogo = stan.maile.map((m) => m.to[0].email).sort().join(",");
+    sprawdz("raport do kierowników z adresem (bez „Bez Maila”)", doKogo === "ola@test.pl,roman@test.pl", doKogo + " " + JSON.stringify(r.json));
+    r = odpowiedz();
+    await raportKierownika(zadanie(), r);
+    sprawdz("drugie wywołanie tego samego dnia nic nie wysyła", stan.maile.length === 2 && r.json.pominieto.length === 2, JSON.stringify(r.json));
+
+    const { podpis } = await cjs("/api/_lib/poczta.js");
+    r = odpowiedz();
+    await raportKierownika(zadanie({ u: "k1", t: podpis("k1"), rodzaj: "tydzien", dzis }, null), r);
+    sprawdz("podgląd z podpisanego linku zwraca HTML", r.kod === 200 && /Raport tygodniowy · Cała sieć/.test(r.tresc || ""));
+    r = odpowiedz();
+    await raportKierownika(zadanie({ u: "k1", t: "falszywy" }, null), r);
+    sprawdz("podgląd z fałszywym podpisem = 403", r.kod === 403);
+    r = odpowiedz();
+    await raportKierownika(zadanie({ u: "p1", t: podpis("p1") }, null), r);
+    sprawdz("podgląd raportu dla pracownika = 404", r.kod === 404);
+
+    // --- endpoint: ustawienia -----------------------------------------
+    log(""); log("— api/email/ustawienia —");
+    stan.tabele = { users: USERS.map((u) => ({ ...u })) };
+    r = odpowiedz();
+    await ustawienia({ method: "GET", query: { u: "p1", t: podpis("p1") }, headers: {} }, r);
+    sprawdz("GET pokazuje stan i NIC nie zmienia", r.kod === 200 && /e-maile są włączone/.test(r.tresc) && stan.tabele.users[3].email_powiadomienia === undefined);
+    r = odpowiedz();
+    await ustawienia({ method: "POST", query: { u: "p1", t: podpis("p1") }, headers: {}, body: { "List-Unsubscribe": "One-Click" } }, r);
+    sprawdz("POST jednym kliknięciem (Gmail „Wypisz”) wyłącza", stan.tabele.users[3].email_powiadomienia === false && /wyłączone/.test(r.tresc));
+    r = odpowiedz();
+    await ustawienia({ method: "POST", query: { u: "p1", t: podpis("p1") }, headers: {}, body: { akcja: "wlacz" } }, r);
+    sprawdz("„Włącz z powrotem”", stan.tabele.users[3].email_powiadomienia === true);
+    r = odpowiedz();
+    await ustawienia({ method: "POST", query: { u: "p1", t: podpis("p2") }, headers: {}, body: {} }, r);
+    sprawdz("cudzy podpis = 403", r.kod === 403);
+
+    log("");
+    log(`ZDANYCH ${zdanych}, OBLANYCH ${oblanych}`, oblanych ? "zle" : "ok");
+  } catch (e) {
+    log("WYJĄTEK: " + (e && e.message ? e.message : e), "zle");
+    const pre = document.createElement("pre");
+    pre.textContent = (e && e.stack) || String(e);
+    out.appendChild(pre);
+  }
+})();
+</script>

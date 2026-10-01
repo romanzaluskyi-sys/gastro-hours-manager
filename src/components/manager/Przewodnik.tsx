@@ -23,6 +23,16 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.70.0",
+    date: "2026-10-01",
+    items: [
+      "Powiadomienia e-mail: kto ma adres w karcie, dostaje kopię wiadomości z aplikacji na pocztę.",
+      "Pracownik dostaje maila od razu (grafik, zamiany, korekty, wolne, brak zapisu godzin, odpowiedź na zgłoszenie).",
+      "Kierownik dostaje raport: codziennie rano raport dnia, w poniedziałek tygodniowy.",
+      "Wyłączenie: przełącznik w karcie pracownika albo link „Ustawienia powiadomień” w mailu.",
+    ],
+  },
+  {
     version: "0.69.1",
     date: "2026-09-30",
     items: [

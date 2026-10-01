@@ -18,6 +18,25 @@
 <div id="status">ładowanie…</div>
 <div id="app"></div>
 
+<script>
+// ⚠️ Zegar przesunięty na 15. dzień BIEŻĄCEGO miesiąca (ta sama godzina, czas
+// dalej płynie). Atrapy stawiają zmiany na "wczoraj", "6 dni temu" i na dni
+// 1–6 miesiąca, zakładając, że to wszystko jest w bieżącym miesiącu i w
+// przeszłości. Na początku miesiąca to nieprawda: 01.10.2026 harness padał w
+// CI bez żadnej zmiany w kodzie ("wczoraj" było już wrześniem). Środek
+// miesiąca daje ten sam wynik każdego dnia. Musi stać PRZED innymi skryptami.
+(() => {
+  const Prawdziwa = Date;
+  const t = new Prawdziwa();
+  const cel = new Prawdziwa(t.getFullYear(), t.getMonth(), 15, t.getHours(), t.getMinutes(), t.getSeconds());
+  const przesuniecie = cel.getTime() - t.getTime();
+  class Data extends Prawdziwa {
+    constructor(...a) { if (a.length === 0) super(Prawdziwa.now() + przesuniecie); else super(...a); }
+    static now() { return Prawdziwa.now() + przesuniecie; }
+  }
+  window.Date = Data;
+})();
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js" crossorigin="anonymous"></script>

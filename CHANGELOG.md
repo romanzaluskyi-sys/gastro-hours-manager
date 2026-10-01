@@ -5,6 +5,24 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.70.0 — 2026-10-01
+
+- **Powiadomienia e-mail.** Kto ma w karcie wpisany adres e-mail, dostaje
+  kopię wiadomości z aplikacji na pocztę.
+  - **Pracownik — od razu** (najwyżej kilka minut): grafik gotowy, prośba o
+    zamianę, zamiana zatwierdzona lub odrzucona, korekta godzin rozpatrzona,
+    decyzja o wolnym, brak zapisu godzin z wczoraj, odpowiedź kierownika na
+    zgłoszenie, terminy sanepidu i umowy. W mailu są szczegóły (dzień,
+    godziny „było → jest”) i przycisk, który otwiera aplikację od razu we
+    właściwym miejscu.
+  - **Kierownik — raport zamiast pojedynczych maili**: codziennie rano raport
+    dnia (wczoraj), w poniedziałek zamiast niego raport tygodnia — utarg
+    wobec celu, koszt pracy, godziny wobec grafiku, decyzje do podjęcia,
+    zmiany bez zapisu godzin, dni ponad budżet, urlopy w najbliższych dniach.
+  - **Wyłączenie:** przełącznik „Powiadomienia e-mail” w karcie pracownika
+    albo link „Ustawienia powiadomień” w każdym mailu (działa bez logowania).
+    Tablet Służbowy maili nie dostaje.
+
 ## 0.69.1 — 2026-09-30
 
 - **Zmiana (tablet, telefon):** w ramce „Do końca zmiany” czas nie łamie się
