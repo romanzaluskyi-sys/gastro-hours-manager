@@ -147,6 +147,8 @@ const zmianyBezOdbicia = ({ plan, shifts, users, absences, dzis, lokalOk }) => {
     .map((s) => ({ plan: s, user: users.find((u) => String(u.id) === String(s.user_id)) }))
     .filter(({ plan: p, user }) => {
       if (!user || user.archived) return false;
+      // poOstatnimDniu — jak w utils/odbicia.ts (0.70.1).
+      if (user.ostatni_dzien && p.date > user.ostatni_dzien) return false;
       const wolne = absences.some(
         (a) => a.status === "approved" && a.start_date <= p.date && p.date <= a.end_date && tenSam(a, user)
       );

@@ -23,6 +23,10 @@
     {
       "path": "/api/cron/raport-kierownika",
       "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/koniec-pracy",
+      "schedule": "15 23 * * *"
     }
   ]
 }

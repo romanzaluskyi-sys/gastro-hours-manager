@@ -11,7 +11,7 @@
 // potwierdzić, bo to jego podpis pod czyjąś wypłatą.
 import { api } from "../api/supabase";
 import { toLocalYMD } from "../api/googleSheets";
-import { trimTime, shiftHours, findBlockingAbsence } from "./grafik";
+import { trimTime, shiftHours, findBlockingAbsence, poOstatnimDniu } from "./grafik";
 import { znajdzKolizjeWBazie, opisKolidujacej } from "./shifts";
 import { createEmployeeNotification } from "../api/notifications";
 
@@ -68,6 +68,11 @@ export const zmianyBezOdbicia = ({
     })
     .filter(({ plan, user }) => {
       if (!user || user.archived) return false;
+      // Zmiana z grafiku PO ostatnim dniu pracy nie jest brakiem odbicia —
+      // tej osoby już nie ma (0.70.1; 01.10.2026 Iga dostała rano wiadomość o
+      // nieodbitej zmianie po odejściu). Taka zmiana do przepisania na kogoś
+      // innego, nie do rozliczenia.
+      if (poOstatnimDniu(user, plan.date)) return false;
       if (findBlockingAbsence(absences, user, plan.date)) return false;
       return !odbilTegoDnia(shifts, user, plan.date);
     })

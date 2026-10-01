@@ -737,6 +737,16 @@ const ManagerDashboard = ({
       if (!dataToSave.umowa_expiry) dataToSave.umowa_expiry = null;
       if (!dataToSave.puls_do) dataToSave.puls_do = null;
       if (!dataToSave.ostatni_dzien) dataToSave.ostatni_dzien = null;
+      // Po ostatnim dniu pracy konto jest NIEAKTYWNE, ale nie w archiwum
+      // (0.70.1, ustalenie właściciela). Co noc robi to api/cron/koniec-pracy.js;
+      // tutaj — dla daty wpisanej wstecz, żeby nie czekać do nocy. Kto ma zostać
+      // aktywny po tej dacie, musi mieć datę zmienioną albo wyczyszczoną —
+      // inaczej najbliższa noc wyłączy go znowu.
+      const wylaczonePoKoncu =
+        !!dataToSave.ostatni_dzien &&
+        dataToSave.ostatni_dzien < toLocalYMD(new Date()) &&
+        dataToSave.active !== false;
+      if (wylaczonePoKoncu) dataToSave.active = false;
       if (!dataToSave.data_urodzenia) dataToSave.data_urodzenia = null;
       if (!dataToSave.data_zatrudnienia) dataToSave.data_zatrudnienia = null;
       if (dataToSave.umowa_bezterminowa) dataToSave.umowa_expiry = null;
@@ -822,8 +832,11 @@ const ManagerDashboard = ({
       // znika, bo nie ma już różnic, a kierownik widzi wynik zamiast pustego
       // miejsca po karcie.
       setEditingUser({ ...zapisany });
-      if (ostrzezenie) showMsg(`Zapisano pracownika.${ostrzezenie}`, "error");
-      else showMsg("Zapisano pracownika!");
+      const poKoncu = wylaczonePoKoncu
+        ? " Ostatni dzień pracy minął — konto jest teraz nieaktywne (nie w archiwum)."
+        : "";
+      if (ostrzezenie) showMsg(`Zapisano pracownika.${poKoncu}${ostrzezenie}`, "error");
+      else showMsg(`Zapisano pracownika!${poKoncu}`);
     } catch (err) {
       showMsg(`Błąd zapisu pracownika: ${err.message || "nieznany błąd"}`, "error");
     }

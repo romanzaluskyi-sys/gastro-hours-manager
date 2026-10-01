@@ -503,6 +503,9 @@ api/                         — root-level, POZA src/ — funkcje Vercel Cron
     wyslij-maile.js            — kopia wiadomości pracownika na e-mail (wołane
                                  z pg_cron co 5 min), patrz "Powiadomienia e-mail"
     raport-kierownika.js       — raport dnia / tygodnia dla kierowników
+    koniec-pracy.js            — co noc: po "Ostatnim dniu pracy" konto
+                                 nieaktywne (nie archiwum) + wiadomość dla
+                                 kierownika lokalu (0.70.1)
   _lib/                        — wspólne dla funkcji wysyłających maile
                                  (podkreślenie = Vercel nie robi z tego
                                  endpointów): czas.js (Europe/Warsaw), baza.js,
@@ -2182,7 +2185,14 @@ zakresem — wymaga Grafiku, którego nie ma.
   zmiany"), `umowa_bezterminowa` (bool, default false — wyklucza się z
   `umowa_expiry`; `handleSaveUser` czyści termin przy zaznaczeniu),
   `ostatni_dzien` (date, nullable — po tej dacie Grafik nie pozwoli wpisać
-  zmiany, `poOstatnimDniu()`). Migracje `0015`, `0016`. Od 2026-09-09
+  zmiany, `poOstatnimDniu()`; od 0.70.1 NASTĘPNEGO dnia konto staje się
+  `active = false`, ale NIE `archived` — robi to `api/cron/koniec-pracy.js`
+  co noc i `handleSaveUser` przy dacie wpisanej wstecz. ⚠️ Tablet nie widzi
+  tej kolumny u innych (users_widok), więc jedynym sygnałem dla niego jest
+  `active` — sprawdzenie daty "na żywo" w KioskDashboard nie zadziała. Zmiana
+  z grafiku po tej dacie NIE jest brakiem odbicia: `zmianyBezOdbicia`,
+  `check-odbicia.js`, Aktywni, Pulpit i `api/_lib/raport.js` ją pomijają.
+  Kto ma zostać aktywny po tej dacie, musi mieć datę zmienioną albo pustą). Migracje `0015`, `0016`. Od 2026-09-09
   (migracja `0018`): `telefon`, `data_urodzenia`, `data_zatrudnienia`,
   `typ_umowy` (text: `umowa_o_prace`|`zlecenie`|`b2b`|`inna`), `wymiar_etatu`
   (numeric — 1 / 0,75 / 0,5…, skaluje normę), `wynagrodzenie_mies` (numeric —

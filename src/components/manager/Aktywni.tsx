@@ -17,7 +17,7 @@ import React, { useEffect, useState } from "react";
 import { AlertTriangle, Check, Hourglass, Phone, Plus, Square } from "lucide-react";
 import { zmianaTrwa } from "../../utils/porzucone";
 import { czekaNaKoniecOdKierownika } from "../../utils/wpisy";
-import { toLocalYMD, trimTime, isSameUser, absenceOn } from "../../utils/grafik";
+import { toLocalYMD, trimTime, isSameUser, absenceOn, poOstatnimDniu } from "../../utils/grafik";
 import { pad, naMin, zMin, odmiana } from "../../utils/czas";
 import { useOdlozoneDecyzje, PasekCofnij } from "./odlozoneDecyzje";
 
@@ -213,7 +213,7 @@ export default function Aktywni({
       const user = users.find((u) => isSameUser(p, u)) || { id: p.user_id, name: p.user_name };
       const k = String(user.id || user.name);
       if (juzJest.has(k) || user.archived || user.active === false) return;
-      if (absenceOn(absences, user, p.date)) return;
+      if (poOstatnimDniu(user, p.date) || absenceOn(absences, user, p.date)) return;
       const odbil = shifts.some(
         (s) =>
           (s.user_id ? String(s.user_id) === String(user.id) : s.user_name === user.name) &&

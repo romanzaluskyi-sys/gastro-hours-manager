@@ -5,6 +5,17 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.70.1 — 2026-10-01
+
+- **Ostatni dzień pracy wyłącza konto.** Następnego dnia osoba staje się
+  nieaktywna (nie trafia do archiwum): znika z listy na Tablecie Służbowym i
+  nie zaloguje się. Data wpisana wstecz działa od razu przy zapisie karty.
+  Kierownik lokalu dostaje wiadomość — z liczbą zmian, które zostały po tej
+  dacie w Grafiku, żeby je przepisać albo zdjąć.
+- **Koniec fałszywych alarmów „nie odbił(a) zmiany”** po ostatnim dniu pracy:
+  zmiana z grafiku po tej dacie nie trafia już do porannej wiadomości, do
+  „Do decyzji”, do „Aktywnych”, na Pulpit ani do raportu e-mail.
+
 ## 0.70.0 — 2026-10-01
 
 - **Powiadomienia e-mail.** Kto ma w karcie wpisany adres e-mail, dostaje
