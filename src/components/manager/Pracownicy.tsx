@@ -1318,11 +1318,17 @@ export default function Pracownicy({
               <Sekcja id="sekcja-koniec" tytul={tablet ? "Notatki" : "Koniec współpracy i notatki"}>
                 {!tablet && (
                   /* Znany ostatni dzień pracy. Grafik po tej dacie nie da wpisać
-                     zmiany, a przypomnienia o umowie milkną. */
+                     zmiany, przypomnienia o umowie milkną, a następnego dnia
+                     konto staje się nieaktywne (api/cron/koniec-pracy.js). */
                   <Pole
                     etykieta="Ostatni dzień pracy (jeśli znany)"
                     className="md:max-w-[50%] mb-4"
-                    podpis={<p className={podpisCls}>Po tej dacie osoba nie pojawi się w Grafiku.</p>}
+                    podpis={
+                      <p className={podpisCls}>
+                        Następnego dnia konto wyłączy się samo (nieaktywne, nie w archiwum): zniknie z
+                        Tabletu i z Grafiku, nie da się nim zalogować. Godziny i dane zostają.
+                      </p>
+                    }
                   >
                     <input
                       type="date"

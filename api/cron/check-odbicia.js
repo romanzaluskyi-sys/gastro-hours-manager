@@ -147,7 +147,7 @@ module.exports = async function handler(req, res) {
           `&start_time=gte.${ymd(new Date(Date.now() - 2 * 86400000))}` +
           `&start_time=lt.${ymd(new Date(Date.now() + 86400000))}`
       ),
-      pobierz(`users?select=id,name,default_lokal,active,archived`),
+      pobierz(`users?select=id,name,default_lokal,active,archived,ostatni_dzien`),
       pobierz(`absences?select=user_id,user_name,start_date,end_date,status`),
     ]);
 
@@ -165,6 +165,9 @@ module.exports = async function handler(req, res) {
     for (const zm of plan) {
       const user = users.find((u) => String(u.id) === String(zm.user_id));
       if (!user || !user.active || user.archived) continue;
+      // Po ostatnim dniu pracy zmiana z grafiku nie jest "nieodbita" — tej
+      // osoby już nie ma (0.70.1, poOstatnimDniu w src/utils/grafik.ts).
+      if (user.ostatni_dzien && zm.date > user.ostatni_dzien) continue;
       const klucz = String(user.id);
       if (odbilWczoraj.has(klucz) || odbilWczoraj.has(user.name)) continue;
       if (naWolnym.has(klucz) || naWolnym.has(user.name)) continue;

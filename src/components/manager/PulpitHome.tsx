@@ -42,6 +42,7 @@ import {
   trimTime,
   isSameUser,
   absenceOn,
+  poOstatnimDniu,
 } from "../../utils/grafik";
 import {
   stanKartDnia,
@@ -663,7 +664,7 @@ export default function PulpitHome({
     const user = users.find((u) => isSameUser(p, u)) || { id: p.user_id, name: p.user_name };
     const k = String(user.id || user.name);
     if (juzJest.has(k) || user.archived || user.active === false) continue;
-    if (absenceOn(absences, user, p.date) || odbilDzis(user)) continue;
+    if (poOstatnimDniu(user, p.date) || absenceOn(absences, user, p.date) || odbilDzis(user)) continue;
     juzJest.add(k);
     bezOdbiciaTeraz.push({ p, user, start });
   }

@@ -128,10 +128,12 @@ window.fetch = ((prawdziwy) => async (url, opcje = {}) => {
       if (["select", "order", "limit", "or"].includes(k)) continue;
       if (v === "is.null") w = w.filter((r) => r[k] == null);
       else if (v === "not.is.null") w = w.filter((r) => r[k] != null);
+      else if (v === "not.is.true") w = w.filter((r) => r[k] !== true);
       else if (v.startsWith("eq.")) w = w.filter((r) => String(r[k]) === v.slice(3));
-      else if (v.startsWith("gte.")) w = w.filter((r) => r[k] == null || String(r[k]) >= v.slice(4));
-      else if (v.startsWith("lte.")) w = w.filter((r) => r[k] == null || String(r[k]) <= v.slice(4));
-      else if (v.startsWith("lt.")) w = w.filter((r) => r[k] == null || String(r[k]) < v.slice(3));
+      else if (v.startsWith("gt.")) w = w.filter((r) => r[k] != null && String(r[k]) > v.slice(3));
+      else if (v.startsWith("gte.")) w = w.filter((r) => r[k] != null && String(r[k]) >= v.slice(4));
+      else if (v.startsWith("lte.")) w = w.filter((r) => r[k] != null && String(r[k]) <= v.slice(4));
+      else if (v.startsWith("lt.")) w = w.filter((r) => r[k] != null && String(r[k]) < v.slice(3));
     }
     if (tabela === "notifications" && p.get("email_at") === "is.null") {
       w = w.filter((r) => r.audience == null || r.audience === "employee");
@@ -152,6 +154,10 @@ window.fetch = ((prawdziwy) => async (url, opcje = {}) => {
       Object.assign(r, body);
     });
     return odp(204, "");
+  }
+  if (metoda === "POST" && tabela === "notifications") {
+    (stan.tabele.notifications = stan.tabele.notifications || []).push(JSON.parse(opcje.body));
+    return odp(201, "");
   }
   if (metoda === "POST" && tabela === "email_raporty") {
     const body = JSON.parse(opcje.body);
@@ -214,6 +220,7 @@ const USERS = [
     const wyslijMaile = await cjs("/api/cron/wyslij-maile.js");
     const raportKierownika = await cjs("/api/cron/raport-kierownika.js");
     const ustawienia = await cjs("/api/email/ustawienia.js");
+    const koniecPracy = await cjs("/api/cron/koniec-pracy.js");
     log("moduły api/ załadowane (CommonJS)", "ok");
     const U = await import(await zaladuj("/src/utils/umowy"));
     const B = await import(await zaladuj("/src/utils/budzet"));
@@ -308,6 +315,15 @@ const USERS = [
       users: USERS, absences: ABS, dzis, lokalOk: () => true,
     }).map((x) => x.plan.id).sort().join(",");
     sprawdz("zmiany bez odbicia = zmianyBezOdbicia z utils/odbicia.ts", bezA === bezB && bezA === "g4", `${bezA} vs ${bezB}`);
+    // Ostatni dzień pracy Ali = 22.09 → jej zmiana 23.09 to nie brak odbicia (0.70.1).
+    const USERS_KONIEC = USERS.map((u) => (u.id === "p1" ? { ...u, ostatni_dzien: "2026-09-22" } : u));
+    const koniecA = T.zmianyBezOdbicia({ plan: PLAN, shifts: SHIFTS, users: USERS_KONIEC, absences: ABS, dzis, lokalOk: () => true }).length;
+    const koniecB = O.zmianyBezOdbicia({
+      planShifts: PLAN,
+      shifts: SHIFTS.map((s) => ({ ...s, start_time: new Date(s.start_time), end_time: s.end_time && new Date(s.end_time) })),
+      users: USERS_KONIEC, absences: ABS, dzis, lokalOk: () => true,
+    }).length;
+    sprawdz("zmiana z grafiku PO ostatnim dniu pracy nie jest brakiem odbicia (serwer i aplikacja)", koniecA === 0 && koniecB === 0, `${koniecA} / ${koniecB}`);
     const chwilaTestu = new Date("2026-09-28T10:00:00Z");
     const porA = SHIFTS.filter((s) => T.czyPorzucona({ shift: s, plan: PLAN, lokale: LOKALE, users: USERS, teraz: chwilaTestu })).map((s) => s.id).join(",");
     const porB = P.zmianyPorzucone({
@@ -541,6 +557,44 @@ const USERS = [
     r = odpowiedz();
     await ustawienia({ method: "POST", query: { u: "p1", t: podpis("p2") }, headers: {}, body: {} }, r);
     sprawdz("cudzy podpis = 403", r.kod === 403);
+
+    // --- endpoint: koniec-pracy (0.70.1) --------------------------------
+    log(""); log("— api/cron/koniec-pracy —");
+    const dzisW = C.ymd();
+    stan.tabele = {
+      notifications: [],
+      grafik_shifts: [
+        { id: "z1", user_id: "o1", date: C.dodajDni(dzisW, 2), deleted_at: null },
+        { id: "z2", user_id: "o1", date: C.dodajDni(dzisW, 3), deleted_at: null },
+        { id: "z3", user_id: "o1", date: C.dodajDni(dzisW, -5), deleted_at: null },
+      ],
+      users: [
+        { id: "o1", name: "Odchodzi", active: true, archived: false, default_lokal: "Ceglana", ostatni_dzien: C.dodajDni(dzisW, -1) },
+        { id: "o2", name: "Ostatni Dziś", active: true, archived: false, default_lokal: "Ceglana", ostatni_dzien: dzisW },
+        { id: "o3", name: "Już Wyłączony", active: false, archived: false, ostatni_dzien: C.dodajDni(dzisW, -10) },
+        { id: "o4", name: "W Archiwum", active: true, archived: true, ostatni_dzien: C.dodajDni(dzisW, -10) },
+        { id: "o5", name: "Bez Daty", active: true, archived: null },
+        { id: "o6", name: "Tablet", active: true, archived: null, allowed_lokale: "Sunset", ostatni_dzien: C.dodajDni(dzisW, -3) },
+      ],
+    };
+    r = odpowiedz();
+    await koniecPracy(zadanie({}, "Bearer zly"), r);
+    sprawdz("koniec-pracy: zły sekret = 401", r.kod === 401);
+    r = odpowiedz();
+    await koniecPracy(zadanie(), r);
+    const ku = (id) => stan.tabele.users.find((u) => u.id === id);
+    sprawdz("dzień po ostatnim dniu: nieaktywny, NIE w archiwum", ku("o1").active === false && ku("o1").archived === false);
+    sprawdz("ostatni dzień = dziś: jeszcze aktywny", ku("o2").active === true);
+    sprawdz("zarchiwizowanego nie ruszamy, bez daty też", ku("o4").active === true && ku("o5").active === true);
+    sprawdz("archived = null traktowane jak nie w archiwum", ku("o6").active === false);
+    sprawdz("kierownik lokalu dostaje wiadomość (lokal z allowed_lokale, gdy brak default)",
+      stan.tabele.notifications.length === 2 &&
+        stan.tabele.notifications.every((n) => n.audience === "manager" && n.type === "koniec_pracy") &&
+        stan.tabele.notifications.some((n) => n.lokal === "Sunset"),
+      JSON.stringify(stan.tabele.notifications.map((n) => n.lokal)));
+    sprawdz("wiadomość mówi, ile zmian zostało w Grafiku po ostatnim dniu",
+      /zostały 2 zmiany po tej dacie/.test((stan.tabele.notifications.find((n) => /Odchodzi/.test(n.message)) || {}).message || ""));
+    sprawdz("odpowiedź wymienia wyłączonych", JSON.stringify(r.json.wylaczone) === JSON.stringify(["Odchodzi", "Tablet"]), JSON.stringify(r.json));
 
     log("");
     log(`ZDANYCH ${zdanych}, OBLANYCH ${oblanych}`, oblanych ? "zle" : "ok");

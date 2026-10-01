@@ -23,6 +23,14 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.70.1",
+    date: "2026-10-01",
+    items: [
+      "Ostatni dzień pracy: następnego dnia konto staje się nieaktywne (bez archiwum) i znika z Tabletu.",
+      "Po ostatnim dniu zmiany z grafiku nie zgłaszają się już jako „nie odbił(a)”.",
+    ],
+  },
+  {
     version: "0.70.0",
     date: "2026-10-01",
     items: [
