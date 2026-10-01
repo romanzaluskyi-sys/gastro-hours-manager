@@ -77,14 +77,36 @@ const pobierz = async (sciezka) => {
   }
 };
 
+// "wt 29 wrz" — ten sam zapis co opisDnia w src/api/notifications.ts (z src/
+// nie wolno importować, patrz komentarz na górze pliku).
+const DNI_KROTKO = ["ndz", "pon", "wt", "śr", "czw", "pt", "sob"];
+const MIES_KROTKO = ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"];
+const opisDnia = (dzien) => {
+  const [y, m, d] = dzien.split("-").map(Number);
+  return `${DNI_KROTKO[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]} ${d} ${MIES_KROTKO[m - 1]}`;
+};
+
 // res.ok sprawdzamy zawsze — cichy 400 wyglądałby jak "wszyscy odbili"
 // (patrz błąd #8 w CLAUDE.md).
+//
+// ⚠️ Baza bez migracji 0039 nie zna kolumny `dane` i odrzuciłaby CAŁY wiersz —
+// wtedy drugi zapis bez niej: wiadomość w aplikacji jest ważniejsza niż
+// tabelka w e-mailu.
 const powiadom = async (wiersz) => {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/notifications`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(wiersz),
-  });
+  const zapisz = (w) =>
+    fetch(`${SUPABASE_URL}/rest/v1/notifications`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(w),
+    });
+  let res = await zapisz(wiersz);
+  if (!res.ok && wiersz.dane) {
+    const tresc = await res.text().catch(() => "");
+    if (/dane/.test(tresc)) {
+      const { dane, ...bezDanych } = wiersz;
+      res = await zapisz(bezDanych);
+    }
+  }
   if (!res.ok) throw new Error(`Błąd zapisu powiadomienia: ${res.status}`);
 };
 
@@ -158,6 +180,19 @@ module.exports = async function handler(req, res) {
             `Wczoraj (${dataPL}) miałeś(-aś) zmianę w grafiku w lokalu ${zm.lokal}, ` +
             `ale nie ma jej wśród odbitych godzin. Kierownik potwierdzi ją w systemie — ` +
             "jeśli godziny były inne, powiedz mu o tym.",
+          // Wiersze do e-maila (0.70.0, migracja 0039) — aplikacja czyta
+          // tylko `message`.
+          dane: {
+            wiersze: [
+              {
+                e: "Zmiana z grafiku",
+                w: `${opisDnia(zm.date)} · ${String(zm.start_time || "").slice(0, 5)}–${String(
+                  zm.end_time || ""
+                ).slice(0, 5)}`,
+              },
+              { e: "Lokal", w: zm.lokal },
+            ],
+          },
         });
         await powiadom({
           audience: "manager",

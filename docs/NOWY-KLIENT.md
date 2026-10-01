@@ -39,7 +39,10 @@ Environment Variables:
 | `SUPABASE_URL` | crony (`api/cron/*.js`) i `api/admin/ustaw-haslo.js` | jak wyżej |
 | `SUPABASE_SERVICE_KEY` | crony (każdy zapis) i `ustaw-haslo.js` (hasło w Auth) | `sb_secret_...` |
 | `SUPABASE_KEY` | tylko `ustaw-haslo.js` — sprawdza token wołającego | `sb_publishable_...` |
-| `CRON_SECRET` | autoryzacja crona | losowy ciąg |
+| `CRON_SECRET` | autoryzacja crona; podpisuje też linki „Ustawienia powiadomień” w mailach | losowy ciąg |
+| `BREVO_API_KEY` | wysyłka e-maili (od 0.70.0) — Brevo → SMTP & API → API Keys | `xkeysib-...` |
+| `EMAIL_FROM` | nadawca maili, zweryfikowany w Brevo | `powiadomienia@shiftro.pl` |
+| `APP_URL` | adres aplikacji tego klienta — linki w mailach (gdy brak: domena produkcyjna z Vercela) | `https://emka.shiftro.pl` |
 
 ⚠️ **Crony czytają `SUPABASE_SERVICE_KEY`, NIE `SUPABASE_KEY`.** Do 0.41.x
 chodziły kluczem publishable, czyli jako anonim; migracja `0026` zabrała
@@ -93,6 +96,25 @@ Drugie sprawdzenie, jednorazowe: wywołaj ręcznie jednego crona z nagłówkiem
 `Authorization: Bearer $CRON_SECRET` i zobacz, czy odpowiada 200, a nie 500.
 Crony chodzą raz na dobę, więc bez tego o błędnej konfiguracji dowiesz się
 dopiero następnego ranka.
+
+### E-maile (od 0.70.0)
+
+Kopia wiadomości pracownika idzie mailem w ciągu kilku minut, kierownik
+dostaje raport dnia (w poniedziałek tygodnia). Poza trzema zmiennymi wyżej:
+
+1. **Brevo** — każdy klient ma WŁASNE konto (darmowy plan: ~300 maili dziennie),
+   więc i własny limit. Nadawcę (`EMAIL_FROM`) trzeba zweryfikować; domena
+   `shiftro.pl` z rekordami SPF/DKIM od Brevo może być wspólna dla wszystkich
+   klientów — weryfikuje się ją raz na koncie, z którego idą maile.
+2. **Harmonogram wysyłki do pracowników stoi w BAZIE**, nie w Vercelu (Hobby
+   wywołuje crona najwyżej raz dziennie): wklej
+   [`docs/sql/tools/email-harmonogram.sql`](sql/tools/email-harmonogram.sql) z
+   adresem aplikacji i `CRON_SECRET` tego klienta. Raport kierownika chodzi
+   zwykłym Vercel Cronem (`vercel.json`).
+3. Sprawdzenie: wiadomość wysłana w aplikacji dostaje po kilku minutach
+   `notifications.email_info = 'wysłano'` (zapytania na końcu tamtego pliku).
+   Bez `BREVO_API_KEY` endpoint odpowiada 500 z nazwą brakującej zmiennej i
+   wiersze czekają w kolejce najwyżej dobę.
 
 ## 3. Google Apps Script (opcjonalnie)
 

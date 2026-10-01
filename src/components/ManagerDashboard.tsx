@@ -63,6 +63,7 @@ import {
   poOstatnimDniu,
 } from "../utils/grafik";
 import PrzepiszZmianyModal from "./manager/PrzepiszZmianyModal";
+import { zuzyjCel, CELE_KIEROWNIKA } from "../utils/linki";
 
 // ==========================================
 // KIEROWNIK DASHBOARD
@@ -139,7 +140,8 @@ const ManagerDashboard = ({
   setBudzetDni,
   showMsg,
 }) => {
-  const [tab, setTabSurowy] = useState("pulpit");
+  // Start na zakładce z linku w e-mailu (0.70.0, utils/linki.ts), inaczej Pulpit.
+  const [tab, setTabSurowy] = useState(() => zuzyjCel(CELE_KIEROWNIKA) || "pulpit");
   // Zgłoszenia i Powiadomienia to od 0.51.0 jedna Skrzynka. Stare klucze
   // przekierowujemy — dzwonek w górnym pasku otwiera ją na "Informacjach".
   const [skrzynkaStart, setSkrzynkaStart] = useState("todo");
@@ -1080,7 +1082,9 @@ const ManagerDashboard = ({
     await createEmployeeNotification(
       issue.user_name,
       `${currentUser.name} odpowiedział(a) na Twoje zgłoszenie „${krotko}”: ${tekst.trim()}`,
-      "issue_reply"
+      "issue_reply",
+      // E-mail (0.70.0) pokazuje temat i odpowiedź osobno, jak w rozmowie.
+      { cytat: temat.length > 200 ? `${temat.slice(0, 197)}…` : temat, odpowiedz: { kto: currentUser.name, tekst: tekst.trim() } }
     );
     if (zamknij && issue.status === "nowe") await resolveIssue(issue.id);
   };

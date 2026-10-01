@@ -65,6 +65,7 @@ import {
 } from "../utils/format";
 import { stanowiskoShort, stanowiskoBadgeStyle } from "../utils/stanowiska";
 import { countWorkdays, URLOP_HOURS_PER_DAY } from "../utils/absences";
+import { zuzyjCel, CELE_PRACOWNIKA } from "../utils/linki";
 import {
   normaMiesiaca,
   naEtacie,
@@ -760,6 +761,20 @@ export const EmployeeSessionScreens = ({
   const zgTypNaWejscie = useRef(null);
   // Tekst zgłoszenia wpisany z góry („Nie da się zrobić?” w Zadaniach).
   const zgTekstNaWejscie = useRef(null);
+
+  // Link z e-maila (0.70.0, utils/linki.ts) — tylko na WŁASNYM telefonie.
+  // Na wspólnym tablecie (onBack) wybrana osoba nie musi być tą, której
+  // przyszedł mail. Ekran spoza bloków lokalu zostaje Pulpitem.
+  useEffect(() => {
+    if (onBack) return;
+    const cel = zuzyjCel(CELE_PRACOWNIKA);
+    if (!cel || (cel.blok && !bloki.includes(cel.blok))) return;
+    if (cel.zgTyp) {
+      zgTypNaWejscie.current = cel.zgTyp;
+      setZgPrefillShiftId(null);
+    }
+    setScreen(cel.screen);
+  }, []);
 
   // ---- "Popraw zmianę" (type: correction) — osobny zestaw pól, patrz handleSendKorekta ----
   // null = jeszcze nie wybrano (lista zmian), uuid zmiany albo "forgot" (od 0.64.0)

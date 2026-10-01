@@ -22,6 +22,7 @@ import { api } from "../api/supabase";
 import {
   createEmployeeNotification,
   createManagerNotification,
+  opisZmiany,
 } from "../api/notifications";
 import {
   trimTime,
@@ -344,7 +345,22 @@ export const offerSwap = async ({
           wzajemnaShift.date
         } ${trimTime(wzajemnaShift.start_time)}–${trimTime(wzajemnaShift.end_time)}.`
       : `${author.name} chce oddać Ci zmianę ${zakres}.`;
-  await createEmployeeNotification(target.name, opis, "swap");
+  // Wiersze do e-maila (0.70.0) — z perspektywy ADRESATA: przy zamianie
+  // oddaje swoją, a dostaje zmianę autora.
+  const wierszePropozycji =
+    typ === "zamiana" && wzajemnaShift
+      ? [
+          { e: "Oddajesz", w: opisZmiany(wzajemnaShift.date, wzajemnaShift.start_time, wzajemnaShift.end_time) },
+          { e: "Dostajesz", w: opisZmiany(planShift.date, planShift.start_time, planShift.end_time) },
+        ]
+      : [
+          { e: "Zmiana", w: opisZmiany(planShift.date, planShift.start_time, planShift.end_time) },
+          { e: "Lokal · stanowisko", w: `${planShift.lokal} · ${planShift.stanowisko}` },
+        ];
+  await createEmployeeNotification(target.name, opis, "swap", {
+    autor: author.name,
+    wiersze: wierszePropozycji,
+  });
   await createManagerNotification(
     planShift.lokal,
     typ === "zamiana"
@@ -538,19 +554,39 @@ export const resolveSwap = async ({
       ? `${wzajemna.date} ${trimTime(wzajemna.start_time)}–${trimTime(wzajemna.end_time)}`
       : null;
     const kto = editorName || "Kierownik";
+    // Wiersze do e-maila (0.70.0): "było / jest" z perspektywy odbiorcy.
+    const opisPlan = opisZmiany(planShift.date, planShift.start_time, planShift.end_time);
+    const opisWzajemny = zapisanaWzajemna
+      ? opisZmiany(wzajemna.date, wzajemna.start_time, wzajemna.end_time)
+      : null;
+    const zatwierdzil = { e: "Zatwierdził(a)", w: kto };
     await createEmployeeNotification(
       swap.author_user_name,
       zakresWzajemny
         ? `${kto} zatwierdził(a) zamianę — oddajesz ${zakres}, pracujesz ${zakresWzajemny}.`
         : `${kto} zatwierdził(a) zamianę — zmianę ${zakres} przejmuje ${swap.taker_user_name}.`,
-      "swap"
+      "swap",
+      {
+        wiersze: opisWzajemny
+          ? [{ e: "Było", w: opisPlan }, { e: "Jest", w: opisWzajemny }, zatwierdzil]
+          : [{ e: "Oddana zmiana", w: opisPlan }, { e: "Przejmuje", w: swap.taker_user_name }, zatwierdzil],
+      }
     );
     await createEmployeeNotification(
       swap.taker_user_name,
       zakresWzajemny
         ? `${kto} zatwierdził(a) zamianę — pracujesz ${zakres}, oddajesz ${zakresWzajemny}.`
         : `${kto} zatwierdził(a) zamianę — pracujesz ${zakres} w lokalu ${planShift.lokal}.`,
-      "swap"
+      "swap",
+      {
+        wiersze: opisWzajemny
+          ? [{ e: "Było", w: opisWzajemny }, { e: "Jest", w: opisPlan }, zatwierdzil]
+          : [
+              { e: "Zmiana", w: opisPlan },
+              { e: "Lokal · stanowisko", w: `${planShift.lokal} · ${planShift.stanowisko}` },
+              zatwierdzil,
+            ],
+      }
     );
     return { swap: updated, planShift: zapisana, wzajemna: zapisanaWzajemna };
   }

@@ -4,7 +4,7 @@
 // Rejestr Godzin (ManagerDashboard.tsx), żeby nie duplikować tego samego
 // zapisu do shifts/issues/shift_edits + powiadomienia w dwóch miejscach.
 import { api } from "../api/supabase";
-import { createEmployeeNotification } from "../api/notifications";
+import { createEmployeeNotification, opisDnia } from "../api/notifications";
 import { sendToGoogleSheets } from "../api/googleSheets";
 import { toLocalYMD } from "../api/googleSheets";
 import { znajdzKolizjeWBazie } from "./shifts";
@@ -148,11 +148,35 @@ export const resolveCorrection = async ({
         finalValues.date
       )} (${zakres}).`;
   if (issue.user_name) {
-    await createEmployeeNotification(
-      issue.user_name,
-      msg,
-      "correction_resolved"
-    );
+    // Wiersze do e-maila (0.70.0): "było → jest" i suma godzin. Stare godziny
+    // tylko przy poprawianej zmianie — przy "Zapomniałem odbić" nie ma czego
+    // przekreślać.
+    const hFmt = (h) => `${String(Math.round(h * 10) / 10).replace(".", ",")} h`;
+    const stareGodziny =
+      existingShift && existingShift.end_time
+        ? (new Date(existingShift.end_time) - new Date(existingShift.start_time)) / 3600000
+        : null;
+    const razem =
+      godzin == null
+        ? null
+        : stareGodziny == null || Math.abs(godzin - stareGodziny) < 0.05
+        ? hFmt(godzin)
+        : `${hFmt(godzin)} (${godzin > stareGodziny ? "+" : "−"}${hFmt(Math.abs(godzin - stareGodziny))})`;
+    const wiersze = [
+      { e: "Zmiana", w: opisDnia(finalValues.date) },
+      {
+        e: "Godziny",
+        w: zakres,
+        bylo: existingShift
+          ? `${fmtHHMM(new Date(existingShift.start_time))}–${
+              existingShift.end_time ? fmtHHMM(new Date(existingShift.end_time)) : "…"
+            }`
+          : null,
+      },
+    ];
+    if (razem) wiersze.push({ e: "Razem", w: razem });
+    if (reason) wiersze.push({ e: "Powód", w: reason });
+    await createEmployeeNotification(issue.user_name, msg, "correction_resolved", { wiersze });
   }
 
   return {
