@@ -480,7 +480,10 @@ const USERS = [
         { id: "n10", audience: "manager", lokal: "Ceglana", type: "x", message: "dla kierownika", created_at: minutTemu(8) },
         { id: "n11", audience: "employee", user_name: "Ala Nowak", type: "x", message: "już wysłana", created_at: minutTemu(8), email_at: minutTemu(5) },
       ],
-      grafik_shifts: [{ id: "x", user_id: "p1", published_at: "x", deleted_at: null, ...GRAFIK_ALI[0] }],
+      // ⚠️ Data WZGLĘDNA (jutro w Warszawie): mail pokazuje tylko zmiany od
+      // dziś, a stała "2026-10-01" z GRAFIK_ALI wypadła w przeszłość 02.10 i
+      // sprawdzian zaczął padać na każdym PR-ze, niezależnie od zmian.
+      grafik_shifts: [{ id: "x", user_id: "p1", published_at: "x", deleted_at: null, ...GRAFIK_ALI[0], date: C.dodajDni(C.ymd(), 1) }],
     };
     stan.brevo = (body) => (body.to[0].email === "bo@zly" ? { status: 400 } : { status: 201 });
     const nr = (id) => stan.tabele.notifications.find((n) => n.id === id);
