@@ -25,7 +25,7 @@ import {
   getAvailableYears,
   formatNotificationText,
 } from "../utils/format";
-import { findOverlappingShift, opisKolidujacej, znajdzKolizjeWBazie } from "../utils/shifts";
+import { findOverlappingShift, opisKolidujacej, znajdzKolizjeWBazie, znajdzOtwartaDoZakonczenia, znajdzOtwartaWBazie } from "../utils/shifts";
 import { zadaniaNaDzien, toLocalYMD } from "../utils/tasks";
 import { resolveAbsenceRequest, addUrlopDirectly, deleteAbsence } from "../utils/absences";
 import { zmianyPorzucone } from "../utils/porzucone";
@@ -1172,6 +1172,23 @@ const ManagerDashboard = ({
             `(${opisKolidujacej(kolizja)}). Zapisać mimo to?`
         );
         if (!confirmed) return false;
+      }
+      // Nowy wpis, który opisuje pracę z JUŻ odbitym startem bez końca — druga
+      // zmiana obok porzuconej (Natalia, 25.09.2026). Ostrzeżenie, nie
+      // blokada: właściwa droga to zakończyć tamtą (Aktywni albo "Do
+      // decyzji" → Zmiany bez zakończenia).
+      if (nowy && !kolizja) {
+        const otwarta =
+          znajdzOtwartaDoZakonczenia(shifts, userId, startD, endD) ||
+          (await znajdzOtwartaWBazie({ userId, start: startD, end: endD }));
+        if (otwarta) {
+          const confirmed = window.confirm(
+            `Ta osoba ma już zmianę bez zakończenia (${opisKolidujacej(otwarta)}). ` +
+              `Zamiast dodawać drugą, zakończ tamtą — w Aktywnych albo w "Do decyzji". ` +
+              `Dodać mimo to?`
+          );
+          if (!confirmed) return false;
+        }
       }
 
       let updated;

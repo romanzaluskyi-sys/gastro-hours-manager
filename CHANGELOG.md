@@ -5,6 +5,19 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.70.2 — 2026-10-02
+
+- **Koniec podwójnych zmian po zapomnianym odbiciu końca.** Gdy ktoś odbił
+  start, nie odbił końca, a potem wpisał na tablecie całą zmianę (albo
+  „Zapomniałem odbić” w Zgłoś), powstawała druga zmiana obok pierwszej —
+  godziny raz, a pierwsza dalej wisiała w „Zmianach bez zakończenia”. Teraz
+  tablet mówi „Ta zmiana już jest zapisana” i wysyła kierownikowi prośbę o
+  zakończenie TEJ zmiany. Zatwierdzenie dopisuje koniec, nic się nie dubluje.
+- Kierownik dodający ręcznie zmianę obok takiej niezakończonej dostaje
+  ostrzeżenie, że lepiej zakończyć tamtą.
+- Poranne przypomnienie „zmiana bez odbitego końca” nie przychodzi, gdy
+  koniec już czeka na decyzję kierownika.
+
 ## 0.70.1 — 2026-10-01
 
 - **Ostatni dzień pracy wyłącza konto.** Następnego dnia osoba staje się

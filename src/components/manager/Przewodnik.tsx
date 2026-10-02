@@ -23,6 +23,14 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.70.2",
+    date: "2026-10-02",
+    items: [
+      "Cała zmiana wpisana na niezakończoną już zmianę nie tworzy drugiej — idzie do kierownika jako zakończenie tamtej.",
+      "Ostrzeżenie przy ręcznym dodaniu zmiany obok niezakończonej; bez porannego przypomnienia, gdy koniec czeka na decyzję.",
+    ],
+  },
+  {
     version: "0.70.1",
     date: "2026-10-01",
     items: [

@@ -34,10 +34,11 @@ import {
 } from "lucide-react";
 import { api } from "../api/supabase";
 import { sendToGoogleSheets, toLocalYMD } from "../api/googleSheets";
+import { dzienKrotki } from "../utils/czas";
 import { createManagerNotification } from "../api/notifications";
 import { APP_VERSION, PRODUKT } from "../config";
 import ShiftroMark from "./ShiftroMark";
-import { findOverlappingShift, opisKolidujacej, znajdzKolizjeWBazie, getTodaysShiftsForUser } from "../utils/shifts";
+import { findOverlappingShift, opisKolidujacej, znajdzKolizjeWBazie, znajdzOtwartaDoZakonczenia, getTodaysShiftsForUser } from "../utils/shifts";
 import { zmianaTrwa } from "../utils/porzucone";
 import {
   regulyWpisu,
@@ -1383,11 +1384,31 @@ export const EmployeeSessionScreens = ({
       const d = dopasujCalaZmiane(startD, endD, teraz);
       startD = d.startD;
       endD = d.endD;
-      const problem = sprawdzGodzine(endD, teraz, r.koniecWstecz);
-      if (problem) {
-        return setPozaOknem({ rodzaj: "cala", ...problem, okno: r.koniecWstecz, startD, endD });
+    }
+    const problemCalej =
+      znamKoniec && r.koniecWstecz != null ? sprawdzGodzine(endD, teraz, r.koniecWstecz) : null;
+    if (problemCalej && problemCalej.powod === "przyszlosc") {
+      return setPozaOknem({ rodzaj: "cala", ...problemCalej, okno: r.koniecWstecz, startD, endD });
+    }
+    // Cała zmiana, której start JUŻ jest zapisany bez końca (porzucona po
+    // progu lokalu) — to zakończenie tamtej, nie druga zmiana. Patrz
+    // znajdzOtwartaDoZakonczenia w utils/shifts.ts (Natalia, 25.09.2026).
+    if (znamKoniec) {
+      const otwarta = znajdzOtwartaDoZakonczenia(shifts, employee.id, startD, endD);
+      if (otwarta) {
+        if (czekaNaKoniecOdKierownika(otwarta, issues)) {
+          return showMsg(
+            `Zmiana od ${fmtHHMM(otwarta.start_time)} czeka już na kierownika — nie wpisuj jej drugi raz.`,
+            "error"
+          );
+        }
+        return setPozaOknem({ rodzaj: "porzucona", powod: "za_pozno", shift: otwarta, startD, endD });
       }
-    } else if (!znamKoniec && r.startWstecz != null) {
+    }
+    if (problemCalej) {
+      return setPozaOknem({ rodzaj: "cala", ...problemCalej, okno: r.koniecWstecz, startD, endD });
+    }
+    if (!znamKoniec && r.startWstecz != null) {
       startD = dopasujStart(startD, teraz);
       const problem = sprawdzGodzine(startD, teraz, r.startWstecz);
       if (problem) {
@@ -1477,6 +1498,19 @@ export const EmployeeSessionScreens = ({
         });
         showMsg("Wysłano do kierownika — godziny pojawią się po zatwierdzeniu.");
         resetShiftForm();
+      } else if (p.rodzaj === "porzucona") {
+        await wyslijProsbeOGodzine({
+          shiftId: p.shift.id,
+          startD: p.startD,
+          endD: p.endD,
+          lokal: formLokal,
+          stanowisko: formStanowisko,
+          opis: `Zmiana od ${fmtHHMM(p.shift.start_time)} bez odbitego końca — pracownik wpisał całą zmianę ${fmtHHMM(p.startD)}–${fmtHHMM(p.endD)}.`,
+        });
+        showMsg(
+          `Wysłano do kierownika — dopisze koniec do zmiany od ${fmtHHMM(p.shift.start_time)}.`
+        );
+        resetShiftForm();
       } else if (p.rodzaj === "koniec") {
         await wyslijProsbeOGodzine({
           shiftId: p.shift.id,
@@ -1557,6 +1591,28 @@ export const EmployeeSessionScreens = ({
     ) {
       return showMsg("Nic się nie zmieniło — popraw godzinę, która się nie zgadza.", "error");
     }
+    // "Zapomniałem odbić", a start tej pracy JUŻ jest zapisany bez końca —
+    // przypinamy prośbę do tamtej zmiany, żeby zatwierdzenie dopisało koniec
+    // zamiast zakładać drugą (patrz znajdzOtwartaDoZakonczenia).
+    let otwarta = null;
+    if (zgCorrectionShiftId === "forgot") {
+      const [y, m, d] = zgPropDate.split("-").map(Number);
+      const [sh, sm] = zgPropStart.split(":").map(Number);
+      const odD = new Date(y, m - 1, d, sh, sm);
+      let doD = null;
+      if (zgPropEnd) {
+        const [eh, em] = zgPropEnd.split(":").map(Number);
+        doD = new Date(y, m - 1, d, eh, em);
+        if (doD <= odD) doD.setDate(doD.getDate() + 1);
+      }
+      otwarta = znajdzOtwartaDoZakonczenia(shifts, employee.id, odD, doD);
+      if (otwarta && czekaNaKoniecOdKierownika(otwarta, issues)) {
+        return showMsg(
+          `Zmiana od ${fmtHHMM(otwarta.start_time)} czeka już na kierownika — nie wysyłaj jej drugi raz.`,
+          "error"
+        );
+      }
+    }
     setZgSaving(true);
     try {
       const issue = await api.post("issues", {
@@ -1566,7 +1622,7 @@ export const EmployeeSessionScreens = ({
         status: "nowe",
         type: "correction",
         is_anonymous: false,
-        shift_id: zgCorrectionShiftId !== "forgot" ? zgCorrectionShiftId : null,
+        shift_id: otwarta ? otwarta.id : zgCorrectionShiftId !== "forgot" ? zgCorrectionShiftId : null,
         proposed_date: zgPropDate,
         proposed_lokal: zgPropLokal,
         proposed_stanowisko: zgPropStanowisko,
@@ -1577,7 +1633,11 @@ export const EmployeeSessionScreens = ({
       setZgKorektaNote("");
       setZgPrefillShiftId(null);
       applyKorektaShiftDefaults(null);
-      showMsg("Wysłano · czeka na kierownika.");
+      showMsg(
+        otwarta
+          ? `Wysłano · kierownik dopisze koniec do zmiany od ${fmtHHMM(otwarta.start_time)}.`
+          : "Wysłano · czeka na kierownika."
+      );
     } catch (err) {
       showMsg(`Błąd połączenia: ${err.message || "nieznany błąd"}`, "error");
     }
@@ -2498,6 +2558,14 @@ export const EmployeeSessionScreens = ({
         p.rodzaj === "start"
           ? "Zmianę rozpoczniesz, gdy zaczniesz pracę — nie z wyprzedzeniem."
           : "Koniec zapiszesz, gdy zmiana się skończy.";
+    } else if (p.rodzaj === "porzucona") {
+      const dzis = toLocalYMD(p.shift.start_time) === toLocalYMD(new Date());
+      tytul = "Ta zmiana już jest zapisana";
+      tresc =
+        `Masz start o ${fmtHHMM(p.shift.start_time)}${
+          dzis ? "" : ` (${dzienKrotki(toLocalYMD(p.shift.start_time))})`
+        } bez odbitego końca. Nie zakładamy drugiej zmiany — wyślemy kierownikowi ` +
+        `prośbę, żeby zakończył tamtą: ${fmtHHMM(p.startD)}–${fmtHHMM(p.endD)}.`;
     } else {
       tytul = "Za późno na samodzielny wpis";
       const godzina = fmtHHMM(p.rodzaj === "start" ? p.startD : p.endD);

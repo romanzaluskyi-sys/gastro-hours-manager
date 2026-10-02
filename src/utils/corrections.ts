@@ -7,7 +7,7 @@ import { api } from "../api/supabase";
 import { createEmployeeNotification, opisDnia } from "../api/notifications";
 import { sendToGoogleSheets } from "../api/googleSheets";
 import { toLocalYMD } from "../api/googleSheets";
-import { znajdzKolizjeWBazie } from "./shifts";
+import { znajdzKolizjeWBazie, znajdzOtwartaWBazie } from "./shifts";
 
 const fmtHHMM = (d) =>
   d
@@ -45,7 +45,7 @@ export const resolveCorrection = async ({
   const startD = buildLocalDate(finalValues.date, finalValues.start);
   if (!startD) throw new Error("Brak daty lub godziny rozpoczęcia.");
 
-  const existingShift = issue.shift_id
+  let existingShift = issue.shift_id
     ? shifts.find((s) => s.id === issue.shift_id)
     : null;
 
@@ -94,12 +94,34 @@ export const resolveCorrection = async ({
       end: endD,
       excludeId: null,
     });
+    // Druga pułapka tego samego rodzaju: osoba ma NIEZAKOŃCZONĄ zmianę, którą
+    // ta korekta opisuje (start o 09:00 bez końca + prośba "09:00–18:00" bez
+    // shift_id). Dopisujemy koniec do tamtej zamiast zakładać drugą — inaczej
+    // godziny są raz, a otwarta zmiana dalej wisi w "Zmianach bez
+    // zakończenia". Pyta dopiero, gdy zakończonej kolizji nie ma: wtedy
+    // praca już jest zapisana i otwarta zmiana jest osobną sprawą.
+    const otwarta = juzJest
+      ? null
+      : await znajdzOtwartaWBazie({ userId: issue.user_id, start: startD, end: endD });
     if (juzJest) {
       // Wiersz już jest — bierzemy istniejący zamiast tworzyć drugi. Reszta
       // (ślad w shift_edits, rozwiązanie zgłoszenia, powiadomienie) musi się
       // wykonać normalnie: wcześniejsze wyjście zostawiłoby zgłoszenie w
       // stanie "nowe" i wróciłoby ono do kolejki następnego dnia.
       savedShift = juzJest;
+    } else if (otwarta) {
+      existingShift = otwarta;
+      savedShift = await api.patch("shifts", otwarta.id, {
+        start_time: startD.toISOString(),
+        end_time: endD ? endD.toISOString() : null,
+        lokal: finalValues.lokal,
+        stanowisko: finalValues.stanowisko,
+        godzin,
+      });
+      sendToGoogleSheets(
+        { ...savedShift, start_time: startD, end_time: endD },
+        "EDIT_SHIFT"
+      );
     } else {
       savedShift = await api.post("shifts", {
         user_id: issue.user_id,

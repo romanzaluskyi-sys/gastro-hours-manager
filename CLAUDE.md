@@ -2770,8 +2770,22 @@ Szczegóły, które łatwo zepsuć:
   `lokale`. Dokładając kolejne miejsce, które pyta "czy ta zmiana trwa",
   przekaż je — inaczej wszędzie wyjdą wartości domyślne i dwa ekrany powiedzą
   co innego.
+- ⚠️ **Cała zmiana wpisana NA porzuconą to jej zakończenie, nie druga zmiana**
+  (0.70.2, `znajdzOtwartaDoZakonczenia` w `utils/shifts.ts`). Po progu
+  formularz nie proponuje już „Zakończ”, więc człowiek wpisywał 09:00–18:00
+  obok odbitego 09:00 bez końca — korekta szła bez `shift_id`, zatwierdzenie
+  zakładało drugi wiersz, a pierwszy wisiał dalej (Natalia, 25.09.2026).
+  Dziś: tablet (cała zmiana i „Zapomniałem odbić”) przypina korektę do
+  otwartej zmiany, `resolveCorrection` w razie braku `shift_id` szuka jej w
+  BAZIE i dopisuje koniec, ręczne dodanie w panelu ostrzega, a
+  `check-porzucone.js` pomija zmiany z koniecem czekającym na kierownika.
+  Warunek to „start otwartej leży W ŚRODKU wpisu” (zapas 2 h), a NIE
+  nakładanie do końca doby — przy zmianie dzielonej wieczorna część nie może
+  zamknąć porannej porzuconej. `findOverlappingShift` dalej pomija zmiany
+  bez końca i tak ma zostać (inaczej poranna porzucona blokowałaby wieczór).
 - `harness-porzucone.html` sprawdza całą arytmetykę progów na ręcznie
-  policzonych przykładach (39 przypadków, razem z pracownikiem na próbę).
+  policzonych przykładach (52 przypadki, razem z pracownikiem na próbę i
+  wpisem na porzuconą).
 
 ## Rejestracja godzin — sposób wpisu i okna tolerancji (0.45.0)
 
