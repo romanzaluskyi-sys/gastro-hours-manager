@@ -58,6 +58,7 @@ const sprawdz = (nazwa, warunek, szczegol = "") => {
     out.textContent = "";
     const P = await import(await zaladuj("/src/utils/porzucone"));
     const R = await import(await zaladuj("/src/utils/probni"));
+    const S = await import(await zaladuj("/src/utils/shifts"));
     log("moduły załadowane razem z grafik.ts i api/*", "ok");
     log("");
 
@@ -257,6 +258,43 @@ const sprawdz = (nazwa, warunek, szczegol = "") => {
     // Zmiana bez końca daje zero godzin — to jest ta sama zasada, na której
     // stoi cała pierwsza połowa tego pliku.
     sprawdz("liczymy tylko zamknięte zmiany tej osoby", godziny === 8, "jest " + godziny);
+
+    // --- Cała zmiana wpisana na porzuconą (Natalia, 25.09.2026) ---
+    log("");
+    log("Cała zmiana wpisana na zmianę bez końca (utils/shifts.ts)");
+    const natalia = { id: "n1" };
+    const otw = { id: "o1", user_id: "n1", start_time: d(2026, 9, 25, 9), end_time: null };
+    const znajdz = (zmiany, od, doG) => S.znajdzOtwartaDoZakonczenia(zmiany, "n1", od, doG);
+    sprawdz("09:00 bez końca + wpis 09:00–18:00 = ta sama zmiana",
+      znajdz([otw], d(2026, 9, 25, 9), d(2026, 9, 25, 18))?.id === "o1");
+    sprawdz("odbicie 09:10, wpis od 09:00 — ta sama praca",
+      znajdz([{ ...otw, start_time: d(2026, 9, 25, 9, 10) }], d(2026, 9, 25, 9), d(2026, 9, 25, 18))?.id === "o1");
+    sprawdz("odbicie 08:00, wpis od 09:30 — mieści się w zapasie",
+      znajdz([{ ...otw, start_time: d(2026, 9, 25, 8) }], d(2026, 9, 25, 9, 30), d(2026, 9, 25, 18))?.id === "o1");
+    // Zmiana dzielona: rano porzucone 09:00, wieczorem osobna część — to NIE
+    // jest zakończenie porannej.
+    sprawdz("zmiana dzielona: 18:00–22:00 nie zamyka porzuconej 09:00",
+      znajdz([otw], d(2026, 9, 25, 18), d(2026, 9, 25, 22)) === null);
+    sprawdz("start po końcu wpisu się nie liczy",
+      znajdz([{ ...otw, start_time: d(2026, 9, 25, 19) }], d(2026, 9, 25, 9), d(2026, 9, 25, 18)) === null);
+    sprawdz("odrzucona przez kierownika (rozliczenie) się nie liczy",
+      znajdz([{ ...otw, rozliczenie: "odrzucono" }], d(2026, 9, 25, 9), d(2026, 9, 25, 18)) === null);
+    sprawdz("zakończona zmiana to nie ten przypadek (to robi findOverlappingShift)",
+      znajdz([{ ...otw, end_time: d(2026, 9, 25, 18) }], d(2026, 9, 25, 9), d(2026, 9, 25, 18)) === null);
+    sprawdz("urlop się nie liczy",
+      znajdz([{ ...otw, is_urlop: true }], d(2026, 9, 25, 9), d(2026, 9, 25, 18)) === null);
+    sprawdz("cudza zmiana się nie liczy",
+      znajdz([{ ...otw, user_id: "x" }], d(2026, 9, 25, 9), d(2026, 9, 25, 18)) === null);
+    sprawdz("wczorajsza porzucona nie zamyka dzisiejszego wpisu",
+      znajdz([{ ...otw, start_time: d(2026, 9, 24, 9) }], d(2026, 9, 25, 9), d(2026, 9, 25, 18)) === null);
+    sprawdz("sam start (bez końca) też trafia w otwartą tego dnia",
+      znajdz([otw], d(2026, 9, 25, 9), null)?.id === "o1");
+    sprawdz("z dwóch otwartych bierzemy najbliższą startowi wpisu",
+      znajdz([otw, { ...otw, id: "o2", start_time: d(2026, 9, 25, 10) }], d(2026, 9, 25, 10), d(2026, 9, 25, 18))?.id === "o2");
+    // findOverlappingShift dalej NIE widzi otwartych — inaczej poranne
+    // porzucone blokowałoby wieczorną część zmiany dzielonej.
+    sprawdz("findOverlappingShift dalej pomija zmiany bez końca",
+      S.findOverlappingShift([otw], "n1", d(2026, 9, 25, 9), d(2026, 9, 25, 18), null) === null);
 
     log("");
     log(`ZDANYCH ${zdanych}, OBLANYCH ${oblanych}`, oblanych ? "zle" : "ok");

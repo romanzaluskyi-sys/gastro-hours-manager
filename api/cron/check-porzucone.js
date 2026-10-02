@@ -174,17 +174,27 @@ module.exports = async function handler(req, res) {
     );
     if (!otwarte.length) return res.status(200).json({ znalezione: 0 });
 
-    const [lokale, users, plan] = await Promise.all([
+    const [lokale, users, plan, korekty] = await Promise.all([
       pobierz(`lokale?select=name,tolerancja_po_grafiku_h,max_dlugosc_zmiany_h`),
       pobierz(`users?select=id,name,active,archived`),
       pobierz(
         `grafik_shifts?select=user_id,user_name,date,start_time,end_time` +
           `&deleted_at=is.null&published_at=not.is.null&date=gte.${od.slice(0, 10)}`
       ),
+      // Koniec, o który pracownik już poprosił kierownika (wpis po czasie
+      // albo cała zmiana wpisana na porzuconą) — to samo co
+      // czekaNaKoniecOdKierownika w src/utils/wpisy.ts. Taka zmiana nie jest
+      // "bez zakończenia", tylko czeka na decyzję, i panel jej tak nie liczy.
+      pobierz(
+        `issues?select=shift_id&type=eq.correction&status=neq.rozwiazane` +
+          `&shift_id=not.is.null&proposed_end_time=not.is.null`
+      ),
     ]);
+    const czekaNaKoniec = new Set(korekty.map((k) => String(k.shift_id)));
 
     for (const zm of otwarte) {
       if (zm.is_urlop) continue;
+      if (czekaNaKoniec.has(String(zm.id))) continue;
       const user = users.find((u) => String(u.id) === String(zm.user_id));
       if (!user || user.archived) continue;
 

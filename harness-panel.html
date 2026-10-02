@@ -2052,6 +2052,41 @@ const poprzedniMiesiac = (h) => {
         if (e !== null) sprawdz("Puls: przebieg bez wyjątku", false, e.message + " " + (e.stack || "").split("\n")[1]);
       }
 
+      // ----------------------------------------------------------------
+      // Korekta "cała zmiana" bez shift_id dla osoby, która ma już start bez
+      // końca (Natalia, 25.09.2026): zatwierdzenie ma DOPISAĆ koniec do
+      // otwartej zmiany, a nie założyć drugiej. Wołane wprost, bez ekranu —
+      // chodzi o resolveCorrection, wspólne dla "Do decyzji" i Pulpitu.
+      try {
+        const K = await import(await zaladuj("/src/utils/corrections"));
+        const dzien = ymd(new Date());
+        const start = new Date(dzien + "T09:00:00");
+        window.__tabele.shifts = [
+          { id: "shOtw", user_id: "uNat", user_name: "Natalia", lokal: "L1", stanowisko: "Bar",
+            start_time: start.toISOString(), end_time: null, rozliczenie: null },
+        ];
+        const przed = window.__zapisy.length;
+        await K.resolveCorrection({
+          issue: { id: "issNat", user_id: "uNat", user_name: "Natalia", shift_id: null },
+          shifts: [],
+          editorName: "Kierownik",
+          finalValues: { date: dzien, lokal: "L1", stanowisko: "Bar", start: "09:00", end: "18:00" },
+        });
+        const nowe = window.__zapisy.slice(przed);
+        const patch = nowe.find((z) => z[0] === "shifts" && z[1] === "shOtw");
+        sprawdz("korekta bez shift_id dopisuje koniec do otwartej zmiany",
+          !!patch && new Date(patch[2].end_time).getHours() === 18, JSON.stringify(nowe.map((z) => z.slice(0, 2))));
+        sprawdz("…i nie zakłada drugiej zmiany",
+          !nowe.some((z) => z[0] === "shifts" && typeof z[1] === "object"));
+        const slad = nowe.find((z) => z[0] === "shift_edits");
+        sprawdz("…a ślad mówi, że poprawiono istniejącą (stary start 09:00)",
+          !!slad && slad[1].shift_id === "shOtw" && slad[1].old_start_time === "09:00", JSON.stringify(slad && slad[1]));
+      } catch (e) {
+        sprawdz("Korekta na otwartą zmianę: przebieg bez wyjątku", false, e.message);
+      } finally {
+        window.__tabele.shifts = [];
+      }
+
       if (status.className !== "zle") {
         status.textContent =
           `panel zamontowany — sprawdziany ${zdanych}/${zdanych + oblanych}`;

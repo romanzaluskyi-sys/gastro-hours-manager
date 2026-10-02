@@ -74,21 +74,77 @@ export const getTodaysShiftsForUser = (shifts, userId) => {
 // ⚠️ Błąd sieci NIE blokuje zapisu. Niezapisana zmiana to czyjeś godziny i
 // czyjeś pieniądze; ewentualny duplikat jest odwracalny jednym kliknięciem
 // kierownika, a utracone odbicie trzeba odtwarzać z pamięci.
-export const znajdzKolizjeWBazie = async ({ userId, start, end, excludeId }) => {
-  if (!userId || !start) return null;
+const zmianyOsobyWBazie = async (userId, start) => {
   const od = new Date(start.getFullYear(), start.getMonth(), start.getDate() - 1);
   const doKiedy = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 2);
+  const wiersze = await api.get(
+    "shifts",
+    `user_id=eq.${userId}&start_time=gte.${od.toISOString()}&start_time=lt.${doKiedy.toISOString()}`
+  );
+  return (Array.isArray(wiersze) ? wiersze : []).map((s) => ({
+    ...s,
+    start_time: new Date(s.start_time),
+    end_time: s.end_time ? new Date(s.end_time) : null,
+  }));
+};
+
+export const znajdzKolizjeWBazie = async ({ userId, start, end, excludeId }) => {
+  if (!userId || !start) return null;
   try {
-    const wiersze = await api.get(
-      "shifts",
-      `user_id=eq.${userId}&start_time=gte.${od.toISOString()}&start_time=lt.${doKiedy.toISOString()}`
-    );
-    const parsed = (Array.isArray(wiersze) ? wiersze : []).map((s) => ({
-      ...s,
-      start_time: new Date(s.start_time),
-      end_time: s.end_time ? new Date(s.end_time) : null,
-    }));
+    const parsed = await zmianyOsobyWBazie(userId, start);
     return findOverlappingShift(parsed, userId, start, end, excludeId);
+  } catch (e) {
+    return null;
+  }
+};
+
+// Niezakończona zmiana tej osoby, którą wpisywany właśnie odcinek [start, end)
+// w praktyce OPISUJE — czyli ta sama praca, tylko wpisana drugi raz.
+//
+// 25.09.2026: Natalia odbiła start o 09:00 i nie odbiła końca. Po progu lokalu
+// zmiana przestała być "trwającą", więc formularz nie proponował już
+// "Zakończ", tylko nową zmianę. Wpisała całą 09:00–18:00 (poza oknem, więc
+// poszło do kierownika jako korekta BEZ shift_id), kierownik zatwierdził i
+// powstał drugi wiersz — a pierwszy dalej wisiał w "Zmianach bez zakończenia".
+// findOverlappingShift tego nie widzi, bo zmian bez końca świadomie nie liczy.
+//
+// ⚠️ Warunek to "start otwartej zmiany leży W ŚRODKU wpisu" (z zapasem
+// ZAPAS_PRZED_STARTEM_MIN, bo odbicie o 09:10 i wpis od 09:00 to ta sama
+// praca), a NIE zwykłe nakładanie się z otwartą zmianą do końca doby. Przy
+// zmianie dzielonej rano zostaje porzucone 09:00, a wieczorem ktoś wpisuje
+// 18:00–22:00 — to druga część dnia, nie zakończenie porannej.
+//
+// Pomija zmiany rozstrzygnięte przez kierownika (`rozliczenie`) — odrzucona
+// "nie było jej" i nowy wpis niczego nie dubluje.
+const ZAPAS_PRZED_STARTEM_MIN = 120;
+
+export const znajdzOtwartaDoZakonczenia = (shifts, userId, start, end) => {
+  if (!userId || !start) return null;
+  const koniec = end || koniecDoby(start);
+  const najwczesniej = start.getTime() - ZAPAS_PRZED_STARTEM_MIN * 60000;
+  const pasujace = (shifts || []).filter(
+    (s) =>
+      String(s.user_id) === String(userId) &&
+      !s.end_time &&
+      !s.is_urlop &&
+      !s.rozliczenie &&
+      s.start_time.getTime() >= najwczesniej &&
+      s.start_time < koniec
+  );
+  pasujace.sort(
+    (a, b) =>
+      Math.abs(a.start_time - start) - Math.abs(b.start_time - start)
+  );
+  return pasujace[0] || null;
+};
+
+// To samo zadane BAZIE (kierownik zatwierdza korektę z danymi sprzed pollu).
+// Błąd sieci = null: wtedy zostaje dotychczasowe zachowanie.
+export const znajdzOtwartaWBazie = async ({ userId, start, end }) => {
+  if (!userId || !start) return null;
+  try {
+    const parsed = await zmianyOsobyWBazie(userId, start);
+    return znajdzOtwartaDoZakonczenia(parsed, userId, start, end);
   } catch (e) {
     return null;
   }
