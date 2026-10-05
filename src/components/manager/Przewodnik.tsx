@@ -23,6 +23,14 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.70.3",
+    date: "2026-10-05",
+    items: [
+      "Godziny, grafik i wiadomości widać tylko w swoich lokalach i u swoich ludzi — tablet i telefon nie czytają już całej sieci.",
+      "Wiadomość z tabletu do kierownika i do osoby z innego lokalu zapisuje się mimo zawężonego dostępu.",
+    ],
+  },
+  {
     version: "0.70.2",
     date: "2026-10-02",
     items: [

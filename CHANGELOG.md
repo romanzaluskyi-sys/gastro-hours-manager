@@ -5,6 +5,17 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.70.3 — 2026-10-05
+
+- **Tablet, telefon i kierownik widzą tylko godziny, grafik i wiadomości
+  swoich lokali i swoich ludzi** (ostatnia część zawężania dostępu do danych).
+  Tablet w jednym lokalu nie czyta już godzin i grafiku całej sieci, a
+  prywatny telefon — cudzych godzin i cudzych wiadomości. Kierownik widzi
+  dalej cały miesiąc swoich ludzi, także zmiany u sąsiada.
+- Wiadomość wysłana z tabletu do kierownika albo do osoby z innego lokalu (np.
+  po giełdzie zmian) zapisuje się także wtedy, gdy wysyłający nie widzi
+  potem jej treści.
+
 ## 0.70.2 — 2026-10-02
 
 - **Koniec podwójnych zmian po zapomnianym odbiciu końca.** Gdy ktoś odbił

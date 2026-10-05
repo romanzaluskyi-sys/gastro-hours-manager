@@ -111,6 +111,16 @@ const API_STUB = stub(`
       window.__zapisy.push([tabela, filtr, dane]);
       return true;
     },
+    // Zapis bez RETURNING (wiadomości od 0041). Ślad w __zapisy w tym samym
+    // kształcie co post, żeby testy szukające wiadomości nie zależały od tego,
+    // którą drogą poszła.
+    dodajBezOdczytu: async (tabela, dane) => {
+      window.__zapisy.push([tabela, dane]);
+      const teraz = new Date().toISOString();
+      const wiersz = { id: "fake-" + (window.__zapisy.length), created_at: teraz, ...dane };
+      (window.__tabele[tabela] = window.__tabele[tabela] || []).push(wiersz);
+      return true;
+    },
   };
 `);
 

@@ -212,7 +212,7 @@ PIN-em czterocyfrowym jest nie do otwarcia — nie "trudniej", tylko wcale.
 Pole w karcie pracownika ma `maxLength="6"` (0.41.2), ale wiersze sprzed tej
 wersji trzeba poprawić ręcznie.
 
-**Etapy** (3a zrobione, reszta nie):
+**Etapy** (wszystkie w repo od 0.70.3; stan bazy — `schema_migrations`):
 - **3a — fundament.** Migracja `0025`: `users.auth_id`, helpery
   `moje_konto`/`moja_rola`/`widzi_wszystko`/`moje_lokale` i RPC
   `sprawdz_kiosk_pin`. Konta zakłada `scripts/utworz-konta-auth.py`
@@ -253,10 +253,12 @@ wersji trzeba poprawić ręcznie.
     największa część bezpieczeństwa za najmniejsze ryzyko: dziś do danych
     wystarczy adres strony, po tej migracji trzeba konta.
   - **3c-2:** zawężenie per lokal. Rozbite na porcje, bo tabele różnią się
-    ryzykiem. Zrobione: blokada PIN-em na RPC (0.42.1, `0027`) i **porcja 1
-    polityk** (`0031`) — patrz „Dane lokalu" niżej. Zostają tabele „ludzkie"
-    (`shifts`, `grafik_shifts`, `absences`, `issues`, `notifications`,
-    `shift_swaps`, `task_completions`) oraz warunek na wiersze w `users_widok`.
+    ryzykiem: blokada PIN-em na RPC (0.42.1, `0027`), porcja 1 — dane lokalu
+    (`0031`), porcja 2 — czyje to dane (`0033`/`0034`/`0035`), porcja 3 —
+    godziny i grafik (`0040`) i ponowne zawężenie `notifications` (`0041`,
+    0.70.3). Patrz „Dane lokalu" i „Godziny i grafik" niżej. ⚠️ Na dzień
+    0.70.3 `0040`/`0041` są w repo — czy weszły na bazę, sprawdź w
+    `schema_migrations`, nie w tym pliku.
   - **3c-3 — ZROBIONE w 0.43.0** (migracje `0029` i `0030`). `GRANT` działa na
     ROLĘ, a kierownik i pracownik to oboje `authenticated`, więc rozróżnienie
     daje **widok `users_widok`** maskujący kolumny zależnie od tego, kto pyta.
@@ -329,8 +331,10 @@ zmiany. To same nazwy, bez danych osobowych.
 **Porcja 2 (migracja `0033`)** — „czyje to dane": `notifications`, `issues`,
 `absences`, `shift_swaps`, `task_completions` i WIERSZE `users_widok`. Trzy
 rzeczy, które trzeba znać:
-- ⚠️ **Tablet widzi wiadomości WSZYSTKICH osób ze swojego lokalu** —
-  `imiona_moich_ludzi()`, nie samo swoje imię. Koperta przy nazwisku na liście
+- ⚠️ **Tablet widzi wiadomości WSZYSTKICH osób ze swojej listy** — od `0041`
+  `imiona_widocznych_ludzi()` (lokal + wypożyczeni z grafiku), nie samo swoje
+  imię. ⚠️ Prywatny telefon od `0041` widzi WYŁĄCZNIE swoje (`0033` dawało mu
+  wiadomości całej załogi). Koperta przy nazwisku na liście
   wyboru jest jedynym sygnałem, że ktoś ma nieprzeczytaną wiadomość; nikt nie
   wchodzi na wspólnym urządzeniu na cudzą stronę.
 - ⚠️ **`with check (true)` na tych tabelach jest ŚWIADOME.** Powiadomienie
@@ -358,9 +362,13 @@ rzeczy, które trzeba znać:
 kolumnę z CAŁĄ tablicą: `operator does not exist: text = text[]`. Tak padła
 migracja "InitPlan" (dawna `0036`) przy pierwszym uruchomieniu (24.09.2026);
 właściciel kazał ją usunąć, więc na produkcji polityki są w kształcie z
-`0035`, a `notifications` zostaje ręcznie otwarte. Rzutowanie
+`0035`, a `notifications` było ręcznie otwarte do `0041`. Rzutowanie
 zamienia podzapytanie w zwykłe wyrażenie, a podzapytanie w środku dalej
-liczy się RAZ (InitPlan). Sprawdzone parserem Postgresa (`pglast`).
+liczy się RAZ (InitPlan). Sprawdzone parserem Postgresa (`pglast`), a `0040`/
+`0041` — `explain analyze` na lokalnym Postgresie 16 (każda funkcja to
+InitPlan z `loops=1`). ⚠️ Polityki z `0031`/`0035` na małych tabelach dalej
+mają gołe `any (public.f())` — działa, bo tabele są małe; przepisz je, gdy
+któraś urośnie.
 Podzapytanie bez odwołań do wiersza planer robi InitPlanem i liczy RAZ; gołe
 wywołanie — zwykle raz na wiersz, nawet gdy funkcja jest `stable` i bez
 argumentów. To ten sam powód, dla którego w Supabase pisze się
@@ -385,12 +393,35 @@ każdy spadek u niego to perezawężenie. Zmierz nim PRZED i PO każdą kolejną
 porcję (`--zapisz` / `--porownaj`); konto tabletu pokazuje drugą stronę, że
 zawężenie w ogóle zadziałało. Te dwa konta razem obejmują obie pomyłki.
 
-⚠️ **`shifts` i `grafik_shifts` zostały POZA obiema porcjami i to nie jest
-zapomnienie.** Mają udowodnione wyjątki: widok miesiąca POKAZUJE kierownikowi
-zmiany jego ludzi w CUDZYCH lokalach (ustalenie właściciela, patrz 5c), a
-`ostrzezeniaKodeksu` liczy odpoczynek przez wszystkie lokale naraz. Do tego
-3071 i 1613 wierszy, na których pomyłka wygląda jak pusty ekran, nie jak błąd.
-Godziny są też mniej wrażliwe niż czyjaś wiadomość — dlatego idą na końcu.
+### Godziny i grafik (migracja `0040`, Etap 3c-2 porcja 3)
+
+`shifts` i `grafik_shifts` szły na końcu, bo mają udowodnione wyjątki poza
+własny lokal i po ~3000/1600 wierszy, na których pomyłka wygląda jak pusty
+ekran. `0040` zachowuje każdy wyjątek osobnym warunkiem. Zasada: **kogo widzisz
+na liście osób (`users_widok`), tego godziny i grafik widzisz W CAŁOŚCI**, plus
+wszystko z własnego lokalu.
+
+| | `shifts` (fakt) | `grafik_shifts` (plan) |
+|---|---|---|
+| właściciel (`widzi_wszystko`) | wszystko | wszystko |
+| kierownik, tablet | swój lokal + `widoczni_ludzie()` w całości | swój lokal + `widoczni_ludzie()` |
+| prywatny telefon | **tylko swoje** | swój lokal + `widoczni_ludzie()` + lokale, w których MNIE zaplanowano (`lokale_mojego_grafiku()`, „Cały lokal") |
+| każdy | — | zmiany z żywej sprawy na giełdzie, w której jestem stroną albo z mojego lokalu (`zmiany_z_gieldy()`) |
+| zapis | jak odczyt (RETURNING!) | **tylko kierownik**: swój lokal albo swój człowiek |
+
+- ⚠️ **`widoczni_ludzie()` = `where` w `users_widok`** (moi ludzie + ja +
+  wypożyczeni z opublikowanego grafiku, wczoraj–jutro). Zmieniając jedno,
+  zmień drugie — inaczej tablet pokazuje osobę, której otwartej zmiany nie
+  widzi (stan „nie na zmianie", a `znajdzKolizjeWBazie` przepuści duplikat).
+- ⚠️ **`zmiany_z_gieldy()` istnieje dla oferty skierowanej do osoby z innego
+  lokalu** — bez niej `offersForUser` nie znajduje zmiany i oferta znika, a
+  kierownik ma wyłączone „Zatwierdź" przy zamianie z drugim lokalem.
+- ⚠️ **Wiersz z lokalem spoza słownika `lokale` wypada kierownikowi lokalu**
+  (właściciel go widzi). `0040` kończy się zapytaniem, które takie wiersze
+  wypisuje.
+- Pomiar na lokalnej bazie (4 lokale, ~3000 zmian): kierownik z kompletem
+  lokali bez spadku, kierownik/tablet jednego lokalu — połowa, telefon — same
+  swoje godziny.
 
 ⚠️ **Zdejmując politykę, ENUMERUJ ją z `pg_policies` — nigdy nie wypisuj nazw
 z pamięci.** Polityki permisywne składają się przez LUB, więc JEDNA
@@ -634,6 +665,9 @@ src/
                                   zadania_moje, migracja 0038) — JEDYNE
                                   miejsce, które do niej pisze (Zadania,
                                   Skrzynka, Puls)
+    uuid.ts                     nowyUuid() — id nadawane w przeglądarce dla
+                                  zapisów `api.dodajBezOdczytu` (wiadomości,
+                                  zgłoszenia problemów)
     linki.ts                    `?otworz=` z linków w mailach — patrz
                                   "Powiadomienia e-mail"
     pola.ts                     definicja PÓL do wpisania (parsePola,
@@ -2826,6 +2860,11 @@ regresję łapie `harness-panel.html`.
 przy ustawionym oknie dostaje tylko wyjaśnienie, bez wysyłki — to nie jest
 spóźnienie, tylko wpis z wyprzedzeniem.
 
+⚠️ **Wiadomości zapisuje się `dodajBezOdczytu` od 0.70.3** (`api/notifications.ts`,
+`notifyEmployee` w ManagerDashboard) — po `0041` tablet nie widzi wiadomości
+dla kierownika, więc INSERT … RETURNING z tabletu padałby w całości. Dlatego
+`0041` idzie dopiero PO deployu 0.70.3 i odświeżeniu tabletów.
+
 ⚠️ **Tablet a `issues` (migracja `0037`).** `api.post` to INSERT … RETURNING, a
 Postgres sprawdza zwracany wiersz polityką SELECT. Polityka z `0033` nie
 pokazywała tabletowi zgłoszeń jego ludzi, więc korekta wysłana z tabletu była
@@ -2843,8 +2882,9 @@ zobaczy po pollu. **Każda nowa tabela, do której tablet pisze w imieniu
 pracownika, potrzebuje SELECT dla tabletu na tych wierszach — albo zapisu
 przez `dodajBezOdczytu`.**
 
-⚠️ Kontrola jest w przeglądarce. Twardy zamek (trigger na `shifts`) — razem z
-zawężeniem `shifts` w Etapie 3c-2.
+⚠️ Kontrola jest w przeglądarce. Twardy zamek (trigger na `shifts`) NIE
+powstał razem z `0040` — `0040` zawęża, KTO pisze, a nie KIEDY. To osobny
+krok.
 
 ⚠️ **Reguły wpisu idą za lokalem ZMIANY, nie tabletu** — za `formLokal`
 (domyślnie: lokal z dzisiejszego grafiku → `default_lokal` → pierwszy z
