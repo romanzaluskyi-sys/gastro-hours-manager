@@ -38,6 +38,7 @@ import { dzienKrotki } from "../utils/czas";
 import { createManagerNotification } from "../api/notifications";
 import { APP_VERSION, PRODUKT } from "../config";
 import ShiftroMark from "./ShiftroMark";
+import { nowyUuid } from "../utils/uuid";
 import { findOverlappingShift, opisKolidujacej, znajdzKolizjeWBazie, znajdzOtwartaDoZakonczenia, getTodaysShiftsForUser } from "../utils/shifts";
 import { zmianaTrwa } from "../utils/porzucone";
 import {
@@ -305,20 +306,6 @@ export const checkboxRowCls = (checked) =>
 // każdym ticku. Trzymaj Shell na poziomie modułu. `onBack` jest opcjonalny:
 // gdy go brak (osobiste konto, nie ma do czego "wracać"), przycisk "<
 // Zmień" po prostu się nie renderuje.
-// uuid v4 nadawany w przeglądarce — dla zapisów bez oddawania wiersza
-// (api.dodajBezOdczytu). `crypto.randomUUID` bywa niedostępne na starszych
-// tabletach, stąd zapas na getRandomValues.
-const nowyUuid = () => {
-  try {
-    if (crypto.randomUUID) return crypto.randomUUID();
-  } catch (e) {}
-  const b = new Uint8Array(16);
-  crypto.getRandomValues(b);
-  b[6] = (b[6] & 0x0f) | 0x40;
-  b[8] = (b[8] & 0x3f) | 0x80;
-  const h = [...b].map((x) => x.toString(16).padStart(2, "0")).join("");
-  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
-};
 
 // Wiadomość pracownika → kategoria filtra, ton (kolor koła i plakietka),
 // ikona, krótki tytuł i akcja (0.65.0, makieta EmployeeMessages). Typy w

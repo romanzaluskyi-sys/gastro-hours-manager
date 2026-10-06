@@ -15,6 +15,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { api } from "../api/supabase";
+import { nowyUuid } from "../utils/uuid";
 import { ustawHasloPracownika } from "../api/auth";
 import { sendToGoogleSheets } from "../api/googleSheets";
 import { createEmployeeNotification } from "../api/notifications";
@@ -257,12 +258,18 @@ const ManagerDashboard = ({
       const message = reason
         ? `${formatNotificationText({ ...pola, user_name: shiftLike.user_name }, false)}. Powód: „${reason}”.`
         : undefined;
-      const created = await api.post("notifications", {
+      // Bez odczytu wiersza (patrz createManagerNotification): osoba z
+      // innego lokalu, której zmianę poprawiamy, nie musi być na liście
+      // kierownika, a wtedy INSERT … RETURNING odrzuciłby zapis w całości.
+      // Id nadajemy sami, żeby wiersz lokalny i ten z pollu były jednym.
+      const created = {
+        id: nowyUuid(),
         ...pola,
         ...(message ? { message, type: "shift_edit" } : {}),
         is_read: false,
-      });
-      setNotifications((prev) => [...prev, created]);
+      };
+      await api.dodajBezOdczytu("notifications", created);
+      setNotifications((prev) => [...prev, { ...created, created_at: new Date().toISOString() }]);
     } catch (err) {
       console.error("Błąd tworzenia powiadomienia:", err);
     }

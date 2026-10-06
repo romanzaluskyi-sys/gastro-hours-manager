@@ -66,12 +66,16 @@ wykonalne.
 | `0037` | tablet widzi korekty godzin swoich ludzi (`issues`, rola `kiosk`, tylko `type='correction'`) | nowe |
 | `0038` | „Moje zadania" kierownika (`zadania_moje`, tylko kierownik i tylko swoje) + przeniesienie zadań ze zgłoszeń z `tasks` — PRZED deployem 0.56.0 | nowe |
 | `0039` | powiadomienia e-mail: `notifications.dane/email_at/email_info`, `users.email_powiadomienia` (+ w `users_widok`), `email_raporty` — PRZED deployem 0.70.0 | nowe |
+| `0040` | godziny i grafik per lokal: `shifts`, `grafik_shifts` (Etap 3c-2, porcja 3) + helpery `widoczni_ludzie`, `lokale_mojego_grafiku`, `zmiany_z_gieldy`; zapis grafiku tylko dla kierownika | nowe |
+| `0041` | `notifications` znowu zawężone (zdejmuje ręczne „zalogowani” z 23.09), telefon widzi tylko swoje — PO deployu 0.70.3 i odświeżeniu tabletów | nowe |
 
 ⚠️ Numer `0036` należał wcześniej do migracji "InitPlan" (ponowne zawężenie
 `notifications` i 15 innych tabel). Nigdy nie weszła na żadną bazę — padła
 przy pierwszym uruchomieniu (24.09.2026) — i została usunięta na prośbę
 właściciela, a numery za nią przesunięte. Zawężenie `notifications`, które
-właściciel ręcznie odblokował 23.09, zostaje otwarte do osobnej decyzji.
+właściciel ręcznie odblokował 23.09, wraca w `0041` — w kształcie z
+podzapytaniem i rzutowaniem, sprawdzonym `explain analyze` na lokalnym
+Postgresie (każda funkcja liczona raz).
 
 `0001`–`0004` odtworzono ze zrzutu prawdziwej bazy
 (`docs/sql/tools/zrzut-schematu.sql`, 2026-09-07), a nie z opisu w

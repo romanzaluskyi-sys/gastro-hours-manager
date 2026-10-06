@@ -6,8 +6,15 @@ import { api } from "./supabase";
 // z powiadomieniami dla pracowników o edycji/usunięciu zmiany — odróżnia je
 // pole audience: "manager". Przeznaczona do reużycia w przyszłych modułach
 // (Sanepid, Zadania/Sprzątanie), które będą wywoływać ją z różnym `type`.
+//
+// ⚠️ Zapis BEZ odczytu wiersza (`dodajBezOdczytu`, migracja 0041). Wiadomość
+// tworzy się DLA KOGOŚ INNEGO: tablet budzi kierownika, pracownik po giełdzie
+// pisze do kolegi z innego lokalu. Zwykłe `api.post` to INSERT … RETURNING, a
+// Postgres sprawdza zwracany wiersz polityką ODCZYTU — wiersza, którego
+// piszący nie widzi, nie da się wtedy zapisać WCALE. Dlatego obie funkcje
+// niczego nie zwracają poza `true`; nikt i tak nie używał zwróconego wiersza.
 export const createManagerNotification = async (lokal, message, type) => {
-  return api.post("notifications", {
+  return api.dodajBezOdczytu("notifications", {
     audience: "manager",
     lokal,
     message,
@@ -38,12 +45,12 @@ export const createEmployeeNotification = async (userName, message, type, dane =
     type,
     is_read: false,
   };
-  if (!dane) return api.post("notifications", wiersz);
+  if (!dane) return api.dodajBezOdczytu("notifications", wiersz);
   try {
-    return await api.post("notifications", { ...wiersz, dane });
+    return await api.dodajBezOdczytu("notifications", { ...wiersz, dane });
   } catch (e) {
     if (!/dane/.test(String(e && e.message))) throw e;
-    return api.post("notifications", wiersz);
+    return api.dodajBezOdczytu("notifications", wiersz);
   }
 };
 
