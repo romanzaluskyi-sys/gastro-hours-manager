@@ -665,6 +665,8 @@ src/
                                   zadania_moje, migracja 0038) — JEDYNE
                                   miejsce, które do niej pisze (Zadania,
                                   Skrzynka, Puls)
+    bezczynnosc.ts              automatyczne wylogowanie po 60 min (poza
+                                  tabletem) — patrz Roadmap p.6
     uuid.ts                     nowyUuid() — id nadawane w przeglądarce dla
                                   zapisów `api.dodajBezOdczytu` (wiadomości,
                                   zgłoszenia problemów)
@@ -3987,11 +3989,25 @@ Rzeczy, których nie widać:
 - Etat jako reguła (dziś pokazujemy tylko różnicę godzin przy zamianie,
   żeby kierownik sam ocenił).
 
-### 6. Automatyczne wylogowanie po nieaktywności — ODŁOŻONE
-Świadomie odłożone (2026-08-28) — obecni główni użytkownicy to kiosk i
-konto właściciela, więc ryzyko niewielkie. **Zrobić przed podłączeniem
-drugiego lokalu do systemu** — wtedy więcej osobistych kont, ryzyko
-rośnie.
+### 6. Automatyczne wylogowanie po nieaktywności — **ZROBIONE (0.71.0)**
+[`utils/bezczynnosc.ts`](src/utils/bezczynnosc.ts) + efekt w `App.tsx` +
+`komunikat` w `LoginScreen`. Wszystkie role poza `kiosk` (także `manager` i
+`open` na prywatnym telefonie). Rzeczy, których nie widać:
+- ⚠️ **Znacznik ostatniej aktywności jest w localStorage**
+  (`shiftro_ostatnia_aktywnosc`), nie w pamięci: uśpiony telefon zatrzymuje
+  timery, a dwie karty dzielą sesję — ruch w jednej trzyma przy życiu obie.
+- ⚠️ **Sprawdzenie przy STARCIE** (wznowienie sesji w `App.tsx`) stoi PRZED
+  `setCurrentUser` — telefon otwarty rano nie mignie danymi.
+- **Po powrocie do karty (`visibilitychange`) sprawdzamy od razu**, poza tym
+  co 30 s. Aktywność = dotyk, klawisz, kółko; poll danych się NIE liczy.
+- **Nowa sesja zaczyna liczenie od nowa** — stary znacznik z poprzedniej
+  sesji wylogowałby świeżo zalogowanego. Brak znacznika (`null`) to nie
+  „dawno temu”.
+- Wylogowanie idzie tą samą drogą co przycisk („login” → efekt w App), a
+  komunikat stoi osobno od `dbError`, bo tamten blokuje formularz.
+- Testy: `harness-auth.html` (10 przypadków).
+
+Pierwotny plan (zostawiony dla kontekstu):
 
 Zakres: 60 minut nieaktywności → automatyczne wylogowanie, **tylko** dla
 `closed`/`manager_lokalu`/`admin`. Rola `kiosk` świadomie WYŁĄCZONA —

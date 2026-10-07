@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { CheckCircle, AlertCircle } from "lucide-react";
 import { isConfigured } from "./config";
 import { api } from "./api/supabase";
@@ -12,6 +12,15 @@ import {
   wyloguj,
 } from "./api/auth";
 import { toLocalYMD } from "./api/googleSheets";
+import {
+  podlegaWylogowaniu,
+  czyMinal,
+  wczytajAktywnosc,
+  zapiszAktywnosc,
+  ostatniaAktywnosc,
+  CO_ILE_ZAPIS_MS,
+  KOMUNIKAT_WYLOGOWANIA,
+} from "./utils/bezczynnosc";
 import LoginScreen from "./components/LoginScreen";
 import PersonalDashboard from "./components/PersonalDashboard";
 import KioskDashboard from "./components/KioskDashboard";
@@ -69,6 +78,11 @@ export default function App() {
   // ktoś odświeża w środku zmiany, to wystarczy, żeby przestać ufać systemowi.
   const [bootowanie, setBootowanie] = useState(true);
   const [dbError, setDbError] = useState("");
+  // Informacja (nie błąd) na ekranie logowania — dziś tylko „wylogowano po
+  // 60 minutach bez aktywności”. Osobno od `dbError`, bo tamten blokuje
+  // formularz, a tu chodzi właśnie o to, żeby się zalogować.
+  const [komunikatLogowania, setKomunikatLogowania] = useState("");
+  const ostatniaAktywnoscRef = useRef(null);
   const [toast, setToast] = useState({
     show: false,
     message: "",
@@ -97,6 +111,14 @@ export default function App() {
         // nie ma. Bez tego pierwsze zapytanie poleciałoby z martwym tokenem.
         if (!(await token())) return;
         const user = await wczytajKonto(api, sesja.user_id);
+        // Telefon odłożony wieczorem i otwarty rano: sesja w Auth dalej
+        // żyje (refresh token), ale nikt tu nie był od godzin. Sprawdzamy
+        // PRZED pokazaniem danych, nie minutę po.
+        if (podlegaWylogowaniu(user) && czyMinal(wczytajAktywnosc(), Date.now())) {
+          await wyloguj();
+          setKomunikatLogowania(KOMUNIKAT_WYLOGOWANIA);
+          return;
+        }
         setCurrentUser(user);
         setCurrentView(widokDlaRoli(user));
       } catch (e) {
@@ -121,6 +143,49 @@ export default function App() {
     setCurrentUser(null);
     wyloguj();
   }, [currentView, currentUser]);
+
+  // Automatyczne wylogowanie po 60 minutach bez aktywności (utils/bezczynnosc.ts).
+  // ⚠️ Nie dotyczy Tabletu Służbowego (rola `kiosk`) — patrz komentarz w
+  // utils/bezczynnosc.ts. Wylogowanie idzie tą samą drogą co przycisk
+  // „Wyloguj” (`setCurrentView("login")` → efekt wyżej), żeby była jedna.
+  useEffect(() => {
+    if (!podlegaWylogowaniu(currentUser)) return;
+    setKomunikatLogowania("");
+    // Nowa sesja (logowanie albo wznowienie, które przeszło sprawdzenie przy
+    // starcie) zaczyna liczenie od teraz — stary znacznik z poprzedniej
+    // sesji wylogowałby świeżo zalogowanego od razu.
+    let ostatniZapis = Date.now();
+    ostatniaAktywnoscRef.current = ostatniZapis;
+    zapiszAktywnosc(ostatniZapis);
+
+    const aktywnosc = () => {
+      const teraz = Date.now();
+      ostatniaAktywnoscRef.current = teraz;
+      if (teraz - ostatniZapis >= CO_ILE_ZAPIS_MS) {
+        ostatniZapis = teraz;
+        zapiszAktywnosc(teraz);
+      }
+    };
+    const sprawdz = () => {
+      if (czyMinal(ostatniaAktywnosc(ostatniaAktywnoscRef.current), Date.now())) {
+        setKomunikatLogowania(KOMUNIKAT_WYLOGOWANIA);
+        setCurrentView("login");
+      }
+    };
+    // Po powrocie do uśpionej karty sprawdzamy OD RAZU — interwał mógł stać.
+    const widocznosc = () => {
+      if (document.visibilityState === "visible") sprawdz();
+    };
+    const zdarzenia = ["pointerdown", "keydown", "touchstart", "wheel"];
+    zdarzenia.forEach((z) => window.addEventListener(z, aktywnosc, { passive: true, capture: true }));
+    document.addEventListener("visibilitychange", widocznosc);
+    const interwal = setInterval(sprawdz, 30 * 1000);
+    return () => {
+      zdarzenia.forEach((z) => window.removeEventListener(z, aktywnosc, { capture: true }));
+      document.removeEventListener("visibilitychange", widocznosc);
+      clearInterval(interwal);
+    };
+  }, [currentUser]);
 
   // ⚠️ Dane pobieramy DOPIERO po zalogowaniu. Do 0.41.2 leciało to przy
   // starcie, bo ekran logowania potrzebował tabeli `users` do porównania
@@ -389,6 +454,7 @@ export default function App() {
           setCurrentUser={setCurrentUser}
           setCurrentView={setCurrentView}
           dbError={dbError}
+          komunikat={komunikatLogowania}
         />
       )}
       {currentView === "closed_dashboard" && (

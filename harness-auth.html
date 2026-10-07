@@ -158,6 +158,25 @@ async function zaladuj(sciezka) {
     await A.wyloguj();
     sprawdz("wylogowanie czyści sesję", A.wczytajSesje() === null);
 
+    // --- automatyczne wylogowanie (utils/bezczynnosc.ts, 0.71.0) ---
+    const B = await import(await zaladuj("/src/utils/bezczynnosc"));
+    const H = 3600 * 1000, T = 1_800_000_000_000;
+    sprawdz("tablet (kiosk) NIE podlega wylogowaniu", !B.podlegaWylogowaniu({ role: "kiosk" }));
+    sprawdz("kierownik, właściciel i telefon podlegają",
+      ["admin", "manager", "manager_lokalu", "closed", "open"].every((r) => B.podlegaWylogowaniu({ role: r })));
+    sprawdz("bez zalogowanego — nic", !B.podlegaWylogowaniu(null));
+    sprawdz("59 min bez ruchu — jeszcze nie", !B.czyMinal(T - 59 * 60000, T));
+    sprawdz("60 min bez ruchu — wylogowanie", B.czyMinal(T - H, T));
+    sprawdz("brak znacznika (pierwsze uruchomienie) to NIE „dawno”", !B.czyMinal(null, T));
+    localStorage.removeItem(B.KLUCZ_AKTYWNOSCI);
+    sprawdz("pusty localStorage — wczytaj daje null", B.wczytajAktywnosc() === null);
+    B.zapiszAktywnosc(T - 2 * H);
+    sprawdz("znacznik przeżywa w localStorage", B.wczytajAktywnosc() === T - 2 * H);
+    sprawdz("ruch w TEJ karcie wygrywa ze starszym zapisem", B.ostatniaAktywnosc(T - 10000) === T - 10000);
+    B.zapiszAktywnosc(T - 5000);
+    sprawdz("ruch w INNEJ karcie trzyma tę przy życiu", B.ostatniaAktywnosc(T - H) === T - 5000);
+    localStorage.removeItem(B.KLUCZ_AKTYWNOSCI);
+
     log("");
     log(`ZDANYCH ${zdanych}, OBLANYCH ${oblanych}`, oblanych ? "zle" : "ok");
   } catch (e) {
