@@ -8,6 +8,8 @@ zastosowaniu — poprawka to nowa migracja z kolejnym numerem.
 python3 scripts/migrate.py --projekt <REF>              # plan, nic nie zmienia
 python3 scripts/migrate.py --projekt <REF> --wykonaj    # zapis WSZYSTKIEGO, co czeka
 python3 scripts/migrate.py --projekt <REF> --do 0029 --wykonaj   # zapis do 0029 włącznie
+python3 scripts/migrate.py --wszyscy                # każda baza z klienci.json
+python3 scripts/migrate.py --wszyscy --wykonaj
 ```
 
 ⚠️ **`--wykonaj` bez `--do` stosuje WSZYSTKIE czekające migracje naraz.** Gdy

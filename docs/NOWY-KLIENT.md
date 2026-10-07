@@ -7,6 +7,73 @@ odróżniającego klientów wpisać do kodu — to jest moment, w którym "drugi
 klient" zamienia się w "kopię repozytorium", a każda kolejna poprawka musi
 być wklejana ręcznie w obie kopie.
 
+## Szybka ścieżka — `scripts/nowy-klient.py`
+
+Od 0.71 całą techniczną część robi jeden skrypt. Sekcje 1–4 niżej opisują, co
+on robi pod spodem — czytaj je, gdy coś pójdzie nie tak, a nie jako listę do
+wyklikania.
+
+**Ręcznie, przed skryptem (≈15 min):**
+
+1. **Projekt Supabase** — Dashboard → New project, region **Frankfurt
+   (eu-central-1)**, organizacja płatna. To jest koszt, więc decyzja człowieka,
+   nie skryptu. Ref projektu to człon z `https://<REF>.supabase.co`.
+2. **Konto Brevo** klienta → zweryfikowany nadawca → API key. Można pominąć i
+   dołożyć później (skrypt wyłączy wtedy maile i powie o tym).
+3. **DPA podpisana** — patrz §6. Skrypt nie wpisuje danych pracowników, ale
+   zakłada konto właściciela, więc to jest ostatni moment.
+
+**Skrypt (≈5 min, z czego większość to build):**
+
+```bash
+export SUPABASE_PAT=sbp_...         # Supabase → Account → Access Tokens
+export VERCEL_TOKEN=...             # Vercel → Account Settings → Tokens
+export BREVO_API_KEY=xkeysib-...    # opcjonalnie
+
+python3 scripts/nowy-klient.py --klient sloneczna --nazwa "Słoneczna" \
+    --projekt <REF> --admin-imie "Anna Kowalska" --admin-email anna@sloneczna.pl
+# przeczytaj plan, potem to samo z --wykonaj
+```
+
+Kolejno: sprawdza projekt i region → pobiera klucze → **wyłącza samodzielną
+rejestrację w Auth** → migracje → CRON_SECRET do Vault + pg_cron dla maili →
+projekt Vercel `shiftro-<klient>` → 11 zmiennych na trzy środowiska → domena
+`<klient>.shiftro.pl` → deploy i czekanie na build → konto właściciela (PIN
+wypisany RAZ) → `/api/zdrowie` i sprawdzenie, czy paczka frontu patrzy na TĘ
+bazę → wpis do `klienci.json`.
+
+Każdy krok jest powtarzalny. Przerwany przebieg uruchamia się jeszcze raz tym
+samym poleceniem (po pierwszym razie wystarczy `--klient sloneczna --wykonaj`
+— reszta jest w rejestrze). Tak samo dokłada się Brevo po fakcie.
+
+⚠️ **Sekrety nie lądują na dysku.** CRON_SECRET żyje w Vault bazy klienta i w
+Vercelu — skrypt czyta go z Vault przy każdym przebiegu, więc druga próba nie
+wygeneruje nowego, rozjechanego z Vercelem. Klucze Supabase pobiera z API.
+
+⚠️ **Rejestracja z zewnątrz musi być wyłączona** (krok 3 skryptu). Domyślnie
+Supabase pozwala założyć konto każdemu, kto ma klucz publishable — czyli
+każdemu, kto otworzył stronę — a część polityk wpuszcza zapis z
+`with check (true)`. Konta zakłada u nas wyłącznie kierownik i
+`pierwszy-admin.py`, przez admin API, któremu to wyłączenie nie przeszkadza.
+
+**Ręcznie, po skrypcie:** DNS dla domeny, jeśli skrypt zgłosi, że czeka;
+przekazanie PIN-u właścicielowi; dane startowe w aplikacji (§5).
+
+### Rejestr klientów i wydania
+
+`klienci.json` (poza gitem, wzór w `klienci.example.json`) to lista wdrożeń:
+slug, nazwa, ref bazy, projekt Vercel, domena. Bez sekretów. Na nim stoją dwa
+polecenia, które w modelu silo zastępują pilnowanie N baz z pamięci:
+
+```bash
+python3 scripts/migrate.py --wszyscy               # plan migracji dla KAŻDEJ bazy
+python3 scripts/migrate.py --wszyscy --wykonaj     # (--do NR działa tak samo)
+python3 scripts/klienci.py sprawdz                 # wersja, migracje, zmienne, Brevo — wszyscy naraz
+```
+
+`klienci.py sprawdz` puść po każdym wydaniu: klient, u którego migracja nie
+weszła albo build się nie udał, wygląda z zewnątrz dokładnie jak działający.
+
 ## 1. Baza
 
 1. Nowy projekt w Supabase (region: Frankfurt — najbliżej Polski).

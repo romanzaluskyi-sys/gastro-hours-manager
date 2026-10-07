@@ -1,3 +1,6 @@
 
 # macOS
 .DS_Store
+
+# Rejestr klientów — dane operacyjne, nie kod (wzór: klienci.example.json)
+klienci.json
