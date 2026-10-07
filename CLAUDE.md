@@ -572,6 +572,11 @@ scripts/nowy-klient.py        — uruchomienie klienta jednym poleceniem (Supaba
                                  powtarzalne, SUCHY przebieg domyślnie — patrz
                                  docs/NOWY-KLIENT.md
 scripts/klienci.py            — `lista` / `sprawdz` (zdrowie wszystkich klientów)
+scripts/import-klienta.py     — dane nowego klienta z arkusza (lokale, stanowiska,
+                                 pracownicy + konta, grafik, godziny, urlopy);
+                                 najpierw sprawdza wszystko, przy błędzie nie
+                                 zapisuje nic; powtarzalny. Szablon CSV:
+                                 docs/szablon-importu/
 scripts/shiftro_ops.py        — wspólne: rejestr klientów, API Supabase/Vercel
 klienci.json                  — rejestr klientów, POZA gitem (wzór:
                                  klienci.example.json); bez sekretów —

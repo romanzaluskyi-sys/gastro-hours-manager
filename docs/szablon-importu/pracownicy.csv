@@ -1,0 +1,8 @@
+imie_nazwisko,rola,lokal,stanowisko,inne_stanowiska,email,telefon,typ_umowy,wymiar_etatu,wynagrodzenie,stawka,data_zatrudnienia,sanepid_do,umowa_do,pin_tabletu
+Anna Kowalska,właściciel,wszystkie,,,anna@sloneczna.pl,,,,,,,,,
+Piotr Nowak,kierownik,Słoneczna Centrum,,,piotr@sloneczna.pl,600100200,umowa o pracę,1,7500,,2023-04-01,2027-01-15,bezterminowa,
+Tablet Centrum,tablet,Słoneczna Centrum,,,tablet.centrum@sloneczna.pl,,,,,,,,,
+Tablet Plaża,tablet,Słoneczna Plaża,,,tablet.plaza@sloneczna.pl,,,,,,,,,
+Ola Wiśniewska,pracownik,Słoneczna Centrum,Kelner,Bar,,600200300,zlecenie,,,32,2025-03-01,2027-03-01,2026-12-31,
+Marek Zieliński,pracownik,Słoneczna Centrum,Kuchnia,,,,umowa o pracę,"0,75",4200,,2024-06-01,2026-11-30,bezterminowa,
+Kasia Lewandowska,pracownik,Słoneczna Plaża,Kelner,,kasia.l@gmail.com,,zlecenie,,,30,2026-05-10,2027-05-10,2026-12-31,483920
