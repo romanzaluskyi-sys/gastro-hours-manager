@@ -23,6 +23,14 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.71.0",
+    date: "2026-10-07",
+    items: [
+      "Automatyczne wylogowanie po 60 minutach bez aktywności (kierownicy, właściciel, prywatne telefony).",
+      "Tablet Służbowy zostaje zalogowany na stałe, jak dotąd.",
+    ],
+  },
+  {
     version: "0.70.3",
     date: "2026-10-05",
     items: [

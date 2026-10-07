@@ -18,7 +18,7 @@ import {
 // Używany przez wszystkie role, więc żyje na poziomie App.tsx, nie w
 // żadnym konkretnym dashboardzie.
 // ==========================================
-const LoginScreen = ({ setCurrentUser, setCurrentView, dbError }) => {
+const LoginScreen = ({ setCurrentUser, setCurrentView, dbError, komunikat = "" }) => {
   const [email, setEmail] = useState("");
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
@@ -89,6 +89,11 @@ const LoginScreen = ({ setCurrentUser, setCurrentView, dbError }) => {
           )}{" "}
           · wersja {APP_VERSION}
         </p>
+        {komunikat && !dbError && (
+          <div className="bg-[#EFEEE8] border-l-4 border-[#8F8E86] p-4 mb-6 rounded" data-komunikat-logowania>
+            <p className="text-sm font-bold text-[#3A3A35]">{komunikat}</p>
+          </div>
+        )}
         {dbError && (
           <div className="bg-[#FAEAE6] border-l-4 border-[#DE3A22] p-4 mb-6 rounded">
             <p className="font-bold text-[#8A3A2B] flex items-center gap-2">

@@ -5,6 +5,14 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.71.0 — 2026-10-07
+
+- **Automatyczne wylogowanie po 60 minutach bez aktywności** — na kontach
+  kierowników, właściciela i na prywatnych telefonach pracowników. Po
+  wylogowaniu ekran logowania mówi, dlaczego. Telefon odłożony wieczorem i
+  otwarty rano prosi o zalogowanie, zanim cokolwiek pokaże.
+- **Tablet Służbowy NIE wylogowuje się sam** — zostaje zalogowany jak dotąd.
+
 ## 0.70.3 — 2026-10-05
 
 - **Tablet, telefon i kierownik widzą tylko godziny, grafik i wiadomości
