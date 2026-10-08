@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef } from "react";
 import { CheckCircle, AlertCircle } from "lucide-react";
-import { isConfigured } from "./config";
+import { isConfigured, DEMO } from "./config";
 import { api } from "./api/supabase";
 import { ustawKontekstBledow } from "./api/errors";
 import {
@@ -10,7 +10,9 @@ import {
   widokDlaRoli,
   token,
   wyloguj,
+  wyczyscSesje,
 } from "./api/auth";
+import { czekaRolaZAdresu } from "./demo";
 import { toLocalYMD } from "./api/googleSheets";
 import {
   podlegaWylogowaniu,
@@ -27,6 +29,7 @@ import KioskDashboard from "./components/KioskDashboard";
 import ManagerDashboard from "./components/ManagerDashboard";
 import UpdateBanner from "./components/UpdateBanner";
 import KonfiguracjaBrak from "./components/KonfiguracjaBrak";
+import DemoPasek from "./components/DemoPasek";
 
 // Sesję trzyma od 0.42.0 SUPABASE AUTH (patrz api/auth.ts), a nie własny wpis
 // w localStorage. Różnica nie jest kosmetyczna: dotąd "zalogowany" znaczyło
@@ -105,6 +108,12 @@ export default function App() {
           /* tryb prywatny — nie ma czego sprzątać */
         }
         if (!isConfigured) return;
+        // Demo: link „w nowej karcie” (`?jako=tablet`) ma zalogować TĘ rolę,
+        // nawet gdy karta odziedziczyła sesję innej — loguje ekran logowania.
+        if (DEMO && czekaRolaZAdresu()) {
+          wyczyscSesje();
+          return;
+        }
         const sesja = wczytajSesje();
         if (!sesja?.user_id) return;
         // ⚠️ `token()` odświeży wygasły dostęp albo zwróci null, gdy sesji już
@@ -449,6 +458,9 @@ export default function App() {
         </div>
       )}
       <UpdateBanner />
+      {DEMO && currentView !== "login" && (
+        <DemoPasek currentUser={currentUser} onZmienRole={() => setCurrentView("login")} />
+      )}
       {currentView === "login" && (
         <LoginScreen
           setCurrentUser={setCurrentUser}

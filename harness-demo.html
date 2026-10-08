@@ -1,0 +1,362 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wersja demonstracyjna</title>
+<!-- Sprawdzian wersji demo (0.72.0), dwie części:
+     1. ARYTMETYKA — api/_lib/demoDane.js dla kilku dat (zwykły dzień,
+        poniedziałek, niedziela, przełom roku, zmiana czasu). Każda kolumna,
+        którą generator wpisuje, musi istnieć w docs/sql/migrations/*.sql;
+        w każdej kolejce kierownika ma czekać po jednej sprawie; nic nie może
+        się nakładać ani wskazywać w próżnię. Konta i PIN muszą się zgadzać
+        między api/_lib/demoKonta.js, src/demo.ts i docs/sql/demo/demo.sql.
+     2. EKRAN — LoginScreen z REACT_APP_DEMO=tak: trzy przyciski, logowanie
+        właściwym kontem, sesja w sessionStorage (nie w localStorage).
+     Nic nie leci do sieci: GoTrue i api/supabase są podmienione. -->
+<style>
+  body { font: 14px system-ui, sans-serif; margin: 0; background: #F1F1EE; }
+  #status { padding: 8px 14px; background: #17120F; color: #fff; font: 12px ui-monospace, monospace; }
+  #status.zle { background: #DE3A22; }
+  #out { padding: 8px 14px; font: 12px ui-monospace, monospace; white-space: pre-wrap; }
+  .zle { color: #DE3A22; font-weight: bold; }
+</style>
+<div id="status">ładowanie…</div>
+<div id="out"></div>
+<div id="app"></div>
+
+<script>
+  window.__SHIFTRO_ENV = {
+    REACT_APP_SUPABASE_URL: "https://harness.supabase.co",
+    REACT_APP_SUPABASE_KEY: "sb_publishable_harness",
+    REACT_APP_TENANT: "Shiftro · wersja demonstracyjna",
+    REACT_APP_DEMO: "tak",
+  };
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js" crossorigin="anonymous"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+const status = document.getElementById("status");
+const out = document.getElementById("out");
+let zdanych = 0, oblanych = 0;
+const linia = (txt, zle) => {
+  const d = document.createElement("div");
+  d.textContent = txt;
+  if (zle) d.className = "zle";
+  out.appendChild(d);
+};
+const sprawdz = (warunek, opis, szczegoly) => {
+  if (warunek) { zdanych++; return; }
+  oblanych++;
+  linia(`✗ ${opis}${szczegoly ? " — " + szczegoly : ""}`, true);
+};
+const pokazBlad = (e) => {
+  console.error("HARNESS", (e && e.stack) || e);
+  status.className = "zle";
+  status.textContent = "BŁĄD: " + (e && e.message ? e.message : e);
+};
+window.addEventListener("error", (ev) => pokazBlad(ev.error || ev.message));
+window.addEventListener("unhandledrejection", (ev) => pokazBlad(ev.reason));
+
+// --- loader CommonJS (api/) — ten sam co w harness-email.html -------------
+const cjsCache = new Map();
+async function cjs(sciezka) {
+  if (cjsCache.has(sciezka)) return cjsCache.get(sciezka);
+  const kod = await (await fetch(sciezka + "?cb=" + Date.now())).text();
+  const baza = sciezka.slice(0, sciezka.lastIndexOf("/"));
+  const mapa = {};
+  for (const [, d] of kod.matchAll(/require\("(\.[^"]+)"\)/g)) {
+    mapa[d] = await cjs(new URL(baza + "/" + d + (d.endsWith(".js") ? "" : ".js"), location.origin).pathname);
+  }
+  const module = { exports: {} };
+  new Function("module", "exports", "require", "process", kod)(
+    module, module.exports, (n) => mapa[n], { env: {} }
+  );
+  cjsCache.set(sciezka, module.exports);
+  return module.exports;
+}
+
+// --- loader ES (src/) — ten sam co w harness-login.html --------------------
+const IKONY = ["Sparkles", "Tag", "Truck", "Activity", "Repeat", "Coins", "Smartphone", "PieChart", "Search", "EyeOff", "Star", "Tablet", "Inbox", "Square", "Phone", "AlertCircle", "AlertTriangle", "Archive", "ArchiveRestore", "ArrowLeft", "ArrowLeftRight", "ArrowRight", "BarChart3", "Bell", "BookOpen", "Briefcase", "Calendar", "CalendarCheck", "CalendarDays", "CalendarRange", "Check", "CheckCircle", "CheckCircle2", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "ClipboardCheck", "ClipboardList", "ClipboardPlus", "Clock", "Cloud", "Construction", "Copy", "CopyPlus", "Delete", "Download", "Edit2", "Eye", "FileText", "Flag", "HelpCircle", "History", "Home", "Hourglass", "Info", "ListChecks", "Lock", "LogIn", "LogOut", "Mail", "MapPin", "MoreHorizontal", "Palmtree", "Pencil", "Plus", "Printer", "RefreshCw", "RotateCcw", "Save", "Send", "Settings", "SlidersHorizontal", "Thermometer", "Trash2", "User", "UserPlus", "Users", "Wallet", "WifiOff", "X"];
+const stub = (kod) => URL.createObjectURL(new Blob([kod], { type: "text/javascript" }));
+const API_STUB = stub(`
+  export const api = {
+    get: async (tabela, filtr) => {
+      window.__odczyty = (window.__odczyty || []).concat([[tabela, filtr]]);
+      if (tabela === "users_widok") return [{ id: "u-1", name: "Marek Wiśniewski", role: "open",
+        email: "pracownik@demo.shiftro.pl", active: true, archived: false, auth_id: "auth-1" }];
+      return [];
+    },
+    post: async (t, d) => ({ id: "x", ...d }), patch: async (t, id, d) => ({ id, ...d }),
+    delete: async () => true, patchByFilter: async () => true, rpc: async () => null,
+    dodajBezOdczytu: async () => true,
+  };
+`);
+const PAKIETY = {
+  react: stub(`const R = window.React;
+    export default R;
+    export const useState = R.useState, useMemo = R.useMemo, useEffect = R.useEffect,
+      useRef = R.useRef, useCallback = R.useCallback, Fragment = R.Fragment;`),
+  "lucide-react": stub(
+    `const ikona = (n) => (p) => window.React.createElement("span", { "data-ikona": n }, "▪");
+     ` + IKONY.map((n) => `export const ${n} = ikona("${n}");`).join("\n")
+  ),
+};
+const prawdziwyFetch = window.fetch.bind(window);
+window.__logowania = [];
+window.fetch = (url, opcje) => {
+  const u = String(url);
+  if (u.includes("/auth/v1/token")) {
+    const body = JSON.parse((opcje && opcje.body) || "{}");
+    window.__logowania.push(body);
+    return Promise.resolve({ ok: true, status: 200, json: async () => ({
+      access_token: "dostep", refresh_token: "odswiez", expires_in: 3600,
+      user: { id: "auth-1", email: body.email },
+    }) });
+  }
+  return prawdziwyFetch(url, opcje);
+};
+const cache = new Map();
+async function zaladuj(sciezka) {
+  if (sciezka.endsWith("/api/supabase")) return API_STUB;
+  if (cache.has(sciezka)) return cache.get(sciezka);
+  const p = (async () => {
+    let kod = null;
+    for (const ext of [".tsx", ".ts", ""]) {
+      const r = await prawdziwyFetch(sciezka + ext + "?cb=" + Date.now());
+      if (r.ok) { kod = await r.text(); break; }
+    }
+    if (kod === null) throw new Error("nie znaleziono " + sciezka);
+    const baza = sciezka.slice(0, sciezka.lastIndexOf("/"));
+    const spec = [...kod.matchAll(/from\s+"([^"]+)"/g)].map((m) => m[1]);
+    const mapa = {};
+    for (const s of spec) {
+      mapa[s] = PAKIETY[s] ? PAKIETY[s]
+        : await zaladuj(new URL(baza + "/" + s, location.origin).pathname);
+    }
+    kod = kod.replace(/from\s+"([^"]+)"/g, (m, s) => `from "${mapa[s]}"`);
+    return URL.createObjectURL(new Blob([
+      Babel.transform(kod, { presets: [["typescript", { allExtensions: true, isTSX: true }], "react"] }).code
+    ], { type: "text/javascript" }));
+  })();
+  cache.set(sciezka, p);
+  return p;
+}
+
+// --- schemat z migracji ------------------------------------------------------
+async function schemat() {
+  const lista = await (await prawdziwyFetch("/docs/sql/migrations/")).text();
+  const pliki = [...lista.matchAll(/href="(\d{4}_[^"]+\.sql)"/g)].map((m) => m[1]);
+  if (!pliki.length) throw new Error("nie widzę listy migracji pod /docs/sql/migrations/");
+  const kolumny = {};
+  for (const p of pliki) {
+    const t = (await (await prawdziwyFetch("/docs/sql/migrations/" + p)).text()).replace(/--[^\n]*/g, "");
+    for (const m of t.matchAll(/create table(?: if not exists)?\s+(?:public\.)?(\w+)\s*\(([\s\S]*?)\n\);/gi)) {
+      const k = (kolumny[m[1]] = kolumny[m[1]] || new Set());
+      for (const l of m[2].split("\n")) {
+        const w = /^\s*(\w+)\s+\w/.exec(l);
+        if (w && !/^(unique|primary|constraint|check|foreign)$/i.test(w[1])) k.add(w[1]);
+      }
+    }
+    for (const m of t.matchAll(/alter table\s+(?:if exists\s+)?(?:public\.)?(\w+)\s+add column(?: if not exists)?\s+(\w+)/gi)) {
+      (kolumny[m[1]] = kolumny[m[1]] || new Set()).add(m[2]);
+    }
+  }
+  return kolumny;
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+// Zmiana bez końca liczy się jak 12 h — porzucona sprzed trzech dni nie
+// „nachodzi” na kolejne dni (aplikacja też jej tak nie traktuje, patrz
+// utils/porzucone.ts), ale dwie otwarte zmiany jednego dnia już tak.
+const koniec = (s) => (s.end_time ? Date.parse(s.end_time) : Date.parse(s.start_time) + 12 * 3600000);
+const nakladaja = (a, b) => Date.parse(a.start_time) < koniec(b) && Date.parse(b.start_time) < koniec(a);
+
+async function arytmetyka() {
+  const C = await cjs("/api/_lib/czas.js");
+  const K = await cjs("/api/_lib/demoKonta.js");
+  const D = await cjs("/api/_lib/demoDane.js");
+  const front = await import(await zaladuj("/src/demo"));
+  const sqlDemo = await (await prawdziwyFetch("/docs/sql/demo/demo.sql")).text();
+  const kolumny = await schemat();
+
+  // Konta: trzy kopie jednej prawdy.
+  sprawdz(front.DEMO_PIN === K.PIN, "PIN w src/demo.ts = api/_lib/demoKonta.js");
+  sprawdz(front.KONTA_DEMO.map((k) => k.klucz + ":" + k.email).join() === K.KONTA.map((k) => k.klucz + ":" + k.email).join(),
+    "konta w src/demo.ts = api/_lib/demoKonta.js");
+  sprawdz(sqlDemo.includes("@" + K.DOMENA_KONT), "domena kont w docs/sql/demo/demo.sql");
+  sprawdz(/revoke all on function public\.demo_wyczysc\(\) from public, anon, authenticated/.test(sqlDemo),
+    "demo_wyczysc niedostępne dla anonima i zalogowanych");
+  sprawdz(K.PIN.length === 6 && /^\d+$/.test(K.PIN), "PIN demo ma sześć cyfr (klawiatura tabletu)");
+
+  const DATY = ["2026-10-08", "2026-10-05", "2026-10-11", "2027-01-01", "2026-03-29", "2026-10-25"];
+  for (const dzis of DATY) {
+    const teraz = C.chwila(dzis, "03:30");
+    const T = D.generuj({ dzis, teraz });
+    const tag = `[${dzis}]`;
+    const wczoraj = C.dodajDni(dzis, -1);
+
+    // Schemat i kolejność zapisu.
+    sprawdz(Object.keys(T).sort().join() === D.KOLEJNOSC.slice().sort().join(), `${tag} KOLEJNOSC obejmuje wszystkie tabele`);
+    for (const [tabela, wiersze] of Object.entries(T)) {
+      if (!kolumny[tabela]) { sprawdz(false, `${tag} tabela ${tabela} istnieje w migracjach`); continue; }
+      const nieznane = new Set();
+      for (const w of wiersze) for (const k of Object.keys(w)) if (!kolumny[tabela].has(k)) nieznane.add(k);
+      sprawdz(!nieznane.size, `${tag} ${tabela}: kolumny z migracji`, [...nieznane].join(", "));
+      if (kolumny[tabela].has("ma_kiosk_pin")) sprawdz(wiersze.every((w) => !("ma_kiosk_pin" in w)), `${tag} ${tabela}: bez kolumny wyliczanej`);
+      const idy = wiersze.filter((w) => w.id).map((w) => w.id);
+      sprawdz(new Set(idy).size === idy.length, `${tag} ${tabela}: id unikalne`);
+      sprawdz(idy.every((i) => UUID.test(i)), `${tag} ${tabela}: id w formacie uuid`);
+    }
+
+    // Konta demo.
+    const poEmailu = (e) => T.users.find((u) => u.email === e);
+    const [kier, tab, tel] = K.KONTA.map((k) => poEmailu(k.email));
+    sprawdz(kier && kier.role === "admin" && kier.active, `${tag} konto kierownika = admin`);
+    sprawdz(tab && tab.role === "kiosk" && tab.allowed_lokale === D.BISTRO, `${tag} konto tabletu = kiosk Bistro`);
+    sprawdz(tel && tel.role === "open" && tel.kiosk_pin === K.PIN && tel.default_lokal === D.BISTRO, `${tag} konto telefonu = open z kiosk_pin`);
+    sprawdz(T.users.filter((u) => u.email).length === 3, `${tag} e-mail mają TYLKO trzy konta demo (żadnych prawdziwych adresów)`);
+    sprawdz(T.users.every((u) => !u.telefon), `${tag} bez numerów telefonów (nie dzwonimy do prawdziwych ludzi)`);
+
+    // Słowniki: każde stanowisko w grafiku i godzinach istnieje w swoim lokalu.
+    const st = new Set(T.stanowiska.map((s) => s.lokal_name + "|" + s.name));
+    sprawdz(T.grafik_shifts.every((g) => st.has(g.lokal + "|" + g.stanowisko)), `${tag} grafik: stanowiska ze słownika lokalu`);
+    sprawdz(T.shifts.filter((s) => !s.is_urlop).every((s) => st.has(s.lokal + "|" + s.stanowisko)), `${tag} godziny: stanowiska ze słownika lokalu`);
+    const poId = Object.fromEntries(T.users.map((u) => [u.id, u]));
+    sprawdz(T.grafik_shifts.every((g) => (poId[g.user_id]?.allowed_stanowiska || "").split(",").includes(g.stanowisko)),
+      `${tag} grafik: każdy stoi na stanowisku ze swojej karty`);
+
+    // Godziny: nic się nie nakłada, otwarte tylko tam, gdzie mają być.
+    const faktOsoby = {};
+    for (const s of T.shifts) (faktOsoby[s.user_id] = faktOsoby[s.user_id] || []).push(s);
+    let kolizje = 0;
+    for (const lista of Object.values(faktOsoby))
+      for (let i = 0; i < lista.length; i++) for (let j = i + 1; j < lista.length; j++) if (nakladaja(lista[i], lista[j])) kolizje++;
+    sprawdz(kolizje === 0, `${tag} godziny bez nakładania się`, `${kolizje} kolizji`);
+    sprawdz(T.shifts.every((s) => !s.end_time || Date.parse(s.end_time) > Date.parse(s.start_time)), `${tag} koniec po starcie`);
+    const otwarte = T.shifts.filter((s) => !s.end_time);
+    const otwarteNieDzis = otwarte.filter((s) => C.ymd(s.start_time) !== dzis);
+    sprawdz(otwarteNieDzis.length === 1, `${tag} dokładnie jedna zmiana bez końca z przeszłości`, String(otwarteNieDzis.length));
+    sprawdz(otwarte.some((s) => s.user_name === "Szymon Kubiak"), `${tag} osoba na próbę odbiła dziś start`);
+
+    // Telefon demo ma dziś co odbić.
+    const marekDzis = T.grafik_shifts.filter((g) => g.user_id === tel.id && g.date === dzis);
+    sprawdz(marekDzis.length >= 1 && marekDzis.every((g) => g.published_at), `${tag} Marek ma dziś opublikowaną zmianę`);
+    sprawdz(!T.shifts.some((s) => s.user_id === tel.id && C.ymd(s.start_time) === dzis), `${tag} Marek dziś jeszcze nie odbił`);
+
+    // Kolejki kierownika: po jednej sprawie.
+    const dniFaktu = new Set(T.shifts.map((s) => s.user_id + "|" + C.ymd(s.start_time)));
+    const bezOdbicia = T.grafik_shifts.filter((g) => g.date < dzis && g.date >= C.dodajDni(dzis, -14) && !dniFaktu.has(g.user_id + "|" + g.date));
+    sprawdz(bezOdbicia.length === 1 && bezOdbicia[0].date === wczoraj, `${tag} jedna zmiana bez odbicia — wczoraj`, bezOdbicia.map((g) => g.user_name + " " + g.date).join(", "));
+    const korekty = T.issues.filter((i) => i.type === "correction" && i.status === "nowe");
+    sprawdz(korekty.length === 2, `${tag} dwie korekty do decyzji`);
+    const idyZmian = new Set(T.shifts.map((s) => s.id));
+    sprawdz(T.issues.every((i) => !i.shift_id || idyZmian.has(i.shift_id)), `${tag} issues.shift_id wskazuje istniejącą zmianę (FK)`);
+    sprawdz(T.absences.filter((a) => a.status === "pending").length === 1, `${tag} jeden wniosek o wolne czeka`);
+    sprawdz(T.users.filter((u) => u.probny_status === "oczekuje").length === 1, `${tag} jedna osoba na próbę`);
+    sprawdz(T.shift_swaps.some((s) => s.status === "na_gieldzie") && T.shift_swaps.some((s) => s.status === "przyjeta"),
+      `${tag} giełda: oferta i prośba do zgody`);
+    const idyGrafiku = new Set(T.grafik_shifts.map((g) => g.id));
+    sprawdz(T.shift_swaps.every((s) => idyGrafiku.has(s.grafik_shift_id)), `${tag} giełda wskazuje istniejące zmiany`);
+    sprawdz(T.issues.some((i) => i.type === "problem" && i.is_anonymous && !i.user_id && !i.shift_id), `${tag} anonimowe zgłoszenie bez user_id i shift_id`);
+
+    // Wolne: nikt nie ma zmiany w zatwierdzony dzień wolny.
+    const wolne = T.absences.filter((a) => a.status === "approved");
+    const wGrafikuWWolne = T.grafik_shifts.filter((g) => wolne.some((a) => a.user_id === g.user_id && g.date >= a.start_date && g.date <= a.end_date));
+    sprawdz(!wGrafikuWWolne.length, `${tag} grafik omija zatwierdzone wolne`);
+    const urlop = T.shifts.filter((s) => s.is_urlop);
+    sprawdz(urlop.length === 3 && urlop.every((s) => s.stanowisko === "Urlop" && s.absence_id), `${tag} urlop zmaterializowany (3 dni po 8 h)`);
+
+    // Szkic grafiku i publikacja.
+    sprawdz(T.grafik_shifts.some((g) => !g.published_at) && T.grafik_shifts.filter((g) => !g.published_at).every((g) => g.date >= C.dodajDni(dzis, 11)),
+      `${tag} szkic tylko na końcu zakresu`);
+    sprawdz(T.grafik_shifts.every((g) => !g.published_at || Date.parse(g.published_at) <= Date.parse(teraz.toISOString())), `${tag} publikacja nie z przyszłości`);
+
+    // Puls: jedna karta na (lokal, dzień); wczoraj otwarta w Bistro, brak w Pizzerii.
+    const klucze = T.day_logs.map((d) => d.lokal + "|" + d.date);
+    sprawdz(new Set(klucze).size === klucze.length, `${tag} day_logs unikalne (lokal, date)`);
+    const wczBistro = T.day_logs.find((d) => d.lokal === D.BISTRO && d.date === wczoraj);
+    sprawdz(wczBistro && wczBistro.status === "otwarty" && wczBistro.obrot > 0, `${tag} wczoraj w Bistro: otwarta karta z utargiem`);
+    sprawdz(!T.day_logs.some((d) => d.lokal === D.PIZZERIA && d.date === wczoraj), `${tag} wczoraj w Pizzerii: bez karty`);
+    sprawdz(T.day_logs.every((d) => d.date < dzis), `${tag} karty dni tylko z przeszłości`);
+    const wymagane = T.day_log_templates.filter((s) => s.lokal === D.BISTRO && s.wymagany).map((s) => s.klucz);
+    const wpisyWcz = new Set(T.day_log_entries.filter((e) => e.lokal === D.BISTRO && e.date === wczoraj).map((e) => e.template_key));
+    sprawdz(wymagane.every((k) => wpisyWcz.has(k)), `${tag} wczoraj w Bistro komplet wymaganych wpisów („Zamknij” na Pulpicie)`);
+
+    // Zadania: wykonania i pomiary wskazują istniejące wiersze.
+    const idyZadan = new Set(T.tasks.map((t) => t.id));
+    const idyWpisow = new Set(T.day_log_entries.map((e) => e.id));
+    sprawdz(T.task_completions.every((c) => idyZadan.has(c.task_id)), `${tag} wykonania → istniejące zadania`);
+    sprawdz(T.task_completions.every((c) => !c.entry_id || idyWpisow.has(c.entry_id)), `${tag} pomiary → istniejące wpisy`);
+    const zadPoId = Object.fromEntries(T.tasks.map((t) => [t.id, t]));
+    sprawdz(T.task_completions.every((c) => (zadPoId[c.task_id].pola.length > 0) === !!c.entry_id), `${tag} pomiar ⇔ zadanie z polami`);
+    const idyBlokow = new Set(T.task_blocks.map((b) => b.id));
+    sprawdz(T.tasks.every((t) => idyBlokow.has(t.block_id)), `${tag} każde zadanie w bloku`);
+
+    sprawdz(T.notifications.every((n) => n.message && n.email_at), `${tag} wiadomości z treścią, oznaczone jako obsłużone mailowo`);
+    sprawdz(T.grafik_budzet_cele.length === 14, `${tag} cele budżetu: 7 dni × 2 lokale`);
+
+    // Deterministycznie: ten sam dzień = te same dane; osoby mają stałe id.
+    const drugi = D.generuj({ dzis, teraz });
+    sprawdz(JSON.stringify(drugi) === JSON.stringify(T), `${tag} ten sam dzień = te same dane`);
+  }
+  const a = D.generuj({ dzis: "2026-10-08", teraz: new Date("2026-10-08T01:30:00Z") });
+  const b = D.generuj({ dzis: "2026-10-09", teraz: new Date("2026-10-09T01:30:00Z") });
+  sprawdz(a.users.map((u) => u.id).join() === b.users.map((u) => u.id).join(), "id osób stałe między resetami");
+  sprawdz(a.lokale.map((u) => u.id).join() === b.lokale.map((u) => u.id).join(), "id lokali stałe między resetami");
+}
+
+async function ekran() {
+  const { default: LoginScreen } = await import(await zaladuj("/src/components/LoginScreen"));
+  const { default: DemoPasek } = await import(await zaladuj("/src/components/DemoPasek"));
+  const front = await import(await zaladuj("/src/demo"));
+  const R = window.React;
+  let zalogowany = null, widok = null;
+  const root = ReactDOM.createRoot(document.getElementById("app"));
+  root.render(R.createElement(LoginScreen, {
+    setCurrentUser: (u) => (zalogowany = u), setCurrentView: (v) => (widok = v), dbError: "", komunikat: "",
+  }));
+  await new Promise((r) => setTimeout(r, 300));
+  const karty = [...document.querySelectorAll("[data-demo-rola]")].map((e) => e.getAttribute("data-demo-rola"));
+  sprawdz(karty.join() === "kierownik,tablet,telefon", "ekran: trzy role", karty.join());
+  sprawdz(!document.querySelector('input[type="password"]'), "ekran: formularz schowany");
+  sprawdz(document.body.textContent.includes(front.DEMO_PIN), "ekran: PIN tabletu podany wprost");
+
+  document.querySelector('[data-demo-rola="telefon"] button').click();
+  for (let i = 0; i < 30 && !widok; i++) await new Promise((r) => setTimeout(r, 50));
+  const log = window.__logowania[0] || {};
+  sprawdz(log.email === "pracownik@demo.shiftro.pl" && log.password === front.DEMO_PIN, "ekran: „Telefon pracownika” loguje kontem telefonu", JSON.stringify(log));
+  sprawdz(widok === "closed_dashboard" && zalogowany && zalogowany.name === "Marek Wiśniewski", "ekran: po zalogowaniu widok telefonu", widok);
+  sprawdz(!!sessionStorage.getItem("shiftro_auth") && !localStorage.getItem("shiftro_auth"), "sesja demo w sessionStorage (osobno dla każdej karty)");
+
+  root.render(R.createElement(DemoPasek, {
+    currentUser: { name: "Katarzyna Nowak", role: "admin", email: "kierownik@demo.shiftro.pl" }, onZmienRole: () => {},
+  }));
+  await new Promise((r) => setTimeout(r, 100));
+  document.querySelector("[data-demo-pasek]").click();
+  await new Promise((r) => setTimeout(r, 100));
+  const panel = document.querySelector("[data-demo-panel]");
+  sprawdz(panel && panel.textContent.includes("Przywróć dane demo"), "pasek: właścicielka ma „Przywróć dane demo”");
+  sprawdz(panel && panel.querySelectorAll('a[href^="?jako="]').length === 2, "pasek: dwie pozostałe role w nowej karcie");
+  root.render(R.createElement(DemoPasek, {
+    currentUser: { name: "Marek Wiśniewski", role: "open", email: "pracownik@demo.shiftro.pl" }, onZmienRole: () => {},
+  }));
+  await new Promise((r) => setTimeout(r, 100));
+  document.querySelector("[data-demo-pasek]").click();
+  await new Promise((r) => setTimeout(r, 100));
+  sprawdz(!document.querySelector("[data-demo-panel]").textContent.includes("Przywróć dane demo"), "pasek: pracownik nie przywraca danych");
+  sessionStorage.removeItem("shiftro_auth");
+}
+
+(async () => {
+  try {
+    await arytmetyka();
+    await ekran();
+  } catch (e) {
+    pokazBlad(e);
+    return;
+  }
+  linia(`ZDANYCH ${zdanych}, OBLANYCH ${oblanych}`, oblanych > 0);
+  status.textContent = oblanych ? `OBLANYCH ${oblanych}` : `gotowe — ${zdanych} sprawdzeń`;
+  if (oblanych) status.className = "zle";
+})();
+</script>

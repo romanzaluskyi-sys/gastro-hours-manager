@@ -5,6 +5,19 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.72.0 — 2026-10-08
+
+- **Wersja demonstracyjna pod demo.shiftro.pl** — dla klientów, którzy chcą
+  zobaczyć Shiftro, zanim cokolwiek wdrożą. Na ekranie wejścia trzy przyciski:
+  **Panel kierownika**, **Tablet Służbowy** i **Telefon pracownika** — bez
+  wpisywania e-maila i PIN-u. Każdą rolę można otworzyć w osobnej karcie albo
+  na swoim telefonie; to, co wpisze się w jednej, widać w pozostałych.
+- Wymyślona sieć dwóch lokali z półtoramiesięczną historią: grafik, godziny,
+  zadania, Puls i po jednej sprawie w każdej kolejce „Do decyzji”. Dane wracają
+  do stanu początkowego co noc (i z przycisku „Przywróć dane demo”).
+- Zakładka **DEMO** przy prawej krawędzi ekranu podpowiada, co warto
+  sprawdzić w danej roli, i pozwala przejść do innej.
+
 ## 0.71.0 — 2026-10-07
 
 - **Automatyczne wylogowanie po 60 minutach bez aktywności** — na kontach

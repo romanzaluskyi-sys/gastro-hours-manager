@@ -109,6 +109,13 @@ export const brakujaceZmienne = [
 export const isConfigured =
   SUPABASE_URL.includes("supabase.co") && SUPABASE_KEY.includes("sb_");
 
+// Wersja demonstracyjna (demo.shiftro.pl, 0.72.0): ekran logowania z trzema
+// przyciskami zamiast formularza, pasek „DEMO” w aplikacji i sesja osobna dla
+// każdej karty przeglądarki. Ustawia ją WYŁĄCZNIE `nowy-klient.py --demo` —
+// patrz src/demo.ts i docs/DEMO.md. To przełącznik zachowania, nie dane
+// klienta: konta i PIN demo są publiczne z założenia.
+export const DEMO = String(env(jest.REACT_APP_DEMO, "")).trim().toLowerCase() === "tak";
+
 // Podbijana przy każdej zmianie widocznej dla użytkownika — historia w
 // CHANGELOG.md. Wyświetlana na ekranie logowania (LoginScreen.tsx).
-export const APP_VERSION = "0.71.0";
+export const APP_VERSION = "0.72.0";

@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { SUPABASE_URL, SUPABASE_KEY } from "../config";
+import { SUPABASE_URL, SUPABASE_KEY, DEMO } from "../config";
 
 // Logowanie przez Supabase Auth (GoTrue), pisane ręcznie na fetchu.
 //
@@ -13,6 +13,13 @@ import { SUPABASE_URL, SUPABASE_KEY } from "../config";
 // i musi przeżyć odświeżenie strony oraz restart urządzenia.
 
 const KLUCZ_SESJI = "shiftro_auth";
+
+// ⚠️ W wersji demonstracyjnej sesja żyje w sessionStorage, czyli OSOBNO w każdej
+// karcie. Odwiedzający otwiera obok siebie Panel kierownika i Tablet Służbowy —
+// ze wspólnym localStorage druga karta nadpisałaby token pierwszej i panel
+// kierownika zacząłby po cichu pytać bazę jako tablet (RLS: dane jednego
+// lokalu, bez stawek). Poza demo bez zmian: tablet ma przeżyć restart.
+const magazyn = () => (DEMO ? sessionStorage : localStorage);
 
 // Ile sekund PRZED wygaśnięciem zaczynamy odświeżać. Dwie minuty, nie
 // sekunda: żądanie wysłane z tokenem ważnym jeszcze 0,5 s dojdzie do Supabase
@@ -28,7 +35,7 @@ const teraz = () => Math.floor(Date.now() / 1000);
 
 export const wczytajSesje = () => {
   try {
-    const raw = localStorage.getItem(KLUCZ_SESJI);
+    const raw = magazyn().getItem(KLUCZ_SESJI);
     return raw ? JSON.parse(raw) : null;
   } catch (e) {
     // Tryb prywatny albo zablokowane dane stron — sesja nie przeżyje
@@ -39,7 +46,7 @@ export const wczytajSesje = () => {
 
 const zapiszSesje = (s) => {
   try {
-    localStorage.setItem(KLUCZ_SESJI, JSON.stringify(s));
+    magazyn().setItem(KLUCZ_SESJI, JSON.stringify(s));
   } catch (e) {
     /* jw. */
   }
@@ -47,7 +54,7 @@ const zapiszSesje = (s) => {
 
 export const wyczyscSesje = () => {
   try {
-    localStorage.removeItem(KLUCZ_SESJI);
+    magazyn().removeItem(KLUCZ_SESJI);
   } catch (e) {
     /* jw. */
   }
@@ -168,7 +175,11 @@ export const wyloguj = async () => {
   wyczyscSesje();
   if (!sesja?.access_token) return;
   try {
-    await fetch(`${SUPABASE_URL}/auth/v1/logout`, {
+    // ⚠️ W demo `scope=local`: domyślne wylogowanie GoTrue jest GLOBALNE i
+    // unieważnia wszystkie sesje tego konta — a z kontem „Tablet Służbowy” w
+    // demo siedzi naraz kilka osób na kilku urządzeniach. Jedno „Wróć do
+    // wyboru roli” wylogowałoby je wszystkie przy następnym odświeżeniu tokenu.
+    await fetch(`${SUPABASE_URL}/auth/v1/logout${DEMO ? "?scope=local" : ""}`, {
       method: "POST",
       headers: { ...naglowkiAuth, Authorization: `Bearer ${sesja.access_token}` },
     });

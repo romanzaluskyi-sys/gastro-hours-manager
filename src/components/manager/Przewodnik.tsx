@@ -23,6 +23,14 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.72.0",
+    date: "2026-10-08",
+    items: [
+      "Wersja demonstracyjna (demo.shiftro.pl): Panel kierownika, Tablet Służbowy i Telefon pracownika jednym przyciskiem.",
+      "Przykładowa sieć z historią i sprawami do decyzji; dane wracają do stanu początkowego co noc.",
+    ],
+  },
+  {
     version: "0.71.0",
     date: "2026-10-07",
     items: [

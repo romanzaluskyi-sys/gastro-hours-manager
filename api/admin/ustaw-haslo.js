@@ -13,6 +13,8 @@
 // api/cron/*.js: Vercel buduje api/ osobnym, legacy tsc, który przewraca się
 // na starym `typescript` z package.json.
 
+const { jestKontemDemo } = require("../_lib/demoKonta");
+
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;              // publishable
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY; // omija RLS!
@@ -105,6 +107,16 @@ module.exports = async function handler(req, res) {
     }
 
     const email = (cel.email || "").trim().toLowerCase();
+
+    // Wersja demonstracyjna: PIN trzech kont z przycisków na ekranie logowania
+    // jest stały — zmieniony przez jednego odwiedzającego wyłączyłby logowanie
+    // wszystkim do nocnego resetu. Kolumnę w bazie chroni trigger z
+    // docs/sql/demo/demo.sql; to jest ta sama ochrona po stronie hasła w Auth.
+    if (process.env.DEMO === "tak" && jestKontemDemo(email)) {
+      return res.status(403).json({
+        error: "To konto demonstracyjne — jego PIN jest stały, żeby każdy mógł się nim zalogować.",
+      });
+    }
 
     // --- 3a. Konto już jest: zmieniamy hasło ---
     if (cel.auth_id) {

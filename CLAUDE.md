@@ -152,6 +152,33 @@ załadowaniem modułu (`harness-karta.html` — prawdziwa baza, `harness-app.htm
 To jedyna droga podania konfiguracji z pominięciem builda i ma być jawna:
 harness sięgający do prawdziwej bazy musi mieć to napisane u siebie.
 
+## Wersja demonstracyjna — demo.shiftro.pl (0.72.0)
+
+Pełny opis i lista kontrolna: [`docs/DEMO.md`](docs/DEMO.md). Demo to ZWYKŁY
+klient (własna baza i projekt Vercel, `nowy-klient.py --klient demo --demo`)
+z flagą `REACT_APP_DEMO`/`DEMO`: trzy przyciski logowania zamiast formularza
+(`src/demo.ts`, `LoginScreen.tsx`), zakładka „DEMO” (`DemoPasek.tsx`) i nocny
+reset danych (`api/cron/demo-reset.js` + generator `api/_lib/demoDane.js`).
+
+⚠️ **Reset czyści CAŁĄ bazę i stoi w `vercel.json` wszystkich klientów.** Dwa
+bezpieczniki, oba obowiązkowe: `DEMO=tak` w Vercelu ORAZ funkcja
+`demo_znacznik()` w bazie (`docs/sql/demo/demo.sql` — instaluje ją tylko
+`--demo`, NIE jest migracją i nie może nią zostać). Nie usuwaj żadnego z nich.
+
+⚠️ **Konta i PIN demo stoją w dwóch kopiach** (`api/_lib/demoKonta.js`,
+`src/demo.ts`) plus domena w `demo.sql` — `harness-demo.html` je porównuje.
+
+⚠️ **W demo sesja jest w `sessionStorage`, a wylogowanie ma `scope=local`**
+(`api/auth.ts`). Poza demo bez zmian. Bez tego karta z tabletem nadpisywała
+token karty z panelem, a „Wróć do wyboru roli” wylogowywało wszystkich na
+tym samym koncie demo.
+
+⚠️ **Dokładając tabelę albo kolumnę, której ekran potrzebuje, dopisz dane do
+`demoDane.js`.** `demo_wyczysc()` wyczyści nową tabelę sama (lista z
+`pg_tables`), ale demo pokaże ją pustą. `harness-demo.html` sprawdza każdą
+kolumnę generatora z migracjami i to, że w każdej kolejce „Do decyzji” czeka
+po jednej sprawie.
+
 ## Logowanie i dostęp do danych — W TRAKCIE (Etap 3, od 0.41.0)
 
 ⚠️ **Stan na dziś: wszystkie polityki RLS to `using (true)`, a PIN-y porównuje
@@ -545,6 +572,10 @@ api/                         — root-level, POZA src/ — funkcje Vercel Cron
                                  raport.js + raportMail.js (raport kierownika)
   email/
     ustawienia.js              — "Ustawienia powiadomień" z linku w mailu
+  cron/demo-reset.js           — TYLKO demo.shiftro.pl: czyści bazę i zapisuje
+                                 dane przykładowe (co noc + przycisk), patrz
+                                 "Wersja demonstracyjna"
+  _lib/demoDane.js, demoKonta.js — generator danych demo i konta demo
   zdrowie.js                   — stan wdrożenia za CRON_SECRET: wersja, brakujące
                                  zmienne (same nazwy), czy front i crony patrzą
                                  na tę samą bazę, liczba migracji, Brevo. Woła
@@ -559,6 +590,8 @@ vercel.json                  — harmonogram crona
                                  `npm run build` — Vercel buduje każdy PR jako
                                  Preview i drugi build mówiłby to samo
 CHANGELOG.md                 — historia wersji, patrz "Wersjonowanie i CHANGELOG" niżej
+docs/DEMO.md                 — wersja demonstracyjna: uruchomienie, dane, bezpieczniki
+docs/sql/demo/demo.sql        — TYLKO baza demo (znacznik, czyszczenie, ochrona kont)
 docs/GRAFIK.md               — pełna specyfikacja Grafiku z uzasadnieniami decyzji właściciela
 docs/KOPIE-ZAPASOWE.md       — co obejmuje kopia, czego NIE obejmuje, kolejność
                                  odtwarzania i ćwiczenie odtworzenia
@@ -605,6 +638,7 @@ public/
 src/
   index.tsx                  — punkt wejścia (bez zmian)
   App.tsx                    — globalny stan, fetch danych z Supabase, routing widoków
+  demo.ts                    — konta demo i `?jako=` (wersja demonstracyjna)
   config.ts                  — konfiguracja NAJEMCY (zmienne środowiskowe),
                                  TENANT/PRODUKT, isConfigured, APP_VERSION —
                                  patrz "Konfiguracja najemcy" niżej
@@ -1897,6 +1931,10 @@ odpadają. Zamiast tego dwa pliki w katalogu głównym, uruchamiane przez
   Supabase i Brevo, porównuje reguły raportu z `src/utils` na tych samych
   danych, przechodzi oba endpointy i stronę ustawień, a na dole pokazuje
   podgląd wszystkich maili;
+- `harness-demo.html` — wersja demonstracyjna: generator danych dla sześciu
+  dat (w tym przełom roku i zmiana czasu) sprawdzany z kolumnami z migracji,
+  kolejki „Do decyzji”, brak nakładających się godzin, zgodność kont w trzech
+  miejscach, ekran z trzema przyciskami i sesja w sessionStorage;
 - `harness-bledy.html` — dziennik błędów: limit zapisów na sesję, odsiewanie
   powtórzeń, komplet pól wiersza i to, czy `ErrorBoundary` pokazuje ekran
   zamiast białej strony. `fetch` jest podmieniony, nic nie leci do sieci.

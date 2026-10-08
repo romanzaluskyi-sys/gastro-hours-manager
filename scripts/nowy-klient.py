@@ -36,6 +36,14 @@ przebiegu dokańcza to, czego brakuje, i nie psuje tego, co już jest.
         --projekt abcdefghijklmnop --admin-imie "Anna Kowalska" --admin-email anna@sloneczna.pl
     # to samo z --wykonaj
 
+Wersja demonstracyjna (demo.shiftro.pl) to ZWYKŁY klient z flagą --demo:
+
+    python3 scripts/nowy-klient.py --klient demo --demo --projekt <REF>
+
+Różnice: zmienne DEMO/REACT_APP_DEMO, funkcje z docs/sql/demo/demo.sql w bazie,
+bez konta właściciela (konta demo zakłada reset), a na końcu pierwszy reset,
+który wypełnia bazę danymi przykładowymi. Pełny opis: docs/DEMO.md.
+
 Bez BREVO_API_KEY wszystko inne się wykona, a maile zostaną wyłączone; po
 założeniu konta w Brevo wystarczy uruchomić skrypt jeszcze raz z kluczem.
 
@@ -220,6 +228,42 @@ select cron.schedule(
   $job$
 );""")
     return sekret
+
+
+def krok_demo_sql(r, pat, ref):
+    r.krok("4a", "Baza demo — znacznik, czyszczenie, ochrona kont (docs/sql/demo/demo.sql)")
+    jest = sql(pat, ref, "select to_regprocedure('public.demo_znacznik()') is not null as j;")
+    # Plik jest powtarzalny (create or replace), więc puszczamy go ZAWSZE —
+    # poprawka w nim ma trafić do bazy przy najbliższym przebiegu.
+    r.zrobie(("odświeżę" if jest and jest[0]["j"] else "zainstaluję") + " funkcje demo w bazie")
+    if r.wykonaj:
+        sql(pat, ref, (ROOT / "docs" / "sql" / "demo" / "demo.sql").read_text())
+
+
+def krok_dane_demo(r, domena, nazwa_vercel, sekret):
+    r.krok("10", "Dane demo — pierwszy reset (api/cron/demo-reset)")
+    r.zrobie("wywołam reset: konta demo + dane przykładowe od dzisiejszej daty")
+    if not r.wykonaj:
+        return
+    # Domena bywa jeszcze bez DNS — wtedy adres z Vercela.
+    for host in (domena, f"{nazwa_vercel}.vercel.app"):
+        try:
+            _, odp = http("GET", f"https://{host}/api/cron/demo-reset",
+                          {"Authorization": f"Bearer {sekret}"}, timeout=120)
+        except BladApi as e:
+            r.uwaga(f"{host}: {e.kod} {e.tresc[:300]}")
+            continue
+        except Exception as e:  # noqa: BLE001 — brak DNS, timeout
+            r.uwaga(f"{host}: {e}")
+            continue
+        if isinstance(odp, dict) and odp.get("tabele"):
+            suma = sum(odp["tabele"].values())
+            r.ok(f"{host}: {suma} wierszy w {len(odp['tabele'])} tabelach; konta: "
+                 + (", ".join(odp.get("konta") or []) or "bez zmian"))
+            return
+        r.uwaga(f"{host}: {json.dumps(odp, ensure_ascii=False)[:300]}")
+    r.uwaga("reset nie przeszedł — dane wypełni nocny cron albo ponowne uruchomienie skryptu",
+            "dane demo: ten skrypt jeszcze raz z --wykonaj (krok 10)")
 
 
 # --- Kroki Vercel --------------------------------------------------------------
@@ -441,6 +485,8 @@ def main():
     ap.add_argument("--admin-email")
     ap.add_argument("--email-from", default="powiadomienia@shiftro.pl")
     ap.add_argument("--produkt", default="Shiftro")
+    ap.add_argument("--demo", action="store_true",
+                    help="wersja demonstracyjna (demo.shiftro.pl) — patrz docs/DEMO.md")
     ap.add_argument("--wykonaj", action="store_true", help="bez tego tylko plan")
     a = ap.parse_args()
 
@@ -449,7 +495,11 @@ def main():
 
     rej = wczytaj_rejestr(wymagany=False)
     byly = klient(rej, a.klient) or {}
-    nazwa = a.nazwa or byly.get("nazwa")
+    # Raz demo, zawsze demo: ponowny przebieg bez --demo nie może po cichu
+    # zdjąć zmiennych DEMO z projektu (reset przestałby działać) ani założyć
+    # konta właściciela w bazie, którą co noc się czyści.
+    demo = a.demo or bool(byly.get("demo"))
+    nazwa = a.nazwa or byly.get("nazwa") or ("Shiftro · wersja demonstracyjna" if demo else None)
     ref = a.projekt or byly.get("supabase_ref")
     domena = (a.domena or byly.get("domena") or f"{a.klient}.shiftro.pl").lower()
     if not nazwa or not ref:
@@ -485,6 +535,11 @@ def main():
     klucze = krok_klucze(r, pat, ref)
     krok_auth(r, pat, ref, domena)
     krok_migracje(r, pat, ref)
+    if demo:
+        krok_demo_sql(r, pat, ref)
+    # Demo nie wysyła maili — nawet gdyby w środowisku wisiał BREVO_API_KEY.
+    if demo:
+        brevo = ""
     sekret = krok_sekret_i_harmonogram(r, pat, ref, domena, bool(brevo))
 
     url = f"https://{ref}.supabase.co"
@@ -502,21 +557,27 @@ def main():
     }
     if brevo:
         zmienne["BREVO_API_KEY"] = brevo
-    if os.environ.get("GOOGLE_SCRIPT_URL", "").strip():
+    if demo:
+        zmienne["DEMO"] = "tak"
+        zmienne["REACT_APP_DEMO"] = "tak"
+    if os.environ.get("GOOGLE_SCRIPT_URL", "").strip() and not demo:
         zmienne["REACT_APP_GOOGLE_SCRIPT_URL"] = os.environ["GOOGLE_SCRIPT_URL"].strip()
 
     projekt, nowy = krok_vercel_projekt(r, vtok, team, projekt_nazwa, repo, wzor_id)
     zmienione = krok_zmienne(r, vtok, team, projekt, zmienne)
     krok_domena(r, vtok, team, projekt, domena)
     krok_deploy(r, vtok, team, projekt, projekt_nazwa, repo, nowy or zmienione)
-    krok_admin(r, ref, klucze.get("secret"), a.admin_imie, a.admin_email)
+    if demo:
+        krok_dane_demo(r, domena, projekt_nazwa, sekret)
+    else:
+        krok_admin(r, ref, klucze.get("secret"), a.admin_imie, a.admin_email)
     krok_sprawdzenie(r, ref, domena, sekret)
 
     if a.wykonaj and not rej.get("vercel_team"):
         rej["vercel_team"] = team
     if a.wykonaj and not rej.get("repo"):
         rej["repo"] = repo
-    krok_rejestr(r, rej, {
+    wpis = {
         "slug": a.klient,
         "nazwa": nazwa,
         "supabase_ref": ref,
@@ -524,14 +585,20 @@ def main():
         "vercel_projekt": (projekt or {}).get("id"),
         "domena": domena,
         "dodano": date.today().isoformat(),
-    })
+    }
+    if demo:
+        wpis["demo"] = True
+    krok_rejestr(r, rej, wpis)
 
     print("\n=== Zostaje ręcznie ===")
-    for x in r.reczne + [
+    reszta = [
         "umowa powierzenia danych (DPA) — PRZED wpisaniem danych pracowników",
         "dane startowe w aplikacji: Lokale → Stanowiska → Pracownicy → "
         "Wymagania obsady → Puls (docs/NOWY-KLIENT.md §5)",
-    ]:
+    ]
+    if demo:
+        reszta = [f"otwórz https://{domena} i przejdź trzy role (docs/DEMO.md, „Sprawdzenie”)"]
+    for x in r.reczne + reszta:
         print(f"  - {x}")
     if not a.wykonaj:
         print("\nTo był suchy przebieg. Powtórz z --wykonaj.\n")

@@ -7,6 +7,9 @@ odróżniającego klientów wpisać do kodu — to jest moment, w którym "drugi
 klient" zamienia się w "kopię repozytorium", a każda kolejna poprawka musi
 być wklejana ręcznie w obie kopie.
 
+> **Wersja demonstracyjna (demo.shiftro.pl)** to też klient — ta sama ścieżka
+> z flagą `--demo`. Opis i lista kontrolna: [`DEMO.md`](DEMO.md).
+
 ## Szybka ścieżka — `scripts/nowy-klient.py`
 
 Od 0.71 całą techniczną część robi jeden skrypt. Sekcje 1–4 niżej opisują, co
