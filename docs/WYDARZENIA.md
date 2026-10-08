@@ -1,6 +1,7 @@
 # Wydarzenia — specyfikacja (Roadmap p.3, plan z 2026-10-08)
 
-Stan: **plan, przed makietami.** Decyzje właściciela z 2026-10-08 są oznaczone
+Stan: **W1 zrobione** (migracja `0043`, `src/utils/wydarzenia.ts`,
+`harness-wydarzenia.html`); makiety gotowe w design systemie. Decyzje właściciela z 2026-10-08 są oznaczone
 „(właściciel)”. Makiety powstają w design systemie „Shiftro”
 (artefakt `TKUadpBcvVrENEiBrDZNfY`), nazwy ekranów niżej.
 
@@ -115,7 +116,7 @@ Tworzy, zmienia i odwołuje **tylko kierownik** (właściciel): `admin`,
 
 | Etap | Co | Wersja |
 |---|---|---|
-| W1 | migracja `0043`, `utils/wydarzenia.ts`, harness | — |
+| W1 ✓ | migracja `0043`, `utils/wydarzenia.ts`, harness | — |
 | W2 | Grafik: panel, chip w dniu, lista; wiadomości + e-mail | 0.74.0 |
 | W3 | pracownik: Grafik, Pulpit, Wiadomości; tablet; Pulpit kierownika; Puls | 0.74.0 |
 | W4 | płatny czas pracy: godziny w siatce/budżecie/Raporcie, rozliczenie w „Do decyzji”, `shifts.wydarzenie_id` | 0.75.0 |

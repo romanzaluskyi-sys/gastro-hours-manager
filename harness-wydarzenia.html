@@ -1,0 +1,212 @@
+<meta charset="utf-8">
+<title>Sprawdzian wydarzeń</title>
+<style>
+  body { font: 14px/1.6 ui-monospace, Menlo, monospace; padding: 24px; background: #FBFAF9; color: #17120F; }
+  h1 { font: 700 18px/1.2 system-ui, sans-serif; }
+  .ok { color: #2C6A4F; } .zle { color: #DE3A22; font-weight: 700; }
+  pre { background: #F1EEEB; padding: 10px; overflow-x: auto; }
+</style>
+<h1>Sprawdzian utils/wydarzenia.ts</h1>
+<div id="out">ładowanie…</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js"></script>
+<script>
+const out = document.getElementById("out");
+const log = (txt, cls = "") => {
+  const d = document.createElement("div");
+  d.className = cls; d.textContent = txt; out.appendChild(d);
+};
+
+// Mały loader ES-modułów: pobiera plik, transpiluje Babelem (te pliki mają
+// @ts-nocheck i są w praktyce zwykłym JS), przepisuje ścieżki importów na
+// blob-URL-e już załadowanych modułów i importuje.
+const cache = new Map();
+async function zaladuj(sciezka) {
+  if (cache.has(sciezka)) return cache.get(sciezka);
+  const p = new Promise(async (resolve, reject) => {
+    try {
+      let kod = null;
+      for (const ext of [".ts", ".tsx", ""]) {
+        const r = await fetch(sciezka + ext + "?cb=" + Date.now());
+        if (r.ok) { kod = await r.text(); break; }
+      }
+      if (kod === null) throw new Error("nie znaleziono " + sciezka);
+
+      const specyfikatory = [...kod.matchAll(/from\s+"(\.[^"]+)"/g)].map((m) => m[1]);
+      const baza = sciezka.slice(0, sciezka.lastIndexOf("/"));
+      const mapa = {};
+      for (const s of specyfikatory) {
+        const url = new URL(baza + "/" + s, location.origin).pathname;
+        mapa[s] = await zaladuj(url);
+      }
+      kod = kod.replace(/from\s+"(\.[^"]+)"/g, (m, s) => `from "${mapa[s]}"`);
+      const js = Babel.transform(kod, { presets: [["typescript", { allExtensions: true, isTSX: true }]] }).code;
+      resolve(URL.createObjectURL(new Blob([js], { type: "text/javascript" })));
+    } catch (e) { reject(e); }
+  });
+  cache.set(sciezka, p);
+  return p;
+}
+
+let zdanych = 0, oblanych = 0;
+const sprawdz = (nazwa, warunek, szczegol = "") => {
+  if (warunek) { zdanych++; log("  OK   " + nazwa, "ok"); }
+  else { oblanych++; log("  ŹLE  " + nazwa + (szczegol ? " — " + szczegol : ""), "zle"); }
+};
+
+(async () => {
+  try {
+    out.textContent = "";
+    const W = await import(await zaladuj("/src/utils/wydarzenia"));
+    log("moduł załadowany razem z grafik.ts i budzet.ts", "ok");
+    log("");
+    const D = "2026-10-14"; // środa
+    const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+    const imiona = (l) => l.map((u) => u.name);
+
+    const ola = { id: "u1", name: "Ola", role: "open", active: true, default_lokal: "A", default_stanowisko: "Sala",
+                  typ_umowy: "zlecenie", stawka: 30 };
+    const kuba = { id: "u2", name: "Kuba", role: "open", active: true, default_lokal: "A", default_stanowisko: "Kuchnia",
+                   allowed_stanowiska: "Bar" };
+    const ewa = { id: "u3", name: "Ewa", role: "closed", active: true, default_lokal: "B", default_stanowisko: "Sala",
+                  allowed_lokale: "A" };
+    const users = [
+      ola, kuba, ewa,
+      { id: "t", name: "Tablet A", role: "kiosk", active: true, allowed_lokale: "A" },
+      { id: "s", name: "Szef", role: "admin", active: true },
+      { id: "k", name: "Kier A", role: "manager_lokalu", active: true, allowed_lokale: "A" },
+      { id: "a", name: "Archiwalna", role: "open", active: true, archived: true, default_lokal: "A", default_stanowisko: "Sala" },
+      { id: "p", name: "Na próbę", role: "open", active: true, default_lokal: "A", default_stanowisko: "Sala", probny_status: "oczekuje" },
+      { id: "o", name: "Odeszła", role: "open", active: true, default_lokal: "A", default_stanowisko: "Sala", ostatni_dzien: "2026-10-10" },
+      { id: "n", name: "Nieaktywny", role: "open", active: false, default_lokal: "A", default_stanowisko: "Sala" },
+    ];
+    const pub = "2026-10-01T10:00:00Z";
+    const planShifts = [
+      { id: "g1", user_id: "u2", user_name: "Kuba", lokal: "A", stanowisko: "Kuchnia", date: D, start_time: "14:00:00", end_time: "22:00:00", published_at: pub },
+      { id: "g2", user_id: "u1", user_name: "Ola", lokal: "A", stanowisko: "Sala", date: D, start_time: "10:00:00", end_time: "15:30:00", published_at: pub },
+      { id: "g3", user_id: "u3", user_name: "Ewa", lokal: "B", stanowisko: "Kuchnia", date: D, start_time: "08:00:00", end_time: "12:00:00", published_at: pub },
+      { id: "g4", user_id: "u1", user_name: "Ola", lokal: "A", stanowisko: "Kuchnia", date: D, start_time: "18:00:00", end_time: "20:00:00", published_at: null },
+      { id: "g5", user_id: "u1", user_name: "Ola", lokal: "A", stanowisko: "Kuchnia", date: D, start_time: "20:00:00", end_time: "21:00:00", published_at: pub, deleted_at: pub },
+    ];
+
+    log("— uczestnicy —");
+    const kand = (w) => imiona(W.kandydaciWydarzenia({ wydarzenie: { data: D, zakres: "wszyscy", ...w }, users, planShifts }));
+    sprawdz("lokal A, wszystkie stanowiska: pracownicy A (z allowed_lokale) + kierownik lokalu, bez tabletu/właściciela/archiwum/próby/po odejściu/nieaktywnych",
+      eq(kand({ lokal: "A" }), ["Ewa", "Kier A", "Kuba", "Ola"]), kand({ lokal: "A" }));
+    sprawdz("lokal A, Sala: Ola i Ewa (z allowed_lokale)", eq(kand({ lokal: "A", stanowiska: "Sala" }), ["Ewa", "Ola"]), kand({ lokal: "A", stanowiska: "Sala" }));
+    sprawdz("Bar z allowed_stanowiska: Kuba", eq(kand({ lokal: "A", stanowiska: "Bar" }), ["Kuba"]));
+    sprawdz("kilka stanowisk: Sala, Bar", eq(kand({ lokal: "A", stanowiska: "Sala, Bar" }), ["Ewa", "Kuba", "Ola"]));
+    sprawdz("cała sieć, Sala: Ola i Ewa (z B)", eq(kand({ lokal: null, stanowiska: "Sala" }), ["Ewa", "Ola"]));
+    sprawdz("lokal B, wszystkie: tylko Ewa", eq(kand({ lokal: "B" }), ["Ewa"]));
+    sprawdz("zakres grafik, A, Kuchnia: Kuba (Ola tylko w szkicu i w usuniętej)",
+      eq(kand({ lokal: "A", stanowiska: "Kuchnia", zakres: "grafik" }), ["Kuba"]), kand({ lokal: "A", stanowiska: "Kuchnia", zakres: "grafik" }));
+    sprawdz("zakres grafik, A, wszystkie: stanowisko ZMIANY, nie karty — Kuba, Ola",
+      eq(kand({ lokal: "A", zakres: "grafik" }), ["Kuba", "Ola"]));
+    sprawdz("zakres grafik, cała sieć, Kuchnia: Ewa (w B) i Kuba", eq(kand({ lokal: null, stanowiska: "Kuchnia", zakres: "grafik" }), ["Ewa", "Kuba"]));
+    sprawdz("zakres grafik, inny dzień: nikt", eq(kand({ lokal: "A", zakres: "grafik", data: "2026-10-15" }), []));
+    sprawdz("stanowiska: puste = null (wszystkie), nie []", W.stanowiskaWydarzenia({ stanowiska: "" }) === null && W.stanowiskaTekst([]) === null);
+    sprawdz("stanowiska z tekstu ze spacjami", eq(W.stanowiskaWydarzenia({ stanowiska: "Sala, Bar" }), ["Sala", "Bar"]));
+
+    log(""); log("— czas —");
+    const zeb = { id: "w1", data: D, lokal: "A", godz_od: "15:00:00", godz_do: "16:00:00", platne: true, tytul: "Zebranie", typ: "zebranie" };
+    const nocne = { id: "w2", data: D, lokal: "A", godz_od: "22:00", godz_do: "01:00", platne: true, tytul: "Inwentaryzacja", typ: "inwentaryzacja" };
+    sprawdz("15:00–16:00 = 60 min", W.minutyWydarzenia(zeb) === 60);
+    sprawdz("przez północ 22:00–01:00 = 180 min", W.minutyWydarzenia(nocne) === 180);
+    sprawdz("bez godzin = cały dzień, 0 min", W.calyDzien({ godz_od: "10:00" }) && W.minutyWydarzenia({ data: D }) === 0);
+    sprawdz("koniec nocnego: następny dzień 01:00",
+      W.koniecWydarzenia(nocne).getDate() === 15 && W.koniecWydarzenia(nocne).getHours() === 1);
+    sprawdz("koniec całodniowego: północ następnego dnia",
+      W.koniecWydarzenia({ data: D }).getDate() === 15 && W.koniecWydarzenia({ data: D }).getHours() === 0);
+    sprawdz("odcinkiPoza: zmiana w środku dzieli na dwa kawałki",
+      eq(W.odcinkiPoza([600, 1080], [[720, 840]]), [[600, 720], [840, 1080]]));
+    sprawdz("odcinkiPoza: zmiana pokrywa całość → nic", eq(W.odcinkiPoza([900, 960], [[840, 1320]]), []));
+    sprawdz("odcinkiPoza: dwie zmiany, rozłączne", eq(W.odcinkiPoza([0, 100], [[10, 20], [50, 60]]), [[0, 10], [20, 50], [60, 100]]));
+
+    log(""); log("— płatne: czas poza zmianą —");
+    sprawdz("Kuba ma zmianę 14–22: zebranie 15–16 w czasie zmiany → 0 min", W.platneMinutyOsoby(zeb, kuba, planShifts) === 0);
+    sprawdz("Ola kończy 15:30: dolicza się 30 min", W.platneMinutyOsoby(zeb, ola, planShifts) === 30);
+    sprawdz("Ewa bez zmiany w tych godzinach: 60 min", W.platneMinutyOsoby(zeb, ewa, planShifts) === 60);
+    sprawdz("szkic i usunięta zmiana nie zajmują czasu (Ola 18–21)",
+      W.platneMinutyOsoby({ ...zeb, godz_od: "18:00", godz_do: "21:00" }, ola, planShifts) === 180);
+    sprawdz("niepłatne → 0", W.platneMinutyOsoby({ ...zeb, platne: false }, ewa, planShifts) === 0);
+    sprawdz("odwołane → 0", W.platneMinutyOsoby({ ...zeb, odwolane_at: pub }, ewa, planShifts) === 0);
+    const noc = [{ id: "g9", user_id: "u3", user_name: "Ewa", lokal: "A", date: "2026-10-13", start_time: "20:00", end_time: "02:00", published_at: pub }];
+    sprawdz("zmiana przez północ z poprzedniego dnia: wydarzenie 01:00–03:00 → 60 min",
+      W.platneMinutyOsoby({ ...zeb, godz_od: "01:00", godz_do: "03:00" }, ewa, noc) === 60);
+    sprawdz("w czasie zmiany: Kuba tak, Ola tak (częściowo), Ewa nie",
+      W.wCzasieZmiany(zeb, kuba, planShifts) && W.wCzasieZmiany(zeb, ola, planShifts) && !W.wCzasieZmiany(zeb, ewa, planShifts));
+
+    log(""); log("— rozliczenie (fakt) —");
+    const fakt = [
+      { user_id: "u1", user_name: "Ola", start_time: new Date(`${D}T10:00:00`), end_time: new Date(`${D}T15:20:00`) },
+      { user_id: "u3", user_name: "Ewa", start_time: new Date(`${D}T14:00:00`), end_time: null },
+    ];
+    const r1 = W.odcinkiDoRozliczenia(zeb, ola, fakt);
+    sprawdz("Ola odbiła do 15:20 → dopisać 15:20–16:00",
+      r1.length === 1 && r1[0].start.getHours() === 15 && r1[0].start.getMinutes() === 20 && r1[0].end.getHours() === 16, JSON.stringify(r1));
+    const r2 = W.odcinkiDoRozliczenia(zeb, ewa, fakt);
+    sprawdz("zmiana bez końca nie zajmuje czasu → Ewa całe 15–16", r2.length === 1 && r2[0].start.getHours() === 15 && r2[0].end.getHours() === 16);
+    sprawdz("całodniowe nie ma czego rozliczać", W.odcinkiDoRozliczenia({ data: D }, ewa, fakt).length === 0);
+
+    log(""); log("— koszt —");
+    const k = W.kosztWydarzenia({ wydarzenie: zeb, osoby: [ola, ewa, kuba], planShifts, lokale: [{ name: "A" }] });
+    sprawdz("koszt: Ola 0,5 h × 30 zł = 15 zł, Ewa bez danych (nie 0), Kuba 0 h pominięty",
+      k.koszt === 15 && k.godziny === 1.5 && eq(k.bezDanych, ["Ewa"]), JSON.stringify(k));
+    sprawdz("koszt liczy się także zanim zaznaczono „płatne” (podgląd w panelu)",
+      W.kosztWydarzenia({ wydarzenie: { ...zeb, platne: false }, osoby: [ola], planShifts, lokale: [] }).koszt === 15);
+    const uczestnicy = [
+      { wydarzenie_id: "w1", user_id: "u3" }, { wydarzenie_id: "w2", user_id: "u3" },
+      { wydarzenie_id: "w3", user_id: "u3" }, { wydarzenie_id: "w4", user_id: "u3" }, { wydarzenie_id: "w1", user_id: "u1" },
+    ];
+    const lista = [zeb, nocne, { ...zeb, id: "w3", odwolane_at: pub }, { ...zeb, id: "w4", data: "2026-11-02" }];
+    sprawdz("godziny płatnych Ewy w październiku: 1 h + 3 h (bez odwołanego i listopadowego)",
+      W.godzinyWydarzenOsoby({ wydarzenia: lista, uczestnicy, user: ewa, planShifts, od: "2026-10-01", doDnia: "2026-10-31" }) === 4);
+    sprawdz("osoba nieuczestnicząca: 0 h",
+      W.godzinyWydarzenOsoby({ wydarzenia: lista, uczestnicy, user: kuba, planShifts, od: "2026-10-01", doDnia: "2026-10-31" }) === 0);
+
+    log(""); log("— listy —");
+    const teraz = new Date(`${D}T17:00:00`);
+    const rozl = W.doRozliczenia([
+      zeb, nocne, { ...zeb, id: "x1", rozliczone_at: pub }, { ...zeb, id: "x2", odwolane_at: pub },
+      { ...zeb, id: "x3", platne: false }, { ...zeb, id: "x4", godz_od: "16:30", godz_do: "17:30" },
+    ], teraz);
+    sprawdz("do rozliczenia: tylko zakończone, płatne, nierozliczone, nieodwołane", eq(rozl.map((w) => w.id), ["w1"]), rozl.map((w) => w.id));
+    const dzien = W.wydarzeniaNaDzien([
+      { id: "b", data: D, lokal: "B", tytul: "B" }, { id: "s", data: D, lokal: null, godz_od: "18:00", godz_do: "19:00" },
+      { id: "a1", data: D, lokal: "A", godz_od: "12:00", godz_do: "13:00" }, { id: "cd", data: D, lokal: "A" },
+      { id: "od", data: D, lokal: "A", odwolane_at: pub }, { id: "inny", data: "2026-10-15", lokal: "A" },
+    ], "A", D);
+    sprawdz("dzień w A: cały dzień, 12:00, cała sieć 18:00 — bez B, odwołanych i innych dni",
+      eq(dzien.map((w) => w.id), ["cd", "a1", "s"]), dzien.map((w) => w.id));
+    sprawdz("wydarzenia osoby: tylko nieodwołane, w których uczestniczy",
+      eq(W.wydarzeniaOsoby(lista, uczestnicy, ola).map((w) => w.id), ["w1"]));
+    sprawdz("pasek na tablecie: zebranie dla Sali — nie; zebranie dla wszystkich — tak; grupa dla Sali — tak",
+      !W.dlaCalegoLokalu({ typ: "zebranie", stanowiska: "Sala" }) && W.dlaCalegoLokalu({ typ: "zebranie" }) &&
+      W.dlaCalegoLokalu({ typ: "grupa", stanowiska: "Sala" }));
+
+    log(""); log("— teksty —");
+    sprawdz("nowe: termin i płatny czas pracy",
+      W.tekstNowego(zeb) === "Nowe wydarzenie: Zebranie — śr 14.10 · 15:00–16:00 · A (płatny czas pracy, wpisany do grafiku).", W.tekstNowego(zeb));
+    sprawdz("nowe, cała sieć, cały dzień",
+      W.tekstNowego({ tytul: "Szkolenie", data: D, lokal: null }) === "Nowe wydarzenie: Szkolenie — śr 14.10 · cały dzień · cała sieć.");
+    sprawdz("zmiana godzin: było → jest",
+      W.tekstZmiany(zeb, { ...zeb, godz_od: "16:00", godz_do: "17:00" }) === "Zmiana w wydarzeniu: Zebranie — godziny: 15:00–16:00 → 16:00–17:00.",
+      W.tekstZmiany(zeb, { ...zeb, godz_od: "16:00", godz_do: "17:00" }));
+    sprawdz("zmiana samego opisu: bez „było → jest”, z terminem",
+      W.tekstZmiany(zeb, { ...zeb, opis: "x" }) === "Zmiana w wydarzeniu: Zebranie — śr 14.10 · 15:00–16:00 · A.");
+    sprawdz("zmiana dnia i lokalu: dwa pola", W.zmienionePola(zeb, { ...zeb, data: "2026-10-15", lokal: "B" }).length === 2);
+    sprawdz("odwołanie", W.tekstOdwolania(zeb) === "Wydarzenie odwołane: Zebranie — śr 14.10 · 15:00–16:00 · A.");
+    sprawdz("różnica uczestników",
+      eq(W.roznicaUczestnikow(["u1", "u2"], ["u2", "u3"]), { dodani: ["u3"], usunieci: ["u1"], zostali: ["u2"] }));
+    const dm = W.daneDoMaila({ ...zeb, opis: "Prosimy o punktualność" });
+    sprawdz("dane do maila: Kiedy, Gdzie, Czas pracy i opis jako cytat",
+      dm.wiersze.length === 3 && dm.wiersze[0].e === "Kiedy" && dm.cytat === "Prosimy o punktualność");
+    sprawdz("typ nieznany spada na „Inne”", W.typWydarzenia("xyz").key === "inne");
+  } catch (e) {
+    oblanych++;
+    log("BŁĄD: " + (e && e.stack ? e.stack : e), "zle");
+  }
+  log("");
+  log(`ZDANYCH ${zdanych}, OBLANYCH ${oblanych}`, oblanych ? "zle" : "ok");
+})();
+</script>
