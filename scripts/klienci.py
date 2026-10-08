@@ -54,7 +54,7 @@ def sprawdz(rej):
             if z.get("brak"):
                 uwagi.append("brak zmiennych: " + ", ".join(z["brak"]))
             uwagi += z.get("problemy") or []
-            if z.get("brevo") not in (None, "ok"):
+            if z.get("brevo") not in (None, "ok") and not z.get("demo"):
                 uwagi.append(f"Brevo: {z['brevo']}")
             if z.get("blad"):
                 uwagi.append(str(z["blad"]))

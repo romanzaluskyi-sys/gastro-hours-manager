@@ -50,7 +50,13 @@ module.exports = async function handler(req, res) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  const brak = WYMAGANE.filter((k) => !(process.env[k] || "").trim());
+  // Wersja demonstracyjna (docs/DEMO.md) świadomie NIE wysyła maili — brak
+  // Brevo jest tam stanem docelowym, nie awarią. Bez tego demo świeciłoby na
+  // czerwono w każdym `klienci.py sprawdz` i alarm o niczym uczyłby go ignorować.
+  const demo = process.env.DEMO === "tak";
+  const brak = WYMAGANE.filter(
+    (k) => !(demo && k === "BREVO_API_KEY") && !(process.env[k] || "").trim()
+  );
   const problemy = [];
 
   // ⚠️ Front i crony muszą patrzeć na TĘ SAMĄ bazę. To dwie zmienne wpisywane
@@ -97,8 +103,8 @@ module.exports = async function handler(req, res) {
 
   // Brevo: samo "czy klucz działa" — GET /account niczego nie wysyła i nie
   // zużywa limitu. Szczegóły konta zostają w Brevo.
-  let brevo = "brak klucza";
-  if (process.env.BREVO_API_KEY) {
+  let brevo = demo ? "wyłączone (demo)" : "brak klucza";
+  if (process.env.BREVO_API_KEY && !demo) {
     try {
       const r = await fetch("https://api.brevo.com/v3/account", {
         headers: { "api-key": process.env.BREVO_API_KEY, accept: "application/json" },
@@ -109,9 +115,10 @@ module.exports = async function handler(req, res) {
     }
   }
 
-  const ok = !brak.length && !problemy.length && baza.ok && brevo === "ok";
+  const ok = !brak.length && !problemy.length && baza.ok && (brevo === "ok" || demo);
   return res.status(ok ? 200 : 503).json({
     ok,
+    demo,
     wersja: WERSJA,
     najemca: process.env.REACT_APP_TENANT || null,
     brak,

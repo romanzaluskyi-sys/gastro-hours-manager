@@ -176,7 +176,7 @@ def krok_migracje(r, pat, ref):
     return migrate.migruj(ref, pat, r.wykonaj, kto=os.environ.get("USER", "nowy-klient.py"))
 
 
-def krok_sekret_i_harmonogram(r, pat, ref, domena, z_mailami):
+def krok_sekret_i_harmonogram(r, pat, ref, domena, z_mailami, demo=False):
     r.krok(5, "CRON_SECRET (Vault) i harmonogram wysyłki maili")
     sekret = sekret_crona_z_vault(pat, ref)
     if sekret:
@@ -189,6 +189,9 @@ def krok_sekret_i_harmonogram(r, pat, ref, domena, z_mailami):
             # token_urlsafe = [A-Za-z0-9_-], więc wstawienie w literał jest bezpieczne.
             sql(pat, ref, f"select vault.create_secret('{sekret}', '{NAZWA_SEKRETU}');")
 
+    if not z_mailami and demo:
+        r.ok("demo — maile świadomie wyłączone (bez Brevo i bez pg_cron)")
+        return sekret
     if not z_mailami:
         r.uwaga("bez BREVO_API_KEY nie planuję wysyłki maili (endpoint i tak "
                 "odpowiadałby 500 co 5 minut)",
@@ -570,7 +573,7 @@ def main():
     # Demo nie wysyła maili — nawet gdyby w środowisku wisiał BREVO_API_KEY.
     if demo:
         brevo = ""
-    sekret = krok_sekret_i_harmonogram(r, pat, ref, domena, bool(brevo))
+    sekret = krok_sekret_i_harmonogram(r, pat, ref, domena, bool(brevo), demo)
 
     url = f"https://{ref}.supabase.co"
     zmienne = {
