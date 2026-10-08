@@ -31,6 +31,11 @@ KATALOG = pathlib.Path(__file__).resolve().parent.parent / "docs" / "sql" / "mig
 API = "https://api.supabase.com/v1/projects/{ref}/database/query"
 
 
+class BrakDostepu(SystemExit):
+    """401/403/404 z API — ta baza jest dla tokenu niedostępna. Przy --wszyscy
+    NIE zatrzymuje pozostałych klientów (w odróżnieniu od błędu w SQL)."""
+
+
 def zapytanie(ref, token, sql):
     req = urllib.request.Request(
         API.format(ref=ref),
@@ -55,10 +60,17 @@ def zapytanie(ref, token, sql):
         tresc = e.read().decode()
         podpowiedz = {
             401: "  Token odrzucony — sprawdź, czy SUPABASE_PAT jest ustawiony i nie wygasł.",
-            403: "  Brak dostępu do tego projektu tym tokenem (albo blokada Cloudflare).",
+            403: ("  Brak dostępu do tego projektu tym tokenem. Najczęściej: projekt jest w\n"
+                  "  organizacji Supabase, w której konto tokenu nie jest członkiem albo ma rolę\n"
+                  "  bez dostępu do SQL (potrzebny Owner / Administrator). Sprawdź, które\n"
+                  "  projekty token widzi:\n"
+                  "    curl -s -H \"Authorization: Bearer $SUPABASE_PAT\" https://api.supabase.com/v1/projects\n"
+                  "  („error code: 1010” zamiast JSON-a = blokada Cloudflare, nie uprawnienia.)"),
             404: "  Nie ma takiego projektu — sprawdź ref po --projekt.",
         }.get(e.code, "")
         print(f"\n  BŁĄD {e.code} od Supabase:\n{tresc}\n{podpowiedz}\n", file=sys.stderr)
+        if e.code in (401, 403, 404):
+            raise BrakDostepu(1)
         raise SystemExit(1)
 
 
@@ -228,14 +240,24 @@ def main():
         sys.exit("Rejestr klientów jest pusty.")
     podsumowanie = []
     for k in klienci:
-        print(f"\n===== {k['slug']} — {k.get('nazwa', '')} =====")
-        n = migruj(k["supabase_ref"], token, args.wykonaj, args.do_numeru, (), kto)
+        print(f"\n===== {k['slug']} — {k.get('nazwa', '')} ({k['supabase_ref']}) =====")
+        # Brak DOSTĘPU do jednej bazy (401/403/404) nie zatrzymuje pozostałych —
+        # to sprawa tokenu, nie migracji. Błąd w SQL dalej kończy cały przebieg
+        # (patrz docstring `migruj`): migracja, która padła u jednego klienta,
+        # nie ma iść dalej.
+        try:
+            n = migruj(k["supabase_ref"], token, args.wykonaj, args.do_numeru, (), kto)
+        except BrakDostepu:
+            n = None
         podsumowanie.append((k["slug"], n))
     print("\n===== Podsumowanie =====")
     for slug, n in podsumowanie:
-        co = "aktualna" if n == 0 else (f"zastosowano {n}" if args.wykonaj else f"czeka {n}")
+        co = ("BRAK DOSTĘPU — patrz wyżej" if n is None else "aktualna" if n == 0
+              else (f"zastosowano {n}" if args.wykonaj else f"czeka {n}"))
         print(f"  {slug:<20} {co}")
     print()
+    if any(n is None for _, n in podsumowanie):
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
