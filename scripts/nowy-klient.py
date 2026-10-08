@@ -283,11 +283,22 @@ def krok_vercel_projekt(r, tok, team, nazwa, repo, wzor_id):
              + ")")
     if not r.wykonaj:
         return None, True
-    p = vc(tok, team, "POST", "/v11/projects", {
-        "name": nazwa,
-        "framework": wzor.get("framework") or "create-react-app",
-        "gitRepository": {"type": "github", "repo": repo},
-    })
+    try:
+        p = vc(tok, team, "POST", "/v11/projects", {
+            "name": nazwa,
+            "framework": wzor.get("framework") or "create-react-app",
+            "gitRepository": {"type": "github", "repo": repo},
+        })
+    except BladApi as e:
+        if e.kod != 403:
+            raise
+        # 2026-10-08 (demo): token czytał projekt pierwszego klienta, ale nie
+        # widział projektu założonego ręcznie i nie mógł założyć nowego — czyli
+        # nie ma pełnego dostępu do zespołu, choć GET na jeden projekt przechodzi.
+        r.stop(f"Vercel odmówił założenia projektu (403). VERCEL_TOKEN nie ma pełnego "
+               f"dostępu do zespołu {team}: utwórz nowy token (Account Settings → Tokens, "
+               f"Scope: ten zespół) i sprawdź rolę Owner w Team Settings → Members. "
+               f"Projekt założony ręcznie w panelu musi się nazywać dokładnie „{nazwa}”.")
     if wzor.get("nodeVersion") and p.get("nodeVersion") != wzor["nodeVersion"]:
         vc(tok, team, "PATCH", f"/v9/projects/{p['id']}", {"nodeVersion": wzor["nodeVersion"]})
     return p, True
