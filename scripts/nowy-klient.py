@@ -283,11 +283,22 @@ def krok_vercel_projekt(r, tok, team, nazwa, repo, wzor_id):
              + ")")
     if not r.wykonaj:
         return None, True
-    p = vc(tok, team, "POST", "/v11/projects", {
-        "name": nazwa,
-        "framework": wzor.get("framework") or "create-react-app",
-        "gitRepository": {"type": "github", "repo": repo},
-    })
+    try:
+        p = vc(tok, team, "POST", "/v11/projects", {
+            "name": nazwa,
+            "framework": wzor.get("framework") or "create-react-app",
+            "gitRepository": {"type": "github", "repo": repo},
+        })
+    except BladApi as e:
+        if e.kod != 403:
+            raise
+        # 2026-10-08 (demo): token czytał projekt pierwszego klienta, ale nie
+        # widział projektu założonego ręcznie i nie mógł założyć nowego — czyli
+        # nie ma pełnego dostępu do zespołu, choć GET na jeden projekt przechodzi.
+        r.stop(f"Vercel odmówił założenia projektu (403). VERCEL_TOKEN nie ma pełnego "
+               f"dostępu do zespołu {team}: utwórz nowy token (Account Settings → Tokens, "
+               f"Scope: ten zespół) i sprawdź rolę Owner w Team Settings → Members. "
+               f"Projekt założony ręcznie w panelu musi się nazywać dokładnie „{nazwa}”.")
     if wzor.get("nodeVersion") and p.get("nodeVersion") != wzor["nodeVersion"]:
         vc(tok, team, "PATCH", f"/v9/projects/{p['id']}", {"nodeVersion": wzor["nodeVersion"]})
     return p, True
@@ -423,11 +434,28 @@ def krok_admin(r, ref, klucz_secret, imie, email):
     r.reczne.append(f"przekaż PIN właścicielowi ({email}) bezpiecznym kanałem")
 
 
-def krok_sprawdzenie(r, ref, domena, sekret):
+def domena_odpowiada(domena):
+    import socket
+    try:
+        socket.getaddrinfo(domena, 443)
+        return True
+    except OSError:
+        return False
+
+
+def krok_sprawdzenie(r, ref, domena, sekret, nazwa_vercel):
     r.krok(11, "Sprawdzenie wdrożenia")
     if not r.wykonaj:
         r.zrobie(f"zapytam https://{domena}/api/zdrowie i sprawdzę paczkę")
         return
+    # Domena bez rekordu DNS (świeży klient, 2026-10-08: demo) to nie awaria
+    # wdrożenia — sprawdzamy wtedy to samo pod adresem z Vercela.
+    if not domena_odpowiada(domena):
+        r.uwaga(f"{domena} jeszcze nie odpowiada (brak rekordu DNS) — sprawdzam "
+                f"{nazwa_vercel}.vercel.app",
+                f"DNS: CNAME {domena.split('.')[0]} → cname.vercel-dns.com u rejestratora "
+                f"{'.'.join(domena.split('.')[1:])}, potem ten skrypt jeszcze raz")
+        domena = f"{nazwa_vercel}.vercel.app"
     z = zdrowie(domena, sekret)
     if z.get("ok"):
         r.ok(f"/api/zdrowie: wersja {z.get('wersja')}, najemca „{z.get('najemca')}”, "
@@ -454,6 +482,8 @@ def krok_sprawdzenie(r, ref, domena, sekret):
                     "albo zbudowano go przed ustawieniem zmiennych")
     except BladApi as e:
         r.uwaga(f"nie pobrałem strony ({e.kod}) — domena jeszcze nie działa?")
+    except OSError as e:
+        r.uwaga(f"nie pobrałem strony ({e}) — domena jeszcze nie działa?")
 
 
 def krok_rejestr(r, rej, wpis):
@@ -571,7 +601,7 @@ def main():
         krok_dane_demo(r, domena, projekt_nazwa, sekret)
     else:
         krok_admin(r, ref, klucze.get("secret"), a.admin_imie, a.admin_email)
-    krok_sprawdzenie(r, ref, domena, sekret)
+    krok_sprawdzenie(r, ref, domena, sekret, projekt_nazwa)
 
     if a.wykonaj and not rej.get("vercel_team"):
         rej["vercel_team"] = team
