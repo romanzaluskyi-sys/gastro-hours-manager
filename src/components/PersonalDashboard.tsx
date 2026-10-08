@@ -50,6 +50,8 @@ const PersonalDashboard = ({
   setShiftSwaps,
   setAbsences,
   showMsg,
+  wydarzenia = [],
+  wydarzeniaUczestnicy = [],
 }) => {
   const myNotifications = notifications.filter(
     (n) => n.user_name === currentUser.name
@@ -93,6 +95,8 @@ const PersonalDashboard = ({
       shiftSwaps={shiftSwaps}
       setShiftSwaps={setShiftSwaps}
       setAbsences={setAbsences}
+      wydarzenia={wydarzenia}
+      wydarzeniaUczestnicy={wydarzeniaUczestnicy}
       onLogout={() => setCurrentView("login")}
     />
   );

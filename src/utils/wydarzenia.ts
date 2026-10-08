@@ -212,6 +212,20 @@ export const jestUczestnikiem = (uczestnicy, wydarzenieId, user) =>
 export const wydarzeniaOsoby = (wydarzenia, uczestnicy, user) =>
   sortujWydarzenia((wydarzenia || []).filter((w) => !odwolane(w) && jestUczestnikiem(uczestnicy, w.id, user)));
 
+// Grafik pracownika, widok „Ja”: wydarzenia, w których jest uczestnikiem, PLUS
+// wydarzenia całego lokalu (grupa, kontrola, w okolicy, dla wszystkich
+// stanowisk) w dniu, w którym ma tam opublikowaną zmianę — „wesele 40 os.”
+// zmienia mu pracę, nawet jeśli nie dostał wiadomości. Makieta
+// EmployeeScheduleEventMobile, ekran 2.
+export const wydarzeniaPracownikaNaDzien = ({ wydarzenia, uczestnicy, user, planShifts, data }) => {
+  const moje = publishedShiftsFor(planShifts, user).filter((s) => s.date === data);
+  return wydarzeniaNaDzien(wydarzenia, null, data).filter(
+    (w) =>
+      jestUczestnikiem(uczestnicy, w.id, user) ||
+      (dlaCalegoLokalu(w) && moje.some((s) => !w.lokal || s.lokal === w.lokal))
+  );
+};
+
 // Pasek „Dziś w lokalu” na tablecie — tylko to, co dotyczy CAŁEGO lokalu:
 // grupa, kontrola, wydarzenie w okolicy albo wydarzenie dla wszystkich
 // stanowisk. Zebranie wybranych osób widzą tylko one, po wybraniu siebie.

@@ -265,7 +265,7 @@ const generuj = ({ dzis = C.ymd(), teraz = new Date() } = {}) => {
     staffing_rules: [], grafik_budzet_cele: [], grafik_shifts: [], shifts: [], absences: [],
     issues: [], shift_swaps: [], shift_edits: [], task_blocks: [], tasks: [],
     day_log_templates: [], day_logs: [], day_log_entries: [], task_completions: [],
-    notifications: [], zadania_moje: [],
+    notifications: [], zadania_moje: [], wydarzenia: [], wydarzenia_uczestnicy: [],
   };
 
   // --- Lokale, stanowiska, godziny otwarcia ---
@@ -717,6 +717,76 @@ const generuj = ({ dzis = C.ymd(), teraz = new Date() } = {}) => {
     message: `Dla pracownika Dmytro Bondarenko (Zmywak) z lokalu ${BISTRO}, książeczka sanepid upłynęła w dniu ${sanepid["Dmytro Bondarenko"].split("-").reverse().join(".")} — termin przekroczony o 3 dni.`,
     created_at: C.chwila(dzis, "08:00").toISOString(),
   });
+  // --- Wydarzenia (0.74.0) ---
+  // Zebranie za 3 dni (płatne, cała załoga Bistro — z Markiem, więc telefon
+  // ma przypomnienie i wiadomość), grupa jutro w Pizzerii (tylko ci z grafiku),
+  // mecz w okolicy w najbliższą sobotę (Bistro, Sala i Bar z grafiku) i
+  // wczorajsza płatna inwentaryzacja w Pizzerii — do rozliczenia (W4).
+  // ⚠️ Teksty wiadomości to KOPIA tekstNowego z src/utils/wydarzenia.ts.
+  const DNI_KR = ["ndz", "pon", "wt", "śr", "czw", "pt", "sob"];
+  const dzienKr = (d) => {
+    const x = new Date(`${d}T00:00:00`);
+    return `${DNI_KR[x.getDay()]} ${d.slice(8)}.${d.slice(5, 7)}`;
+  };
+  const sobotaMeczu = (() => {
+    for (let i = 1; i <= 7; i++) {
+      const d = C.dodajDni(dzis, i);
+      if (new Date(`${d}T00:00:00`).getDay() === 6) return d;
+    }
+    return C.dodajDni(dzis, 6);
+  })();
+  const zGrafiku = (data, lokal, stanowiska) =>
+    [...new Set(
+      T.grafik_shifts
+        .filter((g) => g.published_at && g.date === data && g.lokal === lokal && (!stanowiska || stanowiska.includes(g.stanowisko)))
+        .map((g) => g.user_id)
+    )]
+      .map((id) => T.users.find((u) => u.id === id))
+      .filter(Boolean);
+  const WYD = [
+    {
+      klucz: "zebranie", lokal: BISTRO, data: C.dodajDni(dzis, 3), godz_od: "15:00", godz_do: "16:00", typ: "zebranie",
+      tytul: "Zebranie zespołu", opis: "Jesienne menu, grafik na listopad, BHP przy frytownicy.", platne: true, zakres: "wszyscy",
+      osoby: T.users.filter((u) => u.default_lokal === BISTRO && ["open", "closed", "manager_lokalu"].includes(u.role) && !u.probny_status),
+    },
+    {
+      klucz: "grupa", lokal: PIZZERIA, data: C.dodajDni(dzis, 1), godz_od: "13:00", godz_do: "16:00", typ: "grupa",
+      tytul: "Komunia — 40 osób", opis: "Sala główna zamknięta od 12:30, menu stałe.", liczba_gosci: 40, zakres: "grafik",
+      osoby: zGrafiku(C.dodajDni(dzis, 1), PIZZERIA),
+    },
+    {
+      klucz: "mecz", lokal: BISTRO, data: sobotaMeczu, godz_od: "20:45", godz_do: "22:45", typ: "okolica",
+      tytul: "Mecz Polska – Szwecja", opis: "Więcej gości przy barze i na wynos po meczu.", stanowiska: "Sala,Bar", zakres: "grafik",
+      osoby: zGrafiku(sobotaMeczu, BISTRO, ["Sala", "Bar"]),
+    },
+    {
+      klucz: "inwentaryzacja", lokal: PIZZERIA, data: C.dodajDni(dzis, -1), godz_od: "07:00", godz_do: "09:00", typ: "inwentaryzacja",
+      tytul: "Inwentaryzacja miesięczna", platne: true, zakres: "wszyscy",
+      osoby: T.users.filter((u) => ["Michał Kamiński", "Oksana Shevchenko"].includes(u.name)),
+    },
+  ];
+  for (const w of WYD) {
+    const id = uuidZ(`wydarzenie:${w.klucz}`);
+    const utworzono = C.chwila(C.dodajDni(dzis, -2), "11:20").toISOString();
+    T.wydarzenia.push({
+      id, lokal: w.lokal, data: w.data, godz_od: w.godz_od, godz_do: w.godz_do, typ: w.typ, tytul: w.tytul,
+      opis: w.opis || null, stanowiska: w.stanowiska || null, zakres: w.zakres, liczba_gosci: w.liczba_gosci || null,
+      platne: !!w.platne, utworzyl: WLASCICIELKA, zmienil: WLASCICIELKA, created_at: utworzono, updated_at: utworzono,
+    });
+    for (const u of w.osoby) {
+      T.wydarzenia_uczestnicy.push({
+        id: uuidZ(`uczestnik:${w.klucz}:${u.id}`), wydarzenie_id: id, user_id: u.id, user_name: u.name, powiadomiono_at: utworzono,
+      });
+      T.notifications.push({
+        id: noweId("notif"), audience: "employee", user_name: u.name, type: "wydarzenie", is_read: false,
+        message: `Nowe wydarzenie: ${w.tytul} — ${dzienKr(w.data)} · ${w.godz_od}–${w.godz_do} · ${w.lokal}${
+          w.platne ? " (płatny czas pracy, wpisany do grafiku)" : ""
+        }.`,
+        created_at: utworzono,
+      });
+    }
+  }
+
   // Kopie e-mail w demo nie wychodzą — oznaczamy wiersze jako obsłużone.
   for (const n of T.notifications) {
     n.email_at = n.created_at;
@@ -740,7 +810,7 @@ const KOLEJNOSC = [
   "lokale", "stanowiska", "users", "lokale_godziny", "staffing_rule_sets", "staffing_rules",
   "grafik_budzet_cele", "grafik_shifts", "shifts", "absences", "issues", "shift_swaps",
   "shift_edits", "task_blocks", "tasks", "day_log_templates", "day_logs", "day_log_entries",
-  "task_completions", "notifications", "zadania_moje",
+  "task_completions", "notifications", "zadania_moje", "wydarzenia", "wydarzenia_uczestnicy",
 ];
 
 module.exports = { generuj, KOLEJNOSC, uuidZ, BISTRO, PIZZERIA, LUDZIE };

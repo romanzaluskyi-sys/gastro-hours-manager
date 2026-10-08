@@ -520,6 +520,8 @@ export default function App() {
           planShifts={planShifts}
           shiftSwaps={shiftSwaps}
           setShiftSwaps={setShiftSwaps}
+          wydarzenia={wydarzenia}
+          wydarzeniaUczestnicy={wydarzeniaUczestnicy}
           showMsg={showMsg}
         />
       )}
@@ -550,6 +552,8 @@ export default function App() {
           planShifts={planShifts}
           shiftSwaps={shiftSwaps}
           setShiftSwaps={setShiftSwaps}
+          wydarzenia={wydarzenia}
+          wydarzeniaUczestnicy={wydarzeniaUczestnicy}
           showMsg={showMsg}
         />
       )}

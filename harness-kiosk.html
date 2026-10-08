@@ -277,6 +277,11 @@ const poprzedniMiesiac = (h) => {
             message: "Roman odrzucił(a) Twój wniosek o urlop (19.10.2026–20.10.2026)." },
           { id: "w6", ...f, type: "issue_reply", is_read: true, created_at: temu(5, 10),
             message: "Roman odpowiedział(a) na Twoje zgłoszenie „Zepsuta zmywarka”: serwis jutro o 9:00." },
+          { id: "w7", audience: "employee", user_name: "Gosia", type: "wydarzenie", is_read: false, created_at: temu(0, 8),
+            message: "Nowe wydarzenie: Zebranie zespołu — czw 01.10 · 15:00–16:00 · Ceglana (płatny czas pracy, wpisany do grafiku)." },
+          // Druga kategoria u Gosi — pasek filtrów pokazuje się dopiero od dwóch.
+          { id: "w8", audience: "employee", user_name: "Gosia", type: "grafik", is_read: true, created_at: temu(2, 9),
+            message: "Grafik na ten tydzień został zaktualizowany." },
           { id: "w5", user_name: "Filip", action: "edit", actor_name: "Roman", shift_date: "2026-09-20",
             old_start: "08:00", old_end: "14:00", new_start: "08:00", new_end: "16:00",
             is_read: true, created_at: temu(6, 18) },
@@ -384,6 +389,15 @@ const poprzedniMiesiac = (h) => {
         // zmianę TEGO SAMEGO dnia co Bo: nie może wziąć jego zmiany na wprost,
         // ale może się z nim zamienić.
         planShifts: planGieldy, shiftSwaps, setShiftSwaps,
+        // Wydarzenia (0.74.0): grupa DZIŚ w Ceglanej (cały dzień — pasek na
+        // tablecie) i płatne zebranie JUTRO z Gosią jako uczestniczką.
+        wydarzenia: [
+          { id: "wd1", lokal: "Ceglana", data: zaDni(0), typ: "grupa", tytul: "Grupa 30 os.", liczba_gosci: 30,
+            godz_od: null, godz_do: null, platne: false, stanowiska: null, zakres: "grafik" },
+          { id: "wd2", lokal: "Ceglana", data: zaDni(1), typ: "zebranie", tytul: "Zebranie zespołu",
+            godz_od: "15:00:00", godz_do: "16:00:00", platne: true, stanowiska: null, zakres: "wszyscy", opis: "Jesienne menu." },
+        ],
+        wydarzeniaUczestnicy: [{ id: "wu1", wydarzenie_id: "wd2", user_id: "u8", user_name: "Gosia" }],
         showMsg: (m, t) => console.log("showMsg:", t, m),
       };
       return h(KD, props);
@@ -1097,6 +1111,39 @@ const poprzedniMiesiac = (h) => {
         const trescZgloszenia = document.querySelector("#app main textarea");
         sprawdz("„Wyślij poprawkę” otwiera Zgłoś problem z opisem dnia",
           !!trescZgloszenia && /Zamknięcie dnia/.test(trescZgloszenia.value), trescZgloszenia && trescZgloszenia.value);
+
+        // --- Wydarzenia (0.74.0, makiety KioskStartEvent / EmployeeHomeEvent /
+        // EmployeeScheduleEvent / EmployeeMessagesEvent) ---
+        klik("Zmień"); await czekaj(300);
+        const pasekWyd = zd("[data-pasek-wydarzenia-dnia]");
+        sprawdz("tablet: pasek „Dziś w lokalu” dla grupy (cały dzień, widzą wszyscy)",
+          !!pasekWyd && /Dziś w lokalu: Grupa 30 os\./.test(pasekWyd.textContent) && /cały dzień · 30 gości/.test(pasekWyd.textContent) && !/os\. · 30/.test(pasekWyd.textContent),
+          pasekWyd && pasekWyd.textContent);
+        klik("Gosia"); await czekaj(300);
+        const przyp = zd("[data-przypomnienie-wydarzenia]");
+        sprawdz("Pulpit: „Jutro: Zebranie zespołu” z plakietką czasu pracy",
+          !!przyp && /Jutro: Zebranie zespołu/.test(przyp.textContent) && /czas pracy · 1 h/.test(przyp.textContent),
+          przyp && przyp.textContent);
+        sprawdz("Pulpit: grupa w Ceglanej NIE jest przypomnieniem Gosi (dziś pracuje w Bułce)", !/Grupa 30/.test((przyp || {}).textContent || ""));
+        await kliknij(przyp);
+        await czekaj(300);
+        const kartaZeb = zd('[data-karta-wydarzenia="wd2"]');
+        sprawdz("przypomnienie otwiera Grafik z kartą zebrania: płatne, „wpisane do Twojego grafiku”",
+          !!kartaZeb && /Zebranie zespołu/.test(kartaZeb.textContent) && /Wpisane do Twojego grafiku/.test(kartaZeb.textContent),
+          kartaZeb && kartaZeb.textContent);
+        sprawdz("Grafik: dzień bez zmiany, ale z wydarzeniem — „bez zmiany”, nie zwinięty do „wolne”",
+          !!kartaZeb && /bez zmiany/.test(kartaZeb.closest("[id^=grafik-dzien-]").textContent));
+        sprawdz("Grafik: romb w pasku dni przy dniu z wydarzeniem", !!zd("[data-romb-wydarzenia]"));
+        await klikPrzycisk("Cały lokal");
+        const kartaLokalu = zd('[data-karta-wydarzenia="wd2"]');
+        sprawdz("„Cały lokal”: własne wydarzenie z „dla Ciebie”", !!kartaLokalu && /dla Ciebie/.test(kartaLokalu.textContent));
+        await otworzZakladke("Więcej");
+        await kliknij(wiecej("wiadomosci"));
+        const wiadWyd = zd('[data-wiadomosc="w7"]');
+        sprawdz("Wiadomości: „Nowe wydarzenie” z plakietką „czas pracy”, nie „zatwierdzone”",
+          !!wiadWyd && /Nowe wydarzenie/.test(wiadWyd.textContent) && /czas pracy/.test(wiadWyd.textContent) && !/zatwierdzone/.test(wiadWyd.textContent),
+          wiadWyd && wiadWyd.textContent);
+        sprawdz("Wiadomości: filtr „Wydarzenia”", !!zd('[data-filtr-wiadomosci="ev"]'));
       } catch (e) {
         sprawdz("przebieg bez wyjątku", false, e.message);
       }

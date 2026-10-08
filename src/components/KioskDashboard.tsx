@@ -26,6 +26,8 @@ import {
 import { zmianaTrwa } from "../utils/porzucone";
 import { dodajProbnego, czekaNaDecyzje } from "../utils/probni";
 import WeatherBadge from "./WeatherBadge";
+import { IkonaTypu } from "./manager/wydarzeniaWspolne";
+import { wydarzeniaNaDzien, dlaCalegoLokalu, koniecWydarzenia, godzinyTekst } from "../utils/wydarzenia";
 import ShiftroMark from "./ShiftroMark";
 import { PRODUKT } from "../config";
 import { api } from "../api/supabase";
@@ -82,6 +84,8 @@ const KioskDashboard = ({
   setShiftSwaps,
   setAbsences,
   showMsg,
+  wydarzenia = [],
+  wydarzeniaUczestnicy = [],
 }) => {
   const [screen, setScreen] = useState("LIST");
   const [selectedEmployee, setSelectedEmployee] = useState(null);
@@ -611,6 +615,45 @@ const KioskDashboard = ({
               </div>
             )}
           </div>
+          {/* Wydarzenia (0.74.0, makieta KioskStartEvent): pasek „Dziś w
+              lokalu” dla tego, co dotyczy CAŁEGO lokalu (grupa, kontrola, w
+              okolicy, dla wszystkich stanowisk) — widzi go każdy przed
+              wybraniem siebie, więc bez nazwisk uczestników. Znika po końcu
+              ostatniego wydarzenia dnia. */}
+          {(() => {
+            const dzisYMD = toLocalYMD(new Date());
+            const teraz = new Date();
+            const lista = [
+              ...new Map(
+                lokaleAllowed
+                  .flatMap((l) => wydarzeniaNaDzien(wydarzenia, l.name, dzisYMD))
+                  .filter((w) => dlaCalegoLokalu(w) && koniecWydarzenia(w) > teraz)
+                  .map((w) => [w.id, w])
+              ).values(),
+            ];
+            if (!lista.length) return null;
+            const w = lista[0];
+            return (
+              <div
+                className="mt-3 flex items-center gap-3 rounded-xl bg-[#171714] text-white px-3.5 py-3"
+                data-pasek-wydarzenia-dnia
+              >
+                <IkonaTypu typ={w.typ} size={36} />
+                <span className="flex-1 min-w-0">
+                  <b className="block text-[17px] leading-6">
+                    Dziś w lokalu: {w.tytul}
+                    {lista.length > 1 ? ` · +${lista.length - 1}` : ""}
+                  </b>
+                  <small className="block text-[14px] text-white/75 truncate">
+                    {godzinyTekst(w)}
+                    {w.liczba_gosci ? ` · ${w.liczba_gosci} gości` : ""}
+                    {w.opis ? ` · ${w.opis}` : ""}
+                  </small>
+                </span>
+                <em className="hidden md:inline not-italic text-[12px] font-extrabold text-white/60 whitespace-nowrap">widzą wszyscy</em>
+              </div>
+            );
+          })()}
           {GRUPY.map(({ tytul, stany }) => {
             const osoby = widoczniUsers.filter((u) => stany.includes(stanDnia.get(u.id).stan));
             if (osoby.length === 0) return null;
@@ -882,6 +925,8 @@ const KioskDashboard = ({
         shiftSwaps={shiftSwaps}
         setShiftSwaps={setShiftSwaps}
         setAbsences={setAbsences}
+        wydarzenia={wydarzenia}
+        wydarzeniaUczestnicy={wydarzeniaUczestnicy}
         onBack={goList}
         onLogout={() => setCurrentView("login")}
       />

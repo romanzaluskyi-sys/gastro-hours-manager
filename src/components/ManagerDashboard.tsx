@@ -1259,6 +1259,8 @@ const ManagerDashboard = ({
             setDayLogs={setDayLogs}
             dayLogEntries={dayLogEntries}
             dayLogTemplates={dayLogTemplates}
+            wydarzenia={wydarzenia}
+            wydarzeniaUczestnicy={wydarzeniaUczestnicy}
             showMsg={showMsg}
             tasks={tasks}
             taskBlocks={taskBlocks}
@@ -1372,6 +1374,7 @@ const ManagerDashboard = ({
             showMsg={showMsg}
             initialLokal={pulsCel && pulsCel.lokal}
             initialDate={pulsCel && pulsCel.date}
+            wydarzenia={wydarzenia}
             zadaniaMoje={zadaniaMoje}
             setZadaniaMoje={setZadaniaMoje}
           />

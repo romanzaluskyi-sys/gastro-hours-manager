@@ -23,6 +23,16 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.74.0",
+    date: "2026-10-08",
+    items: [
+      "Wydarzenia w Grafiku: zebrania, grupy, kontrole, mecze w okolicy — dla lokalu albo całej sieci, wybranych stanowisk i osób.",
+      "Powiadamiają od razu (wiadomość i e-mail): nowe, zmiana, odwołanie.",
+      "Widać je w Grafiku, na Pulpicie, w Pulsie, u pracownika (Grafik, Pulpit, Wiadomości) i na Tablecie („Dziś w lokalu”).",
+      "Płatny czas pracy przy wydarzeniu: koszt i uwagi w panelu; rozliczenie obecności w następnej wersji.",
+    ],
+  },
+  {
     version: "0.73.0",
     date: "2026-10-08",
     items: [

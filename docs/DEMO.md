@@ -97,6 +97,10 @@ się od dzisiejszej daty, więc demo zawsze wygląda „na żywo”.
 - **Telefon (Marek)**: dzisiaj 16:00–22:00 do odbicia, nieprzeczytana
   wiadomość o grafiku, zmiana Julii na giełdzie do wzięcia, a w „Więcej”
   — „Zamknięcie dnia” Bistro (ma na dziś prawo `puls_do`).
+- **Wydarzenia** (0.74.0): płatne zebranie całej załogi Bistro za 3 dni
+  (Marek ma przypomnienie i wiadomość), komunia na 40 osób jutro w Pizzerii,
+  mecz w okolicy w najbliższą sobotę i wczorajsza płatna inwentaryzacja w
+  Pizzerii — do rozliczenia, gdy wejdzie etap W4.
 - **Tablet**: profil Marka chroni PIN (ten sam co na ekranie wejścia) —
   pokazuje blokadę profilu.
 

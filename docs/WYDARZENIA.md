@@ -1,6 +1,6 @@
 # Wydarzenia — specyfikacja (Roadmap p.3, plan z 2026-10-08)
 
-Stan: **W1 i W2 zrobione** — baza i logika (`0043`, `src/utils/wydarzenia.ts`)
+Stan: **W1–W3 zrobione (0.74.0)** — baza i logika (`0043`, `src/utils/wydarzenia.ts`)
 oraz Grafik kierownika: chip w nagłówku dnia, „+ wydarzenie” w Edycji, pasek
 nad siatką, panel (`WydarzeniePanel.tsx`), lista „Wydarzenia”
 (`GrafikWydarzenia.tsx`), miesiąc z drukiem, telefon, wiadomości i e-mail. Decyzje właściciela z 2026-10-08 są oznaczone
@@ -120,7 +120,7 @@ Tworzy, zmienia i odwołuje **tylko kierownik** (właściciel): `admin`,
 |---|---|---|
 | W1 ✓ | migracja `0043`, `utils/wydarzenia.ts`, harness | — |
 | W2 ✓ | Grafik: panel, chip w dniu, lista; wiadomości + e-mail | 0.74.0 |
-| W3 | pracownik: Grafik, Pulpit, Wiadomości; tablet; Pulpit kierownika; Puls | 0.74.0 |
+| W3 ✓ | pracownik: Grafik, Pulpit, Wiadomości; tablet; Pulpit kierownika; Puls | 0.74.0 |
 | W4 | płatny czas pracy: godziny w siatce/budżecie/Raporcie, rozliczenie w „Do decyzji”, `shifts.wydarzenie_id` | 0.75.0 |
 | W5 | demo, CLAUDE.md, Przewodnik | z W3 i W4 |
 
@@ -144,6 +144,28 @@ Tworzy, zmienia i odwołuje **tylko kierownik** (właściciel): `admin`,
 - **Do 0.75.0 (W4) płatne wydarzenie nie dopisuje godzin** — po wdrożeniu W4
   minione płatne pojawią się w „Do decyzji” same (`doRozliczenia` bierze
   wszystkie nierozliczone).
+
+## Rzeczy, których nie widać (W3)
+
+- **„Ja” w Grafiku pracownika = wydarzenia, w których jest uczestnikiem, PLUS
+  wydarzenia całego lokalu (grupa, kontrola, w okolicy, dla wszystkich
+  stanowisk) w dniu, w którym ma tam opublikowaną zmianę**
+  (`wydarzeniaPracownikaNaDzien`). Ta sama reguła daje przypomnienie na
+  Pulpicie i romb w pasku dni. „Cały lokal” — wszystkie wydarzenia lokalu,
+  cudze wyszarzone, własne z „dla Ciebie”.
+- **Dzień z wydarzeniem bez zmiany nie zwija się do „wolne”** — ma podpis „bez
+  zmiany”; status na Pulpicie mówi „Dziś bez zmiany” tylko wtedy, gdy osoba
+  jest uczestnikiem.
+- **Przypomnienie na Pulpicie** od dnia przed do końca wydarzenia; dotknięcie
+  ustawia tydzień wydarzenia i otwiera Grafik.
+- **Pasek na tablecie** tylko dla wydarzeń całego lokalu (`dlaCalegoLokalu`) —
+  ekran widzi każdy, więc bez nazwisk. Znika po końcu ostatniego.
+- **Wiadomości**: kategoria filtra `ev` („Wydarzenia”), plakietka z
+  `opisWiadomosci` (`plak`: „czas pracy”, „zmiana”, „odwołane”) zamiast
+  ogólnego „zatwierdzone”. Pasek filtrów pokazuje się, gdy są co najmniej dwa
+  rodzaje wiadomości (tak było zawsze).
+- **Puls**: kafelek „Utarg” pod planem dopisuje „Tego dnia: …” — kontekst, nie
+  zmiana prognozy.
 
 ## Świadomie NIE w pierwszej wersji
 

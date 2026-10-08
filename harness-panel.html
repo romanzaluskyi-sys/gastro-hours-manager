@@ -453,7 +453,13 @@ const poprzedniMiesiac = (h) => {
       const [budzetDni, setBudzetDni] = useState(wyjatkiBudzetu);
       // Wydarzenia (0.74.0) — stan jak w App.tsx, żeby chip w nagłówku dnia
       // pojawiał się po zapisie z panelu.
-      const [wydarzenia, setWydarzenia] = useState([]);
+      // Jedno wydarzenie w Bułce za 2 dni — NIE w Ceglanej, więc sprawdziany
+      // Grafiku (Ceglana) zaczynają od pustej listy; Pulpit przy „Cała sieć” je widzi.
+      const [wydarzenia, setWydarzenia] = useState(() => {
+        const d = new Date(); d.setDate(d.getDate() + 2);
+        return [{ id: "wb1", lokal: "Bułka i Jacek", data: ymd(d), typ: "grupa", tytul: "Urodziny — 25 osób",
+          godz_od: "18:00:00", godz_do: "21:00:00", platne: false, zakres: "grafik", liczba_gosci: 25 }];
+      });
       const [wydarzeniaUczestnicy, setWydarzeniaUczestnicy] = useState([]);
       window.__wydarzenia = wydarzenia;
       window.__uczestnicy = wydarzeniaUczestnicy;
@@ -2209,6 +2215,18 @@ const poprzedniMiesiac = (h) => {
           sprawdz("odwołane otwiera się tylko do odczytu", !!P() && !P().querySelector("[data-zapisz-wydarzenie]") && /Odwołane/.test(P().textContent));
           await kl([...P().querySelectorAll("button")].find((b) => b.textContent.trim() === "Zamknij"));
           await kl(G().querySelector('[data-widok-grafiku="tydzien"]'), 300);
+          // Pulpit: „Najbliższe wydarzenia” (makieta DashboardEvents).
+          [...document.querySelectorAll("#app header button")].find((x) => x.textContent.trim() === "Cała sieć")
+            .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          await czekaj(300);
+          const menuP = [...document.querySelectorAll("#app aside button")]
+            .find((x) => x.textContent.replace(/▪/g, "").replace(/\d+$/, "").trim() === "Pulpit");
+          await kl(menuP, 400);
+          const panelW = document.querySelector("#app [data-panel-wydarzenia]");
+          sprawdz("Pulpit: panel „Najbliższe wydarzenia” z wydarzeniem z Bułki (Cała sieć)",
+            !!panelW && !!panelW.querySelector('[data-wydarzenie-pulpitu="wb1"]') && /25 gości/.test(panelW.textContent),
+            panelW && panelW.textContent.slice(0, 200));
+          sprawdz("Pulpit: odwołane wydarzenie nie stoi na liście", !!panelW && !/Zebranie zespołu/.test(panelW.textContent));
         }
       } catch (e) {
         sprawdz("Wydarzenia: przebieg bez wyjątku", false, e.message);
