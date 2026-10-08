@@ -21,6 +21,9 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
   podsumowanie i „Wyślij poprawkę” do kierownika.
 - Zgłoszenie zdarzenia z tabletu jest krótsze, a **„Przekaż kierownikowi”**
   wysyła mu od razu wiadomość.
+- **Ta sama zmiana nie zapisze się dwa razy** — nawet gdy dwa telefony albo
+  podwójne dotknięcie wyślą ją w tej samej chwili. Pilnuje tego baza; drugi
+  zapis dostaje komunikat „Ta zmiana jest już zapisana”.
 
 ## 0.72.0 — 2026-10-08
 

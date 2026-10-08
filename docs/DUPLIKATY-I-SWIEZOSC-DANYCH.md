@@ -71,7 +71,15 @@ modelu silo, komercyjne użycie na Vercelu — ale nie dla tego mechanizmu.
 
 ## Co zostaje do decyzji
 
-### 1. Unikalny indeks `(user_id, start_time)` na `shifts`
+### 1. Unikalny indeks `(user_id, start_time)` na `shifts` — ZROBIONE (0.73.0)
+
+Migracja [`0042_jedna_zmiana_na_start.sql`](sql/migrations/0042_jedna_zmiana_na_start.sql):
+kasuje dokładne kopie (zostawia wiersz, do którego odwołuje się zgłoszenie,
+potem najstarszy), przy parze RÓŻNYCH zmian o tym samym starcie przerywa się z
+listą do ręcznego rozstrzygnięcia, potem zakłada indeks
+`shifts_osoba_start_uniq`. Aplikacja zamienia naruszenie na zdanie „Ta zmiana
+jest już zapisana…” (`opisBledu` w `src/api/supabase.ts`). Opis decyzji
+poniżej zostaje dla kontekstu.
 
 Jedyny mechanizm, który przeżywa prawdziwy wyścig dwóch równoczesnych zapisów,
 bo nie zależy ani od sieci, ani od tego, co ma na ekranie przeglądarka. Działa

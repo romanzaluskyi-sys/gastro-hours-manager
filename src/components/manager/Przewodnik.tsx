@@ -29,6 +29,7 @@ const CHANGELOG = [
       "Nowy wygląd „Zamknięcia dnia” na tablecie i telefonie: postęp, utarg, wpisy w miejscu z − / +, przycisk mówi, czego brakuje.",
       "Pomiar poza normą wymaga odpowiedzi „Co zrobiono?” — widać ją w karcie dnia.",
       "„Dziś nie było dostawy” i „Przekaż kierownikowi” przy zdarzeniu.",
+      "Ta sama zmiana nie zapisze się dwa razy, nawet przy dwóch zapisach w tej samej chwili.",
     ],
   },
   {

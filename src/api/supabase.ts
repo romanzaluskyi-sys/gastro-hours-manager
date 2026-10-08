@@ -41,6 +41,18 @@ const wyslij = async (url, opcje = {}, dodatkoweNaglowki) => {
   return fetch(url, { ...opcje, headers: await naglowki(dodatkoweNaglowki) });
 };
 
+// Komunikat błędu zapisu dla człowieka. Jedyny przypadek tłumaczony dziś:
+// unikalny indeks `shifts (user_id, start_time)` z migracji 0042 — dwa zapisy
+// tej samej zmiany w tej samej chwili (drugi telefon, podwójne dotknięcie,
+// ponowienie po zerwanym wi-fi). Surowe „duplicate key value violates unique
+// constraint” brzmi jak awaria, a w praktyce znaczy, że wpis już JEST.
+export const opisBledu = (json, domyslny) => {
+  const tekst = (json && json.message) || "";
+  if (json && json.code === "23505" && tekst.includes("shifts_osoba_start_uniq"))
+    return "Ta zmiana jest już zapisana — ta osoba ma wpis zaczynający się o tej samej godzinie. Odśwież listę, zanim wpiszesz ją jeszcze raz.";
+  return tekst || domyslny;
+};
+
 export const api = {
   get: async (table, filter) => {
     const pageSize = 1000;
@@ -71,7 +83,7 @@ export const api = {
       body: JSON.stringify(data),
     });
     const json = await res.json();
-    if (!res.ok) throw new Error(json.message || "Błąd zapisu");
+    if (!res.ok) throw new Error(opisBledu(json, "Błąd zapisu"));
     return json[0];
   },
   // ⚠️ Zapis BEZ oddawania wiersza (`return=minimal`). Zwykły `post` to
@@ -92,7 +104,7 @@ export const api = {
       try {
         json = await res.json();
       } catch (e) {}
-      throw new Error(json.message || `Błąd zapisu (${res.status})`);
+      throw new Error(opisBledu(json, `Błąd zapisu (${res.status})`));
     }
     return true;
   },
@@ -102,7 +114,7 @@ export const api = {
       body: JSON.stringify(data),
     });
     const json = await res.json();
-    if (!res.ok) throw new Error(json.message || "Błąd aktualizacji");
+    if (!res.ok) throw new Error(opisBledu(json, "Błąd aktualizacji"));
     return json[0];
   },
   delete: async (table, id) => {
