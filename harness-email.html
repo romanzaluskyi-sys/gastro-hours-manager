@@ -434,6 +434,16 @@ const USERS = [
       ["Odpowiedź na zgłoszenie", { type: "issue_reply", message: "Roman odpowiedział(a) na Twoje zgłoszenie „Zepsuta zmywarka”: Serwis przyjdzie jutro o 9:00.",
         dane: { cytat: "Zepsuta zmywarka <script>alert(1)<\/script>", odpowiedz: { kto: "Roman", tekst: "Serwis przyjdzie jutro o 9:00. Dzięki, że dałaś znać!" } } }],
       ["Edycja zmiany (stare pola)", { action: "edit", actor_name: "Roman", shift_date: "2026-09-21", old_start: "08:30", old_end: "13:32", new_start: "08:30", new_end: "21:00", lokal: "Ceglana" }],
+      ["Nowe wydarzenie (płatne)", { type: "wydarzenie",
+        message: "Nowe wydarzenie: Zebranie zespołu — śr 14.10 · 15:00–16:00 · Ceglana (płatny czas pracy, wpisany do grafiku).",
+        dane: { wiersze: [{ e: "Kiedy", w: "śr 14.10 · 15:00–16:00" }, { e: "Gdzie", w: "Ceglana" }, { e: "Czas pracy", w: "płatny — wpisany do grafiku" }],
+                cytat: "Jesienne menu <b>i</b> BHP" } }],
+      ["Zmiana w wydarzeniu", { type: "wydarzenie",
+        message: "Zmiana w wydarzeniu: Wesele Nowaków — godziny: 12:00–17:00 → 13:00–18:00.",
+        dane: { wiersze: [{ e: "Godziny", bylo: "12:00–17:00", w: "13:00–18:00" }] } }],
+      ["Wydarzenie odwołane", { type: "wydarzenie",
+        message: "Wydarzenie odwołane: Degustacja win — pt 16.10 · 18:00–20:00 · Ceglana.",
+        dane: { wiersze: [{ e: "Kiedy", w: "pt 16.10 · 18:00–20:00" }, { e: "Gdzie", w: "Ceglana" }] } }],
       ["Nieznany typ", { type: "cos_nowego", message: "Zwykła wiadomość." }],
     ];
     const GRAFIK_ALI = [
@@ -450,6 +460,18 @@ const USERS = [
         sprawdz("grafik: najbliższa i suma miesiąca (12,5 + 8 = 20,5 h)",
           m.html.includes("czw 1 paź · 08:30–21:00") && m.html.includes("20,5"));
         sprawdz("grafik: imię w powitaniu", m.html.includes("Cześć Ala,"));
+      }
+      if (nazwa === "Nowe wydarzenie (płatne)") {
+        sprawdz("wydarzenie: temat = tytuł, etykieta „czas pracy”, CTA do grafiku",
+          m.temat === "Zebranie zespołu" && m.html.includes("Wydarzenie · czas pracy") && m.html.includes("?otworz=grafik"), m.temat);
+        sprawdz("wydarzenie: opis od kierownika escapowany", m.html.includes("&lt;b&gt;i&lt;/b&gt;"));
+      }
+      if (nazwa === "Zmiana w wydarzeniu") {
+        sprawdz("zmiana w wydarzeniu: „Zmiana: …”, stara godzina przekreślona",
+          m.temat === "Zmiana: Wesele Nowaków" && /line-through[^>]*>12:00–17:00/.test(m.html), m.temat);
+      }
+      if (nazwa === "Wydarzenie odwołane") {
+        sprawdz("odwołanie: „Odwołane: …”", m.temat === "Odwołane: Degustacja win", m.temat);
       }
       if (nazwa === "Odpowiedź na zgłoszenie") {
         sprawdz("treść od ludzi jest escapowana", !m.html.includes("<script>alert") && m.html.includes("&lt;script&gt;"));

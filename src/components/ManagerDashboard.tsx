@@ -119,6 +119,10 @@ const ManagerDashboard = ({
   setBudzetCele,
   budzetDni,
   setBudzetDni,
+  wydarzenia = [],
+  setWydarzenia,
+  wydarzeniaUczestnicy = [],
+  setWydarzeniaUczestnicy,
   showMsg,
 }) => {
   // Start na zakładce z linku w e-mailu (0.70.0, utils/linki.ts), inaczej Pulpit.
@@ -1403,6 +1407,11 @@ const ManagerDashboard = ({
             setBudzetDni={setBudzetDni}
             dayLogs={dayLogs}
             onNewEmployee={goToNewEmployee}
+            wydarzenia={wydarzenia}
+            setWydarzenia={setWydarzenia}
+            wydarzeniaUczestnicy={wydarzeniaUczestnicy}
+            setWydarzeniaUczestnicy={setWydarzeniaUczestnicy}
+            onDoDecyzji={() => setTab("zatwierdzanie")}
             showMsg={showMsg}
           />
         )}

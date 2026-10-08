@@ -12,11 +12,14 @@
 // publikacji (updated_at > published_at) albo zdjęte po publikacji
 // (deleted_at). Publikacja i powiadomienia zostają w publishGrafik.
 import React, { useState } from "react";
-import { AlertTriangle, ChevronLeft, ChevronRight, Eye, Pencil, Send, SlidersHorizontal } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, Eye, Pencil, Plus, Send, SlidersHorizontal, CalendarDays } from "lucide-react";
 import GrafikWymagania from "./GrafikWymagania";
 import GrafikTydzien from "./GrafikTydzien";
 import GrafikMiesiac from "./GrafikMiesiac";
 import GrafikDoWyslaniaModal, { rodzajSzkicu } from "./GrafikDoWyslaniaModal";
+import GrafikWydarzenia from "./GrafikWydarzenia";
+import WydarzeniePanel from "./WydarzeniePanel";
+import { wydarzeniaWOkresie, kosztWydarzenia, uczestnicyWydarzenia } from "../../utils/wydarzenia";
 import { api } from "../../api/supabase";
 import { toLocalYMD, mondayOf, addDaysYMD, isUnpublished, publishGrafik } from "../../utils/grafik";
 
@@ -69,6 +72,11 @@ export default function Grafik({
   setBudzetDni,
   dayLogs,
   onNewEmployee,
+  wydarzenia,
+  setWydarzenia,
+  wydarzeniaUczestnicy,
+  setWydarzeniaUczestnicy,
+  onDoDecyzji,
   showMsg,
 }) {
   const [view, setView] = useState("tydzien");
@@ -85,6 +93,8 @@ export default function Grafik({
   const [month, setMonth] = useState(() => addDaysYMD(mondayOf(toLocalYMD(new Date())), 3).slice(0, 7));
   const [publishing, setPublishing] = useState(false);
   const [pokazSzkic, setPokazSzkic] = useState(false);
+  // Panel wydarzenia: { wydarzenie } przy edycji, { data, lokal } przy nowym.
+  const [panelWyd, setPanelWyd] = useState(null);
 
   const lokaleNames = selectedLokal !== "ALL" ? [selectedLokal] : (availableLokaleForManager || []).map((l) => l.name);
   // Wszystkie lokale kierownika — do przypisania zmiany w innym lokalu i do
@@ -168,6 +178,22 @@ export default function Grafik({
         }`
       : fmtZakres(weekStart, weekEnd);
 
+  // Wydarzenia oglądanego okresu w lokalach z paska (i „Cała sieć”).
+  const okresOd = view === "dzien" ? dayStart : weekStart;
+  const okresDo = view === "dzien" ? dayStart : weekEnd;
+  const wydarzeniaTygodnia = wydarzeniaWOkresie(wydarzenia, null, okresOd, okresDo).filter(
+    (w) => !w.lokal || lokaleNames.includes(w.lokal)
+  );
+  const platneTygodnia = wydarzeniaTygodnia.filter((w) => w.platne);
+  const kosztPlatnych = platneTygodnia.reduce((suma, w) => {
+    const osoby = uczestnicyWydarzenia(wydarzeniaUczestnicy, w.id)
+      .map((u) => (users || []).find((x) => String(x.id) === String(u.user_id)))
+      .filter(Boolean);
+    return suma + kosztWydarzenia({ wydarzenie: w, osoby, planShifts: zywePlanShifts, lokale }).koszt;
+  }, 0);
+  const otworzWydarzenie = (w) => setPanelWyd({ wydarzenie: w });
+  const noweWydarzenie = (data, lokal) => setPanelWyd({ data, lokal });
+
   if (!lokalKonfiguracji) {
     return (
       <div className="max-w-3xl mx-auto bg-white border-[2px] border-[#171714] rounded-xl p-5 text-[#6E6E66]">
@@ -210,6 +236,9 @@ export default function Grafik({
             data-widok-grafiku="miesiac"
           >
             Miesiąc
+          </button>
+          <button type="button" className={segCls(view === "wydarzenia")} onClick={() => setView("wydarzenia")} data-widok-grafiku="wydarzenia">
+            Wydarzenia
           </button>
         </div>
         {siatka && (
@@ -271,7 +300,7 @@ export default function Grafik({
           className={`order-2 md:order-none ${btnObrysCls} ${view === "konfiguracja" ? "!bg-[#171714] !text-white" : ""}`}
           title="Konfiguracja: wymagania obsady, godziny otwarcia, wyjątki, budżet"
         >
-          <SlidersHorizontal size={17} /> <span className="hidden 2xl:inline">Konfiguracja</span>
+          <SlidersHorizontal size={17} /> <span className="hidden min-[1700px]:inline">Konfiguracja</span>
         </button>
         {siatka && (
           <button
@@ -282,6 +311,11 @@ export default function Grafik({
             data-opublikuj
           >
             <Send size={17} /> {niewyslane > 0 ? `Opublikuj · ${niewyslane}` : "Opublikowane"}
+          </button>
+        )}
+        {view === "wydarzenia" && (
+          <button type="button" onClick={() => setPanelWyd({ data: dzisYMD })} className={`order-2 md:order-none ${btnGlownyCls}`} data-nowe-wydarzenie>
+            <Plus size={17} /> Wydarzenie
           </button>
         )}
         {(view === "konfiguracja" || view === "miesiac") && lokaleNames.length > 1 && (
@@ -369,6 +403,46 @@ export default function Grafik({
           </button>
         </div>
       )}
+      {/* Wydarzenia tygodnia (makieta ScheduleEvents) — „+ Wydarzenie” działa
+          także w Podglądzie: wydarzenie nie jest edycją grafiku. */}
+      {siatka && (
+        <div className="hidden md:flex items-center gap-2.5 flex-wrap bg-white border-[1.5px] border-[#DEDCD4] rounded-lg px-3.5 py-2 text-sm" data-pasek-wydarzen>
+          <CalendarDays size={18} className="flex-none" />
+          <span className="flex-1">
+            {wydarzeniaTygodnia.length ? (
+              <>
+                <b>
+                  {wydarzeniaTygodnia.length}{" "}
+                  {wydarzeniaTygodnia.length === 1 ? "wydarzenie" : wydarzeniaTygodnia.length < 5 ? "wydarzenia" : "wydarzeń"}{" "}
+                  {view === "dzien" ? "tego dnia" : "w tym tygodniu"}
+                </b>
+                {platneTygodnia.length > 0 && (
+                  <span className="text-[#6E6E66]">
+                    {" "}
+                    · {platneTygodnia.length} płatne{kosztPlatnych > 0 ? ` ≈ ${kosztPlatnych.toLocaleString("pl-PL")} zł` : ""}
+                  </span>
+                )}
+                <span className="text-[#6E6E66]"> · nie liczą się do obsady</span>
+              </>
+            ) : (
+              <span className="text-[#6E6E66]">Brak wydarzeń {view === "dzien" ? "tego dnia" : "w tym tygodniu"}.</span>
+            )}
+          </span>
+          {wydarzeniaTygodnia.length > 0 && (
+            <button type="button" onClick={() => setView("wydarzenia")} className="font-bold underline underline-offset-[3px]">
+              Zobacz listę
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setPanelWyd({ data: view === "dzien" ? dayStart : weekStart >= dzisYMD ? weekStart : dzisYMD })}
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border-[2px] border-[#171714] bg-white font-['Archivo'] font-bold text-sm"
+            data-plus-wydarzenie
+          >
+            <Plus size={15} /> Wydarzenie
+          </button>
+        </div>
+      )}
       {siatka && mode === "podglad" && (
         <p className="md:hidden -mt-1 text-[13px] text-[#6E6E66]">
           Podgląd — nic nie zmienisz przypadkiem. Przełącz na Edycję, żeby dodawać zmiany.
@@ -389,6 +463,19 @@ export default function Grafik({
           month={month}
           setMonth={setMonth}
           onBackToWeek={() => setView("tydzien")}
+          wydarzenia={wydarzenia}
+          onOtworzWydarzenie={otworzWydarzenie}
+        />
+      )}
+
+      {view === "wydarzenia" && (
+        <GrafikWydarzenia
+          wydarzenia={wydarzenia}
+          uczestnicy={wydarzeniaUczestnicy}
+          lokaleNames={lokaleNames}
+          onOtworz={otworzWydarzenie}
+          onNowe={() => setPanelWyd({ data: dzisYMD })}
+          onDoDecyzji={onDoDecyzji}
         />
       )}
 
@@ -445,6 +532,10 @@ export default function Grafik({
           setBudzetDni={setBudzetDni}
           currentUser={currentUser}
           showMsg={showMsg}
+          wydarzenia={wydarzenia}
+          wydarzeniaUczestnicy={wydarzeniaUczestnicy}
+          onOtworzWydarzenie={otworzWydarzenie}
+          onNoweWydarzenie={noweWydarzenie}
         />
       ) : null}
 
@@ -473,6 +564,27 @@ export default function Grafik({
             <Send size={15} /> Opublikuj
           </button>
         </div>
+      )}
+
+      {panelWyd && (
+        <WydarzeniePanel
+          key={panelWyd.wydarzenie ? panelWyd.wydarzenie.id : `nowe-${panelWyd.data}`}
+          wydarzenie={panelWyd.wydarzenie || null}
+          domyslnaData={panelWyd.data}
+          domyslnyLokal={panelWyd.lokal || (lokaleNames.length === 1 ? lokaleNames[0] : lokalKonfiguracji)}
+          lokaleKierownika={availableLokaleForManager}
+          lokale={lokale}
+          activeStanowiska={activeStanowiska}
+          users={users}
+          planShifts={zywePlanShifts}
+          absences={absences}
+          uczestnicy={wydarzeniaUczestnicy}
+          setWydarzenia={setWydarzenia}
+          setUczestnicy={setWydarzeniaUczestnicy}
+          currentUser={currentUser}
+          showMsg={showMsg}
+          onClose={() => setPanelWyd(null)}
+        />
       )}
 
       {pokazSzkic && (

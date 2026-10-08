@@ -66,6 +66,8 @@ import { normaMiesiaca } from "../../utils/umowy";
 import { ostrzezeniaKodeksu } from "../../utils/kodeks";
 import { countWorkdays, URLOP_HOURS_PER_DAY } from "../../utils/absences";
 import { fetchDailyForecast, describeWeatherCode } from "../../utils/weather";
+import { wydarzeniaNaDzien, godzinyTekst, uczestnicyWydarzenia, typWydarzenia } from "../../utils/wydarzenia";
+import { ChipWydarzenia, IkonaTypu, TagWydarzenia } from "./wydarzeniaWspolne";
 
 const KOL_PRACOWNIK = 210;
 const KOL_DZIEN = 140;
@@ -269,6 +271,10 @@ function LokalSection({
   setBudzetDni,
   currentUser,
   showMsg,
+  wydarzenia,
+  wydarzeniaUczestnicy,
+  onOtworzWydarzenie,
+  onNoweWydarzenie,
 }) {
   const [forecast, setForecast] = useState({});
   useEffect(() => {
@@ -679,6 +685,39 @@ function LokalSection({
               </span>
             )}
           </div>
+          {/* Wydarzenia dnia (0.74.0, makieta ScheduleEvents): dwa chipy, reszta
+              jako „+N” do listy. Nie liczą się do obsady. „+ wydarzenie” tylko
+              w Edycji — w Podglądzie jest przycisk w pasku nad siatką. */}
+          {(() => {
+            const wd = wydarzeniaNaDzien(wydarzenia, lokal, d);
+            if (!wd.length && !edycja) return null;
+            return (
+              <div className="flex flex-col gap-1" data-wydarzenia-dnia={d}>
+                {wd.slice(0, 2).map((w) => (
+                  <ChipWydarzenia key={w.id} w={w} onClick={() => onOtworzWydarzenie && onOtworzWydarzenie(w)} />
+                ))}
+                {wd.length > 2 && (
+                  <button
+                    type="button"
+                    onClick={() => onOtworzWydarzenie && onOtworzWydarzenie(wd[2])}
+                    className="text-left text-[12px] font-extrabold underline px-0.5"
+                  >
+                    +{wd.length - 2} {wd.length - 2 === 1 ? "wydarzenie" : "wydarzenia"}
+                  </button>
+                )}
+                {edycja && onNoweWydarzenie && (
+                  <button
+                    type="button"
+                    onClick={() => onNoweWydarzenie(d, lokal)}
+                    className="inline-flex items-center gap-1 h-6 px-[7px] w-max rounded-md border-[1.5px] border-dashed border-[#6E6E66] text-[#6E6E66] hover:border-[#171714] hover:text-[#171714] text-[12px] font-bold"
+                    data-plus-wydarzenie-dnia={d}
+                  >
+                    <Plus size={13} /> wydarzenie
+                  </button>
+                )}
+              </div>
+            );
+          })()}
         </div>
       </th>
     );
@@ -721,6 +760,44 @@ function LokalSection({
             </div>
           </div>
         </div>
+        {(wydarzeniaNaDzien(wydarzenia, lokal, d).length > 0 || edycja) && (
+          <div className={`${kartaCls} overflow-hidden`} data-wydarzenia-mobilne>
+            <div className="px-3.5 py-2.5 border-b-[2px] border-[#171714] font-['Archivo'] font-extrabold flex items-center">
+              Wydarzenia · {dzienKrotko(d)}
+              <span className="flex-1" />
+              {edycja && onNoweWydarzenie && (
+                <button type="button" className={btnMalyCls} onClick={() => onNoweWydarzenie(d, lokal)}>
+                  <Plus size={15} /> wydarzenie
+                </button>
+              )}
+            </div>
+            {wydarzeniaNaDzien(wydarzenia, lokal, d).map((w) => (
+              <button
+                key={w.id}
+                type="button"
+                onClick={() => onOtworzWydarzenie && onOtworzWydarzenie(w)}
+                className="w-full text-left flex items-start gap-3 px-3.5 py-3 border-t-[1.5px] border-[#DEDCD4] first:border-t-0"
+              >
+                <IkonaTypu typ={w.typ} />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[12px] font-bold text-[#6E6E66]">
+                    {typWydarzenia(w.typ).krotko} · {godzinyTekst(w)}
+                    {w.lokal ? "" : " · cała sieć"}
+                  </span>
+                  <b className="block text-[15px]">{w.tytul}</b>
+                  <span className="flex flex-wrap gap-1.5 mt-1">
+                    {w.liczba_gosci ? <TagWydarzenia>{w.liczba_gosci} gości</TagWydarzenia> : null}
+                    {w.platne && <TagWydarzenia ton="paid">płatne</TagWydarzenia>}
+                    <TagWydarzenia>{uczestnicyWydarzenia(wydarzeniaUczestnicy, w.id).length} os.</TagWydarzenia>
+                  </span>
+                </span>
+              </button>
+            ))}
+            {!wydarzeniaNaDzien(wydarzenia, lokal, d).length && (
+              <p className="m-0 px-3.5 py-3 text-[14px] text-[#6E6E66]">Brak wydarzeń tego dnia.</p>
+            )}
+          </div>
+        )}
         {problemy.length > 0 && (
           <div className={`${kartaCls} overflow-hidden`}>
             <div className="px-3.5 py-2.5 border-b-[2px] border-[#171714] font-['Archivo'] font-extrabold">Obsada</div>
@@ -1103,6 +1180,10 @@ export default function GrafikTydzien({
   setBudzetDni,
   currentUser,
   showMsg,
+  wydarzenia = [],
+  wydarzeniaUczestnicy = [],
+  onOtworzWydarzenie,
+  onNoweWydarzenie,
 }) {
   const [modalCtx, setModalCtx] = useState(null);
   const [blokada, setBlokada] = useState(null);
@@ -1459,6 +1540,12 @@ export default function GrafikTydzien({
                 {k && (
                   <i className={`absolute top-[3px] right-[5px] w-[7px] h-[7px] rounded-full ${k === "brak" ? "bg-[#DE3A22]" : "bg-[#8A5300]"}`} />
                 )}
+                {lokaleNames.some((l) => wydarzeniaNaDzien(wydarzenia, l, d).length > 0) && (
+                  <i
+                    className={`absolute top-[4px] left-[6px] w-[6px] h-[6px] rotate-45 ${on ? "bg-white" : "bg-[#171714]"}`}
+                    data-romb-wydarzenia
+                  />
+                )}
                 {DNI[new Date(d + "T00:00:00").getDay()]}
                 <small className={`text-[11px] font-bold ${on ? "text-white/75" : "text-[#6E6E66]"}`}>{Number(d.slice(8))}</small>
               </button>
@@ -1546,6 +1633,10 @@ export default function GrafikTydzien({
           setBudzetDni={setBudzetDni}
           currentUser={currentUser}
           showMsg={showMsg}
+          wydarzenia={wydarzenia}
+          wydarzeniaUczestnicy={wydarzeniaUczestnicy}
+          onOtworzWydarzenie={onOtworzWydarzenie}
+          onNoweWydarzenie={onNoweWydarzenie}
         />
       ))}
 

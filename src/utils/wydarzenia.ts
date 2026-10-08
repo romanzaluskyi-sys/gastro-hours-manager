@@ -25,8 +25,12 @@ import {
   allowedStanowiskaArr,
   isSameUser,
   poOstatnimDniu,
+  absenceOn,
 } from "./grafik";
 import { kosztGodziny } from "./budzet";
+import { uwagiPrzypisania } from "./kodeks";
+import { api } from "../api/supabase";
+import { createEmployeeNotification } from "../api/notifications";
 
 export const TYPY_WYDARZEN = [
   { key: "zebranie", label: "Zebranie / szkolenie", krotko: "Zebranie" },
@@ -304,3 +308,137 @@ export const daneDoMaila = (w, zmiany = null) => ({
       ],
   cytat: w.opis || null,
 });
+
+// --- uwagi przy uczestnikach płatnego wydarzenia ----------------------------
+
+// Te same uwagi co w panelu przypisania zmiany (utils/kodeks.ts), plus dwie
+// własne: czas wydarzenia w zmianie osoby i wolne tego dnia. Sygnał, nie
+// blokada — tak jak w Grafiku.
+export const uwagiUczestnika = ({ wydarzenie, user, planShifts, absences }) => {
+  const w = wydarzenie;
+  const out = [];
+  const wolne = w.data ? absenceOn(absences, user, w.data) : null;
+  if (wolne) {
+    out.push({
+      ton: "warn",
+      tekst: `${wolne.type === "urlop" ? "urlop" : "niedostępność"} ${dzienKrotko(wolne.start_date)}–${dzienKrotko(
+        wolne.end_date
+      )} — dostanie wiadomość, sprawdź, czy ma przyjść`,
+    });
+  }
+  if (!w.platne || calyDzien(w)) return out;
+  const moje = publishedShiftsFor(planShifts, user).filter((s) => s.date === w.data);
+  const poza = platneMinutyOsoby(w, user, planShifts);
+  const razem = minutyWydarzenia(w);
+  if (poza < razem) {
+    const z = moje.find((s) => s.start_time) || {};
+    out.push({
+      ton: "info",
+      tekst:
+        poza === 0
+          ? `ma zmianę ${trimTime(z.start_time)}–${trimTime(z.end_time)} — czas już w zmianie, nie dopiszemy drugi raz`
+          : `część w czasie zmiany ${trimTime(z.start_time)}–${trimTime(z.end_time)} — dopiszemy ${poza} min`,
+    });
+  }
+  if (poza > 0) {
+    uwagiPrzypisania({
+      user,
+      kandydaci: [{ id: "__wydarzenie", user_id: user.id, user_name: user.name, date: w.data, start_time: w.godz_od, end_time: w.godz_do, published_at: "x" }],
+      planShifts: (planShifts || []).filter((s) => s.published_at),
+      absences,
+      stanowisko: null,
+    }).forEach((u) => out.push(u));
+  }
+  return out;
+};
+
+// --- zapis -------------------------------------------------------------------
+
+// Pola formularza → wiersz `wydarzenia`. Puste godziny = cały dzień; liczba
+// gości tylko przy grupie; stanowiska jako tekst po przecinku (NULL = wszystkie).
+export const wierszWydarzenia = (f) => ({
+  lokal: f.lokal || null,
+  data: f.data,
+  godz_od: f.calyDzien ? null : f.godz_od || null,
+  godz_do: f.calyDzien ? null : f.godz_do || null,
+  typ: f.typ || "inne",
+  tytul: String(f.tytul || "").trim(),
+  opis: String(f.opis || "").trim() || null,
+  stanowiska: stanowiskaTekst(f.stanowiska),
+  zakres: f.zakres === "grafik" ? "grafik" : "wszyscy",
+  liczba_gosci: f.typ === "grupa" && String(f.liczba_gosci ?? "").trim() !== "" ? Number(f.liczba_gosci) : null,
+  platne: !!f.platne && !f.calyDzien,
+});
+
+const powiadom = async (lista) => {
+  const wyniki = await Promise.allSettled(lista.map(([imie, tekst, dane]) => createEmployeeNotification(imie, tekst, "wydarzenie", dane)));
+  return wyniki.filter((r) => r.status === "rejected").length;
+};
+
+// JEDYNE miejsce, które zapisuje wydarzenie i jego uczestników. Wiadomości:
+//   nowe wydarzenie        → „Nowe wydarzenie” do wszystkich;
+//   edycja, nowi           → „Nowe wydarzenie”;
+//   edycja, odznaczeni     → „Wydarzenie odwołane” (dla nich);
+//   edycja, ci sami        → „Zmiana w wydarzeniu” tylko z `powiadomOZmianie`.
+// Błąd wysłania wiadomości NIE cofa zapisu — wydarzenie jest, a liczba
+// niewysłanych wraca w `niewyslane`, żeby ekran mógł to powiedzieć.
+export const zapiszWydarzenie = async ({
+  dane,
+  stare = null,
+  stareUczestnicy = [],
+  osoby,
+  powiadomOZmianie = true,
+  kto,
+  setWydarzenia,
+  setUczestnicy,
+}) => {
+  const teraz = new Date().toISOString();
+  const zapisane = stare
+    ? await api.patch("wydarzenia", stare.id, { ...dane, zmienil: kto, updated_at: teraz })
+    : await api.post("wydarzenia", { ...dane, utworzyl: kto, zmienil: kto });
+  const { dodani, usunieci, zostali } = roznicaUczestnikow(
+    stareUczestnicy.map((u) => u.user_id),
+    (osoby || []).map((u) => u.id)
+  );
+  const doUsuniecia = stareUczestnicy.filter((u) => usunieci.includes(String(u.user_id)));
+  await Promise.all(doUsuniecia.map((u) => api.delete("wydarzenia_uczestnicy", u.id)));
+  const nowi = await Promise.all(
+    (osoby || [])
+      .filter((u) => dodani.includes(String(u.id)))
+      .map((u) =>
+        api.post("wydarzenia_uczestnicy", { wydarzenie_id: zapisane.id, user_id: u.id, user_name: u.name, powiadomiono_at: teraz })
+      )
+  );
+  const wiadomosci = [
+    ...nowi.map((u) => [u.user_name, tekstNowego(zapisane), daneDoMaila(zapisane)]),
+    ...doUsuniecia.map((u) => [u.user_name, tekstOdwolania(zapisane), daneDoMaila(zapisane)]),
+  ];
+  const zmiany = stare ? zmienionePola(stare, zapisane) : [];
+  if (stare && powiadomOZmianie) {
+    stareUczestnicy
+      .filter((u) => zostali.includes(String(u.user_id)))
+      .forEach((u) => wiadomosci.push([u.user_name, tekstZmiany(stare, zapisane), daneDoMaila(zapisane, zmiany)]));
+  }
+  const niewyslane = await powiadom(wiadomosci);
+  if (setWydarzenia)
+    setWydarzenia((prev) => [...(prev || []).filter((w) => String(w.id) !== String(zapisane.id)), zapisane]);
+  if (setUczestnicy) {
+    const usunieteId = new Set(doUsuniecia.map((u) => String(u.id)));
+    setUczestnicy((prev) => [...(prev || []).filter((u) => !usunieteId.has(String(u.id))), ...nowi]);
+  }
+  return { wydarzenie: zapisane, powiadomieni: wiadomosci.length - niewyslane, niewyslane };
+};
+
+// Odwołanie: wiersz zostaje (lista, historia, Puls), znika z grafiku, każdy
+// uczestnik dostaje „Wydarzenie odwołane”.
+export const odwolajWydarzenie = async ({ wydarzenie, uczestnicy, kto, setWydarzenia }) => {
+  const zapisane = await api.patch("wydarzenia", wydarzenie.id, {
+    odwolane_at: new Date().toISOString(),
+    odwolal: kto,
+    updated_at: new Date().toISOString(),
+  });
+  const lista = uczestnicyWydarzenia(uczestnicy, wydarzenie.id);
+  const niewyslane = await powiadom(lista.map((u) => [u.user_name, tekstOdwolania(zapisane), daneDoMaila(zapisane)]));
+  if (setWydarzenia) setWydarzenia((prev) => (prev || []).map((w) => (String(w.id) === String(zapisane.id) ? zapisane : w)));
+  return { wydarzenie: zapisane, powiadomieni: lista.length - niewyslane, niewyslane };
+};

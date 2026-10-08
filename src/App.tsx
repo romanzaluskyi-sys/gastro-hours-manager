@@ -73,6 +73,9 @@ export default function App() {
   // i wyjątki na konkretne daty. Patrz utils/budzet.ts.
   const [budzetCele, setBudzetCele] = useState([]);
   const [budzetDni, setBudzetDni] = useState([]);
+  // Wydarzenia (0.74.0) — zebrania, grupy, kontrole; patrz utils/wydarzenia.ts.
+  const [wydarzenia, setWydarzenia] = useState([]);
+  const [wydarzeniaUczestnicy, setWydarzeniaUczestnicy] = useState([]);
 
   const [currentView, setCurrentView] = useState("login");
   const [currentUser, setCurrentUser] = useState(null);
@@ -363,6 +366,27 @@ export default function App() {
     };
     loadGrafik();
 
+    // Wydarzenia — osobno i nieblokująco (baza bez migracji 0043 ma po prostu
+    // pustą listę). Okno 120 dni wstecz: lista „Minione” i kontekst w Pulsie.
+    // W pollu, bo kierownik dodaje je na bieżąco, a tablet stoi zalogowany
+    // tygodniami — wiadomość przychodzi osobno, ale grafik ma ją też pokazać.
+    const loadWydarzenia = () => {
+      const od = (() => {
+        const d = new Date();
+        d.setDate(d.getDate() - 120);
+        return toLocalYMD(d);
+      })();
+      api
+        .get("wydarzenia", `data=gte.${od}`)
+        .then((rows) => setWydarzenia(Array.isArray(rows) ? rows : []))
+        .catch((err) => console.error("Błąd pobierania wydarzeń:", err.message || err));
+      api
+        .get("wydarzenia_uczestnicy")
+        .then((rows) => setWydarzeniaUczestnicy(Array.isArray(rows) ? rows : []))
+        .catch((err) => console.error("Błąd pobierania uczestników wydarzeń:", err.message || err));
+    };
+    loadWydarzenia();
+
     // ⚠️ Odbicia też muszą się odświeżać, nie tylko powiadomienia.
     //
     // `shifts` były pobierane RAZ, przy montowaniu, i nigdy więcej — a Tablet
@@ -408,6 +432,7 @@ export default function App() {
       loadIssues();
       loadShifts();
       loadUsers();
+      loadWydarzenia();
     }, 45000);
     return () => clearInterval(pollInterval);
   }, [currentUser?.id]);
@@ -577,6 +602,10 @@ export default function App() {
           setBudzetCele={setBudzetCele}
           budzetDni={budzetDni}
           setBudzetDni={setBudzetDni}
+          wydarzenia={wydarzenia}
+          setWydarzenia={setWydarzenia}
+          wydarzeniaUczestnicy={wydarzeniaUczestnicy}
+          setWydarzeniaUczestnicy={setWydarzeniaUczestnicy}
           showMsg={showMsg}
         />
       )}

@@ -54,7 +54,7 @@ const pokazBlad = (e) => {
 window.addEventListener("error", (ev) => pokazBlad(ev.error || ev.message));
 window.addEventListener("unhandledrejection", (ev) => pokazBlad(ev.reason));
 
-const IKONY = ["Sparkles", "Tag", "Truck", "Activity", "Repeat", "Coins", "Smartphone", "PieChart", "Search", "EyeOff", "Star", "Tablet", "Inbox", "Square", "Phone", "AlertCircle", "AlertTriangle", "Archive", "ArchiveRestore", "ArrowLeft", "ArrowLeftRight", "ArrowRight", "BarChart3", "Bell", "BookOpen", "Briefcase", "Calendar", "CalendarCheck", "CalendarDays", "CalendarRange", "Check", "CheckCircle", "CheckCircle2", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "ClipboardCheck", "ClipboardList", "ClipboardPlus", "Clock", "Cloud", "Construction", "Copy", "CopyPlus", "Delete", "Download", "Edit2", "Eye", "FileText", "Flag", "HelpCircle", "History", "Home", "Hourglass", "Info", "ListChecks", "Lock", "LogIn", "LogOut", "Mail", "MapPin", "MoreHorizontal", "Palmtree", "Pencil", "Plus", "Printer", "RefreshCw", "RotateCcw", "Save", "Send", "Settings", "SlidersHorizontal", "Thermometer", "Trash2", "User", "UserPlus", "Users", "Wallet", "WifiOff", "X", "Minus", "StickyNote"];
+const IKONY = ["Sparkles", "Tag", "Truck", "Activity", "Repeat", "Coins", "Smartphone", "PieChart", "Search", "EyeOff", "Star", "Tablet", "Inbox", "Square", "Phone", "AlertCircle", "AlertTriangle", "Archive", "ArchiveRestore", "ArrowLeft", "ArrowLeftRight", "ArrowRight", "BarChart3", "Bell", "BookOpen", "Briefcase", "Calendar", "CalendarCheck", "CalendarDays", "CalendarRange", "Check", "CheckCircle", "CheckCircle2", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "ClipboardCheck", "ClipboardList", "ClipboardPlus", "Clock", "Cloud", "Construction", "Copy", "CopyPlus", "Delete", "Download", "Edit2", "Eye", "FileText", "Flag", "HelpCircle", "History", "Home", "Hourglass", "Info", "ListChecks", "Lock", "LogIn", "LogOut", "Mail", "MapPin", "MoreHorizontal", "Palmtree", "Pencil", "Plus", "Printer", "RefreshCw", "RotateCcw", "Save", "Send", "Settings", "SlidersHorizontal", "Thermometer", "Trash2", "User", "UserPlus", "Users", "Wallet", "WifiOff", "X", "Minus", "StickyNote", "Presentation", "ShieldCheck"];
 const stub = (kod) => URL.createObjectURL(new Blob([kod], { type: "text/javascript" }));
 
 // Atrapa Supabase — nic nie leci do sieci, każdy zapis wraca z wymyślonym id.
@@ -451,6 +451,12 @@ const poprzedniMiesiac = (h) => {
       // "zmienione na ten dzień", ani tego, że nadpisanie działa polem po polu.
       const [budzetCele, setBudzetCele] = useState(celeStartowe);
       const [budzetDni, setBudzetDni] = useState(wyjatkiBudzetu);
+      // Wydarzenia (0.74.0) — stan jak w App.tsx, żeby chip w nagłówku dnia
+      // pojawiał się po zapisie z panelu.
+      const [wydarzenia, setWydarzenia] = useState([]);
+      const [wydarzeniaUczestnicy, setWydarzeniaUczestnicy] = useState([]);
+      window.__wydarzenia = wydarzenia;
+      window.__uczestnicy = wydarzeniaUczestnicy;
 
       const props = {
         // ?rola=manager przełącza na kierownika JEDNEGO lokalu. Tylko w tym
@@ -646,6 +652,7 @@ const poprzedniMiesiac = (h) => {
         // jednym miejscu nie miesza się z drugim.
         grafikWyjatki: wyjatkiStartowe,
         budzetCele, setBudzetCele, budzetDni, setBudzetDni,
+        wydarzenia, setWydarzenia, wydarzeniaUczestnicy, setWydarzeniaUczestnicy,
         weatherForecasts: [],
         dayLogs, setDayLogs, dayLogEntries, setDayLogEntries,
         dayLogTemplates, setDayLogTemplates,
@@ -2095,6 +2102,116 @@ const poprzedniMiesiac = (h) => {
         sprawdz("Korekta na otwartą zmianę: przebieg bez wyjątku", false, e.message);
       } finally {
         window.__tabele.shifts = [];
+      }
+
+      // ----------------------------------------------------------------
+      // Wydarzenia (0.74.0, makiety ScheduleEvents / ScheduleEventPanel /
+      // ScheduleEventsList): nowe z listy, uczestnicy z pól, płatne, zapis z
+      // wiadomościami, chip w nagłówku dnia, zmiana godzin, odwołanie.
+      // ----------------------------------------------------------------
+      try {
+        if (new URLSearchParams(location.search).get("rola") !== "manager") {
+          const G = () => document.querySelector("#app [data-grafik]");
+          const P = () => document.querySelector('#app [data-panel-boczny="wydarzenie"]');
+          const kl = async (el, ms = 250) => { el.dispatchEvent(new MouseEvent("click", { bubbles: true })); await czekaj(ms); };
+          const wpisz = (el, v) => {
+            const proto = el.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+            Object.getOwnPropertyDescriptor(proto, "value").set.call(el, v);
+            el.dispatchEvent(new Event("input", { bubbles: true }));
+          };
+          const menuG = [...document.querySelectorAll("#app aside button")]
+            .find((x) => x.textContent.replace(/▪/g, "").replace(/\d+$/, "").trim() === "Grafik");
+          await kl(menuG, 400);
+          [...document.querySelectorAll("#app header button")].find((x) => x.textContent.trim() === "Ceglana")
+            .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          await czekaj(300);
+          sprawdz("pasek wydarzeń nad siatką: „Brak wydarzeń” i „+ Wydarzenie” (także w Podglądzie)",
+            /Brak wydarzeń/.test(G().querySelector("[data-pasek-wydarzen]").textContent) && !!G().querySelector("[data-plus-wydarzenie]"));
+          await kl(G().querySelector('[data-widok-grafiku="wydarzenia"]'), 300);
+          sprawdz("widok „Wydarzenia”: lista pusta, przycisk „+ Wydarzenie”",
+            /Brak zaplanowanych/.test(G().querySelector("[data-lista-wydarzen]").textContent) && !!G().querySelector("[data-nowe-wydarzenie]"));
+          await kl(G().querySelector("[data-nowe-wydarzenie]"), 300);
+          sprawdz("panel „Nowe wydarzenie” z informacją, że powiadamia od razu", !!P() && /bez publikowania grafiku/.test(P().textContent));
+          const uczestnicyPanelu = () => [...P().querySelectorAll("[data-uczestnik]")].map((e) => e.getAttribute("data-uczestnik"));
+          sprawdz("uczestnicy: ludzie Ceglanej bez tabletu, osoby na próbę i właściciela",
+            uczestnicyPanelu().join() === "Bo,Cezary,Dorota,Ewa,Filip,Gosia", uczestnicyPanelu().join());
+          await kl(P().querySelector('[data-stanowisko-wydarzenia="Kelner"]'));
+          sprawdz("„Dla kogo: Kelner” zawęża listę do Gosi", uczestnicyPanelu().join() === "Gosia", uczestnicyPanelu().join());
+          await kl(P().querySelector('[data-stanowisko-wydarzenia="*"]'));
+          const zapisz = () => P().querySelector("[data-zapisz-wydarzenie]");
+          sprawdz("bez tytułu zapis zablokowany i mówi, czego brakuje", zapisz().disabled && /Wypełnij: tytuł/.test(P().textContent));
+          wpisz(P().querySelector("[data-tytul-wydarzenia]"), "Zebranie zespołu");
+          await czekaj(150);
+          await kl(P().querySelector('[data-uczestnik="Dorota"] input'));
+          sprawdz("odznaczenie: licznik „Powiadomimy 5 osób”", /Powiadomimy 5/.test(P().querySelector("[data-licznik-uczestnikow]").textContent),
+            P().querySelector("[data-licznik-uczestnikow]").textContent);
+          await kl(P().querySelector("[data-przelacznik-platne]"));
+          sprawdz("płatny czas pracy: koszt i „nie liczy się do obsady”",
+            !!P().querySelector("[data-koszt-wydarzenia]") && /nie liczy się do obsady/.test(P().querySelector("[data-koszt-wydarzenia]").textContent));
+          const przed = window.__zapisy.length;
+          await kl(zapisz(), 600);
+          const nowe = window.__zapisy.slice(przed);
+          const wyd = nowe.find((z) => z[0] === "wydarzenia");
+          sprawdz("zapis wydarzenia: lokal, dzień, godziny, płatne, kto",
+            !!wyd && wyd[1].lokal === "Ceglana" && wyd[1].godz_od === "15:00" && wyd[1].platne === true && wyd[1].utworzyl === "Roman" && wyd[1].stanowiska === null,
+            JSON.stringify(wyd && wyd[1]));
+          sprawdz("pięciu uczestników zapisanych (bez odznaczonej Doroty)",
+            nowe.filter((z) => z[0] === "wydarzenia_uczestnicy").map((z) => z[1].user_name).sort().join() === "Bo,Cezary,Ewa,Filip,Gosia");
+          const wiad = nowe.filter((z) => z[0] === "notifications");
+          sprawdz("pięć wiadomości „Nowe wydarzenie” z płatnym czasem pracy",
+            wiad.length === 5 && wiad.every((z) => z[1].type === "wydarzenie" && /^Nowe wydarzenie: Zebranie zespołu — .*płatny czas pracy/.test(z[1].message)),
+            JSON.stringify(wiad.map((z) => z[1].message)));
+          sprawdz("wiadomość niesie szczegóły do maila (Kiedy / Gdzie)", !!wiad[0] && wiad[0][1].dane && wiad[0][1].dane.wiersze[0].e === "Kiedy");
+          sprawdz("panel zamknięty po zapisie", !P());
+
+          await kl(G().querySelector('[data-widok-grafiku="tydzien"]'), 400);
+          const dzis = ymd(new Date());
+          const chip = () => G().querySelector(`[data-wydarzenia-dnia="${dzis}"] [data-chip-wydarzenia]`);
+          sprawdz("chip wydarzenia w nagłówku dzisiejszego dnia", !!chip() && /15:00/.test(chip().textContent));
+          sprawdz("pasek: „1 wydarzenie w tym tygodniu · 1 płatne”",
+            /1 wydarzenie w tym tygodniu/.test(G().querySelector("[data-pasek-wydarzen]").textContent) &&
+              /1 płatne/.test(G().querySelector("[data-pasek-wydarzen]").textContent),
+            G().querySelector("[data-pasek-wydarzen]").textContent);
+
+          await kl(chip(), 300);
+          sprawdz("chip otwiera edycję: tytuł w nagłówku, „Odwołaj wydarzenie”",
+            !!P() && /Zebranie zespołu/.test(P().querySelector("h3").textContent) && !!P().querySelector("[data-odwolaj-wydarzenie]"));
+          sprawdz("edycja: zapisani uczestnicy zaznaczeni, Dorota odznaczona",
+            !P().querySelector('[data-uczestnik="Dorota"] input').checked && P().querySelector('[data-uczestnik="Bo"] input').checked);
+          const plusDo = [...P().querySelectorAll('[aria-label="+15 min"]')][1];
+          await kl(plusDo);
+          const przed2 = window.__zapisy.length;
+          await kl(zapisz(), 600);
+          const zm = window.__zapisy.slice(przed2);
+          sprawdz("zmiana godziny końca → patch wydarzenia", zm.some((z) => z[0] === "wydarzenia" && z[2] && z[2].godz_do === "16:15"));
+          const wiad2 = zm.filter((z) => z[0] === "notifications");
+          sprawdz("pięć wiadomości „Zmiana w wydarzeniu” z „było → jest”",
+            wiad2.length === 5 && wiad2.every((z) => /^Zmiana w wydarzeniu: Zebranie zespołu — godziny: 15:00–16:00 → 15:00–16:15/.test(z[1].message)),
+            JSON.stringify(wiad2.map((z) => z[1].message)));
+          sprawdz("…bez dopisywania uczestników drugi raz", !zm.some((z) => z[0] === "wydarzenia_uczestnicy"));
+
+          await kl(chip(), 300);
+          await kl(P().querySelector("[data-odwolaj-wydarzenie]"));
+          sprawdz("odwołanie pyta w panelu: 5 osób dostanie wiadomość, płatny czas zniknie",
+            /5 osób dostanie wiadomość/.test(P().querySelector("[data-potwierdz-odwolanie]").textContent) &&
+              /płatny czas zniknie/.test(P().querySelector("[data-potwierdz-odwolanie]").textContent));
+          const przed3 = window.__zapisy.length;
+          await kl(P().querySelector("[data-odwolaj-tak]"), 600);
+          const od = window.__zapisy.slice(przed3);
+          sprawdz("odwołanie: odwolane_at + 5 × „Wydarzenie odwołane”",
+            od.some((z) => z[0] === "wydarzenia" && z[2] && z[2].odwolane_at) &&
+              od.filter((z) => z[0] === "notifications" && /^Wydarzenie odwołane:/.test(z[1].message)).length === 5);
+          sprawdz("odwołane znika z nagłówka dnia", !chip());
+          await kl(G().querySelector('[data-widok-grafiku="wydarzenia"]'), 300);
+          const wiersz = G().querySelector("[data-wiersz-wydarzenia]");
+          sprawdz("lista: odwołane zostaje, przekreślone, z plakietką", !!wiersz && /odwołane/.test(wiersz.textContent) && !!wiersz.querySelector(".line-through"));
+          await kl(wiersz, 300);
+          sprawdz("odwołane otwiera się tylko do odczytu", !!P() && !P().querySelector("[data-zapisz-wydarzenie]") && /Odwołane/.test(P().textContent));
+          await kl([...P().querySelectorAll("button")].find((b) => b.textContent.trim() === "Zamknij"));
+          await kl(G().querySelector('[data-widok-grafiku="tydzien"]'), 300);
+        }
+      } catch (e) {
+        sprawdz("Wydarzenia: przebieg bez wyjątku", false, e.message);
       }
 
       if (status.className !== "zle") {

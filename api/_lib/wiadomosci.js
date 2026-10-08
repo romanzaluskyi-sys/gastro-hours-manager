@@ -242,6 +242,36 @@ const opisz = (n, user, grafik, dzis) => {
       if (/zapisał\(a\) ją/.test(t)) return { ton: "ok", etykieta: "Koniec zmiany", tytul: "Koniec zmiany zapisany", lead: S.esc(t), cta: CTA.raport };
       if (/odrzucona/.test(t)) return { ton: "no", etykieta: "Koniec zmiany", tytul: "Zmiana bez końca odrzucona", lead: S.esc(t), cta: CTA.korekta };
       return { ton: "warn", ikona: "!", etykieta: "Zmiana bez zakończenia", tytul: "Twoja zmiana nie ma zakończenia", lead: S.esc(t), cta: CTA.korekta };
+    // Wydarzenia (0.74.0) — zdania z src/utils/wydarzenia.ts: „Nowe wydarzenie:”,
+    // „Zmiana w wydarzeniu:”, „Wydarzenie odwołane:”. Szczegóły (Kiedy / Gdzie
+    // albo było → jest) niesie `dane.wiersze`, opis — `dane.cytat`.
+    case "wydarzenie": {
+      const nazwa = t.replace(/^(Nowe wydarzenie|Zmiana w wydarzeniu|Wydarzenie odwołane): /, "").split(" — ")[0];
+      const opis = d.cytat ? S.akapit(`„${S.esc(d.cytat)}”`, { kursywa: true, margines: "0 0 18px 0" }) : null;
+      const cta = ["Zobacz w grafiku", "grafik"];
+      if (/^Wydarzenie odwołane/.test(t))
+        return {
+          ton: "no",
+          ikona: "×",
+          etykieta: "Wydarzenie odwołane",
+          tytul: `Odwołane: ${nazwa}`,
+          lead: "Nie musisz przychodzić. Twoje zmiany w grafiku zostają bez zmian.",
+          cta,
+        };
+      if (/^Zmiana w wydarzeniu/.test(t))
+        return { ton: "warn", ikona: "!", etykieta: "Zmiana w wydarzeniu", tytul: `Zmiana: ${nazwa}`, lead: S.esc(t), rozmowa: opis, cta };
+      return {
+        ton: /płatny czas pracy/.test(t) ? "ok" : "info",
+        ikona: "+",
+        etykieta: /płatny czas pracy/.test(t) ? "Wydarzenie · czas pracy" : "Nowe wydarzenie",
+        tytul: nazwa,
+        lead: /płatny czas pracy/.test(t)
+          ? "Płatny czas pracy — godziny są już w Twoim grafiku."
+          : "Informacja od kierownika — sprawdź szczegóły poniżej.",
+        rozmowa: opis,
+        cta,
+      };
+    }
     case "sanepid":
       return { ton: "warn", ikona: "!", etykieta: "Termin", tytul: "Termin książeczki sanepid", lead: S.esc(t), cta: CTA.aplikacja };
     case "umowa":

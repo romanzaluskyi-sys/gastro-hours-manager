@@ -1,7 +1,9 @@
 # Wydarzenia — specyfikacja (Roadmap p.3, plan z 2026-10-08)
 
-Stan: **W1 zrobione** (migracja `0043`, `src/utils/wydarzenia.ts`,
-`harness-wydarzenia.html`); makiety gotowe w design systemie. Decyzje właściciela z 2026-10-08 są oznaczone
+Stan: **W1 i W2 zrobione** — baza i logika (`0043`, `src/utils/wydarzenia.ts`)
+oraz Grafik kierownika: chip w nagłówku dnia, „+ wydarzenie” w Edycji, pasek
+nad siatką, panel (`WydarzeniePanel.tsx`), lista „Wydarzenia”
+(`GrafikWydarzenia.tsx`), miesiąc z drukiem, telefon, wiadomości i e-mail. Decyzje właściciela z 2026-10-08 są oznaczone
 „(właściciel)”. Makiety powstają w design systemie „Shiftro”
 (artefakt `TKUadpBcvVrENEiBrDZNfY`), nazwy ekranów niżej.
 
@@ -117,10 +119,31 @@ Tworzy, zmienia i odwołuje **tylko kierownik** (właściciel): `admin`,
 | Etap | Co | Wersja |
 |---|---|---|
 | W1 ✓ | migracja `0043`, `utils/wydarzenia.ts`, harness | — |
-| W2 | Grafik: panel, chip w dniu, lista; wiadomości + e-mail | 0.74.0 |
+| W2 ✓ | Grafik: panel, chip w dniu, lista; wiadomości + e-mail | 0.74.0 |
 | W3 | pracownik: Grafik, Pulpit, Wiadomości; tablet; Pulpit kierownika; Puls | 0.74.0 |
 | W4 | płatny czas pracy: godziny w siatce/budżecie/Raporcie, rozliczenie w „Do decyzji”, `shifts.wydarzenie_id` | 0.75.0 |
 | W5 | demo, CLAUDE.md, Przewodnik | z W3 i W4 |
+
+## Rzeczy, których nie widać (W2)
+
+- **Panel liczy uczestników z pól, ale pamięta ręczne decyzje**: lista =
+  kandydaci MINUS odznaczeni PLUS dopisani. Przy edycji punkt wyjścia to
+  zapisani uczestnicy (kogo nie było — odznaczony, kogo dopisano — dopisany).
+- **Wiadomości przy edycji**: nowi → „Nowe wydarzenie”, odznaczeni →
+  „Wydarzenie odwołane”, ci sami → „Zmiana w wydarzeniu” tylko z zaznaczonym
+  „Powiadom o zmianie” (domyślnie tak). Błąd wysłania NIE cofa zapisu —
+  ekran mówi, ile wiadomości nie wyszło.
+- **Polityka odczytu `wydarzenia` stoi na kolumnach wiersza**, nie na funkcji
+  z listą id — inaczej INSERT … RETURNING od kierownika lokalu odbijał się od
+  RLS (funkcja `stable` nie widzi wiersza wstawianego w tym samym poleceniu).
+- **Minione i odwołane otwierają się tylko do odczytu.** Odwołane znika z
+  siatki i z miesiąca, zostaje na liście (przekreślone).
+- **Wydarzenia w miesiącu**: czarna linijka nad zmianami (na papierze ramka,
+  bo tło nie zawsze się drukuje); w układzie „osoby × dni” romb pozycjonowany
+  absolutnie — nie rusza zmierzonych szerokości kolumn A4.
+- **Do 0.75.0 (W4) płatne wydarzenie nie dopisuje godzin** — po wdrożeniu W4
+  minione płatne pojawią się w „Do decyzji” same (`doRozliczenia` bierze
+  wszystkie nierozliczone).
 
 ## Świadomie NIE w pierwszej wersji
 

@@ -21,6 +21,7 @@ import {
   absenceOn,
 } from "../../utils/grafik";
 import { fetchDailyForecast } from "../../utils/weather";
+import { wydarzeniaNaDzien, godzinyTekst, calyDzien } from "../../utils/wydarzenia";
 
 const DNI_NAGLOWEK = ["PON", "WT", "ŚR", "CZW", "PT", "SOB", "ND"];
 
@@ -80,6 +81,8 @@ const PRINT_CSS = `
   #grafik-print .gp-cell { min-height: 0 !important; }
   #grafik-print .gp-day { font-size: 9pt; }
   #grafik-print .gp-entry { font-size: 6.5pt; }
+  /* Wydarzenie na papierze: czarne tło nie zawsze się drukuje, więc ramka. */
+  #grafik-print .gp-wyd { font-size: 6.5pt; background: none !important; color: #000 !important; border: 1px solid #000; }
   #grafik-print .gp-skrot { font-size: 6pt; padding: 0 2px; }
   .gp-noprint { display: none !important; }
 
@@ -121,6 +124,8 @@ export default function GrafikMiesiac({
   month,
   setMonth,
   onBackToWeek,
+  wydarzenia = [],
+  onOtworzWydarzenie,
 }) {
   const [forecast, setForecast] = useState({});
   // "kalendarz" — siedem kolumn, jak kartka na ścianę przy grafiku.
@@ -355,6 +360,21 @@ export default function GrafikMiesiac({
                       {pogoda && pogoda.temp != null ? `${Math.round(pogoda.temp)}°` : ""}
                     </span>
                   </div>
+                  {/* Wydarzenia dnia (0.74.0) — także na wydruku, nad zmianami. */}
+                  {wydarzeniaNaDzien(wydarzenia, lokal, d).map((w) => (
+                    <button
+                      key={w.id}
+                      type="button"
+                      onClick={() => onOtworzWydarzenie && onOtworzWydarzenie(w)}
+                      className="gp-wyd w-full text-left flex items-center gap-1 text-[11px] leading-tight font-bold bg-[#171714] text-white rounded px-1 mb-[2px] whitespace-nowrap overflow-hidden"
+                      title={`${w.tytul} · ${godzinyTekst(w)}`}
+                      data-wydarzenie-miesiaca={w.id}
+                    >
+                      <span className="flex-none">◆</span>
+                      {!calyDzien(w) && <span className="tabular-nums flex-none">{hmShort(w.godz_od)}</span>}
+                      <span className="truncate">{w.tytul}</span>
+                    </button>
+                  ))}
                   {wpisy.length > 0 && (
                     <div className="text-[10px] text-[#6E6E66] mb-0.5">
                       {stat.people} os. · {Math.round(stat.hours)} h
@@ -421,10 +441,16 @@ export default function GrafikMiesiac({
                     return (
                       <th
                         key={i}
-                        className={`border-[1px] border-[#171714] px-0 py-0.5 text-center ${
+                        className={`relative border-[1px] border-[#171714] px-0 py-0.5 text-center ${
                           weekend ? "bg-[#EDEDE8]" : "bg-white"
                         }`}
+                        title={d ? wydarzeniaNaDzien(wydarzenia, lokal, d).map((w) => `${w.tytul} · ${godzinyTekst(w)}`).join("\n") : ""}
                       >
+                        {/* Romb dnia z wydarzeniem — pozycjonowany, żeby nie
+                            ruszyć zmierzonych szerokości kolumn wydruku. */}
+                        {d && wydarzeniaNaDzien(wydarzenia, lokal, d).length > 0 && (
+                          <i className="absolute top-[2px] right-[2px] w-[5px] h-[5px] rotate-45 bg-[#171714]" />
+                        )}
                         <div className="go-dow text-[8px] font-bold text-[#6E6E66] leading-none">
                           {d ? DNI_NAGLOWEK[(dowOf(d) + 6) % 7] : ""}
                         </div>
