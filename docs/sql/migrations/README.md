@@ -23,6 +23,16 @@ Runner trzyma stan w tabeli `schema_migrations` i pilnuje sumy kontrolnej
 każdego zastosowanego pliku. Zmiana treści zastosowanej migracji zatrzymuje
 go z błędem, zamiast pozwolić dwóm bazom rozjechać się po cichu.
 
+⚠️ **Pusta baza (nowy klient) — sprawdzone pierwszy raz 2026-10-08.** `0001`–`0004`
+są odtworzone ze zrzutu produkcji, w którym były już kolumny dodawane potem
+przez `0005` (`users.allowed_stanowiska`) i `0009` (`lokale.dostepne_bloki`) —
+pierwsze uruchomienie na pustej bazie (demo) padło na `column already exists`.
+Oba pliki mają od tego dnia `add column if not exists`, a `migrate.py` zna ich
+stare sumy kontrolne (`POPRAWIONE_PO_FAKCIE`), więc bazy, w których już
+przeszły, dostają nową sumę zamiast alarmu. Cały łańcuch `0000`–`0041` przeszedł
+potem na czystym Postgresie 16 (role i schemat `auth` jak w Supabase).
+**Dokładając migrację, sprawdź ją też na PUSTEJ bazie**, nie tylko na produkcji.
+
 ## Dlaczego to powstało
 
 Do 2026-09 schemat zmieniało się wklejaniem SQL-a do Supabase SQL Editor.

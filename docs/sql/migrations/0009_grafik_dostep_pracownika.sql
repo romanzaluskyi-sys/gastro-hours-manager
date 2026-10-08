@@ -14,7 +14,9 @@
 -- NULL = wszystko dostępne (tak zachowują się wszystkie istniejące lokale,
 -- więc migracja niczego nikomu nie zabiera).
 
-alter table lokale add column dostepne_bloki text;
+-- ⚠️ `if not exists` dopisane 2026-10-08 — ten sam powód co w 0005: kolumna
+-- jest już w 0001 (zrzut produkcji), więc na pustej bazie migracja padała.
+alter table lokale add column if not exists dostepne_bloki text;
 
 -- weryfikacja
 select column_name, data_type

@@ -62,6 +62,20 @@ def zapytanie(ref, token, sql):
         raise SystemExit(1)
 
 
+# ⚠️ Jedyny wyjątek od zasady „zastosowanej migracji się nie edytuje”.
+# 0001–0004 odtworzono ze ZRZUTU produkcji (2026-09-07), w którym były już
+# kolumny dodawane potem przez 0005 i 0009 — więc pusta baza (pierwszy nowy
+# klient, 2026-10-08: demo) padała na `column ... already exists`. Te dwa pliki
+# dostały `add column if not exists`, co w bazach, gdzie już przeszły, niczego
+# nie zmienia. Tu stoją ich STARE sumy: baza, która je ma, dostaje po cichu
+# nową sumę zamiast alarmu o rozjeździe. Nie dopisuj tu nic bez takiego samego
+# uzasadnienia — każda inna zmiana zastosowanego pliku ma zatrzymać runner.
+POPRAWIONE_PO_FAKCIE = {
+    "0005_grafik_podstawy": {"86e2fa127789f412"},
+    "0009_grafik_dostep_pracownika": {"be36990c77c18ccc"},
+}
+
+
 def suma(sciezka):
     return hashlib.sha256(sciezka.read_bytes()).hexdigest()[:16]
 
@@ -119,12 +133,14 @@ def migruj(ref, token, wykonaj, do_numeru=None, oznacz=(), kto="migrate.py"):
             stan = {}
 
     tylko_oznacz = {n.zfill(4) for n in oznacz}
-    do_zrobienia, rozjazdy = [], []
+    do_zrobienia, rozjazdy, nowe_sumy = [], [], []
 
     for p in pliki:
         w, csum = p.stem, suma(p)
         if w in stan:
-            if stan[w] != csum:
+            if stan[w] in POPRAWIONE_PO_FAKCIE.get(w, ()):
+                nowe_sumy.append((w, csum))
+            elif stan[w] != csum:
                 rozjazdy.append(w)
             continue
         do_zrobienia.append((p, w, csum, p.name[:4] in tylko_oznacz))
@@ -136,6 +152,12 @@ def migruj(ref, token, wykonaj, do_numeru=None, oznacz=(), kto="migrate.py"):
         print("  Bazy klientów już się rozjechały albo zaraz się rozjadą.")
         print("  Nie edytuj zastosowanych plików — dopisz nową migrację.\n")
         sys.exit(1)
+
+    for w, csum in nowe_sumy:
+        print(f"  [nowa suma kontrolna] {w} — plik poprawiony po fakcie, treść "
+              "bez skutku dla tej bazy (patrz POPRAWIONE_PO_FAKCIE)")
+        if wykonaj:
+            zapisz_rejestr(ref, token, w, csum, kto)
 
     # ⚠️ Migracja bywa związana z KOLEJNOŚCIĄ wdrożenia i nie wolno jej puścić
     # razem z poprzednią: `0029` musiała pójść przed deployem 0.43.0, a `0030`

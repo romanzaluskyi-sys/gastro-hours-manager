@@ -1,7 +1,11 @@
 -- GRAFIK — migracja 1/3: rozszerzenia istniejących tabel + godziny otwarcia
 -- Wklej CAŁOŚĆ naraz, potem uruchom zapytanie weryfikujące na dole.
 
-alter table users add column allowed_stanowiska text;
+-- ⚠️ `if not exists` dopisane 2026-10-08: 0001 jest odtworzone ze ZRZUTU
+-- produkcji, w którym ta kolumna już była — na pustej bazie (nowy klient)
+-- zwykłe `add column` padało. W bazach, gdzie ta migracja już przeszła, nic
+-- się nie zmienia; starą sumę kontrolną zna migrate.py (POPRAWIONE_PO_FAKCIE).
+alter table users add column if not exists allowed_stanowiska text;
 
 create table lokale_godziny (
   id uuid primary key default gen_random_uuid(),
