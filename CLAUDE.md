@@ -545,6 +545,10 @@ api/                         — root-level, POZA src/ — funkcje Vercel Cron
                                  raport.js + raportMail.js (raport kierownika)
   email/
     ustawienia.js              — "Ustawienia powiadomień" z linku w mailu
+  zdrowie.js                   — stan wdrożenia za CRON_SECRET: wersja, brakujące
+                                 zmienne (same nazwy), czy front i crony patrzą
+                                 na tę samą bazę, liczba migracji, Brevo. Woła
+                                 go nowy-klient.py i klienci.py
   admin/
     ustaw-haslo.js             — zmiana PIN-u pracownika RAZEM z hasłem jego
                                  konta w Auth; wymaga SUPABASE_SERVICE_KEY,
@@ -562,6 +566,21 @@ docs/sql/migrations/          — migracje, stosowane przez scripts/migrate.py (
 docs/sql/tools/               — zapytania pomocnicze (zrzut schematu, weryfikacja Grafiku,
                                  ostatnie-bledy.sql — dziennik błędów aplikacji)
 scripts/migrate.py            — runner migracji, domyślnie SUCHY przebieg
+                                 (`--wszyscy` = każda baza z klienci.json)
+scripts/nowy-klient.py        — uruchomienie klienta jednym poleceniem (Supabase,
+                                 Vercel, domena, deploy, admin, sprawdzenie);
+                                 powtarzalne, SUCHY przebieg domyślnie — patrz
+                                 docs/NOWY-KLIENT.md
+scripts/klienci.py            — `lista` / `sprawdz` (zdrowie wszystkich klientów)
+scripts/import-klienta.py     — dane nowego klienta z arkusza (lokale, stanowiska,
+                                 pracownicy + konta, grafik, godziny, urlopy);
+                                 najpierw sprawdza wszystko, przy błędzie nie
+                                 zapisuje nic; powtarzalny. Szablon CSV:
+                                 docs/szablon-importu/
+scripts/shiftro_ops.py        — wspólne: rejestr klientów, API Supabase/Vercel
+klienci.json                  — rejestr klientów, POZA gitem (wzór:
+                                 klienci.example.json); bez sekretów —
+                                 CRON_SECRET czyta się z Vault bazy klienta
 scripts/sprawdz-dostep.py     — co widzi i co może zmienić ktoś, kto ma sam
                                  klucz z paczki; regresja Etapu 3c, NICZEGO
                                  nie zapisuje (zapis sprawdza PATCH-em w

@@ -7,6 +7,73 @@ odróżniającego klientów wpisać do kodu — to jest moment, w którym "drugi
 klient" zamienia się w "kopię repozytorium", a każda kolejna poprawka musi
 być wklejana ręcznie w obie kopie.
 
+## Szybka ścieżka — `scripts/nowy-klient.py`
+
+Od 0.71 całą techniczną część robi jeden skrypt. Sekcje 1–4 niżej opisują, co
+on robi pod spodem — czytaj je, gdy coś pójdzie nie tak, a nie jako listę do
+wyklikania.
+
+**Ręcznie, przed skryptem (≈15 min):**
+
+1. **Projekt Supabase** — Dashboard → New project, region **Frankfurt
+   (eu-central-1)**, organizacja płatna. To jest koszt, więc decyzja człowieka,
+   nie skryptu. Ref projektu to człon z `https://<REF>.supabase.co`.
+2. **Konto Brevo** klienta → zweryfikowany nadawca → API key. Można pominąć i
+   dołożyć później (skrypt wyłączy wtedy maile i powie o tym).
+3. **DPA podpisana** — patrz §6. Skrypt nie wpisuje danych pracowników, ale
+   zakłada konto właściciela, więc to jest ostatni moment.
+
+**Skrypt (≈5 min, z czego większość to build):**
+
+```bash
+export SUPABASE_PAT=sbp_...         # Supabase → Account → Access Tokens
+export VERCEL_TOKEN=...             # Vercel → Account Settings → Tokens
+export BREVO_API_KEY=xkeysib-...    # opcjonalnie
+
+python3 scripts/nowy-klient.py --klient sloneczna --nazwa "Słoneczna" \
+    --projekt <REF> --admin-imie "Anna Kowalska" --admin-email anna@sloneczna.pl
+# przeczytaj plan, potem to samo z --wykonaj
+```
+
+Kolejno: sprawdza projekt i region → pobiera klucze → **wyłącza samodzielną
+rejestrację w Auth** → migracje → CRON_SECRET do Vault + pg_cron dla maili →
+projekt Vercel `shiftro-<klient>` → 11 zmiennych na trzy środowiska → domena
+`<klient>.shiftro.pl` → deploy i czekanie na build → konto właściciela (PIN
+wypisany RAZ) → `/api/zdrowie` i sprawdzenie, czy paczka frontu patrzy na TĘ
+bazę → wpis do `klienci.json`.
+
+Każdy krok jest powtarzalny. Przerwany przebieg uruchamia się jeszcze raz tym
+samym poleceniem (po pierwszym razie wystarczy `--klient sloneczna --wykonaj`
+— reszta jest w rejestrze). Tak samo dokłada się Brevo po fakcie.
+
+⚠️ **Sekrety nie lądują na dysku.** CRON_SECRET żyje w Vault bazy klienta i w
+Vercelu — skrypt czyta go z Vault przy każdym przebiegu, więc druga próba nie
+wygeneruje nowego, rozjechanego z Vercelem. Klucze Supabase pobiera z API.
+
+⚠️ **Rejestracja z zewnątrz musi być wyłączona** (krok 3 skryptu). Domyślnie
+Supabase pozwala założyć konto każdemu, kto ma klucz publishable — czyli
+każdemu, kto otworzył stronę — a część polityk wpuszcza zapis z
+`with check (true)`. Konta zakłada u nas wyłącznie kierownik i
+`pierwszy-admin.py`, przez admin API, któremu to wyłączenie nie przeszkadza.
+
+**Ręcznie, po skrypcie:** DNS dla domeny, jeśli skrypt zgłosi, że czeka;
+przekazanie PIN-u właścicielowi; dane startowe w aplikacji (§5).
+
+### Rejestr klientów i wydania
+
+`klienci.json` (poza gitem, wzór w `klienci.example.json`) to lista wdrożeń:
+slug, nazwa, ref bazy, projekt Vercel, domena. Bez sekretów. Na nim stoją dwa
+polecenia, które w modelu silo zastępują pilnowanie N baz z pamięci:
+
+```bash
+python3 scripts/migrate.py --wszyscy               # plan migracji dla KAŻDEJ bazy
+python3 scripts/migrate.py --wszyscy --wykonaj     # (--do NR działa tak samo)
+python3 scripts/klienci.py sprawdz                 # wersja, migracje, zmienne, Brevo — wszyscy naraz
+```
+
+`klienci.py sprawdz` puść po każdym wydaniu: klient, u którego migracja nie
+weszła albo build się nie udał, wygląda z zewnątrz dokładnie jak działający.
+
 ## 1. Baza
 
 1. Nowy projekt w Supabase (region: Frankfurt — najbliżej Polski).
@@ -147,6 +214,70 @@ Auth). Na pustej bazie nie zrobi nic.
 
 ## 5. Dane startowe
 
+Dwie drogi: **import z arkusza** (klient ma już załogę, grafik i godziny w
+Excelu / Google Sheets — prawie zawsze) albo **ręcznie w aplikacji** (mały
+lokal zaczynający od zera). Po obu zostają kroki 4–5 z listy na końcu.
+
+### Import z arkusza — `scripts/import-klienta.py`
+
+Szablon: [`docs/szablon-importu/`](szablon-importu/) — sześć plików CSV z
+przykładowymi, spójnymi danymi (przechodzą import bez błędów). Najwygodniej:
+wgrać je jako zakładki jednego Arkusza Google, wypełnić z klientem, pobrać
+każdą zakładkę jako CSV (Plik → Pobierz → CSV) do jednego katalogu **poza
+repozytorium** (to dane osobowe).
+
+| Plik | Wymagany | Wiersz = | Kolumny |
+|---|---|---|---|
+| `lokale.csv` | tak | lokal | `nazwa`, `miasto` |
+| `stanowiska.csv` | tak | stanowisko w lokalu | `lokal`, `nazwa`, `skrot` |
+| `pracownicy.csv` | tak | osoba | `imie_nazwisko`, `rola`, `lokal`, `stanowisko`, `inne_stanowiska`, `email`, `telefon`, `typ_umowy`, `wymiar_etatu`, `wynagrodzenie`, `stawka`, `data_zatrudnienia`, `sanepid_do`, `umowa_do`, `pin_tabletu` |
+| `grafik.csv` | nie | osoba (kolumny = dni) **albo** zmiana | szeroki: `pracownik`, `lokal`, `stanowisko`, `2026-11-02`, `2026-11-03`… z „10-18”, „11-15/18-22”; długi: `data`, `pracownik`, `lokal`, `stanowisko`, `od`, `do` |
+| `godziny.csv` | nie | przepracowana zmiana | `data`, `pracownik`, `lokal`, `stanowisko`, `od`, `do` — albo samo `godzin` |
+| `urlopy.csv` | nie | okres | `pracownik`, `od_dnia`, `do_dnia`, `rodzaj` (urlop / niedostępność) |
+
+Zasady wypełniania (skrypt pilnuje każdej z nich i wskazuje wiersz):
+
+- **`imie_nazwisko` musi być unikalne.** Godziny, grafik i wiadomości wiążą
+  się z osobą PO IMIENIU — dwie „Kasie” to jedna osoba. Dopisz inicjał.
+- **`rola`**: `pracownik` (z tabletu, bez e-maila), `kierownik`, `tablet`,
+  `właściciel`. Trzy ostatnie logują się, więc muszą mieć e-mail; skrypt
+  zakłada im konto i losuje PIN. **Kierownik sieci** = `kierownik` z
+  `lokal` = `wszystkie`; kierownik jednego lokalu — z nazwą lokalu. Tablet —
+  jedno konto na urządzenie, z lokalem (albo kilkoma: `A; B`).
+- **Kilka wartości w jednej komórce oddziel średnikiem**: `Bar; Kelner`.
+- `lokal` i `stanowisko` w grafiku i godzinach mogą zostać puste — wtedy
+  biorą się z karty pracownika. Wypełnij, gdy ktoś pracował gdzie indziej.
+- `do` mniejsze niż `od` = zmiana przez północ (`16:00`–`0:30`).
+- `typ_umowy`: `umowa o pracę` (+ `wymiar_etatu` 1 / 0,75 / 0,5 i
+  `wynagrodzenie` miesięcznie ZA TEN wymiar) albo `zlecenie`/`b2b` (+
+  `stawka` zł/h). Bez tych liczb koszt tej osoby będzie „brak danych”.
+- `umowa_do` może być `bezterminowa`. Daty: `2026-10-01` albo `01.10.2026`.
+- `pin_tabletu` — 6 cyfr, opcjonalnie. Z e-mailem daje też logowanie z
+  prywatnego telefonu (tym samym PIN-em).
+- **`godziny.csv`: od początku bieżącego okresu rozliczeniowego**, nie z
+  całej historii. Norma i bilans liczą się per okres; starsze godziny niczego
+  nie zmienią, a każda jest okazją do pomyłki. Ewidencja z samą liczbą godzin
+  dostaje umowny start 9:00 (`--godziny-od`).
+- **Grafik importuje się jako OPUBLIKOWANY** (pracownicy widzą go od razu),
+  bez powiadomień — wiadomość „nowy grafik” do całej załogi w dniu startu
+  byłaby szumem.
+
+```bash
+python3 scripts/import-klienta.py --klient sloneczna ~/klienci/sloneczna/            # sprawdzenie
+python3 scripts/import-klienta.py --klient sloneczna ~/klienci/sloneczna/ --wykonaj  # zapis
+```
+
+Najpierw sprawdza WSZYSTKO i wypisuje każdy błąd jako `plik:wiersz`. Dopóki
+jest choć jeden błąd, nie zapisuje niczego. Powtarzalny: po poprawce w
+arkuszu drugi przebieg dopisuje tylko brakujące (lokal po nazwie, osoba po
+imieniu, zmiana po osobie+dniu+godzinie) i niczego nie zmienia w tym, co już
+jest. Właściciel założony wcześniej przez `nowy-klient.py` zostanie
+rozpoznany po imieniu i pominięty.
+
+PIN-y kont do logowania skrypt wypisuje RAZ, na końcu.
+
+### Ręcznie w aplikacji
+
 Zalogowany jako właściciel, w tej kolejności, bo każdy krok korzysta z
 poprzedniego:
 
@@ -157,9 +288,14 @@ poprzedniego:
 3. **Pracownicy** — reszta załogi. Kierownicy i tablety dostają e-mail + PIN
    i od razu konto do logowania; pracownicy obsługiwani z tabletu nie
    potrzebują ani jednego, ani drugiego.
-4. **Wymagania obsady** (Grafik → Konfiguracja) — bez nich kontrola obsady
+
+### Po obu drogach
+
+4. **Ustawienia lokali, których import nie zna** (Ustawienia → Lokale): dzień
+   wypłaty, okres rozliczeniowy, narzuty, sposób wpisu godzin.
+5. **Wymagania obsady** (Grafik → Konfiguracja) — bez nich kontrola obsady
    nie ma czego pilnować i każdy dzień wygląda na poprawny.
-5. **Szablony wpisów Pulsu** (Puls → Konfiguracja, sekcja "Szybki start") —
+6. **Szablony wpisów Pulsu** (Puls → Konfiguracja, sekcja "Szybki start") —
    sześć typowych wpisów HACCP, każdy dodawany jednym kliknięciem. Sekcja
    znika, gdy wszystkie są już dodane.
 

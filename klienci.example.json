@@ -1,0 +1,15 @@
+{
+  "vercel_team": "team_XXXXXXXXXXXXXXXXXXXXXXXX",
+  "repo": "romanzaluskyi-sys/gastro-hours-manager",
+  "klienci": [
+    {
+      "slug": "emka",
+      "nazwa": "Gastro Emka",
+      "supabase_ref": "abcdefghijklmnopqrst",
+      "vercel_nazwa": "gastro-hours-manager",
+      "vercel_projekt": "prj_XXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      "domena": "emka.shiftro.pl",
+      "dodano": "2026-08-26"
+    }
+  ]
+}
