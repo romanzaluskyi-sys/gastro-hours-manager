@@ -179,14 +179,25 @@ tym samym koncie demo.
 kolumnę generatora z migracjami i to, że w każdej kolejce „Do decyzji” czeka
 po jednej sprawie.
 
-## Logowanie i dostęp do danych — W TRAKCIE (Etap 3, od 0.41.0)
+## Logowanie i dostęp do danych — Etap 3 (0.41.0–0.70.3)
 
-⚠️ **Stan na dziś: wszystkie polityki RLS to `using (true)`, a PIN-y porównuje
-PRZEGLĄDARKA** po pobraniu całej tabeli `users`. Klucz publishable jedzie w
-paczce do każdego, kto otworzy stronę, więc każdy, kto zna adres, może odczytać
-i zapisać wszystko — stawki, daty urodzenia, PIN-y. Migracja `0025` NIE
-zmieniła tego; dołożyła tylko fundament. Nie opisuj tego systemu jako
-zabezpieczonego, dopóki Etap 3c nie jest zrobiony.
+**Stan od 0.70.3 (wszystkie migracje `0025`–`0041` w repo):** logowanie przez
+Supabase Auth, anonim nie widzi ŻADNYCH danych (poza zapisem do `app_errors`),
+dane lokalu, godziny, grafik i wiadomości zawężone do swojego lokalu i swoich
+ludzi, stawki i dane osobowe innych zakryte w `users_widok`, PIN-y sprawdza
+baza (`sprawdz_kiosk_pin`), zapis do `users` tylko dla kierownika. ⚠️ Czy dana
+baza klienta ma wszystkie migracje, mówi jej `schema_migrations`
+(`scripts/migrate.py`), nie ten plik.
+
+Do 0.41.0 było odwrotnie: wszystkie polityki RLS `using (true)`, a PIN-y
+porównywała PRZEGLĄDARKA po pobraniu całej tabeli `users` — każdy, kto znał
+adres, mógł odczytać i zapisać wszystko. Opis etapów i pułapek niżej zostaje,
+bo tłumaczy, dlaczego polityki wyglądają tak, a nie inaczej.
+
+**Co dalej NIE jest zamknięte:** wewnątrz lokalu wspólny tablet nie odróżnia,
+która osoba odbija (świadoma decyzja, niżej), a okna tolerancji wpisu godzin
+pilnuje przeglądarka — twardego zamka w bazie na to, KIEDY wolno wpisać
+godzinę, nie ma (patrz „Rejestracja godzin”).
 
 **Kto się faktycznie loguje** (29 aktywnych kont, pomiar z 2026-09-20):
 4 kierowników + 4 tablety (e-mail + 6-cyfrowy `pin`) i 4 pracowników z
@@ -745,10 +756,6 @@ src/
                                   stronę", zamontowany w App.tsx dla
                                   wszystkich ról, patrz "Wersjonowanie i
                                   CHANGELOG" niżej
-    TimeEntryForm.tsx          — wspólny formularz start/koniec zmiany (kiosk i self-tracking)
-    HoursReport.tsx            — raport miesięczny (zakładka "Raport")
-    IssueForm.tsx               — zakładka "Zgłoś"
-    NotificationsPanel.tsx      — zakładka "Wiadomości"/"Powiadomienia" (wspólna dla closed, open i managera)
     employeeSessionShared.tsx   — WSPÓLNE dla KioskDashboard.tsx i
                                   PersonalDashboard.tsx: `Shell` (nagłówek +
                                   tabbar) i `EmployeeSessionScreens`
@@ -763,19 +770,8 @@ src/
                                   employeeSessionShared.tsx bez ekranu
                                   wyboru/PIN-u (konto to już jedna
                                   konkretna osoba) — patrz niżej.
-    ClosedEmployeeDashboard.tsx — POPRZEDNIA wersja dashboardu osobistego,
-                                  zastąpiona przez PersonalDashboard.tsx w
-                                  App.tsx (już nierenderowana). Zostawiona
-                                  jako rollback, tak jak OpenDeviceDashboard.tsx.
     KioskDashboard.tsx          — dashboard "Tablet Służbowy" (kiosk),
                                   redesign z 2026-08-31 — patrz niżej
-    OpenDeviceDashboard.tsx     — POPRZEDNIA wersja dashboardu kiosku,
-                                  zastąpiona przez KioskDashboard.tsx w
-                                  App.tsx (już nierenderowana). Zostawiona
-                                  w repo świadomie jako łatwy rollback —
-                                  usuń dopiero po tym, jak nowy design
-                                  postoi w produkcji jakiś czas bez
-                                  problemów, nie od razu.
     ManagerDashboard.tsx        — redesign 2026-09-02 (patrz "Panel
                                   kierownika" niżej): host/orkiestrator —
                                   cały wspólny stan (editingUser/
@@ -784,10 +780,8 @@ src/
                                   handleSaveShiftEdit z trybem tworzenia,
                                   handleArchiveEntity...) i routing tab →
                                   komponent z manager/. Stare wersje
-                                  poszczególnych zakładek WCIĄŻ w tym pliku,
-                                  za `{false && tab === "..." && (...)}` —
-                                  celowo nieusunięte (żywa referencja przy
-                                  dalszych zmianach), NIE dodawaj tam kodu.
+                                  zakładek (`{false && ...}`) usunięte w
+                                  0.73.0 — zostały w historii gita.
     manager/                    — nowe komponenty zakładek Panelu
                                   Kierownika, po jednym pliku na zakładkę:
       designTokens.ts              wspólne kolory/klasy Tailwind (ten sam
@@ -797,8 +791,9 @@ src/
       ManagerShell.tsx              sidebar (desktop) / dolny pasek +
                                     "Więcej" (mobile) — patrz "Panel
                                     kierownika" niżej po szczegóły nawigacji
-      WBudowie.tsx                  wspólny placeholder dla zakładek bez
-                                    jeszcze własnej treści (obecnie: Grafik)
+      WBudowie.tsx                  siatka bezpieczeństwa dla klucza z
+                                    NAV_ITEMS bez własnego widoku (dziś
+                                    nieużywana — każda zakładka ma widok)
       ZadaniaISprzatanie.tsx        zakładka Zadania (0.56.0): "Dziś w
                                     lokalach", "Moje zadania", "Bloki i
                                     zadania" — patrz "Zadania — bloki i
@@ -869,7 +864,7 @@ zakładaj, że role to zamknięty zbiór z tej tabeli; sprawdź `select distinct
 role from users`, jeśli coś na tym zależy.
 
 Login: `Email konta` + `PIN` (6 cyfr). **Wyjątek: rola `open` loguje się
-e-mailem i swoim 4-cyfrowym `kiosk_pin`**, nie kolumną `pin` (której to
+e-mailem i swoim 6-cyfrowym `kiosk_pin`**, nie kolumną `pin` (której to
 konto w ogóle nie używa) — patrz `LoginScreen.tsx`. E-mail porównywany jest
 bez rozróżniania wielkości liter i bez spacji po obu stronach; pusty e-mail
 albo pusty PIN są odrzucane PRZED wyszukiwaniem (inaczej pusty e-mail
@@ -931,16 +926,13 @@ dashboardy przez wspólny komponent `EmployeeSessionScreens` w
   kiosku (`kiosk_pin`) się tu nie stosuje — to koncepcja czysto kioskowa,
   konto osobiste jest już chronione własnym Email+PIN przy logowaniu.
 
-Obie stare wersje (`OpenDeviceDashboard.tsx`, `ClosedEmployeeDashboard.tsx`
-— flat, 4-zakładkowy układ z `TimeEntryForm`/`HoursReport`/`IssueForm`/
-`NotificationsPanel`) zostały w repo jako rollback, ale App.tsx już ich
-nie renderuje.
+Stare wersje (`OpenDeviceDashboard.tsx`, `ClosedEmployeeDashboard.tsx` i ich
+klocki `TimeEntryForm`/`HoursReport`/`IssueForm`/`NotificationsPanel`) usunięte
+w 0.73.0 — są w historii gita.
 
 **Zmiana** (obie wersje): formularz startu z dwiema metodami — "tylko
-start" / cała zmiana naraz, dokładnie logika
-`TimeEntryForm.handleCreateShift`/`handleCloseShift` przepisana na nowy UI
-w `EmployeeSessionScreens` — NIE reużywa samego komponentu `TimeEntryForm`,
-bo ten renderuje własny picker pracownika, którego tu nie chcemy.
+start" / cała zmiana naraz — logika dawnego `TimeEntryForm`
+(`handleCreateShift`/`handleCloseShift`) przepisana w `EmployeeSessionScreens`.
 **Zadania**: placeholder "w budowie" — moduł Zadania z Roadmapy punkt 2
 jeszcze nie istnieje, świadomie NIE ma fałszywego, nieinteraktywnego
 checklisty. **Więcej**: opis tego akapitu jest historyczny (zakładki
@@ -974,8 +966,8 @@ razu wpuszcza go do jego sesji. Pełny opis: "Pracownik na próbę" niżej.
 ⚠️ **Ekran startowy — układ z makiety właściciela (0.58.0, KioskStartMobile /
 KioskStartTablet).** Przebudowa ekranów pracownika idzie BLOK PO BLOKU (prośba
 właściciela) — to był pierwszy; ostatni (Więcej) wszedł w 0.66.0 i od tej
-wersji wszystkie ekrany pracownika mają nowy wygląd (poza „Zamknięciem dnia”,
-które jest ekranem Pulsu). Rzeczy, których nie widać:
+wersji wszystkie ekrany pracownika mają nowy wygląd; „Zamknięcie dnia”
+(ekran Pulsu) doszło w 0.73.0 — patrz „Kierownik zmiany”. Rzeczy, których nie widać:
 - **Grupy liczą się z `stanDnia`** — tego samego, co liczniki nad listą: Na
   zmianie (`na_zmianie`), Dziś w grafiku (`oczekiwany`), Pozostali
   (`zakonczyl` + `wolne`). Pusta grupa się nie rysuje.
@@ -1159,10 +1151,9 @@ w jakiej właściciel je przysyłał w sesji projektowej. `ManagerDashboard.tsx`
 sam jest teraz tylko hostem: trzyma wspólny stan i handlery, renderuje
 `<ManagerShell>` (`manager/ManagerShell.tsx`) i wewnątrz niego routuje
 `tab` → właściwy komponent z `manager/`. Stare, sprzed-redesignu wersje
-poszczególnych zakładek WCIĄŻ są w tym pliku, każda za literalnym
-`{false && tab === "..." && (...)}` — celowo nieusunięte (żywa referencja
-do starej logiki, na wypadek gdyby coś trzeba było odtworzyć), NIE dopisuj
-tam nic i NIE usuwaj bez wyraźnej potrzeby.
+zakładek stały tu do 0.72.0 za `{false && tab === "..." && (...)}`; usunięte
+w 0.73.0 (razem ze starym Pulpitem godzin i filtrami Rejestru) — są w
+historii gita.
 
 **`ManagerShell.tsx`** — cała rama: na desktopie stały sidebar (lista
 zakładek z `NAV_ITEMS`, licznik nieprzeczytanych z `badges`, "Wersja
@@ -1350,9 +1341,8 @@ Informacje / Archiwum, filtr typu Wnioski / Zgłoszenia / System.
   informacja zwrotna dla osoby z tabletu — tablet nie widzi zgłoszeń problemów
   (RLS), więc i ich statusu.
 - Stare klucze `zgloszenia`/`powiadomienia` przekierowuje `setTab` w
-  ManagerDashboard (dzwonek → Skrzynka na Informacjach). `Zgloszenia.tsx`
-  i powiązany blok zostały w repo nieużywane — do usunięcia po okresie
-  próbnym, jak inne stare wersje.
+  ManagerDashboard (dzwonek → Skrzynka na Informacjach). Stary
+  `Zgloszenia.tsx` usunięty w 0.73.0.
 
 ⚠️ **Pracownicy — układ z makiety właściciela (0.52.0, PeopleDesktop /
 PeopleMobile).** Wszystkie pola karty zostały — zmieniła się kolejność,
@@ -1516,9 +1506,9 @@ zakładki Wiadomości pracownika. Nie twórz nowych funkcji ad-hoc do
 wysyłania powiadomień, wywołuj te dwie. ⚠️ Ta zakładka była chwilowo
 faktycznie zepsuta (2026-09-02, między redesignem shellu a jego naprawą)
 — stara treść trafiła za `{false && ...}` razem z resztą starych zakładek
-i nikt nie podpiął jej z powrotem od razu. Jeśli widzisz podobny wzorzec
-(`tab` bez odpowiadającego mu żywego bloku) w innej zakładce — to ten sam
-błąd, podłącz z powrotem tak jak tu.
+i nikt nie podpiął jej z powrotem od razu. Klucz z `NAV_ITEMS` bez żywego
+bloku pokazuje dziś `WBudowie` (spoza `TABY_Z_WLASNYM_WIDOKIEM`) — to sygnał
+tego samego błędu.
 
 **Codzienna weryfikacja terminów** — `api/cron/check-document-terms.js`
 (Vercel Cron, patrz sekcja "Cron" wyżej). Dla każdego aktywnego
@@ -1846,6 +1836,36 @@ wartość bez wyjaśnienia — dokładnie to, przed czym ta funkcja chroni.
 
 **Kierownik zmiany** — [`manager/PulsZmiany.tsx`](src/components/manager/PulsZmiany.tsx),
 wpięte w `employeeSessionShared.tsx` jako ekran `PULS` (wiersz w "Więcej").
+
+⚠️ **Układ z makiety właściciela (0.73.0, EmployeeCloseDayMobile /
+EmployeeCloseDayTablet).** Rzeczy, których nie widać:
+- **Ramę (Shell) podaje rodzic przez `rama(tresc, stopka)`** — ekran sam składa
+  treść i stopkę z „Zamknij dzień” (na telefonie nad dolnym paskiem, na
+  tablecie w prawym dolnym rogu). Pasek postępu przyklejony u góry (`sticky`
+  z ujemnym `top` = górny odstęp `main`).
+- **Utarg, paragony, chip „Coś nietypowego dziś?” i notatka zapisują się SAME,
+  kolejką** — ten sam mechanizm co w KartaDnia. Chipy to `obrot_powod`
+  (Impreza obok = `wydarzenie`, Mało ludzi = `personel`, `awaria` doszła do
+  POWODY_UTARGU w 0.73.0).
+- **Wpis dnia powstaje przyciskiem „Zapisz” przy wpisie**, nie przy każdym
+  dotknięciu − / + — zapis to nowy wiersz, a zmiana to poprawka z powodem.
+  Zapisanego wpisu pracownik nie zmienia.
+- **Payload wpisu ma dwa klucze spoza szablonu**: `_dzialanie` („Poza normą.
+  Co zrobiono?” — bez tego pomiaru poza normą nie da się zapisać) i `_brak`
+  („Dziś nie było dostawy”, tylko typ `dostawa`). `wartosciWpisu` i KartaDnia
+  je pokazują. Klucze z podkreśleniem nie zderzą się z polem (`slugKlucza` je
+  obcina).
+- **Wymagane pola wpisu: liczbowe i tak/nie; tekstowe („Uwagi”) tylko gdy nie
+  ma innych.** Kierownik w KartaDnia wymaga wszystkich nie-bool — świadoma
+  różnica.
+- **„Zamknij dzień” blokują: utarg, obowiązkowe wpisy i wpisane-niezapisane.**
+  Potem drugie pytanie. Po zamknięciu podsumowanie i „Wyślij poprawkę” (Zgłoś
+  problem z tekstem przez `zgTekstNaWejscie`, tylko z blokiem ZGLOS_PROBLEM).
+- **Zdarzenie: `ZdarzenieModal` z `prosty`** — chipy skutku, bez „Status” i
+  „Dowody”, „Przekaż kierownikowi” ustawia `status = eskalacja` i
+  `wymaga_prowadzenia` i wysyła wiadomość do kierownika lokalu. Zdjęcia z
+  makiety nie ma (brak miejsca na pliki).
+- `harness-kiosk.html` przechodzi cały przebieg (Cezary ma `puls_do` na dziś).
 Zamiast nowej roli — **prawo na czas**: `users.puls_do` to ostatni dzień, w
 którym ta osoba może zamknąć Puls swojego lokalu z Tabletu Służbowego
 (`mozeZamykacPuls`). Wygasa samo; uprawnień, które trzeba pamiętać odebrać,
@@ -1888,7 +1908,8 @@ odpadają. Zamiast tego dwa pliki w katalogu głównym, uruchamiane przez
   zakładek. Jedyny sprawdzian, który łapie props wstawiony do złego elementu
   (patrz błąd #16);
 - `harness-kiosk.html` — montuje `KioskDashboard` (Tablet Służbowy): ekran
-  wyboru osoby, blokada PIN-em, mini-konto po wybraniu. To jedyny ekran w
+  wyboru osoby, blokada PIN-em, mini-konto po wybraniu (od 0.73.0 także cały
+  przebieg „Zamknięcia dnia”). To jedyny ekran w
   aplikacji, którego nie da się obejrzeć przy biurku — stoi na sali i nikt na
   niego nie patrzy, dopóki nie przestanie działać;
 - `harness-login.html` — montuje sam `LoginScreen`. Ten ekran był wcześniej
@@ -2341,6 +2362,8 @@ zakresem — wymaga Grafiku, którego nie ma.
   ```
 - **shifts** — `id, user_name, user_id?, lokal, stanowisko, start_time
   (timestamptz), end_time (timestamptz | null), godzin, is_urlop, absence_id`.
+  ⚠️ Od migracji `0042` unikalny indeks `(user_id, start_time)` — patrz
+  „Duplikaty godzin i świeżość danych”.
   `id` to **uuid** (zweryfikowane bezpośrednio w Supabase 2026-09-02 —
   wcześniejsze wzmianki o `bigint` w tym pliku były błędne; nie ufaj typom
   kolumn opisanym tu bez świeżej weryfikacji przez
@@ -2505,9 +2528,10 @@ zakresem — wymaga Grafiku, którego nie ma.
   'pogoda'|'wydarzenie'|'akcja'|'personel'|'inne'), obrot_komentarz (text),
   cos_nadzwyczajnego (bool), notatka, handover, tagi (lista po przecinku),
   pogoda_temp (numeric), pogoda_kod (int), status ('otwarty'|'zamkniety'),
-  closed_by, closed_at, created_at`. ⚠️ **Jedyna w projekcie wymuszona
-  unikalność**: `(lokal, date)` — dwie karty na jeden dzień to dwa utargi i
-  fałszywy labour cost. Migracje `0010`, `0014`.
+  closed_by, closed_at, created_at`. ⚠️ **Wymuszona unikalność**
+  `(lokal, date)` — dwie karty na jeden dzień to dwa utargi i fałszywy labour
+  cost. Migracje `0010`, `0014`. (Od 0.73.0 także `shifts (user_id,
+  start_time)`, migracja `0042` — patrz „Duplikaty godzin”.)
 - **day_log_entries** — wpisy dnia: `id (uuid), lokal, date, day_log_id (text,
   luźne odwołanie), typ ('temperatura'|'dostawa'|'sprzatanie'|'incydent'|
   'inne'|'korekta'), template_key (text), payload (jsonb), recorded_by,
@@ -3159,10 +3183,18 @@ Naprawione dwiema warstwami: `shifts` w pollu co 45 s (okno 21 dni) i
 `znajdzKolizjeWBazie` pytające BAZY tuż przed zapisem.
 ⚠️ Te 45 s to NIE okno, w którym duplikat przejdzie — kontrola przy zapisie
 działa niezależnie od pollu. Zostaje tylko wyścig dwóch zapisów w tej samej
-chwili.
+chwili — i ten zamyka od 0.73.0 trzecia warstwa:
 
-Pełny opis, dane i propozycje (unikalny indeks `(user_id, start_time)`,
-`created_by` + osobna tożsamość urządzeń):
+⚠️ **Unikalny indeks `shifts_osoba_start_uniq` na `(user_id, start_time)`**
+(migracja `0042`). Drugi zapis tej samej zmiany dostaje od bazy `23505`, a
+`opisBledu` w `src/api/supabase.ts` zamienia to na „Ta zmiana jest już
+zapisana…”. Migracja kasuje dokładne kopie i PRZERYWA SIĘ z listą, gdy ta sama
+osoba ma dwie różne zmiany o tym samym starcie — wtedy zbędną usuwa człowiek i
+migrację puszcza się ponownie. Wiersze bez `user_id` nie są objęte.
+⚠️ Kontroli w aplikacji (`znajdzKolizjeWBazie`) NIE usuwaj — indeks łapie tylko
+TEN SAM start, a nakładające się godziny o różnych startach dalej łapie ona.
+
+Pełny opis, dane i propozycje (`created_by` + osobna tożsamość urządzeń):
 [`docs/DUPLIKATY-I-SWIEZOSC-DANYCH.md`](docs/DUPLIKATY-I-SWIEZOSC-DANYCH.md).
 
 ⚠️ **Ta sama klasa błędu wróciła 08.09.2026 z PANELU, nie z tabletu** (naprawione
