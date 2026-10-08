@@ -114,6 +114,20 @@ export const szablonyNaDzien = (templates, lokal, dateStr) => {
 export const pozaNorma = (szablon, payload) =>
   pozaNormaPola(polaSzablonu(szablon), payload);
 
+// Dwa klucze w payloadzie wpisu, które NIE są polami szablonu (0.73.0, ekran
+// zamknięcia dnia pracownika). Podkreślenie na początku jest bezpieczne:
+// `slugKlucza` obcina je z kluczy pól, więc kolizji z polem nie będzie.
+//   _dzialanie — „Poza normą. Co zrobiono?”, wymagane przy pomiarze poza normą;
+//   _brak      — „Dziś nie było dostawy”: wpis jest, wartości nie ma.
+export const KLUCZ_DZIALANIA = "_dzialanie";
+export const KLUCZ_BRAKU = "_brak";
+
+// Wartości wpisu w jednym wierszu („4°C”, „Makro / 3°C / —”, „nie było dziś”).
+export const wartosciWpisu = (pola, payload) =>
+  payload && payload[KLUCZ_BRAKU]
+    ? "nie było dziś"
+    : (pola || []).map((p) => wartoscPola(p, payload)).join(" / ");
+
 // --- SZABLONY WPISÓW ----------------------------------------------------
 
 // Gotowy zestaw startowy. Wpisanie sześciu pozycji ręcznie dla każdego lokalu
@@ -214,6 +228,8 @@ export const POWODY_UTARGU = [
   { key: "wydarzenie", label: "Wydarzenie / święto" },
   { key: "akcja", label: "Akcja, promocja" },
   { key: "personel", label: "Personel" },
+  // 0.73.0: chip „Awaria” z ekranu zamknięcia dnia na tablecie.
+  { key: "awaria", label: "Awaria" },
   { key: "inne", label: "Inne" },
 ];
 

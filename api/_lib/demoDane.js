@@ -328,6 +328,8 @@ const generuj = ({ dzis = C.ymd(), teraz = new Date() } = {}) => {
       // Prywatny telefon: e-mail + kiosk_pin. Ten sam PIN blokuje jego profil na tablecie.
       w.email = konto("telefon").email;
       w.kiosk_pin = K.PIN;
+      // Może dziś zamknąć Puls (0.73.0) — „Więcej → Zamknięcie dnia” na telefonie.
+      w.puls_do = dzis;
     }
     if (p.rola === "manager_lokalu") w.pin = "";
     T.users.push(w);

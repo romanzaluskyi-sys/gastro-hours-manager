@@ -23,6 +23,15 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.73.0",
+    date: "2026-10-08",
+    items: [
+      "Nowy wygląd „Zamknięcia dnia” na tablecie i telefonie: postęp, utarg, wpisy w miejscu z − / +, przycisk mówi, czego brakuje.",
+      "Pomiar poza normą wymaga odpowiedzi „Co zrobiono?” — widać ją w karcie dnia.",
+      "„Dziś nie było dostawy” i „Przekaż kierownikowi” przy zdarzeniu.",
+    ],
+  },
+  {
     version: "0.72.0",
     date: "2026-10-08",
     items: [

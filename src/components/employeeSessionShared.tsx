@@ -5142,28 +5142,57 @@ export const EmployeeSessionScreens = ({
   // ==========================================
   // EKRAN: WIADOMOSCI
   // ==========================================
+  // Zamknięcie dnia — układ z makiety (0.73.0, EmployeeCloseDayMobile /
+  // EmployeeCloseDayTablet). PulsZmiany sam składa treść i stopkę z
+  // przyciskiem „Zamknij dzień”, a rama (Shell) zostaje tutaj — ta sama co na
+  // pozostałych ekranach.
   if (screen === "PULS") {
+    const lokalPulsu = effectiveAssignment.lokal;
+    // Chipy „Kto brał udział” w zdarzeniu: kto dziś odbił zmianę w tym lokalu.
+    const osobyNaZmianie = [
+      ...new Set(
+        (shifts || [])
+          .filter((sh) => sh.lokal === lokalPulsu && !sh.is_urlop && toLocalYMD(sh.start_time) === todayStr)
+          .map((sh) => sh.user_name)
+          .filter(Boolean)
+      ),
+    ];
     return (
-      <Shell
-        screen={screen}
-        setScreen={setScreen}
-        onBack={onBack}
-        unreadCount={unreadCount}
-        taskBadgeCount={taskBadgeCount}
-        grafikBadgeCount={grafikBadgeCount}
-        bloki={bloki}
-        personName={onBack ? employee.name : null}
-        title="Zamknięcie dnia"
-      >
-        <div className="p-3">
-          <PulsZmiany
-            currentUser={employee}
-            lokal={effectiveAssignment.lokal}
-            showMsg={showMsg}
-            onBack={() => setScreen("WIECEJ")}
-          />
-        </div>
-      </Shell>
+      <PulsZmiany
+        currentUser={employee}
+        lokal={lokalPulsu}
+        showMsg={showMsg}
+        osobyNaZmianie={osobyNaZmianie}
+        onPoprawka={
+          bloki.includes("ZGLOS_PROBLEM")
+            ? (tekst) => {
+                zgTypNaWejscie.current = "problem";
+                zgTekstNaWejscie.current = tekst;
+                setZgPrefillShiftId(null);
+                setScreen("ZGLOS");
+              }
+            : null
+        }
+        onWroc={onBack ? { label: "Wróć do listy osób", onClick: onBack } : { label: "Wróć do Pulpitu", onClick: () => setScreen("PULPIT") }}
+        rama={(tresc, stopka) => (
+          <Shell
+            screen={screen}
+            setScreen={setScreen}
+            onBack={onBack}
+            unreadCount={unreadCount}
+            taskBadgeCount={taskBadgeCount}
+            grafikBadgeCount={grafikBadgeCount}
+            bloki={bloki}
+            personName={onBack ? employee.name : null}
+            title="Zamknięcie dnia"
+            imieNadTytulem
+            nowyWyglad
+            footer={stopka}
+          >
+            {tresc}
+          </Shell>
+        )}
+      />
     );
   }
 

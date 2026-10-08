@@ -137,14 +137,20 @@ export function Pole({ etykieta, children, podpowiedz }) {
 
 // Panel z boku (na telefonie arkusz od dołu) — ten sam kształt co w Grafiku
 // i Zadaniach.
-export function PanelBoczny({ tytul, podtytul, onClose, stopka, children, id }) {
+// `srodek` — od `md` okno na środku zamiast panelu przy prawej krawędzi
+// (ekran zamknięcia dnia na Tablecie Służbowym, makieta EmployeeCloseDayTablet).
+export function PanelBoczny({ tytul, podtytul, onClose, stopka, children, id, srodek = false }) {
   return (
     <>
       <div className="fixed inset-0 bg-black/40 z-50" onClick={onClose} />
       <aside
         role="dialog"
         aria-label={tytul}
-        className="fixed z-50 bg-white flex flex-col inset-x-0 bottom-0 top-12 rounded-t-2xl border-t-[2px] md:inset-y-0 md:right-0 md:left-auto md:top-0 md:w-[560px] md:rounded-none md:border-t-0 md:border-l-[2px] border-[#171714]"
+        className={`fixed z-50 bg-white flex flex-col inset-x-0 bottom-0 top-12 rounded-t-2xl border-t-[2px] border-[#171714] ${
+          srodek
+            ? "md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-[640px] md:max-h-[86vh] md:rounded-2xl md:border-[2px] md:overflow-hidden"
+            : "md:inset-y-0 md:right-0 md:left-auto md:top-0 md:w-[560px] md:rounded-none md:border-t-0 md:border-l-[2px]"
+        }`}
         data-panel-boczny={id}
       >
         <div className="flex items-start gap-3 px-4 md:px-5 py-4 border-b-[2px] border-[#171714]">

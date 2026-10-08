@@ -11,8 +11,12 @@
 // zdarzenia, a formularz, którego nie da się zamknąć bez kompletu, kończy tak
 // samo jak poprzedni — pusty.
 //
-// ⚠️ Używa go też ekran kierownika zmiany na Tablecie (PulsZmiany.tsx) —
+// ⚠️ Używa go też ekran zamknięcia dnia na Tablecie (PulsZmiany.tsx) —
 // kształt onSave("incydent", null, payload) i pola payloadu się nie zmieniają.
+// Tam idzie z `prosty` (0.73.0, makieta EmployeeCloseDayMobile): skutek
+// finansowy chipami, bez „Status” i „Dowody”, a przełącznik prowadzenia to
+// „Przekaż kierownikowi” — ustawia OBA pola (status „eskalacja” i
+// wymaga_prowadzenia), bo osoba z sali nie rozróżnia tych dwóch rzeczy.
 import React, { useState } from "react";
 import { Check } from "lucide-react";
 import { KATEGORIE_ZDARZENIA } from "../../utils/dziennik";
@@ -26,7 +30,7 @@ const TYPY_WPLYWU = [
 ];
 const MIEJSCA = ["sala", "kuchnia", "zaplecze", "na zewnątrz"];
 
-export default function ZdarzenieModal({ dateStr, osobyNaZmianie = [], onClose, onSave }) {
+export default function ZdarzenieModal({ dateStr, osobyNaZmianie = [], onClose, onSave, prosty = false }) {
   const [f, setF] = useState({
     kategoria: "",
     czas: "",
@@ -67,6 +71,7 @@ export default function ZdarzenieModal({ dateStr, osobyNaZmianie = [], onClose, 
   return (
     <PanelBoczny
       id="zdarzenie"
+      srodek={prosty}
       tytul="Zgłoś zdarzenie"
       podtytul={`${dateStr.split("-").reverse().join(".")} · zapisuje się osobno, nie blokuje zamknięcia dnia`}
       onClose={onClose}
@@ -82,7 +87,7 @@ export default function ZdarzenieModal({ dateStr, osobyNaZmianie = [], onClose, 
         </>
       }
     >
-      <Pole etykieta="Kategoria">
+      <Pole etykieta={prosty ? "Co się stało" : "Kategoria"}>
         <div className="flex gap-1.5 flex-wrap">
           {KATEGORIE_ZDARZENIA.map((k) => (
             <Chip key={k.key} wlaczony={f.kategoria === k.key} onClick={() => ustaw("kategoria", k.key)} data-kategoria-zdarzenia={k.key}>
@@ -122,10 +127,10 @@ export default function ZdarzenieModal({ dateStr, osobyNaZmianie = [], onClose, 
         )}
         <input className={inputCls} placeholder="gość, np. „gość przy stoliku 4”" value={f.gosc} onChange={(e) => ustaw("gosc", e.target.value)} />
       </Pole>
-      <Pole etykieta="Co się wydarzyło">
+      <Pole etykieta={prosty ? "Opis" : "Co się wydarzyło"}>
         <textarea className={`${inputCls} h-24 py-2`} value={f.opis} onChange={(e) => ustaw("opis", e.target.value)} data-opis-zdarzenia />
       </Pole>
-      <Pole etykieta="Co zrobiono na miejscu">
+      <Pole etykieta={prosty ? "Co zrobiono na miejscu · opcjonalnie" : "Co zrobiono na miejscu"}>
         <input
           className={inputCls}
           placeholder="przeprosiny, wymiana dania, wezwanie serwisu"
@@ -133,6 +138,34 @@ export default function ZdarzenieModal({ dateStr, osobyNaZmianie = [], onClose, 
           onChange={(e) => ustaw("dzialania", e.target.value)}
         />
       </Pole>
+      {prosty ? (
+        <Pole etykieta="Skutek finansowy">
+          <div className="flex gap-1.5 flex-wrap">
+            {TYPY_WPLYWU.map((w) => (
+              <Chip
+                key={w.key || "brak"}
+                wlaczony={f.wplyw_typ === w.key}
+                onClick={() => setF((x) => ({ ...x, wplyw_typ: w.key, wplyw_kwota: w.key ? x.wplyw_kwota : "" }))}
+              >
+                {w.label}
+              </Chip>
+            ))}
+          </div>
+          {f.wplyw_typ && (
+            <div className="relative w-[160px]">
+              <input
+                className={`${inputCls} pr-10 tabular-nums`}
+                inputMode="decimal"
+                placeholder="kwota"
+                value={f.wplyw_kwota}
+                onChange={(e) => ustaw("wplyw_kwota", e.target.value)}
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6E6E66] font-bold pointer-events-none">zł</span>
+            </div>
+          )}
+        </Pole>
+      ) : (
+      <>
       <div className="grid grid-cols-1 sm:grid-cols-[1fr_140px] gap-4">
         <Pole etykieta="Skutek finansowy">
           <select className={`${inputCls} font-semibold`} value={f.wplyw_typ} onChange={(e) => ustaw("wplyw_typ", e.target.value)}>
@@ -171,6 +204,38 @@ export default function ZdarzenieModal({ dateStr, osobyNaZmianie = [], onClose, 
           <input className={inputCls} placeholder="nr nagrania, zdjęcie, link" value={f.dowod} onChange={(e) => ustaw("dowod", e.target.value)} />
         </Pole>
       </div>
+      </>
+      )}
+      {prosty ? (
+        <button
+          type="button"
+          onClick={() =>
+            setF((x) => ({
+              ...x,
+              wymaga_prowadzenia: !x.wymaga_prowadzenia,
+              status: x.wymaga_prowadzenia ? "zamkniete" : "eskalacja",
+            }))
+          }
+          className={`flex items-start gap-3 text-left rounded-xl border-[2px] px-3.5 py-3 ${
+            f.wymaga_prowadzenia ? "border-[#171714] bg-[#F6F5F1]" : "border-[#DEDCD4] bg-white"
+          }`}
+          data-przekaz-kierownikowi
+        >
+          <span
+            className={`mt-0.5 w-6 h-6 rounded-md border-[2px] border-[#171714] grid place-items-center flex-shrink-0 ${
+              f.wymaga_prowadzenia ? "bg-[#171714] text-white" : "bg-white"
+            }`}
+          >
+            {f.wymaga_prowadzenia && <Check size={15} strokeWidth={3} />}
+          </span>
+          <span>
+            <b className="block text-[15px]">Przekaż kierownikowi</b>
+            <span className={podpowiedzCls}>
+              dostanie wiadomość i sprawa trafi do jego zadań; bez tego zgłoszenie jest zamknięte na miejscu
+            </span>
+          </span>
+        </button>
+      ) : (
       <button
         type="button"
         onClick={() => ustaw("wymaga_prowadzenia", !f.wymaga_prowadzenia)}
@@ -190,6 +255,7 @@ export default function ZdarzenieModal({ dateStr, osobyNaZmianie = [], onClose, 
         </span>
         Wymaga dalszego prowadzenia — w panelu trafi do Moich zadań
       </button>
+      )}
     </PanelBoczny>
   );
 }

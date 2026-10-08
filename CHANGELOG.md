@@ -5,6 +5,23 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.73.0 — 2026-10-08
+
+- **Nowy wygląd „Zamknięcia dnia” na tablecie i telefonie** (dla osoby, która
+  ma dziś prawo zamknąć Puls). U góry pasek „Zostało N z M”, potem utarg
+  dużym polem, „Coś nietypowego dziś?” jednym dotknięciem (pogoda, impreza
+  obok, awaria, mało ludzi), wpisy dnia pogrupowane i wpisywane w miejscu —
+  temperatura przyciskami − / + z normą obok, bez osobnego okienka.
+- **Pomiar poza normą wymaga odpowiedzi „Co zrobiono?”** — kierownik widzi ją
+  przy wpisie w karcie dnia.
+- **„Dziś nie było dostawy”** — dzień bez dostawy da się zamknąć bez wymyślania
+  wartości.
+- Przycisk **„Zamknij dzień”** stoi zawsze na dole i mówi, czego brakuje;
+  wpisane, a niezapisane pomiary też blokują zamknięcie. Po zamknięciu —
+  podsumowanie i „Wyślij poprawkę” do kierownika.
+- Zgłoszenie zdarzenia z tabletu jest krótsze, a **„Przekaż kierownikowi”**
+  wysyła mu od razu wiadomość.
+
 ## 0.72.0 — 2026-10-08
 
 - **Wersja demonstracyjna pod demo.shiftro.pl** — dla klientów, którzy chcą

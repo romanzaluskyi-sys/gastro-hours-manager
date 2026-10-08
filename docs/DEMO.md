@@ -95,7 +95,8 @@ się od dzisiejszej daty, więc demo zawsze wygląda „na żywo”.
 - **Zadania**: pięć bloków na lokal, ostatni tydzień prawie cały odhaczony,
   dziś rano w Bistro zrobione otwarcie.
 - **Telefon (Marek)**: dzisiaj 16:00–22:00 do odbicia, nieprzeczytana
-  wiadomość o grafiku, zmiana Julii na giełdzie do wzięcia.
+  wiadomość o grafiku, zmiana Julii na giełdzie do wzięcia, a w „Więcej”
+  — „Zamknięcie dnia” Bistro (ma na dziś prawo `puls_do`).
 - **Tablet**: profil Marka chroni PIN (ten sam co na ekranie wejścia) —
   pokazuje blokadę profilu.
 

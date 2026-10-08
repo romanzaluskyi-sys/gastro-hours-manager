@@ -36,7 +36,7 @@ const pokazBlad = (e) => {
 window.addEventListener("error", (ev) => pokazBlad(ev.error || ev.message));
 window.addEventListener("unhandledrejection", (ev) => pokazBlad(ev.reason));
 
-const IKONY = ["Sparkles", "Tag", "Truck", "Activity", "Repeat", "Coins", "Smartphone", "PieChart", "Search", "EyeOff", "Star", "Tablet", "Inbox", "Square", "Phone", "AlertCircle", "AlertTriangle", "Archive", "ArchiveRestore", "ArrowLeft", "ArrowLeftRight", "ArrowRight", "BarChart3", "Bell", "BookOpen", "Briefcase", "Calendar", "CalendarCheck", "CalendarDays", "CalendarRange", "Check", "CheckCircle", "CheckCircle2", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "ClipboardCheck", "ClipboardList", "ClipboardPlus", "Clock", "Cloud", "Construction", "Copy", "CopyPlus", "Delete", "Download", "Edit2", "Eye", "FileText", "Flag", "HelpCircle", "History", "Home", "Hourglass", "Info", "ListChecks", "Lock", "LogIn", "LogOut", "Mail", "MapPin", "MoreHorizontal", "Palmtree", "Pencil", "Plus", "Printer", "RefreshCw", "RotateCcw", "Save", "Send", "Settings", "SlidersHorizontal", "Thermometer", "Trash2", "User", "UserPlus", "Users", "Wallet", "WifiOff", "X"];
+const IKONY = ["Sparkles", "Tag", "Truck", "Activity", "Repeat", "Coins", "Smartphone", "PieChart", "Search", "EyeOff", "Star", "Tablet", "Inbox", "Square", "Phone", "AlertCircle", "AlertTriangle", "Archive", "ArchiveRestore", "ArrowLeft", "ArrowLeftRight", "ArrowRight", "BarChart3", "Bell", "BookOpen", "Briefcase", "Calendar", "CalendarCheck", "CalendarDays", "CalendarRange", "Check", "CheckCircle", "CheckCircle2", "ChevronDown", "ChevronLeft", "ChevronRight", "ChevronUp", "ClipboardCheck", "ClipboardList", "ClipboardPlus", "Clock", "Cloud", "Construction", "Copy", "CopyPlus", "Delete", "Download", "Edit2", "Eye", "FileText", "Flag", "HelpCircle", "History", "Home", "Hourglass", "Info", "ListChecks", "Lock", "LogIn", "LogOut", "Mail", "MapPin", "MoreHorizontal", "Palmtree", "Pencil", "Plus", "Printer", "RefreshCw", "RotateCcw", "Save", "Send", "Settings", "SlidersHorizontal", "Thermometer", "Trash2", "User", "UserPlus", "Users", "Wallet", "WifiOff", "X", "Minus", "StickyNote"];
 const stub = (kod) => URL.createObjectURL(new Blob([kod], { type: "text/javascript" }));
 
 // Atrapa Supabase — nic nie leci do sieci, każdy zapis wraca z wymyślonym id.
@@ -293,7 +293,9 @@ const poprzedniMiesiac = (h) => {
         { id: "u2", name: "Bo", role: "open", active: true, archived: false,
           default_lokal: "Ceglana", default_stanowisko: "Kucharz" },
         // Kucharz wolny w dniu zmiany Bo — jedyny kandydat przy "oddaj".
+        // Ma dziś prawo zamknąć Puls (puls_do) — ekran „Zamknięcie dnia” (0.73.0).
         { id: "u3", name: "Cezary", role: "open", active: true, archived: false,
+          puls_do: (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })(),
           default_lokal: "Ceglana", default_stanowisko: "Kucharz" },
         // Z PIN-em blokady — po kliknięciu ma wyjść klawiatura, nie konto.
         // Pracuje tego samego dnia co Bo: przy "oddaj" jej nie ma, przy
@@ -974,6 +976,127 @@ const poprzedniMiesiac = (h) => {
         await klikPrzycisk("Nie, zostaw zalogowany");
         sprawdz("„Nie, zostaw zalogowany” zamyka pytanie i zostawia sesję",
           !document.querySelector("#app [data-pytanie-wyloguj]") && !!wiecej("zglos"));
+
+        // --- Zamknięcie dnia (0.73.0, EmployeeCloseDayMobile/Tablet) ---
+        // Trzy wpisy: lodówka (norma 0–5 °C, obowiązkowa), dostawa i sprzątanie.
+        window.__tabele.day_log_templates = [
+          { id: "t1", lokal: "Ceglana", klucz: "lodowka", nazwa: "Lodówka kuchnia", typ: "temperatura", kolejnosc: 0,
+            pola: [{ klucz: "temperatura", label: "Temperatura", typ: "number", jednostka: "°C", min: 0, max: 5 }] },
+          { id: "t2", lokal: "Ceglana", klucz: "dostawa", nazwa: "Przyjęcie dostawy", typ: "dostawa", kolejnosc: 1,
+            pola: [{ klucz: "dostawca", label: "Dostawca", typ: "text" },
+                   { klucz: "temperatura", label: "Temperatura towaru", typ: "number", jednostka: "°C", max: 4 }] },
+          { id: "t3", lokal: "Ceglana", klucz: "sprzatanie_koncowe", nazwa: "Sprzątanie końcowe", typ: "sprzatanie", kolejnosc: 2,
+            pola: [{ klucz: "wykonane", label: "Wykonane", typ: "bool" }, { klucz: "uwagi", label: "Uwagi", typ: "text" }] },
+          { id: "t4", lokal: "Bułka i Jacek", klucz: "obca", nazwa: "Cudzy lokal", typ: "inne", pola: [] },
+        ];
+        sprawdz("Więcej: wiersz „Zamknięcie dnia” przy prawie puls_do", !!wiecej("puls"));
+        wiecej("puls").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(400);
+        const zd = (sel) => document.querySelector("#app " + sel);
+        const wpisDnia = (k) => zd(`[data-wpis-dnia="${k}"]`);
+        const wTym = (el, sel) => el && el.querySelector(sel);
+        const wpiszTekst = (el, v) => {
+          const proto = el.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+          Object.getOwnPropertyDescriptor(proto, "value").set.call(el, v);
+          el.dispatchEvent(new Event("input", { bubbles: true }));
+        };
+        const opusc = (el) => el.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+        const kliknij = async (el) => { el.dispatchEvent(new MouseEvent("click", { bubbles: true })); await czekaj(250); };
+        sprawdz("nagłówek: „Zamknięcie dnia”, bez drugiego tytułu i „Wróć” w treści",
+          /Zamknięcie dnia/.test((zd("header") || {}).textContent || "") && ![...document.querySelectorAll("#app main button")].some((b) => b.textContent.trim() === "Wróć"));
+        sprawdz("trzy wpisy swojego lokalu, cudzy pominięty",
+          !!wpisDnia("lodowka") && !!wpisDnia("dostawa") && !!wpisDnia("sprzatanie_koncowe") && !wpisDnia("obca"));
+        sprawdz("pasek postępu: „Zostało 4 z 4”", /Zostało 4 z 4/.test((zd("[data-postep-zamkniecia]") || {}).textContent || ""));
+        const przyciskZamknij = () => zd("[data-zamknij-dzien]");
+        sprawdz("„Zamknij dzień” nieaktywny i mówi, czego brakuje",
+          przyciskZamknij().disabled && /brakuje: utarg, 3 wpisy/.test(przyciskZamknij().textContent),
+          przyciskZamknij().textContent);
+
+        wpiszTekst(zd("[data-pole-utarg]"), "4 800");
+        opusc(zd("[data-pole-utarg]"));
+        await czekaj(300);
+        const karta = (window.__tabele.day_logs || [])[0];
+        sprawdz("utarg zapisuje się sam po opuszczeniu pola (karta założona)", karta && karta.obrot === 4800, JSON.stringify(karta));
+        await kliknij(zd('[data-nietypowe="awaria"]'));
+        await czekaj(200);
+        sprawdz("chip „Awaria” zapisuje powód od razu", (window.__tabele.day_logs || [])[0].obrot_powod === "awaria");
+        sprawdz("po chipie pole „Co konkretnie?”", !!document.querySelector('#app input[placeholder^="Co konkretnie"]'));
+
+        await kliknij(wTym(wpisDnia("lodowka"), '[aria-label="więcej"]'));
+        sprawdz("+ przy pustym polu startuje od środka normy (3) i mówi „w normie”",
+          wTym(wpisDnia("lodowka"), "input").value === "3" && /w normie/.test(wpisDnia("lodowka").textContent));
+        wpiszTekst(wTym(wpisDnia("lodowka"), "input"), "7,5");
+        await czekaj(200);
+        sprawdz("7,5 °C poza normą: pomarańczowa karta i „Co zrobiono?”, zapis zablokowany",
+          wpisDnia("lodowka").dataset.stan === "zly" && !!wTym(wpisDnia("lodowka"), "[data-co-zrobiono]") &&
+          wTym(wpisDnia("lodowka"), "[data-zapisz-wpis]").disabled);
+        wpiszTekst(wTym(wpisDnia("lodowka"), "[data-co-zrobiono]"), "drzwi były otwarte, towar przeniesiony");
+        await czekaj(200);
+        await kliknij(wTym(wpisDnia("lodowka"), "[data-zapisz-wpis]"));
+        await czekaj(300);
+        const wpisLodowki = (window.__tabele.day_log_entries || []).find((w) => w.template_key === "lodowka");
+        sprawdz("wpis lodówki: liczba z kropką i opis działania w payloadzie",
+          wpisLodowki && wpisLodowki.payload.temperatura === "7.5" && /drzwi/.test(wpisLodowki.payload._dzialanie),
+          JSON.stringify(wpisLodowki && wpisLodowki.payload));
+        sprawdz("zapisany wpis: wartość, „poza normą” i opis", wpisDnia("lodowka").dataset.stan === "zapisany" &&
+          /7.5°C/.test(wpisDnia("lodowka").textContent) && /drzwi były otwarte/.test(wpisDnia("lodowka").textContent));
+
+        wpiszTekst(wTym(wpisDnia("dostawa"), 'input[data-pole-wpisu="dostawca"]'), "Makro");
+        await czekaj(200);
+        sprawdz("wpisane, niezapisane blokuje zamknięcie („1 niezapisane”)", /1 niezapisane/.test(przyciskZamknij().textContent),
+          przyciskZamknij().textContent);
+        await kliknij(wTym(wpisDnia("dostawa"), "[data-brak-dostawy]"));
+        await czekaj(300);
+        const wpisDostawy = (window.__tabele.day_log_entries || []).find((w) => w.template_key === "dostawa");
+        sprawdz("„Dziś nie było dostawy” to wpis z _brak", wpisDostawy && wpisDostawy.payload._brak === true &&
+          /nie było dziś/.test(wpisDnia("dostawa").textContent));
+
+        const sprz = wpisDnia("sprzatanie_koncowe");
+        sprawdz("tak/nie: dwa duże przyciski z nazwą pola, „Uwagi” opcjonalne",
+          /Wykonane/.test(sprz.textContent) && /opcjonalnie/.test(sprz.textContent));
+        await kliknij([...sprz.querySelectorAll("button")].find((b) => /^\W*Wykonane/.test(b.textContent.replace(/▪/g, ""))));
+        await kliknij(wTym(wpisDnia("sprzatanie_koncowe"), "[data-zapisz-wpis]"));
+        await czekaj(300);
+        const wpisSprz = (window.__tabele.day_log_entries || []).find((w) => w.template_key === "sprzatanie_koncowe");
+        sprawdz("sprzątanie zapisane jako wykonane = true", wpisSprz && wpisSprz.payload.wykonane === true,
+          JSON.stringify(wpisSprz && wpisSprz.payload));
+        sprawdz("komplet: „Wszystko wpisane”, przycisk aktywny",
+          /Wszystko wpisane/.test(zd("[data-postep-zamkniecia]").textContent) && !przyciskZamknij().disabled);
+
+        // Zdarzenie z „Przekaż kierownikowi” — wiadomość dla kierownika lokalu.
+        await kliknij(zd("[data-zglos-zdarzenie]"));
+        sprawdz("arkusz zdarzenia: „Co się stało”, bez „Status” i „Dowody”",
+          // textContent, nie innerText — etykiety są `uppercase` w CSS.
+          /Co się stało/.test(zd("[data-panel-boczny]").textContent) && !/Dowody|wymaga eskalacji/.test(zd("[data-panel-boczny]").textContent));
+        await kliknij(zd('[data-kategoria-zdarzenia="awaria"]'));
+        wpiszTekst(zd("[data-opis-zdarzenia]"), "Zmywarka przestała grzać wodę");
+        await czekaj(150);
+        await kliknij(zd("[data-przekaz-kierownikowi]"));
+        await kliknij(zd("[data-zapisz-zdarzenie]"));
+        await czekaj(300);
+        const zdarz = (window.__tabele.day_log_entries || []).find((w) => w.typ === "incydent");
+        sprawdz("zdarzenie: wymaga_prowadzenia i status eskalacja",
+          zdarz && zdarz.payload.wymaga_prowadzenia === true && zdarz.payload.status === "eskalacja");
+        sprawdz("„Przekaż kierownikowi” wysyła wiadomość do kierownika lokalu",
+          window.__zapisy.some((z) => z[0] === "notifications" && z[1].audience === "manager" && /Zmywarka/.test(z[1].message)));
+        sprawdz("zdarzenie na liście z „do kierownika”", /do kierownika/.test(zd('[data-sekcja-zamkniecia="zdarzenia"]').textContent));
+
+        await kliknij(przyciskZamknij());
+        sprawdz("„Zamknij dzień” pyta drugi raz", !!zd("[data-potwierdz-zamkniecie]") &&
+          (window.__tabele.day_logs || [])[0].status !== "zamkniety");
+        await klikPrzycisk("Tak, zamknij dzień");
+        await czekaj(400);
+        const zamknieta = (window.__tabele.day_logs || [])[0];
+        sprawdz("dzień zamknięty: status, kto, utarg z pola",
+          zamknieta.status === "zamkniety" && zamknieta.closed_by === "Cezary" && zamknieta.obrot === 4800, JSON.stringify(zamknieta));
+        sprawdz("po zamknięciu: podsumowanie, kłódka, „Wyślij poprawkę”, „Wróć do listy osób”",
+          !!zd("[data-dzien-zamkniety]") && widac("1 · z opisem") && widac("nie można zmienić") &&
+          !!zd("[data-wyslij-poprawke]") && widac("Wróć do listy osób") && !zd("[data-zamknij-dzien]"));
+        await kliknij(zd("[data-wyslij-poprawke]"));
+        await czekaj(300);
+        const trescZgloszenia = document.querySelector("#app main textarea");
+        sprawdz("„Wyślij poprawkę” otwiera Zgłoś problem z opisem dnia",
+          !!trescZgloszenia && /Zamknięcie dnia/.test(trescZgloszenia.value), trescZgloszenia && trescZgloszenia.value);
       } catch (e) {
         sprawdz("przebieg bez wyjątku", false, e.message);
       }

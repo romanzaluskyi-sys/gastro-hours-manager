@@ -60,6 +60,8 @@ import {
   przesun,
   PORY,
   POWODY_UTARGU,
+  wartosciWpisu as tekstWpisu,
+  KLUCZ_DZIALANIA,
   POLA_KOREKTY,
   KATEGORIE_ZDARZENIA,
   korektyDnia,
@@ -481,7 +483,7 @@ export default function KartaDnia({
           <>
             <div className="col-start-2 md:col-start-auto flex flex-wrap items-center gap-2 md:justify-end">
               <b className={`font-['Archivo'] text-[16px] tabular-nums ${alarm ? "text-[#DE3A22]" : ""}`}>
-                {pola.map((p) => wartoscPola(p, wpis.payload)).join(" / ")}
+                {tekstWpisu(pola, wpis.payload)}
               </b>
               {alarm && (
                 <span className="inline-flex items-center gap-1 text-[12px] font-bold text-[#DE3A22]">
@@ -492,6 +494,11 @@ export default function KartaDnia({
                 {wpis.recorded_by} · {godzTxt(wpis.recorded_at || wpis.created_at)}
               </span>
               {poprawka && <SladPoprawki opis={poprawka} />}
+              {wpis.payload?.[KLUCZ_DZIALANIA] && (
+                <span className="basis-full text-[13px] text-[#3A3A35] md:text-right" data-dzialanie-wpisu>
+                  Co zrobiono: {wpis.payload[KLUCZ_DZIALANIA]}
+                </span>
+              )}
             </div>
             <div className="col-start-2 md:col-start-auto flex gap-1.5 md:justify-end">
               {alarm && !juzWMoich && (
