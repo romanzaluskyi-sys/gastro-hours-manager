@@ -12,6 +12,7 @@ import { resolveAbsenceRequest, addUrlopDirectly, deleteAbsence } from "../utils
 import { zmianyPorzucone } from "../utils/porzucone";
 import { zmianyBezOdbicia } from "../utils/odbicia";
 import { probniDoDecyzji, czekaNaDecyzje } from "../utils/probni";
+import { wydarzeniaDoDecyzji } from "../utils/wydarzenia";
 import ZatwierdzanieZmian from "./manager/ZatwierdzanieZmian";
 import ZadaniaISprzatanie from "./manager/ZadaniaISprzatanie";
 import Puls from "./manager/Puls";
@@ -548,8 +549,13 @@ const ManagerDashboard = ({
     (s) => s.box === "todo"
   ).length;
 
+  // Płatne wydarzenia po czasie (0.75.0) — ta sama funkcja liczy kartę w „Do
+  // decyzji” i sprawę na Pulpicie.
+  const wydarzeniaDoRozliczenia = wydarzeniaDoDecyzji({ wydarzenia, lokalOk: hasAccessToLokal, calaSiec: jestWlascicielem });
+
   const shellBadges = {
     zatwierdzanie:
+      wydarzeniaDoRozliczenia.length +
       pendingCorrections.length +
       pendingAbsences.length +
       pendingSwaps.length +
@@ -1259,6 +1265,9 @@ const ManagerDashboard = ({
             setDayLogs={setDayLogs}
             dayLogEntries={dayLogEntries}
             dayLogTemplates={dayLogTemplates}
+            wydarzenia={wydarzenia}
+            wydarzeniaUczestnicy={wydarzeniaUczestnicy}
+            calaSiec={jestWlascicielem}
             showMsg={showMsg}
             tasks={tasks}
             taskBlocks={taskBlocks}
@@ -1293,6 +1302,7 @@ const ManagerDashboard = ({
               korekty: pendingCorrections,
               braki: brakiOdbiciaDoDecyzji,
               porzucone: porzuconeZmiany,
+              wydarzenia: wydarzeniaDoRozliczenia,
             }}
             onGoToApprovals={() => setTab("zatwierdzanie")}
             onGoToRegister={() => setTab("godziny")}
@@ -1372,6 +1382,7 @@ const ManagerDashboard = ({
             showMsg={showMsg}
             initialLokal={pulsCel && pulsCel.lokal}
             initialDate={pulsCel && pulsCel.date}
+            wydarzenia={wydarzenia}
             zadaniaMoje={zadaniaMoje}
             setZadaniaMoje={setZadaniaMoje}
           />
@@ -1451,6 +1462,7 @@ const ManagerDashboard = ({
             planShifts={planShifts}
             onGoToApprovals={() => setTab("zatwierdzanie")}
             ukryte={usuwaneWpisy}
+            wydarzenia={wydarzenia}
           />
         )}
 
@@ -1481,6 +1493,8 @@ const ManagerDashboard = ({
             planShifts={planShifts}
             showMsg={showMsg}
             onEditShift={openEditShift}
+            wydarzenia={wydarzenia}
+            wydarzeniaUczestnicy={wydarzeniaUczestnicy}
             onDopisz={(plan) =>
               setEditingShift({
                 id: null,
@@ -1520,6 +1534,11 @@ const ManagerDashboard = ({
             onOpenEmployee={goToEmployeeCard}
             absences={absences}
             setPlanShifts={setPlanShifts}
+            wydarzenia={wydarzenia}
+            setWydarzenia={setWydarzenia}
+            wydarzeniaUczestnicy={wydarzeniaUczestnicy}
+            setWydarzeniaUczestnicy={setWydarzeniaUczestnicy}
+            calaSiec={jestWlascicielem}
           />
         )}
 

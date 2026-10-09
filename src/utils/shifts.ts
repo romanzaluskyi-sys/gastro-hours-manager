@@ -74,7 +74,7 @@ export const getTodaysShiftsForUser = (shifts, userId) => {
 // ⚠️ Błąd sieci NIE blokuje zapisu. Niezapisana zmiana to czyjeś godziny i
 // czyjeś pieniądze; ewentualny duplikat jest odwracalny jednym kliknięciem
 // kierownika, a utracone odbicie trzeba odtwarzać z pamięci.
-const zmianyOsobyWBazie = async (userId, start) => {
+export const zmianyOsobyWBazie = async (userId, start) => {
   const od = new Date(start.getFullYear(), start.getMonth(), start.getDate() - 1);
   const doKiedy = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 2);
   const wiersze = await api.get(

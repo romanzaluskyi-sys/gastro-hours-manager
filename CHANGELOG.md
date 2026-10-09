@@ -5,6 +5,50 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.75.0 — 2026-10-09
+
+- **Rozliczenie płatnych wydarzeń.** Po zakończeniu płatnego wydarzenia (np.
+  zebrania) w **Zatwierdzaniu zmian** pojawia się „Wydarzenia do rozliczenia”:
+  lista uczestników, domyślnie wszyscy obecni — odznaczasz, kogo nie było, i
+  „Zapisz godziny”. Godziny trafiają do Rejestru, a pracownik dostaje
+  wiadomość (i e-mail), ile mu dopisano. Jest też „Nikt nie przyszedł”. Jak
+  każdą decyzję, rozliczenie da się cofnąć przez 6 sekund.
+- **Czas w zmianie nie liczy się drugi raz** — kto był na zmianie w czasie
+  zebrania, nie dostaje dodatkowej godziny; przy częściowym nakładaniu się
+  dopisuje się tylko część poza zmianą.
+- Sprawa liczy się w znaczku „Zatwierdzanie zmian” i w „Wymaga decyzji” na
+  Pulpicie; panel „Najbliższe wydarzenia” ostrzega o wydarzeniu do rozliczenia.
+- **Godziny z wydarzenia mają jego nazwę** w Rejestrze godzin, w Mojej pracy i
+  w Raporcie pracownika (zamiast „poza grafikiem”).
+- **Płatne wydarzenie liczy się do planu:** w Grafiku jako kreskowany blok w
+  wierszu uczestnika, w godzinach tygodnia i miesiąca („w tym X h wydarzeń”),
+  w normie i w budżecie dnia, a u pracownika — w „Z grafikiem wyjdzie”.
+- **Przewodnik „Jak korzystać” od nowa** — po jednym opisie na każdą zakładkę
+  panelu, w kolejności menu (doszły Grafik, Wydarzenia, Zadania, Puls,
+  Skrzynka i Ustawienia; zniknęły nieaktualne „Zgłoszenia”).
+
+## 0.74.0 — 2026-10-08
+
+- **Wydarzenia** — zebranie, szkolenie, grupa / rezerwacja, inwentaryzacja,
+  kontrola, mecz albo koncert w okolicy. Kierownik dodaje je w **Grafiku**
+  („+ Wydarzenie” nad siatką albo „+ wydarzenie” w nagłówku dnia w Edycji),
+  wybiera lokal (albo całą sieć), stanowiska i kogo powiadomić: wszystkich z
+  tymi stanowiskami albo tylko tych, którzy tego dnia są w grafiku. Listę
+  osób można poprawić ręcznie.
+- **Wydarzenie zapisuje się i powiadamia od razu** — nie czeka na publikację
+  grafiku. Uczestnicy dostają wiadomość (i e-mail): nowe wydarzenie, zmiana
+  godzin albo dnia (było → jest), odwołanie.
+- **Gdzie widać wydarzenia:** w nagłówku dnia w Grafiku (tydzień, dzień,
+  miesiąc, wydruk), w nowej liście „Wydarzenia”, na Pulpicie kierownika
+  („Najbliższe wydarzenia”), w karcie dnia w Pulsie obok utargu, a u
+  pracownika — w jego Grafiku, na Pulpicie („Jutro: zebranie 15:00”) i w
+  Wiadomościach (nowy filtr). Na Tablecie Służbowym grupa, kontrola albo mecz
+  w okolicy stoją paskiem „Dziś w lokalu” nad listą osób.
+- **Płatny czas pracy** przy wydarzeniu (np. płatne zebranie) — panel pokazuje
+  koszt i uwagi (ktoś ma wtedy zmianę, urlop, za krótki odpoczynek), a
+  pracownik widzi, że godzina jest w jego grafiku. Rozliczenie obecności i
+  dopisanie godzin do Rejestru przyjdzie w kolejnej wersji.
+
 ## 0.73.0 — 2026-10-08
 
 - **Nowy wygląd „Zamknięcia dnia” na tablecie i telefonie** (dla osoby, która

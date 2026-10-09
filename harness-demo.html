@@ -253,6 +253,11 @@ async function arytmetyka() {
     sprawdz(T.issues.every((i) => !i.shift_id || idyZmian.has(i.shift_id)), `${tag} issues.shift_id wskazuje istniejącą zmianę (FK)`);
     sprawdz(T.absences.filter((a) => a.status === "pending").length === 1, `${tag} jeden wniosek o wolne czeka`);
     sprawdz(T.users.filter((u) => u.probny_status === "oczekuje").length === 1, `${tag} jedna osoba na próbę`);
+    // 0.75.0: płatne wydarzenie po czasie, nierozliczone — „Wydarzenia do rozliczenia”.
+    const doRozl = T.wydarzenia.filter((w) => w.platne && !w.rozliczone_at && !w.odwolane_at && w.data < dzis);
+    sprawdz(doRozl.length === 1 && doRozl[0].data === wczoraj &&
+      T.wydarzenia_uczestnicy.filter((u) => u.wydarzenie_id === doRozl[0].id).length >= 1,
+      `${tag} jedno płatne wydarzenie do rozliczenia — wczoraj, z uczestnikami`);
     sprawdz(T.shift_swaps.some((s) => s.status === "na_gieldzie") && T.shift_swaps.some((s) => s.status === "przyjeta"),
       `${tag} giełda: oferta i prośba do zgody`);
     const idyGrafiku = new Set(T.grafik_shifts.map((g) => g.id));
@@ -294,6 +299,12 @@ async function arytmetyka() {
 
     sprawdz(T.notifications.every((n) => n.message && n.email_at), `${tag} wiadomości z treścią, oznaczone jako obsłużone mailowo`);
     sprawdz(T.grafik_budzet_cele.length === 14, `${tag} cele budżetu: 7 dni × 2 lokale`);
+    // Stawki nie niższe niż minimalne (umowa o pracę za pełny etat, zlecenie za godzinę).
+    const ponizej = T.users.filter((u) =>
+      (u.typ_umowy === "umowa_o_prace" && u.wynagrodzenie_mies < D.MIN_PENSJA * (u.wymiar_etatu || 1)) ||
+      (u.typ_umowy === "zlecenie" && u.stawka < D.MIN_STAWKA));
+    sprawdz(!ponizej.length, `${tag} stawki ≥ minimalnych (${D.MIN_PENSJA} zł brutto, ${String(D.MIN_STAWKA).replace(".", ",")} zł/h)`,
+      ponizej.map((u) => u.name).join(", "));
 
     // Deterministycznie: ten sam dzień = te same dane; osoby mają stałe id.
     const drugi = D.generuj({ dzis, teraz });

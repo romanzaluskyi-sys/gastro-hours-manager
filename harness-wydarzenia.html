@@ -184,6 +184,38 @@ const sprawdz = (nazwa, warunek, szczegol = "") => {
       !W.dlaCalegoLokalu({ typ: "zebranie", stanowiska: "Sala" }) && W.dlaCalegoLokalu({ typ: "zebranie" }) &&
       W.dlaCalegoLokalu({ typ: "grupa", stanowiska: "Sala" }));
 
+    log(""); log("— rozliczenie i plan (W4, 0.75.0) —");
+    const uc = [{ id: "c1", wydarzenie_id: "w1", user_id: "u3", user_name: "Ewa" }, { id: "c2", wydarzenie_id: "w1", user_id: "u1", user_name: "Ola" }];
+    const poz = W.pozycjeRozliczenia({ wydarzenie: zeb, uczestnicy: uc, users, shifts: fakt });
+    sprawdz("pozycje rozliczenia: Ewa 60 min (zmiana bez końca nie zajmuje), Ola 40 min, po imieniu",
+      eq(poz.map((p) => [p.user.name, p.minuty]), [["Ewa", 60], ["Ola", 40]]), JSON.stringify(poz.map((p) => [p.user.name, p.minuty])));
+    const urlopEwy = [{ user_id: "u3", user_name: "Ewa", is_urlop: true, start_time: new Date(`${D}T09:00:00`), end_time: new Date(`${D}T17:00:00`) }];
+    sprawdz("urlop (09–17 umownie) nie zjada czasu wydarzenia", W.odcinkiDoRozliczenia(zeb, ewa, urlopEwy).length === 1);
+    const lista2 = [zeb, { ...zeb, id: "s1", lokal: null }];
+    sprawdz("do decyzji: kierownik B nie widzi wydarzenia z A",
+      W.wydarzeniaDoDecyzji({ wydarzenia: lista2, lokalOk: (l) => l === "B", calaSiec: false, teraz }).length === 0);
+    sprawdz("do decyzji: „Cała sieć” tylko dla właściciela",
+      eq(W.wydarzeniaDoDecyzji({ wydarzenia: lista2, lokalOk: (l) => l === "A", calaSiec: false, teraz }).map((w) => w.id), ["w1"]) &&
+      eq(W.wydarzeniaDoDecyzji({ wydarzenia: lista2, lokalOk: () => true, calaSiec: true, teraz }).map((w) => w.id), ["w1", "s1"]));
+    const kd = W.kosztWydarzenDnia({ wydarzenia: lista, uczestnicy, users, planShifts, lokalRow: null, lokal: "A", dateStr: D });
+    sprawdz("koszt wydarzeń dnia w A: Ola 0,5 h × 30 = 15 zł (zlecenie), Ewa 1 h + 3 h bez danych",
+      Math.round(kd.koszt) === 15 && Math.round(kd.zlecenia) === 15 && kd.etaty === 0 && kd.godziny === 4.5 && eq(kd.bezDanych, ["Ewa"]), JSON.stringify(kd));
+    sprawdz("„Cała sieć” obciąża lokal macierzysty: Ewa (B) w B, nic w A",
+      W.kosztWydarzenDnia({ wydarzenia: [{ ...zeb, id: "s1", lokal: null }], uczestnicy: [{ wydarzenie_id: "s1", user_id: "u3" }], users, planShifts, lokal: "B", dateStr: D }).godziny === 1 &&
+      W.kosztWydarzenDnia({ wydarzenia: [{ ...zeb, id: "s1", lokal: null }], uczestnicy: [{ wydarzenie_id: "s1", user_id: "u3" }], users, planShifts, lokal: "A", dateStr: D }).godziny === 0);
+    const fp = W.faktIPlanZWydarzeniami({ shifts: [], planShifts, user: ewa, rok: 2026, mies: 10, dzis: new Date(`${D}T08:00:00`), wydarzenia: lista, uczestnicy });
+    sprawdz("z grafikiem wyjdzie: Ewa 4 h grafiku + 4 h płatnych wydarzeń", fp.plan === 8 && fp.wydarzenia === 4, JSON.stringify(fp));
+    const fp2 = W.faktIPlanZWydarzeniami({ shifts: [], planShifts, user: ewa, rok: 2026, mies: 10, dzis: new Date(`${D}T08:00:00`),
+      wydarzenia: [{ ...zeb, rozliczone_at: pub }, nocne], uczestnicy });
+    sprawdz("rozliczone nie liczy się drugi raz (jest już w shifts)", fp2.plan === 7, JSON.stringify(fp2));
+    sprawdz("zamknięty miesiąc: bez dodatku", W.faktIPlanZWydarzeniami({ shifts: [], planShifts, user: ewa, rok: 2026, mies: 9, dzis: new Date(`${D}T08:00:00`), wydarzenia: lista, uczestnicy }).plan === 0);
+    sprawdz("etykieta wpisu: tytuł, a spoza listy „Wydarzenie”",
+      W.etykietaWydarzenia({ wydarzenie_id: "w1" }, lista) === "Zebranie" && W.etykietaWydarzenia({ wydarzenie_id: "zz" }, lista) === "Wydarzenie" &&
+      W.etykietaWydarzenia({}, lista) === null);
+    sprawdz("tekst rozliczenia",
+      W.tekstRozliczenia(zeb, 90, "Szef") === "Godziny z wydarzenia dopisane: Zebranie — śr 14.10 · 15:00–16:00 · A, 1,5 h (zapisał(a) Szef).",
+      W.tekstRozliczenia(zeb, 90, "Szef"));
+
     log(""); log("— teksty —");
     sprawdz("nowe: termin i płatny czas pracy",
       W.tekstNowego(zeb) === "Nowe wydarzenie: Zebranie — śr 14.10 · 15:00–16:00 · A (płatny czas pracy, wpisany do grafiku).", W.tekstNowego(zeb));

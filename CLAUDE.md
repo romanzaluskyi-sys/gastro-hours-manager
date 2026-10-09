@@ -179,6 +179,40 @@ tym samym koncie demo.
 kolumnę generatora z migracjami i to, że w każdej kolejce „Do decyzji” czeka
 po jednej sprawie.
 
+## Wydarzenia — od 0.74.0 (Roadmap p.3)
+
+Pełna specyfikacja i „rzeczy, których nie widać”: [`docs/WYDARZENIA.md`](docs/WYDARZENIA.md).
+Logika i zapis: [`utils/wydarzenia.ts`](src/utils/wydarzenia.ts) (jedyne miejsce
+piszące do `wydarzenia` i `wydarzenia_uczestnicy`, migracja `0043`); ekrany:
+`manager/WydarzeniePanel.tsx`, `manager/GrafikWydarzenia.tsx`, klocki w
+`manager/wydarzeniaWspolne.tsx`; sprawdzian `harness-wydarzenia.html`.
+
+⚠️ **Wydarzenie jest NIEZALEŻNE od grafiku** (decyzja właściciela): zapisuje się
+i powiadamia od razu, bez publikacji, i nie liczy się do obsady.
+⚠️ **Płatne wydarzenie NIE jest wierszem `grafik_shifts`** — inaczej trzeba by
+je wyłączać z obsady, giełdy, „bez odbicia”, porzuconych, Aktywnych i
+publikacji. Godziny dolicza `platneMinutyOsoby` (bez czasu w zmianie osoby),
+fakt — `shifts.wydarzenie_id` po rozliczeniu (0.75.0).
+⚠️ **Rozliczenie płatnego = sprawa w „Do decyzji”** (`wydarzeniaDoDecyzji` —
+karta w ZatwierdzanieZmian, `shellBadges`, `sprawy` w PulpitHome) i zapis
+WYŁĄCZNIE przez `rozliczWydarzenie`, który liczy odcinki z BAZY tuż przed
+zapisem (ta sama ochrona co `rozliczBrakOdbicia`). „Cała sieć” rozlicza tylko
+właściciel — tylko on może ją zmienić w bazie.
+⚠️ **Godziny płatnych doliczają się do planu w trzech miejscach**: wiersz osoby
+w Grafiku (`godzinyWydarzenOsoby`), budżet dnia (`kosztWydarzenDnia` →
+`budzetDnia({ dodatki })`) i „Z grafikiem wyjdzie” (`faktIPlanZWydarzeniami`).
+Wiersz `shifts` z `wydarzenie_id` pokazuje tytuł (`etykietaWydarzenia`) i nie
+paruje się z grafikiem.
+⚠️ **Polityki `wydarzenia` są osobne na select/insert/update/delete** (odczyt
+szerszy niż zapis), a odczyt stoi na KOLUMNACH wiersza — przy funkcji z listą
+id INSERT … RETURNING od kierownika lokalu odbijałby się od RLS.
+⚠️ **Zdania wiadomości** („Nowe wydarzenie:”, „Zmiana w wydarzeniu:”,
+„Wydarzenie odwołane:”) rozpoznają `opisWiadomosci` i `api/_lib/wiadomosci.js`,
+a kopię ma generator demo — zmieniając je w `utils/wydarzenia.ts`, popraw te
+trzy miejsca.
+⚠️ **Nowa tabela, której potrzebuje ekran → dane w `demoDane.js`** (tu:
+`wydarzenia`, `wydarzenia_uczestnicy` w `KOLEJNOSC`).
+
 ## Logowanie i dostęp do danych — Etap 3 (0.41.0–0.70.3)
 
 **Stan od 0.70.3 (wszystkie migracje `0025`–`0041` w repo):** logowanie przez
@@ -472,8 +506,9 @@ Skutek: od `0026` do `0032` każde ZALOGOWANE konto czytało cudze powiadomienia
 wykonania zadań i historię korekt, a `0031` nie zawęziło zadań ani bloków.
 Znalazł to dopiero inwentarz `pg_policies` — polecenie stoi na końcu `0032`
 i **warto je puścić po każdej migracji ruszającej polityki**: tabela z liczbą
-polityk > 1 (poza `app_errors` x3 i `users` x2) to polityka unieważniająca
-sąsiadkę.
+polityk > 1 (poza `app_errors` x3, `users` x2 oraz `wydarzenia` i
+`wydarzenia_uczestnicy` po x4 — po jednej na polecenie) to polityka
+unieważniająca sąsiadkę.
 
 ⚠️ **Polityka RLS zwraca MNIEJ WIERSZY, nie błąd.** To zaleta (ekran, który
 tych danych nie używa, dostaje pustą listę zamiast „permission denied") i wada
@@ -725,6 +760,9 @@ src/
                                   duplikuj jej w ZadaniaISprzatanie.tsx,
                                   ZadaniaKonfiguracja.tsx ani w
                                   employeeSessionShared.tsx.
+    wydarzenia.ts               Wydarzenia (0.74.0): uczestnicy, godziny i
+                                  koszt płatnych, listy, teksty wiadomości,
+                                  zapis i odwołanie — patrz "Wydarzenia"
     mojeZadania.ts              "Moje zadania" kierownika (tabela
                                   zadania_moje, migracja 0038) — JEDYNE
                                   miejsce, które do niej pisze (Zadania,
@@ -824,6 +862,9 @@ src/
                                     dla wszystkich trzech układów
       GrafikBudzetKonfiguracja.tsx  cel finansowy na dzień tygodnia i wyjątki
                                     na konkretne daty
+      WydarzeniePanel.tsx           panel wydarzenia (nowe / edycja / odwołanie)
+      GrafikWydarzenia.tsx          lista „Wydarzenia” w Grafiku
+      wydarzeniaWspolne.tsx         ikona typu, chip, plakietka, karta pracownika
       GrafikDoWyslaniaModal.tsx     panel "Szkic grafiku" — dodane / zmienione /
                                     usunięte, "Cofnij" przy dodanej i usuniętej,
                                     "Opublikuj · N" — patrz 5g
@@ -1818,8 +1859,8 @@ przez `template_key` i muszą mieć skąd wziąć nazwę i normy.
 tabeli, którą ktoś musiałby uzupełniać co grudzień. Osobno `dniHandloweRoku`
 — Walentynki, tłusty czwartek, Wigilia, Sylwester: nie są wolne, ale w
 gastronomii zmieniają salę bardziej niż niejedno święto. Dzień wypłaty siedzi
-w `lokale.dzien_wyplaty` (puste = 10). Lokalne wydarzenia to osobny moduł
-(Roadmap p.3), jeszcze go nie ma.
+w `lokale.dzien_wyplaty` (puste = 10). Lokalne wydarzenia to moduł
+Wydarzenia (0.74.0) — karta dnia pokazuje je przy utargu.
 
 **Zdarzenia** ([`manager/ZdarzenieModal.tsx`](src/components/manager/ZdarzenieModal.tsx))
 — pełny formularz zamiast jednego pola „co się wydarzyło”, którego nie
@@ -1956,6 +1997,10 @@ odpadają. Zamiast tego dwa pliki w katalogu głównym, uruchamiane przez
   dat (w tym przełom roku i zmiana czasu) sprawdzany z kolumnami z migracji,
   kolejki „Do decyzji”, brak nakładających się godzin, zgodność kont w trzech
   miejscach, ekran z trzema przyciskami i sesja w sessionStorage;
+- `harness-wydarzenia.html` — arytmetyka Wydarzeń: kto jest uczestnikiem
+  (wszyscy z lokalu / tylko z grafiku / stanowiska / cała sieć), godziny
+  płatnych bez czasu w zmianie (także przez północ), odcinki do rozliczenia,
+  koszt, listy i teksty wiadomości;
 - `harness-bledy.html` — dziennik błędów: limit zapisów na sesję, odsiewanie
   powtórzeń, komplet pól wiersza i to, czy `ErrorBoundary` pokazuje ekran
   zamiast białej strony. `fetch` jest podmieniony, nic nie leci do sieci.
@@ -3531,10 +3576,8 @@ Oba typy mają "beneficjenta" w postaci stanowiska (kto jest
 odpowiedzialny). Zależało od fundamentu z punktu 0 (powiadomienia
 kierownika) — już gotowe.
 
-### 3. Wydarzenia
-Kierownik tworzy zdarzenie (zebranie, grupa o określonej godzinie itp.)
-widoczne dla pracowników. Najprostszy moduł z całej listy — dobry "quick
-win" do budowania zaufania do systemu.
+### 3. Wydarzenia — **ZROBIONE w 0.74.0** (rozliczenie płatnych: 0.75.0)
+Patrz sekcja "Wydarzenia" wyżej i [`docs/WYDARZENIA.md`](docs/WYDARZENIA.md).
 
 ### 4. Wnioski o urlop/wolne — CZĘŚCIOWO ZROBIONE (2026-09-03)
 ⚠️ Podstawowy flow wniosek → zatwierdzenie DZIAŁA — patrz "Urlopy i

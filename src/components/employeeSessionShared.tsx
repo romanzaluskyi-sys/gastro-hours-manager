@@ -31,6 +31,7 @@ import {
   Lock,
   MapPin,
   RotateCcw,
+  Presentation,
 } from "lucide-react";
 import { api } from "../api/supabase";
 import { sendToGoogleSheets, toLocalYMD } from "../api/googleSheets";
@@ -53,6 +54,19 @@ import {
 } from "../utils/wpisy";
 import WeatherBadge from "./WeatherBadge";
 import PulsZmiany, { mozeZamykacPuls } from "./manager/PulsZmiany";
+import { KartaWydarzenia } from "./manager/wydarzeniaWspolne";
+import {
+  wydarzeniaPracownikaNaDzien,
+  wydarzeniaNaDzien,
+  jestUczestnikiem,
+  wCzasieZmiany,
+  calyDzien,
+  koniecWydarzenia,
+  godzinyTekst,
+  minutyWydarzenia,
+  etykietaWydarzenia,
+  faktIPlanZWydarzeniami,
+} from "../utils/wydarzenia";
 import PulsPrzypomnienie from "./manager/PulsPrzypomnienie";
 // Ten sam modal, co w karcie dnia i na ekranie kierownika zmiany — wpisanie
 // pomiaru to ta sama czynność i ma wyglądać tak samo wszędzie.
@@ -317,8 +331,19 @@ export const checkboxRowCls = (checked) =>
 export const opisWiadomosci = (n) => {
   const t = n.message || "";
   const typ = n.type || (n.action ? "edycja" : "");
-  const w = (kat, ton, ikona, tytul, akcja = null) => ({ kat, ton, ikona, tytul, akcja });
+  const w = (kat, ton, ikona, tytul, akcja = null, plak = null) => ({ kat, ton, ikona, tytul, akcja, plak });
   switch (typ) {
+    // Wydarzenia (0.74.0) — zdania z utils/wydarzenia.ts (tekstNowego,
+    // tekstZmiany, tekstOdwolania, od 0.75.0 tekstRozliczenia). Plakietka własna: „czas pracy” przy
+    // płatnym, „zmiana”, „odwołane”. Te same zdania rozpoznaje
+    // api/_lib/wiadomosci.js.
+    case "wydarzenie":
+      if (/^Wydarzenie odwołane/.test(t)) return w("ev", "no", "wydarzenie", "Wydarzenie odwołane", "grafik", "odwołane");
+      if (/^Zmiana w wydarzeniu/.test(t)) return w("ev", "warn", "wydarzenie", "Zmiana w wydarzeniu", "grafik", "zmiana");
+      if (/^Godziny z wydarzenia/.test(t)) return w("ev", "ok", "wydarzenie", "Godziny z wydarzenia dopisane", null, "czas pracy");
+      return /płatny czas pracy/.test(t)
+        ? w("ev", "ok", "wydarzenie", "Nowe wydarzenie", "grafik", "czas pracy")
+        : w("ev", "info", "wydarzenie", "Nowe wydarzenie", "grafik");
     case "grafik":
       return /koliduje/.test(t)
         ? w("grafik", "warn", "grafik", "Zmiana koliduje z Twoim wnioskiem", "grafik")
@@ -586,6 +611,9 @@ export const EmployeeSessionScreens = ({
   bloki = BLOKI_WSZYSTKIE,
   onBack,
   onLogout,
+  // Wydarzenia (0.74.0) — karta w Grafiku, przypomnienie na Pulpicie.
+  wydarzenia = [],
+  wydarzeniaUczestnicy = [],
 }) => {
   const [screen, setScreen] = useState("PULPIT");
   const [justClosed, setJustClosed] = useState(false);
@@ -981,12 +1009,15 @@ export const EmployeeSessionScreens = ({
   // grafikiem” jest w obu miejscach ta sama. Dzień dzisiejszy należy do planu,
   // także wtedy, gdy zmiana właśnie trwa. Od 0.61.0 Raport pokazuje liczby
   // (norma, ponad/do normy, z grafikiem) zamiast jednego zdania.
-  const raportRozbicie = faktIPlanMiesiaca({
+  // Od 0.75.0 plan obejmuje też płatne wydarzenia (`faktIPlanZWydarzeniami`).
+  const raportRozbicie = faktIPlanZWydarzeniami({
     shifts,
     planShifts,
     user: employee,
     rok: raportYear,
     mies: raportMonth + 1,
+    wydarzenia,
+    uczestnicy: wydarzeniaUczestnicy,
   });
   const recentShiftsForZgloszenie = shifts
     .filter((s) => s.user_id === employee.id)
@@ -2875,7 +2906,8 @@ export const EmployeeSessionScreens = ({
       return (
         <section className={kartaCls}>
           <span className={etykietaCls}>
-            <Palmtree size={18} /> {widziGrafik ? "Dziś wolne" : "Dziś"}
+            <Palmtree size={18} />{" "}
+            {widziGrafik ? (wydarzeniaDnia(dzisYMD).some((w) => jestUczestnikiem(wydarzeniaUczestnicy, w.id, employee)) ? "Dziś bez zmiany" : "Dziś wolne") : "Dziś"}
           </span>
           {widziGrafik ? (
             nastepna ? (
@@ -3025,8 +3057,64 @@ export const EmployeeSessionScreens = ({
     const kartaInfoCls =
       "w-full flex items-center gap-3 px-3.5 py-3 rounded-lg mb-2.5 text-left text-[#171714]";
     const kolkoCls = "w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0";
+    // Wydarzenia (0.74.0, makieta EmployeeHomeEvent): od dnia przed do końca
+    // wydarzenia. Dziś — ciemna karta, jutro — biała z czarnym paskiem. Kilka
+    // naraz → pierwsze i „+N”. Dotknięcie otwiera Grafik na tym tygodniu.
+    const wydarzeniaDnia = (data) =>
+      widziGrafik
+        ? wydarzeniaPracownikaNaDzien({ wydarzenia, uczestnicy: wydarzeniaUczestnicy, user: employee, planShifts, data })
+        : [];
+    const wydDzis = wydarzeniaDnia(dzisYMD).filter((w) => koniecWydarzenia(w) > now);
+    const wydPrzypomnienie = wydDzis.length
+      ? { lista: wydDzis, dzis: true, data: dzisYMD }
+      : { lista: wydarzeniaDnia(addDaysYMD(dzisYMD, 1)), dzis: false, data: addDaysYMD(dzisYMD, 1) };
+    const kartaWydarzenia = () => {
+      const { lista, dzis, data } = wydPrzypomnienie;
+      if (!lista.length) return null;
+      const w = lista[0];
+      const uczestnik = jestUczestnikiem(wydarzeniaUczestnicy, w.id, employee);
+      const godz = Math.round((minutyWydarzenia(w) / 60) * 10) / 10;
+      return (
+        <button
+          onClick={() => {
+            setTydzienOffset(
+              Math.round((new Date(mondayOf(data) + "T00:00:00") - new Date(mondayOf(dzisYMD) + "T00:00:00")) / (7 * 86400000))
+            );
+            setGrafikWidok("tydzien");
+            setGrafikWszyscy(false);
+            setScreen("GRAFIK");
+          }}
+          className={`${kartaInfoCls} border-2 border-l-[6px] border-[#171714] ${dzis ? "bg-[#171714] text-white" : "bg-white"}`}
+          data-przypomnienie-wydarzenia
+        >
+          <span className="flex-1 min-w-0">
+            <small className={`block text-[13px] font-extrabold ${dzis ? "text-white/70" : "text-[#6E6E66]"}`}>
+              {uczestnik ? (dzis ? "Wydarzenie dla Ciebie" : `Przypomnienie · ${dataKrotko(data)}`) : "W lokalu"}
+            </small>
+            <b className="block text-[16px] leading-[22px]">
+              {dzis ? "Dziś" : "Jutro"}: {w.tytul}
+              {lista.length > 1 ? ` · +${lista.length - 1}` : ""}
+            </b>
+            <small className={`block text-[14px] ${dzis ? "text-white/80" : "text-[#6E6E66]"}`}>
+              {godzinyTekst(w)} · {w.lokal || "wszystkie lokale"}
+            </small>
+            {w.platne && uczestnik ? (
+              <span className="inline-flex mt-1.5 h-[22px] items-center px-2 rounded-md text-[12px] font-extrabold bg-[#E2F3E9] text-[#1F7A4A]">
+                czas pracy · {String(godz).replace(".", ",")} h
+              </span>
+            ) : !uczestnik ? (
+              <span className={`inline-flex mt-1.5 h-[22px] items-center px-2 rounded-md text-[12px] font-extrabold ${dzis ? "bg-white/15 text-white" : "bg-[#ECEBE6] text-[#171714]"}`}>
+                informacja · nie zmienia Twojej zmiany
+              </span>
+            ) : null}
+          </span>
+          <ChevronRight size={20} className={`${dzis ? "text-white/70" : "text-[#6E6E66]"} flex-shrink-0`} />
+        </button>
+      );
+    };
     const renderKarty = () => (
       <>
+        {kartaWydarzenia()}
         {nieprzeczytane.length > 0 && (
           <button
             onClick={() => setScreen("WIADOMOSCI")}
@@ -3432,7 +3520,7 @@ export const EmployeeSessionScreens = ({
     // Godziny miesiąca: fakt do wczoraj + grafik od dziś — ta sama prognoza co
     // w Raporcie („Z grafikiem wyjdzie”), żeby dwa ekrany nie mówiły co innego.
     const godzinyMiesiaca = (rok, mies) => {
-      const r = faktIPlanMiesiaca({ shifts, planShifts, user: employee, rok, mies });
+      const r = faktIPlanZWydarzeniami({ shifts, planShifts, user: employee, rok, mies, wydarzenia, uczestnicy: wydarzeniaUczestnicy });
       return r.fakt + r.plan;
     };
     const etat = naEtacie(employee);
@@ -3822,7 +3910,25 @@ export const EmployeeSessionScreens = ({
         const wolne = wolneNa(d);
         const lokalDnia = moje[0]?.lokal || effectiveAssignment.lokal;
         const wszyscyDnia = publishedShiftsOnDay(planShifts, lokalDnia, d);
-        if (!grafikWszyscy && !moje.length && !oferty.length && !przejete.length && !wolne) {
+        // Wydarzenia (0.74.0): „Ja” — moje i całego lokalu w dniu, w którym
+        // tam pracuję; „Cały lokal” — wszystkie lokalu dnia. Dzień z
+        // wydarzeniem bez zmiany NIE zwija się do „wolne”.
+        const wydJa = wydarzeniaPracownikaNaDzien({ wydarzenia, uczestnicy: wydarzeniaUczestnicy, user: employee, planShifts, data: d });
+        const wydLokalu = wydarzeniaNaDzien(wydarzenia, lokalDnia, d);
+        const kartaWyd = (w, wCalymLokalu) => {
+          const uczestnik = jestUczestnikiem(wydarzeniaUczestnicy, w.id, employee);
+          return (
+            <KartaWydarzenia
+              key={`wyd-${w.id}`}
+              w={w}
+              dlaCiebie={uczestnik}
+              wyszarzone={wCalymLokalu && !uczestnik}
+              oznaczDlaCiebie={wCalymLokalu && uczestnik}
+              wCzasieZmiany={uczestnik && wCzasieZmiany(w, employee, planShifts)}
+            />
+          );
+        };
+        if (!grafikWszyscy && !moje.length && !oferty.length && !przejete.length && !wolne && !wydJa.length) {
           wolneCiag.push(d);
           return;
         }
@@ -3836,7 +3942,11 @@ export const EmployeeSessionScreens = ({
                 <span className="text-[12px] font-extrabold px-2 py-0.5 rounded-full bg-[#DE3A22] text-white">dziś</span>
               )}
               {d === addDaysYMD(dzisYMD, 1) && <span className="text-[13px] text-[#6E6E66]">jutro</span>}
+              {!grafikWszyscy && !moje.length && wydJa.length > 0 && <span className="text-[13px] text-[#6E6E66]">bez zmiany</span>}
             </div>
+            {grafikWszyscy && wydLokalu.length > 0 && (
+              <div className="flex flex-col gap-2 mb-2">{wydLokalu.map((w) => kartaWyd(w, true))}</div>
+            )}
             {grafikWszyscy ? (
               <div className="bg-white border-2 border-[#DEDCD4] rounded-xl">
                 {wszyscyDnia.length === 0 ? (
@@ -3869,14 +3979,23 @@ export const EmployeeSessionScreens = ({
               </div>
             ) : (
               <>
-                {moje.length > 0 && <div className="flex flex-col gap-2">{moje.map((s) => renderKarta(s, inni))}</div>}
+                {(moje.length > 0 || wydJa.length > 0) && (
+                  <div className="flex flex-col gap-2">
+                    {[
+                      ...moje.map((s) => ({ t: trimTime(s.start_time), el: <React.Fragment key={`z-${s.id}`}>{renderKarta(s, inni)}</React.Fragment> })),
+                      ...wydJa.map((w) => ({ t: calyDzien(w) ? "00:00" : trimTime(w.godz_od), el: kartaWyd(w, false) })),
+                    ]
+                      .sort((a, b) => a.t.localeCompare(b.t))
+                      .map((x) => x.el)}
+                  </div>
+                )}
                 {!moje.length && wolne && (
                   <div className="flex items-center gap-2 px-3.5 py-2.5 border-2 border-[#DEDCD4] rounded-lg bg-white text-[15px] text-[#6E6E66]">
                     <Palmtree size={16} />
                     {wolne.type === "urlop" ? "Urlop" : "Zgłoszona niedostępność"}
                   </div>
                 )}
-                {!moje.length && !wolne && !przejete.length && (
+                {!moje.length && !wolne && !przejete.length && !wydJa.length && (
                   <div className="px-3.5 py-2.5 border-[1.5px] border-[#DEDCD4] rounded-lg text-[14px] text-[#6E6E66]">wolne</div>
                 )}
                 {przejete.map(({ sw, ps }) => (
@@ -3991,7 +4110,7 @@ export const EmployeeSessionScreens = ({
                   key={ymd}
                   onClick={() => setGrafikDzienMiesiaca(ymd)}
                   title={nieobecnosc ? (nieobecnosc.type === "urlop" ? "Urlop" : "Niedostępność") : undefined}
-                  className={`aspect-[1/1.05] rounded-lg border-[1.5px] flex flex-col items-center justify-center tabular-nums ${
+                  className={`relative aspect-[1/1.05] rounded-lg border-[1.5px] flex flex-col items-center justify-center tabular-nums ${
                     z.length
                       ? inny
                         ? "bg-[#8A5300] border-[#8A5300] text-white"
@@ -4003,6 +4122,9 @@ export const EmployeeSessionScreens = ({
                     ymd === dzisYMD ? "outline outline-[3px] outline-offset-1 outline-[#DE3A22]" : ""
                   } ${ymd === wybrany ? "shadow-[0_0_0_3px_#fff,0_0_0_5px_#171714]" : ""}`}
                 >
+                  {wydarzeniaPracownikaNaDzien({ wydarzenia, uczestnicy: wydarzeniaUczestnicy, user: employee, planShifts, data: ymd }).length > 0 && (
+                    <i className={`absolute top-1 left-1 w-[6px] h-[6px] rotate-45 ${z.length ? "bg-white" : "bg-[#171714]"}`} />
+                  )}
                   <em className="not-italic font-extrabold text-[14px]">{i + 1}</em>
                   {z.length > 0 && <small className="text-[10px] font-extrabold">{h1(godzDnia)}</small>}
                   {nieobecnosc && (
@@ -4063,6 +4185,15 @@ export const EmployeeSessionScreens = ({
             ) : (
               <b className="text-[18px] text-[#171714]">{wolneNa(wybrany) ? (wolneNa(wybrany).type === "urlop" ? "Urlop" : "Niedostępność") : "Wolne"}</b>
             )}
+            {wydarzeniaPracownikaNaDzien({ wydarzenia, uczestnicy: wydarzeniaUczestnicy, user: employee, planShifts, data: wybrany }).map((w) => (
+              <div key={w.id} className="mt-2">
+                <KartaWydarzenia
+                  w={w}
+                  dlaCiebie={jestUczestnikiem(wydarzeniaUczestnicy, w.id, employee)}
+                  wCzasieZmiany={wCzasieZmiany(w, employee, planShifts)}
+                />
+              </div>
+            ))}
           </div>
           {moje.length === 0 && miesiacPrefix > dzisYMD.slice(0, 7) && (
             <p className="text-[14px] text-[#6E6E66] mt-3">Kierownik nie wysłał jeszcze grafiku na ten miesiąc.</p>
@@ -4248,6 +4379,9 @@ export const EmployeeSessionScreens = ({
                       <b className="text-[16px] text-[#171714]">{dt.getDate()}</b>
                       <i className={`w-4 h-1 rounded-sm mt-0.5 ${z.length ? (inny ? "bg-[#8A5300]" : "bg-[#171714]") : ""}`} />
                       {oferta && <i className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#1F7A4A]" />}
+                      {wydarzeniaPracownikaNaDzien({ wydarzenia, uczestnicy: wydarzeniaUczestnicy, user: employee, planShifts, data: d }).length > 0 && (
+                        <i className="absolute top-1.5 left-1.5 w-[7px] h-[7px] rotate-45 bg-[#171714]" data-romb-wydarzenia />
+                      )}
                     </button>
                   );
                 })}
@@ -4559,6 +4693,10 @@ export const EmployeeSessionScreens = ({
             {zaplanowana ? (
               <small className="basis-full text-[13px] font-bold text-[#6E6E66]">
                 w grafiku · jeszcze nie przepracowane
+              </small>
+            ) : s.wydarzenie_id ? (
+              <small className="basis-full text-[13px] font-bold text-[#1F7A4A]" data-wpis-wydarzenia>
+                wydarzenie · {etykietaWydarzenia(s, wydarzenia)}
               </small>
             ) : czeka ? (
               <small className="basis-full flex items-center gap-1 text-[13px] font-bold text-[#8A5300]">
@@ -5205,6 +5343,7 @@ export const EmployeeSessionScreens = ({
   if (screen === "WIADOMOSCI") {
     const MIES_Z = ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"];
     const KATEGORIE = [
+      ["ev", "Wydarzenia"],
       ["grafik", "Grafik"],
       ["gie", "Giełda"],
       ["kor", "Korekty i wolne"],
@@ -5218,6 +5357,7 @@ export const EmployeeSessionScreens = ({
       uwaga: AlertTriangle,
       odpowiedz: Mail,
       dokument: FileText,
+      wydarzenie: Presentation,
     };
     const KOLO = {
       info: "bg-[#DEDCD4] text-[#171714]",
@@ -5288,7 +5428,9 @@ export const EmployeeSessionScreens = ({
         );
       }
       const Ikona = IKONY_WIAD[o.ikona] || Bell;
-      const plakietka = PLAKIETKA[o.ton];
+      // Wydarzenia niosą własny podpis plakietki („czas pracy”, „zmiana”,
+      // „odwołane”) — „zatwierdzone” przy nowym zebraniu byłoby nieprawdą.
+      const plakietka = o.plak && PLAKIETKA[o.ton] ? [PLAKIETKA[o.ton][0], o.plak, PLAKIETKA[o.ton][2]] : o.kat === "ev" ? null : PLAKIETKA[o.ton];
       const akcja = o.akcja && AKCJE[o.akcja];
       elementy.push(
         <div

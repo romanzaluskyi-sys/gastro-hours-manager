@@ -444,6 +444,8 @@ const USERS = [
       ["Wydarzenie odwołane", { type: "wydarzenie",
         message: "Wydarzenie odwołane: Degustacja win — pt 16.10 · 18:00–20:00 · Ceglana.",
         dane: { wiersze: [{ e: "Kiedy", w: "pt 16.10 · 18:00–20:00" }, { e: "Gdzie", w: "Ceglana" }] } }],
+      ["Godziny z wydarzenia", { type: "wydarzenie",
+        message: "Godziny z wydarzenia dopisane: Inwentaryzacja — śr 14.10 · 22:00–01:00 · Ceglana, 3 h (zapisał(a) Roman)." }],
       ["Nieznany typ", { type: "cos_nowego", message: "Zwykła wiadomość." }],
     ];
     const GRAFIK_ALI = [
@@ -469,6 +471,10 @@ const USERS = [
       if (nazwa === "Zmiana w wydarzeniu") {
         sprawdz("zmiana w wydarzeniu: „Zmiana: …”, stara godzina przekreślona",
           m.temat === "Zmiana: Wesele Nowaków" && /line-through[^>]*>12:00–17:00/.test(m.html), m.temat);
+      }
+      if (nazwa === "Godziny z wydarzenia") {
+        sprawdz("rozliczenie wydarzenia (0.75.0): „Godziny dopisane: …”, CTA do Raportu",
+          m.temat === "Godziny dopisane: Inwentaryzacja" && m.html.includes("?otworz=raport"), m.temat);
       }
       if (nazwa === "Wydarzenie odwołane") {
         sprawdz("odwołanie: „Odwołane: …”", m.temat === "Odwołane: Degustacja win", m.temat);

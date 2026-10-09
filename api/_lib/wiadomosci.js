@@ -243,10 +243,11 @@ const opisz = (n, user, grafik, dzis) => {
       if (/odrzucona/.test(t)) return { ton: "no", etykieta: "Koniec zmiany", tytul: "Zmiana bez końca odrzucona", lead: S.esc(t), cta: CTA.korekta };
       return { ton: "warn", ikona: "!", etykieta: "Zmiana bez zakończenia", tytul: "Twoja zmiana nie ma zakończenia", lead: S.esc(t), cta: CTA.korekta };
     // Wydarzenia (0.74.0) — zdania z src/utils/wydarzenia.ts: „Nowe wydarzenie:”,
-    // „Zmiana w wydarzeniu:”, „Wydarzenie odwołane:”. Szczegóły (Kiedy / Gdzie
+    // „Zmiana w wydarzeniu:”, „Wydarzenie odwołane:”, „Godziny z wydarzenia
+    // dopisane:” (0.75.0). Szczegóły (Kiedy / Gdzie
     // albo było → jest) niesie `dane.wiersze`, opis — `dane.cytat`.
     case "wydarzenie": {
-      const nazwa = t.replace(/^(Nowe wydarzenie|Zmiana w wydarzeniu|Wydarzenie odwołane): /, "").split(" — ")[0];
+      const nazwa = t.replace(/^(Nowe wydarzenie|Zmiana w wydarzeniu|Wydarzenie odwołane|Godziny z wydarzenia dopisane): /, "").split(" — ")[0];
       const opis = d.cytat ? S.akapit(`„${S.esc(d.cytat)}”`, { kursywa: true, margines: "0 0 18px 0" }) : null;
       const cta = ["Zobacz w grafiku", "grafik"];
       if (/^Wydarzenie odwołane/.test(t))
@@ -258,6 +259,9 @@ const opisz = (n, user, grafik, dzis) => {
           lead: "Nie musisz przychodzić. Twoje zmiany w grafiku zostają bez zmian.",
           cta,
         };
+      // 0.75.0 — kierownik rozliczył płatne wydarzenie (tekstRozliczenia).
+      if (/^Godziny z wydarzenia dopisane/.test(t))
+        return { ton: "ok", ikona: "✓", etykieta: "Wydarzenie · czas pracy", tytul: `Godziny dopisane: ${nazwa}`, lead: S.esc(t), cta: CTA.raport };
       if (/^Zmiana w wydarzeniu/.test(t))
         return { ton: "warn", ikona: "!", etykieta: "Zmiana w wydarzeniu", tytul: `Zmiana: ${nazwa}`, lead: S.esc(t), rozmowa: opis, cta };
       return {

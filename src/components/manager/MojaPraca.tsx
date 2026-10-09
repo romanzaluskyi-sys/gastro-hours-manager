@@ -37,11 +37,11 @@ import {
   publishedShiftsFor,
   nextShiftFrom,
   shiftHours,
-  faktIPlanMiesiaca,
   trimTime,
   toLocalYMD,
 } from "../../utils/grafik";
 import { podsumowanieMiesiaca } from "../../utils/umowy";
+import { etykietaWydarzenia, faktIPlanZWydarzeniami } from "../../utils/wydarzenia";
 import { regulyWpisu, wymuszonaCalaZmiana, opisGdzie } from "../../utils/wpisy";
 import { PoleGodziny, fmtHHMM } from "../employeeSessionShared";
 
@@ -78,6 +78,7 @@ const PASEK = {
   bezkonca: "border-l-[#8A5300]",
   trwa: "border-l-[#1F7A4A]",
   urlop: "border-l-[#DEDCD4]",
+  wydarzenie: "border-l-[#1F7A4A]",
   plan: "border-l-[#DEDCD4]",
 };
 
@@ -91,6 +92,8 @@ export default function MojaPraca({
   showMsg,
   onEditShift,
   onDopisz,
+  wydarzenia = [],
+  wydarzeniaUczestnicy = [],
 }) {
   const [teraz, setTeraz] = useState(new Date());
   useEffect(() => {
@@ -472,7 +475,12 @@ export default function MojaPraca({
   new Set([...Object.keys(planDnia), ...Object.keys(faktDnia)]).forEach((ymd) => {
     const plany = (planDnia[ymd] || []).sort((a, b) => trimTime(a.start_time).localeCompare(trimTime(b.start_time)));
     const fakty = (faktDnia[ymd] || []).sort((a, b) => a.start_time - b.start_time);
-    const praca = fakty.filter((s) => !s.is_urlop);
+    // Godziny z rozliczonego wydarzenia (0.75.0) nie mają pary w grafiku —
+    // osobny wiersz, jak urlop, z tytułem wydarzenia zamiast grafiku.
+    const praca = fakty.filter((s) => !s.is_urlop && !s.wydarzenie_id);
+    fakty
+      .filter((s) => !s.is_urlop && s.wydarzenie_id)
+      .forEach((s) => wiersze.push({ klucz: s.id, ymd, fakt: s, plan: null, status: "wydarzenie", sort: fmtHHMM(s.start_time) }));
     fakty
       .filter((s) => s.is_urlop)
       .forEach((s) => wiersze.push({ klucz: s.id, ymd, fakt: s, plan: null, status: "urlop", sort: "00:00" }));
@@ -503,7 +511,16 @@ export default function MojaPraca({
   }, [klucz, braki.length]);
 
   // Norma — to samo zdanie co w Raporcie pracownika i z tej samej funkcji.
-  const rozbicie = faktIPlanMiesiaca({ shifts, planShifts, user: currentUser, rok: mies.rok, mies: mies.m + 1, dzis: teraz });
+  const rozbicie = faktIPlanZWydarzeniami({
+    shifts,
+    planShifts,
+    user: currentUser,
+    rok: mies.rok,
+    mies: mies.m + 1,
+    dzis: teraz,
+    wydarzenia,
+    uczestnicy: wydarzeniaUczestnicy,
+  });
   const podsumowanie = podsumowanieMiesiaca({
     user: currentUser,
     przepracowane: rozbicie.fakt,
@@ -552,7 +569,9 @@ export default function MojaPraca({
           {w.plan ? (
             `${trimTime(w.plan.start_time)}–${trimTime(w.plan.end_time)}`
           ) : (
-            <em className="not-italic text-[13px]">{w.status === "urlop" ? "—" : "poza grafikiem"}</em>
+            <em className="not-italic text-[13px]">
+              {w.status === "urlop" ? "—" : w.status === "wydarzenie" ? etykietaWydarzenia(w.fakt, wydarzenia) : "poza grafikiem"}
+            </em>
           )}
         </div>
         <div className="col-start-2 row-start-1 md:col-start-auto md:row-start-auto min-w-0">

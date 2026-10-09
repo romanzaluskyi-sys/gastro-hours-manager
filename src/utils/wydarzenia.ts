@@ -26,11 +26,15 @@ import {
   isSameUser,
   poOstatnimDniu,
   absenceOn,
+  faktIPlanMiesiaca,
 } from "./grafik";
 import { kosztGodziny } from "./budzet";
+import { naEtacie } from "./umowy";
 import { uwagiPrzypisania } from "./kodeks";
 import { api } from "../api/supabase";
 import { createEmployeeNotification } from "../api/notifications";
+import { zmianyOsobyWBazie } from "./shifts";
+import { zapiszSladRecznejZmiany } from "./corrections";
 
 export const TYPY_WYDARZEN = [
   { key: "zebranie", label: "Zebranie / szkolenie", krotko: "Zebranie" },
@@ -166,7 +170,7 @@ export const odcinkiDoRozliczenia = (w, user, shifts) => {
   const zakres = zakresWydarzenia(w);
   if (!zakres) return [];
   const zajete = (shifts || [])
-    .filter((s) => s.end_time && (s.user_id ? String(s.user_id) === String(user.id) : s.user_name === user.name))
+    .filter((s) => s.end_time && !s.is_urlop && (s.user_id ? String(s.user_id) === String(user.id) : s.user_name === user.name))
     .map((s) => [new Date(s.start_time).getTime() / 60000, new Date(s.end_time).getTime() / 60000]);
   return odcinkiPoza(zakres, zajete).map(([p, k]) => ({ start: new Date(p * 60000), end: new Date(k * 60000) }));
 };
@@ -182,6 +186,13 @@ export const koniecWydarzenia = (w) => {
 // Płatne, nieodwołane, nierozliczone i już zakończone → sprawa w „Do decyzji”.
 export const doRozliczenia = (wydarzenia, teraz = new Date()) =>
   (wydarzenia || []).filter((w) => w.platne && !odwolane(w) && !w.rozliczone_at && koniecWydarzenia(w) <= teraz);
+
+// Kolejka „Do decyzji” dla TEGO kierownika. ⚠️ „Cała sieć” (lokal NULL) tylko
+// dla właściciela — baza pozwala ją zmienić wyłącznie `widzi_wszystko()`
+// (`moge_zmieniac_wydarzenie`), więc kierownik lokalu dostałby sprawę, której
+// nie da się zapisać. Ta sama funkcja liczy znaczek, Pulpit i listę.
+export const wydarzeniaDoDecyzji = ({ wydarzenia, lokalOk, calaSiec, teraz }) =>
+  doRozliczenia(wydarzenia, teraz).filter((w) => (w.lokal ? !lokalOk || lokalOk(w.lokal) : !!calaSiec));
 
 // --- listy ------------------------------------------------------------------
 
@@ -212,6 +223,20 @@ export const jestUczestnikiem = (uczestnicy, wydarzenieId, user) =>
 export const wydarzeniaOsoby = (wydarzenia, uczestnicy, user) =>
   sortujWydarzenia((wydarzenia || []).filter((w) => !odwolane(w) && jestUczestnikiem(uczestnicy, w.id, user)));
 
+// Grafik pracownika, widok „Ja”: wydarzenia, w których jest uczestnikiem, PLUS
+// wydarzenia całego lokalu (grupa, kontrola, w okolicy, dla wszystkich
+// stanowisk) w dniu, w którym ma tam opublikowaną zmianę — „wesele 40 os.”
+// zmienia mu pracę, nawet jeśli nie dostał wiadomości. Makieta
+// EmployeeScheduleEventMobile, ekran 2.
+export const wydarzeniaPracownikaNaDzien = ({ wydarzenia, uczestnicy, user, planShifts, data }) => {
+  const moje = publishedShiftsFor(planShifts, user).filter((s) => s.date === data);
+  return wydarzeniaNaDzien(wydarzenia, null, data).filter(
+    (w) =>
+      jestUczestnikiem(uczestnicy, w.id, user) ||
+      (dlaCalegoLokalu(w) && moje.some((s) => !w.lokal || s.lokal === w.lokal))
+  );
+};
+
 // Pasek „Dziś w lokalu” na tablecie — tylko to, co dotyczy CAŁEGO lokalu:
 // grupa, kontrola, wydarzenie w okolicy albo wydarzenie dla wszystkich
 // stanowisk. Zebranie wybranych osób widzą tylko one, po wybraniu siebie.
@@ -229,6 +254,26 @@ export const godzinyWydarzenOsoby = ({ wydarzenia, uczestnicy, user, planShifts,
       60) *
       100
   ) / 100;
+
+// `faktIPlanMiesiaca` + płatne wydarzenia od dziś do końca miesiąca (W4,
+// 0.75.0) — „Z grafikiem wyjdzie” w Raporcie pracownika, godziny miesiąca w
+// jego Grafiku i Moja praca. Rozliczone pomijamy: są już wierszami `shifts`.
+// Osobna funkcja, bo utils/grafik.ts nie może importować stąd (cykl).
+export const faktIPlanZWydarzeniami = ({ wydarzenia, uczestnicy, ...reszta }) => {
+  const r = faktIPlanMiesiaca(reszta);
+  if (!r.biezacy || !(wydarzenia || []).length) return { ...r, wydarzenia: 0 };
+  const od = toLocalYMD(reszta.dzis || new Date());
+  const doDnia = `${reszta.rok}-${String(reszta.mies).padStart(2, "0")}-31`;
+  const ev = godzinyWydarzenOsoby({
+    wydarzenia: wydarzenia.filter((w) => !w.rozliczone_at),
+    uczestnicy,
+    user: reszta.user,
+    planShifts: reszta.planShifts,
+    od,
+    doDnia,
+  });
+  return { ...r, plan: r.plan + ev, wydarzenia: ev };
+};
 
 // Koszt płatnego wydarzenia dla listy osób — „≈ 180 zł” w panelu. Lokal
 // kosztu: lokal wydarzenia, a przy „Cała sieć” — lokal macierzysty osoby.
@@ -249,6 +294,35 @@ export const kosztWydarzenia = ({ wydarzenie, osoby, planShifts, lokale }) => {
     else koszt += (m / 60) * k;
   }
   return { koszt: Math.round(koszt), godziny: Math.round((minuty / 60) * 100) / 100, bezDanych };
+};
+
+// Koszt płatnych wydarzeń JEDNEGO lokalu w jednym dniu — dodatek do budżetu
+// dnia w Grafiku (`budzetDnia({ dodatki })`). Liczy uczestników z ich
+// minutami poza zmianą; „Cała sieć” obciąża lokal macierzysty osoby (ta sama
+// reguła co `kosztWydarzenia`), więc w danym lokalu liczą się tylko jego ludzie.
+// Rozliczone też — to wciąż plan tego dnia, a godziny w `shifts` budżet nie widzi.
+export const kosztWydarzenDnia = ({ wydarzenia, uczestnicy, users, planShifts, lokalRow, lokal, dateStr }) => {
+  const [rok, mies] = dateStr.split("-").map(Number);
+  const wynik = { koszt: 0, etaty: 0, zlecenia: 0, godziny: 0, bezDanych: [] };
+  for (const w of wydarzeniaNaDzien(wydarzenia, null, dateStr).filter((x) => x.platne)) {
+    for (const uc of uczestnicyWydarzenia(uczestnicy, w.id)) {
+      const u = (users || []).find((x) => String(x.id) === String(uc.user_id));
+      if (!u || (w.lokal || u.default_lokal) !== lokal) continue;
+      const min = platneMinutyOsoby(w, u, planShifts);
+      if (!min) continue;
+      wynik.godziny += min / 60;
+      const k = kosztGodziny(u, lokalRow, rok, mies);
+      if (k == null) {
+        if (!wynik.bezDanych.includes(u.name)) wynik.bezDanych.push(u.name);
+        continue;
+      }
+      const kwota = (min / 60) * k;
+      wynik.koszt += kwota;
+      if (naEtacie(u)) wynik.etaty += kwota;
+      else wynik.zlecenia += kwota;
+    }
+  }
+  return wynik;
 };
 
 // --- teksty -----------------------------------------------------------------
@@ -441,4 +515,115 @@ export const odwolajWydarzenie = async ({ wydarzenie, uczestnicy, kto, setWydarz
   const niewyslane = await powiadom(lista.map((u) => [u.user_name, tekstOdwolania(zapisane), daneDoMaila(zapisane)]));
   if (setWydarzenia) setWydarzenia((prev) => (prev || []).map((w) => (String(w.id) === String(zapisane.id) ? zapisane : w)));
   return { wydarzenie: zapisane, powiadomieni: lista.length - niewyslane, niewyslane };
+};
+
+// --- rozliczenie płatnego wydarzenia (W4, 0.75.0) ----------------------------
+
+const tejOsoby = (s, user) => (s.user_id ? String(s.user_id) === String(user.id) : s.user_name === user.name);
+const minutyOdcinkow = (odc) => Math.round(odc.reduce((m, o) => m + (o.end - o.start) / 60000, 0));
+
+// Wiersze karty „Wydarzenie do rozliczenia”: każdy uczestnik z tym, co się mu
+// DOPISZE (odcinki poza jego odbitymi zmianami). `minuty = 0` przy obecności
+// znaczy „czas w zmianie — nic nie dopisujemy”.
+export const pozycjeRozliczenia = ({ wydarzenie, uczestnicy, users, shifts }) =>
+  uczestnicyWydarzenia(uczestnicy, wydarzenie.id)
+    .map((uc) => {
+      const user = (users || []).find((u) => String(u.id) === String(uc.user_id)) || { id: uc.user_id, name: uc.user_name };
+      const odcinki = odcinkiDoRozliczenia(wydarzenie, user, (shifts || []).filter((s) => !s.wydarzenie_id || String(s.wydarzenie_id) !== String(wydarzenie.id)));
+      return { uczestnik: uc, user, odcinki, minuty: minutyOdcinkow(odcinki) };
+    })
+    .sort((a, b) => (a.user.name || "").localeCompare(b.user.name || "", "pl"));
+
+// Tekst wiadomości do pracownika po dopisaniu godzin — jego wypłata.
+export const tekstRozliczenia = (w, minuty, kto) =>
+  `Godziny z wydarzenia dopisane: ${w.tytul} — ${opisTerminu(w)}, ${String(Math.round((minuty / 60) * 100) / 100).replace(".", ",")} h (zapisał(a) ${kto}).`;
+
+// JEDYNE miejsce, które zamienia płatne wydarzenie w godziny (`shifts` z
+// `wydarzenie_id`). `obecniIds` = kto był (pusta lista = „Nikt nie przyszedł”).
+// Nic nie dopisuje się samo — to podpis kierownika pod wypłatą, ta sama zasada
+// co przy zmianach bez odbicia.
+//
+// ⚠️ Odcinki liczymy z BAZY tuż przed zapisem (`zmianyOsobyWBazie`), nie ze
+// stanu — ta sama ochrona co w `rozliczBrakOdbicia`: stan potrafi być stary, a
+// drugie kliknięcie / druga sesja dałyby te same godziny dwa razy. Wiersz z
+// tym samym `wydarzenie_id` już w bazie = ta osoba jest rozliczona, nie
+// dopisujemy drugi raz. Błąd sieci przy odczycie spada na stan.
+//
+// Stanowisko = domyślne stanowisko osoby (koszt trafia tam, gdzie zwykle),
+// lokal = lokal wydarzenia, a przy „Cała sieć” — lokal macierzysty osoby.
+export const rozliczWydarzenie = async ({
+  wydarzenie,
+  uczestnicy,
+  obecniIds,
+  users,
+  kto,
+  shifts,
+  setShifts,
+  setWydarzenia,
+  setUczestnicy,
+}) => {
+  const w = wydarzenie;
+  const obecni = new Set((obecniIds || []).map(String));
+  const zakres = zakresWydarzenia(w);
+  const noweZmiany = [];
+  const zmienieniUczestnicy = [];
+  let niewyslane = 0;
+  for (const uc of uczestnicyWydarzenia(uczestnicy, w.id)) {
+    const user = (users || []).find((u) => String(u.id) === String(uc.user_id)) || { id: uc.user_id, name: uc.user_name };
+    const obecny = obecni.has(String(uc.user_id));
+    let shiftId = uc.shift_id || null;
+    if (obecny && zakres && !shiftId) {
+      let wBazie;
+      try {
+        wBazie = await zmianyOsobyWBazie(user.id, new Date(zakres[0] * 60000));
+      } catch (e) {
+        wBazie = (shifts || []).filter((s) => tejOsoby(s, user));
+      }
+      const juz = wBazie.find((s) => String(s.wydarzenie_id || "") === String(w.id));
+      if (juz) {
+        shiftId = juz.id;
+      } else {
+        const odcinki = odcinkiDoRozliczenia(w, user, wBazie);
+        for (const o of odcinki) {
+          const zapisana = await api.post("shifts", {
+            user_id: user.id,
+            user_name: user.name,
+            lokal: w.lokal || user.default_lokal || null,
+            stanowisko: user.default_stanowisko || typWydarzenia(w.typ).krotko,
+            start_time: o.start.toISOString(),
+            end_time: o.end.toISOString(),
+            godzin: Math.round(((o.end - o.start) / 3600000) * 100) / 100,
+            wydarzenie_id: String(w.id),
+          });
+          const wiersz = { ...zapisana, start_time: new Date(zapisana.start_time), end_time: new Date(zapisana.end_time) };
+          noweZmiany.push(wiersz);
+          if (!shiftId) shiftId = zapisana.id;
+          await zapiszSladRecznejZmiany({ stara: null, nowa: wiersz, editorName: kto, reason: `Wydarzenie: ${w.tytul}`, source: "manual_add" });
+        }
+        if (odcinki.length) {
+          await createEmployeeNotification(user.name, tekstRozliczenia(w, minutyOdcinkow(odcinki), kto), "wydarzenie").catch(() => {
+            niewyslane += 1;
+          });
+        }
+      }
+    }
+    const zapisany = await api.patch("wydarzenia_uczestnicy", uc.id, { obecny, shift_id: obecny ? shiftId : null });
+    zmienieniUczestnicy.push(zapisany || { ...uc, obecny, shift_id: obecny ? shiftId : null });
+  }
+  const teraz = new Date().toISOString();
+  const zapisane = await api.patch("wydarzenia", w.id, { rozliczone_at: teraz, rozliczone_przez: kto, updated_at: teraz });
+  if (setShifts && noweZmiany.length) setShifts((prev) => [...(prev || []), ...noweZmiany]);
+  if (setUczestnicy)
+    setUczestnicy((prev) => (prev || []).map((u) => zmienieniUczestnicy.find((z) => String(z.id) === String(u.id)) || u));
+  if (setWydarzenia) setWydarzenia((prev) => (prev || []).map((x) => (String(x.id) === String(w.id) ? zapisane || { ...x, rozliczone_at: teraz } : x)));
+  return { dopisane: noweZmiany.length, minuty: noweZmiany.reduce((m, s) => m + (s.end_time - s.start_time) / 60000, 0), niewyslane };
+};
+
+// Wiersz `shifts` z rozliczonego wydarzenia → jego tytuł do pokazania zamiast
+// samego stanowiska (Rejestr, Raport, Moja praca — jak „Urlop” przy
+// `is_urlop`). Wydarzenia spoza pobranego okna → „Wydarzenie”.
+export const etykietaWydarzenia = (shift, wydarzenia) => {
+  if (!shift || !shift.wydarzenie_id) return null;
+  const w = (wydarzenia || []).find((x) => String(x.id) === String(shift.wydarzenie_id));
+  return w ? w.tytul : "Wydarzenie";
 };

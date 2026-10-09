@@ -76,6 +76,7 @@ import { kontekstDnia, kontekstKrotko } from "../../utils/kalendarz";
 import { celDnia, zapiszNadpisanieDnia } from "../../utils/budzet";
 import { czyWpisZadania, zadanieWpisu, polaZadania } from "../../utils/tasks";
 import { pozaNormaPola } from "../../utils/pola";
+import { wydarzeniaNaDzien, godzinyTekst } from "../../utils/wydarzenia";
 import { maZadanieZe } from "../../utils/mojeZadania";
 import ZdarzenieModal from "./ZdarzenieModal";
 import ModalWpisu from "./ModalWpisu";
@@ -117,6 +118,7 @@ export default function KartaDnia({
   budzetCele, budzetDni, setBudzetDni,
   setKarty, setWpisy, odswiez, showMsg,
   zadaniaMoje, dodajDoMoich,
+  wydarzenia = [],
   data, setData,
 }) {
   const [busy, setBusy] = useState(false);
@@ -407,9 +409,19 @@ export default function KartaDnia({
         etykieta="Utarg"
         duza={obrot != null ? zl(obrot) : "—"}
         pod={
-          odniesienie
-            ? `${odniesienie.nazwa} ${zl(odniesienie.kwota)}${odchylenie != null ? ` · ${znak(odchylenie, "%")}` : ""}`
-            : "brak planu w Grafiku"
+          <>
+            {odniesienie
+              ? `${odniesienie.nazwa} ${zl(odniesienie.kwota)}${odchylenie != null ? ` · ${znak(odchylenie, "%")}` : ""}`
+              : "brak planu w Grafiku"}
+            {/* Wydarzenia dnia (0.74.0, makieta PulseCard) — tłumaczą
+                odchylenie od planu, ale go nie zmieniają. */}
+            {wydarzeniaNaDzien(wydarzenia, lokal, data).map((w) => (
+              <span key={w.id} className="block mt-1 font-bold text-[#171714]" data-wydarzenie-dnia-pulsu={w.id}>
+                Tego dnia: {w.tytul}
+                {w.liczba_gosci ? ` · ${w.liczba_gosci} gości` : ""} · {godzinyTekst(w)}
+              </span>
+            ))}
+          </>
         }
       />
       <Kafelek

@@ -147,9 +147,23 @@ export const budzetDnia = ({
   lokalRow,
   lokal,
   dateStr,
+  // Płatne wydarzenia tego dnia (0.75.0) — liczy je `kosztWydarzenDnia` w
+  // utils/wydarzenia.ts i podaje tu gotowe; budzet.ts nie importuje stamtąd,
+  // bo tamten plik importuje stąd (cykl).
+  dodatki = null,
 }) => {
   const cel = celDnia({ cele, budzetDni }, lokal, dateStr);
-  const k = kosztZmianDnia({ planShifts, users, lokalRow, lokal, dateStr });
+  const z = kosztZmianDnia({ planShifts, users, lokalRow, lokal, dateStr });
+  const k = dodatki
+    ? {
+        ...z,
+        koszt: z.koszt + dodatki.koszt,
+        etaty: z.etaty + dodatki.etaty,
+        zlecenia: z.zlecenia + dodatki.zlecenia,
+        godziny: z.godziny + dodatki.godziny,
+        bezDanych: [...new Set([...z.bezDanych, ...dodatki.bezDanych])],
+      }
+    : z;
   const utarg = cel ? cel.utarg : null;
   const pct = cel ? cel.pct : null;
   // Procent liczymy tylko wtedy, gdy jest z czego. Koszt podzielony przez brak
@@ -171,6 +185,7 @@ export const budzetDnia = ({
     zlecenia: k.zlecenia,
     wgStanowisk: k.wgStanowisk,
     bezDanych: k.bezDanych,
+    wydarzeniaKoszt: dodatki ? dodatki.koszt : 0,
     kosztPct,
     limit,
     zapas: limit == null ? null : limit - k.koszt,

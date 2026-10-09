@@ -11,17 +11,42 @@ import React, { useState } from "react";
 import {
   Home,
   CheckCircle2,
+  Calendar,
+  ClipboardCheck,
+  BookOpen,
   FileText,
   Clock,
-  Flag,
+  Inbox,
   Users,
   BarChart3,
   User,
+  Settings,
 } from "lucide-react";
 import { APP_VERSION } from "../../config";
 import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
+  {
+    version: "0.75.0",
+    date: "2026-10-09",
+    items: [
+      "Rozliczenie płatnych wydarzeń w Zatwierdzaniu zmian: odznacz, kogo nie było, i „Zapisz godziny” — trafiają do Rejestru (6 s na „Cofnij”).",
+      "Czas wydarzenia w zmianie osoby nie liczy się drugi raz.",
+      "Godziny z wydarzenia mają jego nazwę w Rejestrze, Mojej pracy i Raporcie pracownika.",
+      "Płatne wydarzenia liczą się do planu: blok w wierszu osoby w Grafiku, godziny, norma, budżet dnia i „Z grafikiem wyjdzie”.",
+      "Przewodnik „Jak korzystać” opisuje od nowa wszystkie zakładki, z Grafikiem, Wydarzeniami, Zadaniami, Pulsem i Skrzynką.",
+    ],
+  },
+  {
+    version: "0.74.0",
+    date: "2026-10-08",
+    items: [
+      "Wydarzenia w Grafiku: zebrania, grupy, kontrole, mecze w okolicy — dla lokalu albo całej sieci, wybranych stanowisk i osób.",
+      "Powiadamiają od razu (wiadomość i e-mail): nowe, zmiana, odwołanie.",
+      "Widać je w Grafiku, na Pulpicie, w Pulsie, u pracownika (Grafik, Pulpit, Wiadomości) i na Tablecie („Dziś w lokalu”).",
+      "Płatny czas pracy przy wydarzeniu: koszt i uwagi w panelu.",
+    ],
+  },
   {
     version: "0.73.0",
     date: "2026-10-08",
@@ -950,46 +975,73 @@ const CHANGELOG = [
   },
 ];
 
+// Po jednej sekcji na zakładkę, w kolejności menu (NAV_ITEMS w ManagerShell).
+// Przepisane w 0.75.0 — do 0.74.0 opisywało stan sprzed Grafiku i Skrzynki.
 const SECTIONS = [
   {
     Icon: Home,
     title: "Pulpit",
-    body: "Ekran startowy. Godziny dziś/w tym tygodniu, koszt miesiąca (jeśli pracownikom ustawiono stawkę), skrót do zgłoszeń czekających na decyzję, kto teraz pracuje i czyje terminy sanepid/umowy się kończą. To dobre miejsce, żeby zacząć dzień.",
+    body: "Ekran na początek dnia. Najpierw „Do zrobienia teraz”: zamknięcie wczorajszego dnia w każdym lokalu i „Wymaga decyzji” — te same sprawy co w Zatwierdzaniu zmian (prostą korektę godzin zatwierdzisz tu jednym ✓). Potem liczby (dziś, tydzień, miesiąc, koszt — zawsze w porównaniu z tym samym okresem wcześniej) i panele: kto jest teraz na zmianie, najbliższe wydarzenia, terminy dokumentów i zadania na dziś. Lokal wybierasz w pasku u góry.",
   },
   {
     Icon: CheckCircle2,
     title: "Zatwierdzanie zmian",
-    body: "Tu trafiają poprawki godzin zgłoszone przez pracowników przez „Zgłoś → Popraw zmianę”. Dla każdej: Zatwierdź (przyjmujesz dane tak, jak podał pracownik), Popraw (wpisujesz własne godziny + podajesz powód — pracownik go zobaczy), albo Zapytaj (gdy zgłoszenie jest niekompletne, np. brak godziny zakończenia). Zatwierdzone zmiany od razu trafiają do Rejestru Godzin. Nad tą kolejką: osobna sekcja „Wnioski o wolne” — urlop albo dni niedostępności zgłoszone przez pracowników przez „Zgłoś → Wolne / urlop”. Zatwierdzony urlop od razu wpisuje się jako godziny (8h za dzień roboczy) we wszystkich raportach.",
+    body: "Wszystko, co czeka na Twój podpis: osoby na próbę dodane z tabletu, zmiany z grafiku bez odbicia, zmiany bez zakończenia, wydarzenia do rozliczenia, giełda zmian, wnioski o wolne i korekty godzin. Główny przycisk mówi, co się stanie („Dopisz 8 h”), „Popraw” otwiera poprawkę pod kartą. Proste sprawy zaznaczysz i zatwierdzisz hurtem. Każdą decyzję możesz cofnąć przez 6 sekund — dopiero potem trafia do bazy.",
+  },
+  {
+    Icon: Calendar,
+    title: "Grafik",
+    body: "Planowanie tygodnia, dnia i miesiąca (miesiąc też do druku A4). W trybie Edycja klikasz kratkę albo czerwoną etykietę braku nad dniem — panel podpowiada kandydatów, godziny z wymagań i uwagi z Kodeksu pracy (to sygnał, nie blokada). Zmiany zbierają się w szkicu; pracownicy zobaczą je dopiero po „Opublikuj”. Nad siatką: koszt i budżet tygodnia oraz giełda zmian. Konfiguracja: wymagania obsady, godziny otwarcia, budżet i wyjątki.",
+  },
+  {
+    Icon: Calendar,
+    title: "Wydarzenia (w Grafiku)",
+    body: "Zebranie, szkolenie, grupa, inwentaryzacja, kontrola, mecz w okolicy. Dodajesz przyciskiem „+ Wydarzenie” nad siatką albo w nagłówku dnia, dla lokalu albo całej sieci, dla wszystkich lub wybranych stanowisk. Wydarzenie zapisuje się i powiadamia od razu — nie czeka na publikację grafiku i nie liczy się do obsady. „Płatny czas pracy” wpisuje je uczestnikom do planu (godziny, norma, budżet); po wydarzeniu rozliczasz obecność w Zatwierdzaniu zmian i godziny trafiają do Rejestru. Czas, który wypada w czyjejś zmianie, nie liczy się drugi raz.",
+  },
+  {
+    Icon: ClipboardCheck,
+    title: "Zadania",
+    body: "Checklisty w blokach: blok mówi KIEDY (pora, dni) i DLA KOGO (stanowiska), zadania to jego punkty — także z pomiarem (temperatura, kwota) i normą. „Dziś w lokalach” pokazuje postęp i pomiary poza normą, „Moje zadania” to Twoja lista spraw z terminem, a „Bloki i zadania” (na komputerze) — konfiguracja z gotowym zestawem startowym.",
+  },
+  {
+    Icon: BookOpen,
+    title: "Puls",
+    body: "Karta dnia: utarg i paragony (wobec planu z Grafiku), wpisy HACCP, notatka dla następnej zmiany i zdarzenia. Zapisuje się samo; „Zamknij dzień” wymaga utargu i obowiązkowych wpisów. Zamkniętego dnia się nie otwiera — każda zmiana to „Poprawka” z powodem. Dni i Analityka pokazują tydzień, koszt pracy wobec utargu i trafność prognozy. Dzień może zamknąć też pracownik z prawem „Kto zamyka dzień”.",
   },
   {
     Icon: FileText,
     title: "Rejestr Godzin",
-    body: "Wszystkie zapisane zmiany, pogrupowane po stanowisku. Szukaj po imieniu/stanowisku/dacie/godzinie, sortuj, dodawaj wpis ręcznie (+ Dodaj wpis) dla dowolnego pracownika. Ikona zegara (Historia) przy wierszu pokazuje, kto i kiedy poprawił daną zmianę oraz dlaczego. Eksport CSV zapisuje aktualnie widoczny (przefiltrowany) miesiąc.",
+    body: "Wszystkie odbite godziny miesiąca: grafik obok faktu, różnica od 15 minut, „Poza grafikiem”, urlop i wydarzenia z nazwą. Filtry (różnice, ręczne, do decyzji), wyszukiwanie, „+ Dodaj wpis” i eksport CSV. Zmiana zapisanej godziny wymaga powodu — pracownik go zobaczy, a historia zostaje w śladzie korekt. Usunięcie można cofnąć przez 6 sekund.",
+  },
+  {
+    Icon: User,
+    title: "Moja praca",
+    body: "Kierownik też pracuje: z lewej zapis Twojej zmiany, z prawej miesiąc — grafik obok faktu, brakujące zapisy z „Dopisz” i zdanie o normie. Ikonka osoby przy dzwonku prowadzi tu z każdej zakładki.",
   },
   {
     Icon: Clock,
     title: "Aktywni",
-    body: "Kto w tej chwili pracuje, z licznikiem czasu na żywo (podświetla się na czerwono po 8h). „Zakończ zmianę” zamyka zmianę ręcznie — przydaje się, gdy ktoś zapomniał odbić wyjście.",
+    body: "Kto jest teraz w pracy, z postępem zmiany, oraz „Wymaga uwagi”: osoby z grafiku bez wejścia i po planowanym końcu. „Zakończ” i „Dopisz wejście” najpierw pytają o godzinę. Osobno na dole — zmiany bez zakończenia.",
   },
   {
-    Icon: Flag,
-    title: "Zgłoszenia",
-    body: "Wolne zgłoszenia od pracowników (nie poprawki godzin — te są w Zatwierdzanie zmian) — awarie, braki, uwagi, czasem anonimowe. „Oznacz jako rozwiązane” zamyka temat.",
+    Icon: Inbox,
+    title: "Skrzynka",
+    body: "Zgłoszenia i powiadomienia w jednym. „Do zrobienia” to sprawy liczone z danych (wnioski o wolne, nowe zgłoszenia, zmiany bez końca) — znikają same, gdy rozstrzygniesz je gdziekolwiek. „Informacje” to powiadomienia z 14 dni, „Archiwum” — reszta. Na zgłoszenie pod imieniem możesz odpowiedzieć; anonimowe ma treść ukrytą do „Pokaż”.",
   },
   {
     Icon: Users,
     title: "Pracownicy",
-    body: "Lista + karta szczegółów. Klikasz osobę z listy po lewej, edytujesz po prawej. Lokal i stanowisko są wymagane (poza kontem typu „Tablet lokalu”); przy koncie logującym się samodzielnie — też email i PIN. Reszta bloków jest opcjonalna. Blok „Umowa i wynagrodzenie” decyduje, jak liczy się koszt: przy zleceniu wpisujesz stawkę godzinową, przy umowie o pracę — wymiar etatu i kwotę z umowy, a normę godzin aplikacja liczy sama z kalendarza. „PIN blokady na kiosku” dotyczy tylko kont typu „Otwarte Konto” używanych na wspólnym tablecie. Sekcja „Urlop” pozwala od razu wpisać urlop pracownikowi (od-do), bez czekania na wniosek — zatwierdzony automatycznie. Usunięcie na zawsze jest możliwe tylko z zakładki Archiwum — najpierw zarchiwizuj, potem usuń. Lokale i Stanowiska (przyciski przy Aktywni/Archiwum, tylko dla Szefa) to osobny, rzadko używany słownik nazw.",
+    body: "Lista i karta osoby: dane, logowanie (e-mail i PIN), miejsce pracy, umowa i wynagrodzenie (zlecenie — stawka godzinowa, umowa o pracę — wymiar i kwota; normę liczy aplikacja), dokumenty, urlop, ostatni dzień pracy i notatki. „Braki w danych” pokazuje, komu brakuje terminów albo wynagrodzenia. Usunąć na zawsze można tylko z Archiwum.",
   },
   {
     Icon: BarChart3,
     title: "Raporty i koszty",
-    body: "Zestawienie miesięczne wg lokalu i wg pracownika. Kliknij pracownika po lewej, żeby zobaczyć jego pełny raport (zmiany, godziny, koszt) po prawej — to samo miejsce, do którego prowadzi kliknięcie imienia w Rejestr Godzin i Aktywni.",
+    body: "Miesiąc (domyślnie poprzedni, zamknięty): koszt pracy, godziny, średni koszt godziny, „Na co zwrócić uwagę” i „Gotowość do rozliczenia” — czy nic nie czeka na decyzję. Przekroje: lokale, stanowiska, pracownicy; klik w osobę otwiera jej raport. Koszt etatowca liczy się z kwoty z umowy, a godziny ponad normę — po stawce z tej samej umowy.",
   },
   {
-    Icon: User,
-    title: "Moja Praca",
-    body: "Kierownik też odbija godziny — to Twój własny „Zmiana”/„Raport”, dokładnie jak u pracownika. Ikonka osoby przy dzwoneczku u góry prowadzi tu z każdej zakładki.",
+    Icon: Settings,
+    title: "Ustawienia (tylko właściciel)",
+    body: "Lokale (miasto do pogody, bloki na prywatnym telefonie, narzut, okres rozliczeniowy, zasady wpisu godzin), stanowiska (skrót i kolor) i dane firmy.",
   },
 ];
 
