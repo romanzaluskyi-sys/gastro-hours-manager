@@ -130,6 +130,11 @@ const STANOWISKA = [
   { lokal: PIZZERIA, name: "Dowóz", skrot: "DOW", kolor: "#1A4F6A" },
 ];
 
+// Stawki nie niższe niż minimalne (2026): umowa o pracę 4950 zł brutto za pełny
+// etat (pół etatu — połowa), zlecenie 32,30 zł/h. `harness-demo.html` to pilnuje.
+const MIN_PENSJA = 4950;
+const MIN_STAWKA = 32.3;
+
 // Załoga. `wzor`: [dni tygodnia (0 = niedziela), start, koniec, lokal?, stanowisko?].
 // Wzory są ułożone tak, żeby w siatce było i dobrze, i kilka dziur w obsadzie —
 // kontrola obsady bez ani jednego ostrzeżenia nie pokazuje, co potrafi.
@@ -137,20 +142,20 @@ const LUDZIE = [
   { name: "Agnieszka Kowalczyk", lokal: BISTRO, st: "Kuchnia", umiejetnosci: ["Kuchnia"], umowa: "umowa_o_prace", kwota: 6400, wymiar: 1, wzor: [[[1, 2, 3, 4, 5], "07:30", "15:30"]] },
   { name: "Tomasz Zieliński", lokal: BISTRO, st: "Kuchnia", umiejetnosci: ["Kuchnia"], umowa: "zlecenie", stawka: 34, wzor: [[[3, 4, 5, 6, 0], "14:00", "22:00"]] },
   { name: "Rafał Grabowski", lokal: BISTRO, st: "Kuchnia", umiejetnosci: ["Kuchnia", "Pomoc kuchenna"], umowa: "zlecenie", stawka: 33, wzor: [[[6, 0], "07:30", "15:30"], [[1, 2], "14:00", "22:00"]] },
-  { name: "Olena Kovalenko", lokal: BISTRO, st: "Pomoc kuchenna", umiejetnosci: ["Pomoc kuchenna", "Zmywak"], umowa: "zlecenie", stawka: 28.5, wzor: [[[1, 2, 3, 4, 5], "08:00", "16:00"]] },
-  { name: "Dmytro Bondarenko", lokal: BISTRO, st: "Zmywak", umiejetnosci: ["Zmywak"], umowa: "zlecenie", stawka: 27, wzor: [[[4, 5, 6, 0, 1], "15:00", "22:30"]] },
-  { name: K.KONTA[2].imie, lokal: BISTRO, st: "Sala", umiejetnosci: ["Sala", "Bar"], umowa: "zlecenie", stawka: 30, wzor: [[[1, 3, 4, 5], "16:00", "22:00"]], konto: "telefon" },
-  { name: "Julia Mazur", lokal: BISTRO, st: "Sala", umiejetnosci: ["Sala", "Bar"], umowa: "zlecenie", stawka: 30, wzor: [[[2, 3, 4, 5, 6], "09:00", "17:00"]] },
+  { name: "Olena Kovalenko", lokal: BISTRO, st: "Pomoc kuchenna", umiejetnosci: ["Pomoc kuchenna", "Zmywak"], umowa: "zlecenie", stawka: 32.3, wzor: [[[1, 2, 3, 4, 5], "08:00", "16:00"]] },
+  { name: "Dmytro Bondarenko", lokal: BISTRO, st: "Zmywak", umiejetnosci: ["Zmywak"], umowa: "zlecenie", stawka: 32.3, wzor: [[[4, 5, 6, 0, 1], "15:00", "22:30"]] },
+  { name: K.KONTA[2].imie, lokal: BISTRO, st: "Sala", umiejetnosci: ["Sala", "Bar"], umowa: "zlecenie", stawka: 32.3, wzor: [[[1, 3, 4, 5], "16:00", "22:00"]], konto: "telefon" },
+  { name: "Julia Mazur", lokal: BISTRO, st: "Sala", umiejetnosci: ["Sala", "Bar"], umowa: "zlecenie", stawka: 32.3, wzor: [[[2, 3, 4, 5, 6], "09:00", "17:00"]] },
   { name: "Natalia Krawczyk", lokal: BISTRO, st: "Sala", umiejetnosci: ["Sala"], umowa: "umowa_o_prace", kwota: 3300, wymiar: 0.5, wzor: [[[6, 0], "10:00", "18:00"], [[3], "12:00", "18:00"]] },
-  { name: "Kacper Wójcik", lokal: BISTRO, st: "Bar", umiejetnosci: ["Bar", "Sala"], umowa: "zlecenie", stawka: 31, wzor: [[[3, 4, 5, 6, 0], "14:00", "22:00"]] },
+  { name: "Kacper Wójcik", lokal: BISTRO, st: "Bar", umiejetnosci: ["Bar", "Sala"], umowa: "zlecenie", stawka: 33, wzor: [[[3, 4, 5, 6, 0], "14:00", "22:00"]] },
   { name: "Paweł Lewandowski", lokal: BISTRO, st: "Sala", umiejetnosci: ["Sala", "Bar"], umowa: "umowa_o_prace", kwota: 8500, wymiar: 1, rola: "manager_lokalu", wzor: [[[1, 2, 3, 4, 5], "10:00", "18:00"]] },
   { name: "Michał Kamiński", lokal: PIZZERIA, st: "Pizzaiolo", umiejetnosci: ["Pizzaiolo"], umowa: "umowa_o_prace", kwota: 5900, wymiar: 1, wzor: [[[2, 3, 4, 5, 6], "11:30", "19:30"]] },
-  { name: "Oksana Shevchenko", lokal: PIZZERIA, st: "Pizzaiolo", umiejetnosci: ["Pizzaiolo"], umowa: "zlecenie", stawka: 32, wzor: [[[4, 5, 6, 0, 1], "15:00", "23:00"]] },
+  { name: "Oksana Shevchenko", lokal: PIZZERIA, st: "Pizzaiolo", umiejetnosci: ["Pizzaiolo"], umowa: "zlecenie", stawka: 33.5, wzor: [[[4, 5, 6, 0, 1], "15:00", "23:00"]] },
   { name: "Bartosz Szymański", lokal: PIZZERIA, st: "Dowóz", umiejetnosci: ["Dowóz"], umowa: "b2b", stawka: 38, wzor: [[[3, 4, 5, 6, 0], "17:00", "23:00"]] },
-  { name: "Zuzanna Dąbrowska", lokal: PIZZERIA, st: "Sala", umiejetnosci: ["Sala"], umowa: "zlecenie", stawka: 29, wzor: [[[1, 2, 3, 4, 5], "12:00", "20:00"]] },
+  { name: "Zuzanna Dąbrowska", lokal: PIZZERIA, st: "Sala", umiejetnosci: ["Sala"], umowa: "zlecenie", stawka: 32.3, wzor: [[[1, 2, 3, 4, 5], "12:00", "20:00"]] },
   // Wypożyczana: we wtorki stoi w grafiku Bistro — pokazuje pracę w dwóch lokalach.
-  { name: "Iryna Melnyk", lokal: PIZZERIA, st: "Sala", umiejetnosci: ["Sala", "Bar"], umowa: "zlecenie", stawka: 29, wzor: [[[5, 6, 0], "15:00", "23:00"], [[2], "16:00", "22:00", BISTRO, "Sala"]] },
-  { name: "Wiktoria Jankowska", lokal: PIZZERIA, st: "Bar", umiejetnosci: ["Bar", "Sala"], umowa: "zlecenie", stawka: 30, wzor: [[[3, 4, 5, 6, 0], "16:00", "23:00"]] },
+  { name: "Iryna Melnyk", lokal: PIZZERIA, st: "Sala", umiejetnosci: ["Sala", "Bar"], umowa: "zlecenie", stawka: 32.3, wzor: [[[5, 6, 0], "15:00", "23:00"], [[2], "16:00", "22:00", BISTRO, "Sala"]] },
+  { name: "Wiktoria Jankowska", lokal: PIZZERIA, st: "Bar", umiejetnosci: ["Bar", "Sala"], umowa: "zlecenie", stawka: 32.3, wzor: [[[3, 4, 5, 6, 0], "16:00", "23:00"]] },
   { name: "Ewa Piotrowska", lokal: PIZZERIA, st: "Sala", umiejetnosci: ["Sala", "Bar"], umowa: "umowa_o_prace", kwota: 7800, wymiar: 1, rola: "manager_lokalu", wzor: [[[2, 3, 4, 5, 6], "12:00", "20:00"]] },
 ];
 
@@ -813,4 +818,4 @@ const KOLEJNOSC = [
   "task_completions", "notifications", "zadania_moje", "wydarzenia", "wydarzenia_uczestnicy",
 ];
 
-module.exports = { generuj, KOLEJNOSC, uuidZ, BISTRO, PIZZERIA, LUDZIE };
+module.exports = { generuj, KOLEJNOSC, uuidZ, BISTRO, PIZZERIA, LUDZIE, MIN_PENSJA, MIN_STAWKA };

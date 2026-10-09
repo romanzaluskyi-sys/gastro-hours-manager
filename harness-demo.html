@@ -299,6 +299,12 @@ async function arytmetyka() {
 
     sprawdz(T.notifications.every((n) => n.message && n.email_at), `${tag} wiadomości z treścią, oznaczone jako obsłużone mailowo`);
     sprawdz(T.grafik_budzet_cele.length === 14, `${tag} cele budżetu: 7 dni × 2 lokale`);
+    // Stawki nie niższe niż minimalne (umowa o pracę za pełny etat, zlecenie za godzinę).
+    const ponizej = T.users.filter((u) =>
+      (u.typ_umowy === "umowa_o_prace" && u.wynagrodzenie_mies < D.MIN_PENSJA * (u.wymiar_etatu || 1)) ||
+      (u.typ_umowy === "zlecenie" && u.stawka < D.MIN_STAWKA));
+    sprawdz(!ponizej.length, `${tag} stawki ≥ minimalnych (${D.MIN_PENSJA} zł brutto, ${String(D.MIN_STAWKA).replace(".", ",")} zł/h)`,
+      ponizej.map((u) => u.name).join(", "));
 
     // Deterministycznie: ten sam dzień = te same dane; osoby mają stałe id.
     const drugi = D.generuj({ dzis, teraz });
