@@ -23,6 +23,9 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 - **Płatne wydarzenie liczy się do planu:** w Grafiku jako kreskowany blok w
   wierszu uczestnika, w godzinach tygodnia i miesiąca („w tym X h wydarzeń”),
   w normie i w budżecie dnia, a u pracownika — w „Z grafikiem wyjdzie”.
+- **Przewodnik „Jak korzystać” od nowa** — po jednym opisie na każdą zakładkę
+  panelu, w kolejności menu (doszły Grafik, Wydarzenia, Zadania, Puls,
+  Skrzynka i Ustawienia; zniknęły nieaktualne „Zgłoszenia”).
 
 ## 0.74.0 — 2026-10-08
 

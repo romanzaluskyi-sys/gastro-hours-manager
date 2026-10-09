@@ -122,7 +122,7 @@ Tworzy, zmienia i odwołuje **tylko kierownik** (właściciel): `admin`,
 | W2 ✓ | Grafik: panel, chip w dniu, lista; wiadomości + e-mail | 0.74.0 |
 | W3 ✓ | pracownik: Grafik, Pulpit, Wiadomości; tablet; Pulpit kierownika; Puls | 0.74.0 |
 | W4 ✓ | płatny czas pracy: godziny w siatce/budżecie/Raporcie, rozliczenie w „Do decyzji”, `shifts.wydarzenie_id` | 0.75.0 |
-| W5 | demo, CLAUDE.md, Przewodnik | z W3 i W4 |
+| W5 ✓ | demo, CLAUDE.md, Przewodnik („Jak korzystać” od nowa) | z W3 i W4 |
 
 ## Rzeczy, których nie widać (W2)
 
