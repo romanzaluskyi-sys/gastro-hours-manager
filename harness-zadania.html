@@ -325,6 +325,23 @@ const sprawdz = (nazwa, warunek, szczegol = "") => {
     sprawdz("autor nie jest kandydatem na własną zmianę",
       !kandydaci("oddanie").includes("Ala"));
 
+    // 0.76.0: „Możesz wziąć dodatkową zmianę” — komu idzie wiadomość.
+    const zLokalu = ludzie.map((u) => ({ ...u, default_lokal: "L" }));
+    const odb = (extra) =>
+      S.odbiorcyGieldy({ users: [...zLokalu, ...extra], planShifts: plan, absences: wolne,
+        planShift: zmianaAli, author: ala }).map((u) => u.name).sort().join(",");
+    sprawdz("giełda: wiadomość dostaje wolny kucharz z lokalu (jak lista ofert)", odb([]) === "Bo", odb([]));
+    sprawdz("giełda: kucharz z innego lokalu — nie (nie zobaczy oferty); z allowed_lokale — tak",
+      odb([{ id: "u5", name: "Ewa", active: true, role: "open", default_lokal: "M", allowed_stanowiska: "Kucharz" },
+           { id: "u6", name: "Filip", active: true, role: "closed", default_lokal: "M", allowed_lokale: "M, L", allowed_stanowiska: "Kucharz" }]) === "Bo,Filip");
+    sprawdz("giełda: bez właściciela, osoby na próbę i po ostatnim dniu",
+      odb([{ id: "u7", name: "Szef", active: true, role: "admin", default_lokal: "L", allowed_stanowiska: "Kucharz" },
+           { id: "u8", name: "Próba", active: true, role: "open", default_lokal: "L", allowed_stanowiska: "Kucharz", probny_status: "oczekuje" },
+           { id: "u9", name: "Odeszła", active: true, role: "open", default_lokal: "L", allowed_stanowiska: "Kucharz", ostatni_dzien: "2026-01-01" }]) === "Bo");
+    sprawdz("giełda: tekst zaczyna się od „Możesz wziąć dodatkową zmianę:” i mówi, kto oddaje",
+      /^Możesz wziąć dodatkową zmianę: .*10:00–18:00, L \(Kucharz\) — oddaje ją Ala\./.test(S.tekstDoWziecia(ala, zmianaAli)),
+      S.tekstDoWziecia(ala, zmianaAli));
+
     const doZamiany = (kand) =>
       S.zmianyDoZamiany({ planShifts: plan, absences: wolne, kandydat: kand,
         author: ala, mojaZmiana: zmianaAli }).map((p) => p.id);

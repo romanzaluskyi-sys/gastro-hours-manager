@@ -1148,6 +1148,17 @@ const poprzedniMiesiac = (h) => {
         sprawdz("przebieg bez wyjątku", false, e.message);
       }
 
+      // 0.76.0: odmowa bazy (trigger okna wpisu, 0044) idzie do człowieka
+      // słowo w słowo; każdy inny błąd — ogólny komunikat jak dotąd.
+      try {
+        const ESS = await import(await zaladuj("/src/components/employeeSessionShared"));
+        const t = "Poza oknem wpisu: w lokalu Ceglana start można zapisać samemu najwyżej 15 min po fakcie.";
+        sprawdz("odmowa okna z bazy pokazuje się słowo w słowo, inny błąd — ogólnie",
+          ESS.bladZapisuZmiany(new Error(t), "X") === t && ESS.bladZapisuZmiany(new Error("permission denied"), "X") === "X");
+      } catch (e) {
+        sprawdz("bladZapisuZmiany: przebieg bez wyjątku", false, e.message);
+      }
+
       if (status.className !== "zle") {
         status.textContent = `Tablet Służbowy zamontowany — PIN ${zdanych}/${zdanych + oblanych}`;
       }

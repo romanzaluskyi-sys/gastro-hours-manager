@@ -30,6 +30,7 @@ import {
   findOverlappingPlanShift,
   findBlockingAbsence,
   knowsStanowisko,
+  poOstatnimDniu,
 } from "./grafik";
 
 // Ustalenie właściciela: zmiany nie da się wystawić później niż 12 godzin
@@ -208,6 +209,34 @@ export const kandydaciNaZmiane = ({ users, planShifts, absences, planShift, auth
     )
     .sort((a, b) => String(a.name).localeCompare(String(b.name), "pl"));
 
+// Komu wysłać „Możesz wziąć dodatkową zmianę” przy ofercie na GIEŁDZIE
+// (0.76.0, prośba właściciela). Ten sam predykat co lista ofert (`mozeWziac`
+// przez `kandydaciNaZmiane`) plus trzy zawężenia:
+//   - tylko ludzie lokalu tej zmiany (macierzysty albo `allowed_lokale`) —
+//     ktoś z innego lokalu tej oferty w aplikacji nie zobaczy (RLS na
+//     `grafik_shifts`, `zmiany_z_gieldy()`), więc wiadomość prowadziłaby donikąd;
+//   - pracownicy i kierownik lokalu, nie właściciel (ten dostaje swoją
+//     wiadomość „wystawił(a) na giełdę”);
+//   - bez osób na próbę i po ostatnim dniu pracy.
+export const odbiorcyGieldy = ({ users, planShifts, absences, planShift, author }) =>
+  kandydaciNaZmiane({ users, planShifts, absences, planShift, author, typ: "oddanie" }).filter(
+    (u) =>
+      ["open", "closed", "manager_lokalu"].includes(u.role) &&
+      u.probny_status !== "oczekuje" &&
+      !poOstatnimDniu(u, planShift.date) &&
+      (u.default_lokal === planShift.lokal ||
+        String(u.allowed_lokale || "")
+          .split(",")
+          .map((x) => x.trim())
+          .includes(planShift.lokal))
+  );
+
+// ⚠️ Początek zdania rozpoznaje `opisWiadomosci` (employeeSessionShared.tsx) i
+// api/_lib/wiadomosci.js — zmieniając go, popraw oba miejsca.
+export const tekstDoWziecia = (author, planShift) =>
+  `Możesz wziąć dodatkową zmianę: ${opisZmiany(planShift.date, planShift.start_time, planShift.end_time)}, ` +
+  `${planShift.lokal} (${planShift.stanowisko}) — oddaje ją ${author.name}. Zajrzyj na giełdę w Grafiku.`;
+
 // Zmiany kandydata, które autor mógłby wziąć w zamian. Sprawdzamy je z punktu
 // widzenia AUTORA (to on je przejmie), bo to jego kalendarz decyduje, czy
 // zamiana ma sens — kandydat zwalnia swój dzień, oddając tę właśnie zmianę.
@@ -290,6 +319,11 @@ export const offerSwap = async ({
   typ = "gielda",
   target = null,
   wzajemnaShift = null,
+  // Do „Możesz wziąć dodatkową zmianę” (tylko 'gielda'). Bez nich oferta
+  // powstaje jak dawniej — budzi samego kierownika.
+  users = null,
+  planShifts = null,
+  absences = null,
 }) => {
   if (!canOfferSwap(planShift)) {
     throw new Error(
@@ -334,6 +368,22 @@ export const offerSwap = async ({
       `${author.name} wystawił(a) na giełdę zmianę ${zakres}.`,
       "swap_offer"
     );
+    // Każdy, kto może ją wziąć, dostaje wiadomość (i e-mail z crona
+    // wyslij-maile). Nieudana wysyłka nie cofa oferty — ta już stoi.
+    if (users) {
+      const odbiorcy = odbiorcyGieldy({ users, planShifts, absences, planShift, author });
+      await Promise.allSettled(
+        odbiorcy.map((u) =>
+          createEmployeeNotification(u.name, tekstDoWziecia(author, planShift), "swap", {
+            autor: author.name,
+            wiersze: [
+              { e: "Zmiana", w: opisZmiany(planShift.date, planShift.start_time, planShift.end_time) },
+              { e: "Lokal · stanowisko", w: `${planShift.lokal} · ${planShift.stanowisko}` },
+            ],
+          })
+        )
+      );
+    }
     return swap;
   }
 

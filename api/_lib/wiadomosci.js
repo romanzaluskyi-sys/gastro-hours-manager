@@ -85,6 +85,18 @@ const opisGrafiku = (n, user, grafik, dzis) => {
 const opisWymiany = (n) => {
   const t = n.message || "";
   const d = n.dane || {};
+  // 0.76.0 — oferta na giełdzie rozesłana do uprawnionych (tekstDoWziecia w
+  // src/utils/swaps.ts). Szczegóły zmiany niesie `dane.wiersze`.
+  if (/^Możesz wziąć dodatkową zmianę/.test(t)) {
+    return {
+      ton: "info",
+      ikona: "+",
+      etykieta: "Giełda",
+      tytul: "Możesz wziąć dodatkową zmianę",
+      lead: `${S.esc(d.autor || "Ktoś z zespołu")} oddaje swoją zmianę. Weź ją w aplikacji — przejdzie na Ciebie po zatwierdzeniu kierownika. Jeśli ktoś był szybszy, oferty już tam nie będzie.`,
+      cta: CTA.grafik,
+    };
+  }
   if (/zatwierdził\(a\) zamianę/.test(t)) {
     return {
       ton: "ok",

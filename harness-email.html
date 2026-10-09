@@ -446,6 +446,9 @@ const USERS = [
         dane: { wiersze: [{ e: "Kiedy", w: "pt 16.10 · 18:00–20:00" }, { e: "Gdzie", w: "Ceglana" }] } }],
       ["Godziny z wydarzenia", { type: "wydarzenie",
         message: "Godziny z wydarzenia dopisane: Inwentaryzacja — śr 14.10 · 22:00–01:00 · Ceglana, 3 h (zapisał(a) Roman)." }],
+      ["Zmiana do wzięcia", { type: "swap",
+        message: "Możesz wziąć dodatkową zmianę: sob 17 paź · 10:00–18:00, Ceglana (Kelner) — oddaje ją Bo. Zajrzyj na giełdę w Grafiku.",
+        dane: { autor: "Bo", wiersze: [{ e: "Zmiana", w: "sob 17 paź · 10:00–18:00" }, { e: "Lokal · stanowisko", w: "Ceglana · Kelner" }] } }],
       ["Nieznany typ", { type: "cos_nowego", message: "Zwykła wiadomość." }],
     ];
     const GRAFIK_ALI = [
@@ -475,6 +478,10 @@ const USERS = [
       if (nazwa === "Godziny z wydarzenia") {
         sprawdz("rozliczenie wydarzenia (0.75.0): „Godziny dopisane: …”, CTA do Raportu",
           m.temat === "Godziny dopisane: Inwentaryzacja" && m.html.includes("?otworz=raport"), m.temat);
+      }
+      if (nazwa === "Zmiana do wzięcia") {
+        sprawdz("giełda do wszystkich (0.76.0): temat, autor w treści, szczegóły zmiany, CTA do grafiku",
+          m.temat === "Możesz wziąć dodatkową zmianę" && m.html.includes("Bo oddaje") && m.html.includes("Ceglana · Kelner") && m.html.includes("?otworz=grafik"), m.temat);
       }
       if (nazwa === "Wydarzenie odwołane") {
         sprawdz("odwołanie: „Odwołane: …”", m.temat === "Odwołane: Degustacja win", m.temat);

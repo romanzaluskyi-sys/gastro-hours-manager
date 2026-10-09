@@ -229,9 +229,8 @@ adres, mógł odczytać i zapisać wszystko. Opis etapów i pułapek niżej zost
 bo tłumaczy, dlaczego polityki wyglądają tak, a nie inaczej.
 
 **Co dalej NIE jest zamknięte:** wewnątrz lokalu wspólny tablet nie odróżnia,
-która osoba odbija (świadoma decyzja, niżej), a okna tolerancji wpisu godzin
-pilnuje przeglądarka — twardego zamka w bazie na to, KIEDY wolno wpisać
-godzinę, nie ma (patrz „Rejestracja godzin”).
+która osoba odbija (świadoma decyzja, niżej). Okna tolerancji wpisu godzin
+pilnuje od 0.76.0 także baza (trigger z `0044`, patrz „Rejestracja godzin”).
 
 **Kto się faktycznie loguje** (29 aktywnych kont, pomiar z 2026-09-20):
 4 kierowników + 4 tablety (e-mail + 6-cyfrowy `pin`) i 4 pracowników z
@@ -1700,9 +1699,13 @@ Podgląd raportu bez wysyłki: `/api/cron/raport-kierownika?u=<id>&t=<podpis>`
 harmonogram w bazie — `docs/NOWY-KLIENT.md` i
 `docs/sql/tools/email-harmonogram.sql` (sekret w Vault, nie w treści zadania).
 
-**Świadomie NIE ma (jeszcze):** maila „Możesz wziąć dodatkową zmianę” do
-wszystkich uprawnionych przy wystawieniu na giełdę (dziś wiadomość dostaje
-tylko kierownik — nowa wiadomość = nowa decyzja), maila „Twoja zmiana w sobotę
+**Od 0.76.0** oferta na giełdzie (tryb `gielda`) idzie też do każdego, kto
+może ją wziąć: „Możesz wziąć dodatkową zmianę” (`odbiorcyGieldy` +
+`tekstDoWziecia` w `utils/swaps.ts`) — wiadomość w aplikacji i e-mail. Tylko
+ludzie lokalu tej zmiany (inni nie zobaczą oferty przez RLS), bez właściciela,
+osób na próbę i po ostatnim dniu.
+
+**Świadomie NIE ma (jeszcze):** maila „Twoja zmiana w sobotę
 się zmieniła” per zmiana (publikacja grafiku to jedna wiadomość na osobę), w
 raporcie: braków obsady w najbliższym tygodniu (arytmetyka wymagań z
 `utils/grafik.ts`), spóźnień ponad tolerancję (aplikacja nie ma takiego progu)
@@ -3010,9 +3013,21 @@ zobaczy po pollu. **Każda nowa tabela, do której tablet pisze w imieniu
 pracownika, potrzebuje SELECT dla tabletu na tych wierszach — albo zapisu
 przez `dodajBezOdczytu`.**
 
-⚠️ Kontrola jest w przeglądarce. Twardy zamek (trigger na `shifts`) NIE
-powstał razem z `0040` — `0040` zawęża, KTO pisze, a nie KIEDY. To osobny
-krok.
+⚠️ **Od 0.76.0 okna pilnuje też BAZA** — trigger `pilnuj_okna_wpisu` na
+`shifts` (migracja `0044`); `0040` zawęża, KTO pisze, `0044` — KIEDY. Reguły
+są lustrem `sprawdzGodzine`: nowa zmiana bez końca → okno startu, z końcem
+(cała) → okno końca, dopisany/zmieniony koniec → okno końca, przesunięty start
+→ okno startu, ponad 5 min w przyszłość → odmowa, NULL → bez limitu. Trzy
+rzeczy, których nie widać:
+- **Dotyczy tylko kont niebędących kierownikiem** (pracownik, tablet).
+  Kierownik dopisuje po fakcie (Do decyzji, Rejestr, wydarzenia), a crony i
+  skrypty nie mają `auth.uid()` — przechodzą.
+- **Zapas 15 min w obie strony** — godzinę liczy URZĄDZENIE, a zegar tabletu
+  bywa przestawiony. Bez zapasu okno „tylko teraz” (0) blokowałoby odbicie z
+  tabletu spóźnionego o dwie minuty.
+- **Komunikat zaczyna się od „Poza oknem wpisu”** — `bladZapisuZmiany` w
+  `employeeSessionShared.tsx` pokazuje go zamiast „Błąd zapisu”. Zmieniając
+  regułę w `utils/wpisy.ts`, zmień trigger (i odwrotnie).
 
 ⚠️ **Reguły wpisu idą za lokalem ZMIANY, nie tabletu** — za `formLokal`
 (domyślnie: lokal z dzisiejszego grafiku → `default_lokal` → pierwszy z
@@ -3834,6 +3849,9 @@ trzy miejsca, w których można zapomnieć o kierowniku.
   zobaczył. `offersForUser` pokazuje ofertę skierowaną wyłącznie adresatowi, a
   `acceptSwap` sprawdza to drugi raz — filtr w UI to za mało, bo od tego zależy,
   czy „oddałem Marcie" cokolwiek znaczy.
+- **„Możesz wziąć dodatkową zmianę” (0.76.0)** dostaje przy trybie `gielda`
+  każdy z `odbiorcyGieldy` — ten sam `mozeWziac`, zawężony do lokalu zmiany.
+  Wysyłka nie cofa oferty, gdy któraś wiadomość nie wyjdzie.
 - **Kto może wziąć zmianę, liczy JEDEN predykat** (`mozeWziac`) — ten sam dla
   listy ofert, listy kandydatów przy oddaniu i przy zamianie. Inaczej ktoś
   widoczny w jednym miejscu znikałby w drugim bez wyjaśnienia.

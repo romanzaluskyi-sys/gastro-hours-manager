@@ -328,6 +328,15 @@ export const checkboxRowCls = (checked) =>
 // absences.ts, odbicia.ts, porzucone.ts i crony. ⚠️ Zmieniając tam zdanie,
 // sprawdź dopasowanie tutaj. Nieznana treść spada na ogólny opis — wiadomość
 // nigdy nie znika.
+// Odmowa z bazy (trigger `pilnuj_okna_wpisu`, migracja 0044) mówi, co zrobić
+// — pokazujemy ją zamiast ogólnego „Błąd zapisu”. Zwykle nie zdarza się wcale,
+// bo okno sprawdza już formularz; zostaje przypadek zegara urządzenia
+// przestawionego o więcej niż 15 min i duplikat (23505, `opisBledu`).
+export const bladZapisuZmiany = (err, domyslny) => {
+  const t = (err && err.message) || "";
+  return /^Poza oknem wpisu|^Ta zmiana jest już zapisana/.test(t) ? t : domyslny;
+};
+
 export const opisWiadomosci = (n) => {
   const t = n.message || "";
   const typ = n.type || (n.action ? "edycja" : "");
@@ -350,6 +359,8 @@ export const opisWiadomosci = (n) => {
         : w("grafik", "info", "grafik", "Grafik zaktualizowany", "grafik");
     case "swap":
     case "swap_accepted":
+      // 0.76.0 — oferta na giełdzie rozesłana do uprawnionych (tekstDoWziecia).
+      if (/^Możesz wziąć dodatkową zmianę/.test(t)) return w("gie", "info", "gielda", "Zmiana do wzięcia", "grafik");
       if (/zatwierdził\(a\) zamianę/.test(t)) return w("gie", "ok", "gielda", "Zamiana zatwierdzona", "grafik");
       if (/nie zgodził\(a\) się/.test(t)) return w("gie", "no", "gielda", "Zamiana odrzucona");
       if (/proponuje zamianę|chce oddać Ci/.test(t)) return w("gie", "info", "gielda", "Propozycja dla Ciebie", "grafik");
@@ -1175,6 +1186,9 @@ export const EmployeeSessionScreens = ({
         typ: typ || "gielda",
         target: target || null,
         wzajemnaShift: wzajemnaShift || null,
+        users,
+        planShifts,
+        absences,
       });
       setShiftSwaps([...(shiftSwaps || []), sw]);
       showMsg(
@@ -1289,7 +1303,7 @@ export const EmployeeSessionScreens = ({
       setJustClosed(true);
       setScreen("ZMIANA");
     } catch (err) {
-      showMsg("Błąd połączenia z bazą!", "error");
+      showMsg(bladZapisuZmiany(err, "Błąd połączenia z bazą!"), "error");
     }
     setSaving(false);
   };
@@ -1350,7 +1364,7 @@ export const EmployeeSessionScreens = ({
       sendToGoogleSheets(parsed, "ADD_SHIFT");
       return parsed;
     } catch (err) {
-      showMsg("Błąd zapisu do bazy!", "error");
+      showMsg(bladZapisuZmiany(err, "Błąd zapisu do bazy!"), "error");
       return null;
     }
   };
