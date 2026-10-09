@@ -27,6 +27,14 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.76.0",
+    date: "2026-10-09",
+    items: [
+      "Okna wpisu godzin z karty lokalu pilnuje też baza — nie da się ich obejść z pominięciem aplikacji (15 min zapasu na zegar urządzenia).",
+      "Zmiana wystawiona na giełdę: wiadomość i e-mail „Możesz wziąć dodatkową zmianę” do każdego z lokalu, kto może ją wziąć.",
+    ],
+  },
+  {
     version: "0.75.0",
     date: "2026-10-09",
     items: [

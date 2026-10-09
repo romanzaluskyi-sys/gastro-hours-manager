@@ -12,9 +12,9 @@
 // limitów). Lokal, którego nikt nie skonfigurował, nie może się niczym różnić
 // od wczoraj — dlatego każda funkcja niżej przy `null` po prostu przepuszcza.
 //
-// ⚠️ To jest kontrola w PRZEGLĄDARCE. Dopóki `shifts` ma otwarte polityki,
-// dałoby się ją obejść zapytaniem wprost do bazy. Twardy zamek to trigger na
-// `shifts` — razem z zawężeniem tej tabeli w Etapie 3c-2.
+// ⚠️ Od 0.76.0 te same okna pilnuje też BAZA — trigger `pilnuj_okna_wpisu`
+// (migracja 0044), z zapasem 15 min na zegar urządzenia. Zmieniając regułę
+// tutaj, zmień ją tam — inaczej baza odrzuci coś, co formularz przepuścił.
 
 // Sposoby wpisu. `null` (oba) to wartość domyślna i jednocześnie stan każdego
 // lokalu sprzed tej funkcji.

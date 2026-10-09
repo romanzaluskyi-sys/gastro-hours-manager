@@ -5,6 +5,19 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.76.0 — 2026-10-09
+
+- **Godziny wpisane po czasie zatrzyma też baza.** Okna z karty lokalu („start
+  / koniec najwyżej N min po fakcie”) pilnowała dotąd tylko aplikacja — od
+  teraz pilnuje ich także serwer, więc nie da się ich obejść z pominięciem
+  ekranu. Dotyczy pracowników i tabletu; kierownik dopisuje po fakcie jak
+  dotąd. Baza daje 15 minut zapasu na przestawiony zegar urządzenia, a gdy
+  odmówi, pracownik widzi, co zrobić (wysłać godzinę do kierownika).
+- **„Możesz wziąć dodatkową zmianę”** — gdy ktoś wystawi zmianę na giełdę,
+  wiadomość (i e-mail) dostaje każdy z lokalu, kto może ją wziąć: zna to
+  stanowisko, ma tego dnia wolne i nie ma urlopu. Wcześniej wiedział o tym
+  tylko kierownik.
+
 ## 0.75.0 — 2026-10-09
 
 - **Rozliczenie płatnych wydarzeń.** Po zakończeniu płatnego wydarzenia (np.
