@@ -253,6 +253,11 @@ async function arytmetyka() {
     sprawdz(T.issues.every((i) => !i.shift_id || idyZmian.has(i.shift_id)), `${tag} issues.shift_id wskazuje istniejącą zmianę (FK)`);
     sprawdz(T.absences.filter((a) => a.status === "pending").length === 1, `${tag} jeden wniosek o wolne czeka`);
     sprawdz(T.users.filter((u) => u.probny_status === "oczekuje").length === 1, `${tag} jedna osoba na próbę`);
+    // 0.75.0: płatne wydarzenie po czasie, nierozliczone — „Wydarzenia do rozliczenia”.
+    const doRozl = T.wydarzenia.filter((w) => w.platne && !w.rozliczone_at && !w.odwolane_at && w.data < dzis);
+    sprawdz(doRozl.length === 1 && doRozl[0].data === wczoraj &&
+      T.wydarzenia_uczestnicy.filter((u) => u.wydarzenie_id === doRozl[0].id).length >= 1,
+      `${tag} jedno płatne wydarzenie do rozliczenia — wczoraj, z uczestnikami`);
     sprawdz(T.shift_swaps.some((s) => s.status === "na_gieldzie") && T.shift_swaps.some((s) => s.status === "przyjeta"),
       `${tag} giełda: oferta i prośba do zgody`);
     const idyGrafiku = new Set(T.grafik_shifts.map((g) => g.id));

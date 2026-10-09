@@ -1,6 +1,6 @@
 # Wydarzenia — specyfikacja (Roadmap p.3, plan z 2026-10-08)
 
-Stan: **W1–W3 zrobione (0.74.0)** — baza i logika (`0043`, `src/utils/wydarzenia.ts`)
+Stan: **W1–W4 zrobione (0.74.0 i 0.75.0)** — baza i logika (`0043`, `src/utils/wydarzenia.ts`)
 oraz Grafik kierownika: chip w nagłówku dnia, „+ wydarzenie” w Edycji, pasek
 nad siatką, panel (`WydarzeniePanel.tsx`), lista „Wydarzenia”
 (`GrafikWydarzenia.tsx`), miesiąc z drukiem, telefon, wiadomości i e-mail. Decyzje właściciela z 2026-10-08 są oznaczone
@@ -121,7 +121,7 @@ Tworzy, zmienia i odwołuje **tylko kierownik** (właściciel): `admin`,
 | W1 ✓ | migracja `0043`, `utils/wydarzenia.ts`, harness | — |
 | W2 ✓ | Grafik: panel, chip w dniu, lista; wiadomości + e-mail | 0.74.0 |
 | W3 ✓ | pracownik: Grafik, Pulpit, Wiadomości; tablet; Pulpit kierownika; Puls | 0.74.0 |
-| W4 | płatny czas pracy: godziny w siatce/budżecie/Raporcie, rozliczenie w „Do decyzji”, `shifts.wydarzenie_id` | 0.75.0 |
+| W4 ✓ | płatny czas pracy: godziny w siatce/budżecie/Raporcie, rozliczenie w „Do decyzji”, `shifts.wydarzenie_id` | 0.75.0 |
 | W5 | demo, CLAUDE.md, Przewodnik | z W3 i W4 |
 
 ## Rzeczy, których nie widać (W2)
@@ -141,8 +141,8 @@ Tworzy, zmienia i odwołuje **tylko kierownik** (właściciel): `admin`,
 - **Wydarzenia w miesiącu**: czarna linijka nad zmianami (na papierze ramka,
   bo tło nie zawsze się drukuje); w układzie „osoby × dni” romb pozycjonowany
   absolutnie — nie rusza zmierzonych szerokości kolumn A4.
-- **Do 0.75.0 (W4) płatne wydarzenie nie dopisuje godzin** — po wdrożeniu W4
-  minione płatne pojawią się w „Do decyzji” same (`doRozliczenia` bierze
+- **Do 0.75.0 (W4) płatne wydarzenie nie dopisywało godzin** — po wdrożeniu W4
+  minione płatne pojawiają się w „Do decyzji” same (`doRozliczenia` bierze
   wszystkie nierozliczone).
 
 ## Rzeczy, których nie widać (W3)
@@ -166,6 +166,32 @@ Tworzy, zmienia i odwołuje **tylko kierownik** (właściciel): `admin`,
   rodzaje wiadomości (tak było zawsze).
 - **Puls**: kafelek „Utarg” pod planem dopisuje „Tego dnia: …” — kontekst, nie
   zmiana prognozy.
+
+## Rzeczy, których nie widać (W4)
+
+- **Rozlicza WYŁĄCZNIE `rozliczWydarzenie`** (`utils/wydarzenia.ts`): wiersze
+  `shifts` z `wydarzenie_id`, `wydarzenia_uczestnicy.obecny`/`shift_id`,
+  `wydarzenia.rozliczone_at`, ślad w `shift_edits` (`manual_add`, powód
+  „Wydarzenie: …”) i wiadomość „Godziny z wydarzenia dopisane:”. Karta w „Do
+  decyzji” idzie przez te same 6 s „Cofnij” co reszta (`rozliczWyd`).
+- **Odcinki do dopisania liczy się z BAZY tuż przed zapisem**
+  (`zmianyOsobyWBazie`), nie ze stanu — wiersz z tym samym `wydarzenie_id` już
+  w bazie znaczy „rozliczone”, drugi nie powstaje. Czas w odbitych zmianach
+  (zakończonych, bez urlopu) się nie dubluje; przy zmianie w środku wydarzenia
+  powstają dwa wiersze.
+- **Lokal wiersza = lokal wydarzenia, przy „Cała sieć” — macierzysty osoby;
+  stanowisko = domyślne osoby** (koszt trafia tam, gdzie zwykle).
+- **„Cała sieć” w kolejce tylko u właściciela** (`wydarzeniaDoDecyzji`, `calaSiec`)
+  — baza pozwala ją zmienić wyłącznie `widzi_wszystko()`. Ta sama funkcja daje
+  kartę, znaczek menu i sprawę na Pulpicie.
+- **Plan**: `godzinyWydarzenOsoby` w wierszu osoby w Grafiku (tydzień, miesiąc,
+  norma, „w tym X h wydarzeń”), `kosztWydarzenDnia` → `budzetDnia({ dodatki })`
+  (budzet.ts nie importuje z wydarzenia.ts — cykl), `faktIPlanZWydarzeniami` w
+  Raporcie pracownika, jego Grafiku i Mojej pracy (bez rozliczonych — te są już
+  faktem).
+- **Fakt**: `etykietaWydarzenia` — Rejestr (zamiast „poza grafikiem”, bez
+  parowania z grafikiem), Moja praca (osobny wiersz jak urlop), Raport
+  pracownika („wydarzenie · tytuł”).
 
 ## Świadomie NIE w pierwszej wersji
 

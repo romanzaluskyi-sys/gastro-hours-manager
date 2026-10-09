@@ -23,13 +23,23 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.75.0",
+    date: "2026-10-09",
+    items: [
+      "Rozliczenie płatnych wydarzeń w Zatwierdzaniu zmian: odznacz, kogo nie było, i „Zapisz godziny” — trafiają do Rejestru (6 s na „Cofnij”).",
+      "Czas wydarzenia w zmianie osoby nie liczy się drugi raz.",
+      "Godziny z wydarzenia mają jego nazwę w Rejestrze, Mojej pracy i Raporcie pracownika.",
+      "Płatne wydarzenia liczą się do planu: blok w wierszu osoby w Grafiku, godziny, norma, budżet dnia i „Z grafikiem wyjdzie”.",
+    ],
+  },
+  {
     version: "0.74.0",
     date: "2026-10-08",
     items: [
       "Wydarzenia w Grafiku: zebrania, grupy, kontrole, mecze w okolicy — dla lokalu albo całej sieci, wybranych stanowisk i osób.",
       "Powiadamiają od razu (wiadomość i e-mail): nowe, zmiana, odwołanie.",
       "Widać je w Grafiku, na Pulpicie, w Pulsie, u pracownika (Grafik, Pulpit, Wiadomości) i na Tablecie („Dziś w lokalu”).",
-      "Płatny czas pracy przy wydarzeniu: koszt i uwagi w panelu; rozliczenie obecności w następnej wersji.",
+      "Płatny czas pracy przy wydarzeniu: koszt i uwagi w panelu.",
     ],
   },
   {

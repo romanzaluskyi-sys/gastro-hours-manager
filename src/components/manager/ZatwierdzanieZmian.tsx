@@ -36,6 +36,7 @@ import {
   Hourglass,
   UserPlus,
   User,
+  Coins,
 } from "lucide-react";
 import {
   resolveCorrection,
@@ -69,6 +70,14 @@ import {
   PROG_CZEKANIA_DNI,
 } from "../../utils/czas";
 import { useOdlozoneDecyzje, PasekCofnij } from "./odlozoneDecyzje";
+import {
+  wydarzeniaDoDecyzji,
+  pozycjeRozliczenia,
+  rozliczWydarzenie,
+  godzinyTekst as godzinyWydarzenia,
+  lokalTekst,
+} from "../../utils/wydarzenia";
+import { IkonaTypu } from "./wydarzeniaWspolne";
 import PoleCzasu from "./PoleCzasu";
 
 // ---------------------------------------------------------------------------
@@ -282,6 +291,13 @@ const GRUPY = [
     opis: "Ktoś odbił start i wyszedł bez odbicia końca. Godzin nie zgadujemy — do Twojej decyzji liczą się jako zero.",
   },
   {
+    typ: "wydarzenie",
+    Icon: Coins,
+    tytul: "Wydarzenia do rozliczenia",
+    tab: "Wydarzenia",
+    opis: "Płatne wydarzenia, które się skończyły. Odznacz, kogo nie było — reszta dostaje godziny w Rejestrze. Czas w zmianie osoby nie liczy się drugi raz.",
+  },
+  {
     typ: "gielda",
     Icon: ArrowLeftRight,
     tytul: "Giełda zmian",
@@ -336,6 +352,11 @@ export default function ZatwierdzanieZmian({
   onResolveSwap,
   zakres = "Cała sieć",
   showMsg,
+  wydarzenia = [],
+  setWydarzenia,
+  wydarzeniaUczestnicy = [],
+  setWydarzeniaUczestnicy,
+  calaSiec = false,
 }) {
   // ⚠️ Zamek na REF, nie na stanie. Wszystkie decyzje na tej stronie pilnował
   // dotąd zwykły `useState` ("busy id"), a stan Reacta aktualizuje się
@@ -360,6 +381,9 @@ export default function ZatwierdzanieZmian({
   // Poprawione godziny per pozycja — kierownik potrafi poprawiać kilka naraz.
   const [odbicieGodziny, setOdbicieGodziny] = useState({});
   const [porzuconeGodziny, setPorzuconeGodziny] = useState({});
+  // Kogo NIE było na wydarzeniu: { [wydarzenieId]: { [userId]: true } }.
+  // Domyślnie wszyscy obecni (makieta: „domyślnie wszyscy”).
+  const [nieobecni, setNieobecni] = useState({});
   // Otwarty panel "Popraw" korekty: { id, date, lokal, stanowisko, start,
   // end, reason, miejsce (czy pokazać datę/lokal/stanowisko) }.
   const [edycja, setEdycja] = useState(null);
@@ -387,6 +411,8 @@ export default function ZatwierdzanieZmian({
   }).filter((poz) => !czekaNaKoniecOdKierownika(poz.shift, issues));
 
   const probni = probniDoDecyzji({ users, lokalOk: hasAccessToLokal });
+
+  const wydarzeniaRozliczenie = wydarzeniaDoDecyzji({ wydarzenia, lokalOk: hasAccessToLokal, calaSiec });
 
   const rows = issues
     .filter((iss) => iss.type === "correction" && iss.status === "nowe")
@@ -512,6 +538,27 @@ export default function ZatwierdzanieZmian({
     }
   };
 
+  const rozliczWyd = async (w, obecniIds) => {
+    if (!zajmij(`wydarzenie:${w.id}`)) return;
+    try {
+      const wynik = await rozliczWydarzenie({
+        wydarzenie: w,
+        uczestnicy: wydarzeniaUczestnicy,
+        obecniIds,
+        users,
+        kto: currentUser.name,
+        shifts,
+        setShifts,
+        setWydarzenia,
+        setUczestnicy: setWydarzeniaUczestnicy,
+      });
+      if (wynik.niewyslane) showMsg(`${w.tytul}: godziny zapisane, ale ${wynik.niewyslane} wiadomości nie wyszło.`, "error");
+    } catch (e) {
+      showMsg(`${w.tytul}: ${e.message || "błąd zapisu"}`, "error");
+    }
+    zwolnij(`wydarzenie:${w.id}`);
+  };
+
   const decyzjaOGieldzie = async (swap, decision) => {
     await onResolveSwap(swap, decision);
   };
@@ -528,6 +575,7 @@ export default function ZatwierdzanieZmian({
     odrzucDuplikat,
     decyzjaOWolnym,
     decyzjaOGieldzie,
+    rozliczWyd,
   });
   // Decyzja zdejmuje też zaznaczenie — inaczej pasek "Zatwierdź N" liczyłby
   // karty, których już nie widać.
@@ -693,6 +741,101 @@ export default function ZatwierdzanieZmian({
                 }
               >
                 <Check size={18} /> Dopisz {min != null ? godzTekst(min) : ""}
+              </button>
+            </>
+          }
+        />
+      ),
+    });
+  }
+
+  // --- Wydarzenia do rozliczenia (0.75.0) ---
+  // Lista uczestników z tym, co się dopisze; odznaczenie = „nie było”.
+  // „Zapisz godziny” to `rozliczWydarzenie` (jedyne miejsce, które robi z
+  // wydarzenia wiersze `shifts`), „Nikt nie przyszedł” — to samo z pustą listą.
+  for (const w of wydarzeniaRozliczenie) {
+    const klucz = `wydarzenie:${w.id}`;
+    const pozycje = pozycjeRozliczenia({ wydarzenie: w, uczestnicy: wydarzeniaUczestnicy, users, shifts });
+    const nie = nieobecni[w.id] || {};
+    const obecni = pozycje.filter((p) => !nie[p.user.id]);
+    const obecniIds = obecni.map((p) => p.user.id);
+    const minuty = obecni.reduce((m, p) => m + p.minuty, 0);
+    const przelacz = (id) =>
+      setNieobecni((prev) => ({ ...prev, [w.id]: { ...(prev[w.id] || {}), [id]: !(prev[w.id] || {})[id] } }));
+    const tak = { klucz, zadanie: ["rozliczWyd", [w, obecniIds]] };
+    const opisTak = `Rozliczono: ${w.tytul} · ${obecni.length} os.${minuty ? ` · ${godzTekst(minuty)}` : ""}`;
+    sprawy.push({
+      klucz,
+      typ: "wydarzenie",
+      kto: w.tytul,
+      wiek: dniOd(w.data),
+      tak,
+      opisTak,
+      karta: (z, onZ) => (
+        <Karta
+          key={klucz}
+          kto={w.tytul}
+          znacznik={<IkonaTypu typ={w.typ} size={24} />}
+          meta={`${dzienKrotki(w.data)} · ${godzinyWydarzenia(w)} · ${lokalTekst(w)}`}
+          ostrzezenia={<Czeka dni={dniOd(w.data)} />}
+          zaznaczone={z}
+          onZaznacz={onZ}
+          moznaZaznaczyc
+          szczegoly={
+            <Kv etykieta="Do dopisania">
+              <span className="whitespace-nowrap">
+                {minuty ? godzTekst(minuty) : "—"} · {obecni.length} os.
+              </span>
+            </Kv>
+          }
+          pod={
+            // Lista na całą szerokość karty — w kolumnie szczegółów chipy z
+            // imionami ściskały się do jednego słowa w wierszu.
+            <div className="px-4 md:pl-[64px] md:pr-5 pb-4 -mt-1" data-rozliczenie-wydarzenia={w.id}>
+              <p className={`${etykietaCls} mb-1.5`}>Kto był · {obecni.length} z {pozycje.length} · dotknij, żeby odznaczyć</p>
+              {pozycje.length ? (
+                <span className="flex flex-wrap gap-1.5">
+                  {pozycje.map((p) => {
+                    const byl = !nie[p.user.id];
+                    return (
+                      <button
+                        key={p.uczestnik.id}
+                        type="button"
+                        onClick={() => przelacz(p.user.id)}
+                        aria-pressed={byl}
+                        className={chipCls(byl)}
+                        data-uczestnik-rozliczenia={p.user.id}
+                      >
+                        {byl ? <Check size={14} className="mr-1" /> : <X size={14} className="mr-1" />}
+                        <span className={byl ? "" : "line-through"}>{p.user.name}</span>
+                        <span className={`ml-1.5 tabular-nums ${byl ? "opacity-75" : "text-[#6E6E66]"}`}>
+                          {p.minuty ? godzTekst(p.minuty) : "w zmianie"}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </span>
+              ) : (
+                <span className="text-[14px] text-[#6E6E66]">Nikogo nie zaproszono.</span>
+              )}
+            </div>
+          }
+          akcje={
+            <>
+              <button
+                type="button"
+                className={btnObrysCls}
+                onClick={() =>
+                  decyduj(
+                    [{ klucz, zadanie: ["rozliczWyd", [w, []]] }],
+                    `Nikt nie przyszedł: ${w.tytul} — bez godzin`
+                  )
+                }
+              >
+                <X size={18} className="hidden md:block" /> Nikt nie przyszedł
+              </button>
+              <button type="button" className={btnGlownyCls} onClick={() => decyduj([tak], opisTak)}>
+                <Check size={18} /> Zapisz godziny ({obecni.length})
               </button>
             </>
           }

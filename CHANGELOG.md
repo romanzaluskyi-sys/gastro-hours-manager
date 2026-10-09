@@ -5,6 +5,25 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.75.0 — 2026-10-09
+
+- **Rozliczenie płatnych wydarzeń.** Po zakończeniu płatnego wydarzenia (np.
+  zebrania) w **Zatwierdzaniu zmian** pojawia się „Wydarzenia do rozliczenia”:
+  lista uczestników, domyślnie wszyscy obecni — odznaczasz, kogo nie było, i
+  „Zapisz godziny”. Godziny trafiają do Rejestru, a pracownik dostaje
+  wiadomość (i e-mail), ile mu dopisano. Jest też „Nikt nie przyszedł”. Jak
+  każdą decyzję, rozliczenie da się cofnąć przez 6 sekund.
+- **Czas w zmianie nie liczy się drugi raz** — kto był na zmianie w czasie
+  zebrania, nie dostaje dodatkowej godziny; przy częściowym nakładaniu się
+  dopisuje się tylko część poza zmianą.
+- Sprawa liczy się w znaczku „Zatwierdzanie zmian” i w „Wymaga decyzji” na
+  Pulpicie; panel „Najbliższe wydarzenia” ostrzega o wydarzeniu do rozliczenia.
+- **Godziny z wydarzenia mają jego nazwę** w Rejestrze godzin, w Mojej pracy i
+  w Raporcie pracownika (zamiast „poza grafikiem”).
+- **Płatne wydarzenie liczy się do planu:** w Grafiku jako kreskowany blok w
+  wierszu uczestnika, w godzinach tygodnia i miesiąca („w tym X h wydarzeń”),
+  w normie i w budżecie dnia, a u pracownika — w „Z grafikiem wyjdzie”.
+
 ## 0.74.0 — 2026-10-08
 
 - **Wydarzenia** — zebranie, szkolenie, grupa / rezerwacja, inwentaryzacja,

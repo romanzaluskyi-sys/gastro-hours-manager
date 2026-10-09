@@ -66,7 +66,16 @@ import { normaMiesiaca } from "../../utils/umowy";
 import { ostrzezeniaKodeksu } from "../../utils/kodeks";
 import { countWorkdays, URLOP_HOURS_PER_DAY } from "../../utils/absences";
 import { fetchDailyForecast, describeWeatherCode } from "../../utils/weather";
-import { wydarzeniaNaDzien, godzinyTekst, uczestnicyWydarzenia, typWydarzenia } from "../../utils/wydarzenia";
+import {
+  wydarzeniaNaDzien,
+  godzinyTekst,
+  uczestnicyWydarzenia,
+  typWydarzenia,
+  jestUczestnikiem,
+  godzinyWydarzenOsoby,
+  platneMinutyOsoby,
+  kosztWydarzenDnia,
+} from "../../utils/wydarzenia";
 import { ChipWydarzenia, IkonaTypu, TagWydarzenia } from "./wydarzeniaWspolne";
 
 const KOL_PRACOWNIK = 210;
@@ -103,6 +112,7 @@ const stanSzkicu = (s) => (!s.published_at ? "nowa" : isUnpublished(s) ? "zmieni
 // kolumnie osoby.
 const opisOsoby = (meta) => {
   const czesci = [`${hLiczba(meta.hours)} h w miesiącu`, `${meta.zmian} zmian`];
+  if (meta.wydarzeniaH > 0) czesci.push(`w tym ${hLiczba(meta.wydarzeniaH)} h płatnych wydarzeń`);
   if (meta.koszt != null) czesci.push(`${Math.round(meta.koszt)} zł`);
   if (Math.abs(meta.swapDelta) > 0.01) {
     czesci.push(`${meta.swapDelta > 0 ? "+" : "−"}${hLiczba(Math.abs(meta.swapDelta))} h po zatwierdzeniu zamian z giełdy`);
@@ -316,7 +326,26 @@ function LokalSection({
   const [nrRok, nrMies] = monthPrefix.split("-").map(Number);
   const rowMeta = rows.map((u) => {
     const monthShifts = (planShifts || []).filter((s) => s.date.startsWith(monthPrefix) && isSameUser(s, u));
-    const hours = godzinyMiesiacaOsoby(planShifts, absences, u, monthPrefix);
+    // Płatne wydarzenia (0.75.0) to czas pracy z planu, choć nie są wierszem
+    // `grafik_shifts` — doliczamy je do godzin miesiąca, tygodnia i normy.
+    // Czas w zmianie osoby się nie dubluje (`platneMinutyOsoby`).
+    const wydarzeniaH = godzinyWydarzenOsoby({
+      wydarzenia,
+      uczestnicy: wydarzeniaUczestnicy,
+      user: u,
+      planShifts,
+      od: `${monthPrefix}-01`,
+      doDnia: `${monthPrefix}-31`,
+    });
+    const wydarzeniaTydzH = godzinyWydarzenOsoby({
+      wydarzenia,
+      uczestnicy: wydarzeniaUczestnicy,
+      user: u,
+      planShifts,
+      od: weekFrom,
+      doDnia: weekTo,
+    });
+    const hours = godzinyMiesiacaOsoby(planShifts, absences, u, monthPrefix) + wydarzeniaH;
     const stawka = u.stawka === "" || u.stawka == null ? null : Number(u.stawka);
     const norma = normaMiesiaca(u, nrRok, nrMies);
     const lokaleOsoby = [...new Set(monthShifts.map((s) => s.lokal))];
@@ -324,7 +353,8 @@ function LokalSection({
       user: u,
       wylaczone: u.archived || u.active === false,
       hours,
-      weekHours: planWeek.filter((s) => isSameUser(s, u)).reduce((a, s) => a + shiftHours(s), 0),
+      weekHours: planWeek.filter((s) => isSameUser(s, u)).reduce((a, s) => a + shiftHours(s), 0) + wydarzeniaTydzH,
+      wydarzeniaH,
       swapDelta: pendingSwapDelta(shiftSwaps, planShifts, u, monthPrefix),
       zmian: monthShifts.length,
       ostrzezenia: ostrzezeniaKodeksu({ planShifts, absences, user: u, od: weekFrom, doDnia: weekTo }),
@@ -356,7 +386,24 @@ function LokalSection({
   // Warstwa budżetu — koszt dnia i jego udział w prognozie stoją w nagłówku
   // każdego układu. Gdy budżetu nie skonfigurowano, `cel` jest null.
   const dniBudzetu = weekDays.map((d) =>
-    budzetDnia({ cele: budzetCele, budzetDni, planShifts, users, lokalRow, lokal, dateStr: d })
+    budzetDnia({
+      cele: budzetCele,
+      budzetDni,
+      planShifts,
+      users,
+      lokalRow,
+      lokal,
+      dateStr: d,
+      dodatki: kosztWydarzenDnia({
+        wydarzenia,
+        uczestnicy: wydarzeniaUczestnicy,
+        users,
+        planShifts,
+        lokalRow,
+        lokal,
+        dateStr: d,
+      }),
+    })
   );
   const sumaBudzetu = budzetTygodnia(dniBudzetu);
 
@@ -487,7 +534,12 @@ function LokalSection({
       .map((sw) => (planShifts || []).find((p) => String(p.id) === String(sw.grafik_shift_id)))
       .filter((p) => p && p.lokal === lokal && p.date === dateStr);
     const abs = own.length === 0 ? absenceOn(absences, user, dateStr) : null;
-    const cokolwiek = own.length + gdzieIndziej.length + przychodzace.length + skreslone.length;
+    // Płatne wydarzenia tej osoby (0.75.0, makieta ScheduleEvents): kreskowany
+    // blok w jej kratce — czas pracy, ale NIE zmiana (nie liczy się do obsady).
+    const wydOsoby = wydarzeniaNaDzien(wydarzenia, null, dateStr).filter(
+      (w) => w.platne && jestUczestnikiem(wydarzeniaUczestnicy, w.id, user)
+    );
+    const cokolwiek = own.length + gdzieIndziej.length + przychodzace.length + skreslone.length + wydOsoby.length;
 
     return (
       <div className="flex flex-col gap-[5px] min-h-[56px]">
@@ -502,6 +554,23 @@ function LokalSection({
           </div>
         ) : null}
         {own.map((s) => chipZmiany(s, user, dateStr))}
+        {wydOsoby.map((w) => {
+          const min = platneMinutyOsoby(w, user, planShifts);
+          return (
+            <button
+              key={`wyd-${w.id}`}
+              type="button"
+              onClick={() => onOtworzWydarzenie && onOtworzWydarzenie(w)}
+              className="text-left rounded-md border-[1.5px] border-dashed border-[#1F7A4A] px-1.5 py-1 text-[12px] leading-4 tabular-nums text-[#1F7A4A]"
+              style={{ background: "repeating-linear-gradient(135deg,rgba(31,122,74,.08) 0 5px,transparent 5px 10px)" }}
+              title={`${w.tytul} · ${godzinyTekst(w)} · ${min ? `+${hLiczba(min / 60)} h czasu pracy` : "w czasie zmiany — bez dopisania"}`}
+              data-wydarzenie-w-wierszu={w.id}
+            >
+              <b className="block font-extrabold truncate text-[#171714]">{w.tytul}</b>
+              {godzinyTekst(w)} · {min ? `+${hLiczba(min / 60)} h` : "w zmianie"}
+            </button>
+          );
+        })}
         {skreslone.map((s) => {
           const W = edycja ? "button" : "div";
           return (
@@ -615,6 +684,11 @@ function LokalSection({
             </span>
             {meta.koszt != null && <span className="text-[12px] leading-4 text-[#6E6E66]">{zl(meta.koszt)}</span>}
           </>
+        )}
+        {meta.wydarzeniaH > 0 && (
+          <span className="text-[12px] leading-4 font-bold text-[#1F7A4A] tabular-nums" data-godziny-wydarzen>
+            w tym {hLiczba(meta.wydarzeniaH)} h wydarzeń
+          </span>
         )}
         {Math.abs(meta.swapDelta) > 0.01 && (
           <span className={`text-[12px] font-extrabold ${meta.swapDelta > 0 ? "text-[#1F7A4A]" : "text-[#DE3A22]"}`}>

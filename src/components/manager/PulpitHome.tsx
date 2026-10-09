@@ -26,6 +26,7 @@ import {
   Check,
   ChevronRight,
   Clock,
+  Coins,
   Hourglass,
   Lock,
   Palmtree,
@@ -74,7 +75,13 @@ import {
 } from "../../utils/czas";
 import { useOdlozoneDecyzje, PasekCofnij } from "./odlozoneDecyzje";
 import { IkonaTypu, TagWydarzenia } from "./wydarzeniaWspolne";
-import { wydarzeniaWOkresie, godzinyTekst, uczestnicyWydarzenia, dzienKrotko as dzienWydarzenia } from "../../utils/wydarzenia";
+import {
+  wydarzeniaWOkresie,
+  godzinyTekst,
+  uczestnicyWydarzenia,
+  dzienKrotko as dzienWydarzenia,
+  wydarzeniaDoDecyzji,
+} from "../../utils/wydarzenia";
 
 // ---------------------------------------------------------------------------
 // Liczby
@@ -276,6 +283,7 @@ export default function PulpitHome({
   showMsg = () => {},
   wydarzenia = [],
   wydarzeniaUczestnicy = [],
+  calaSiec = false,
 }) {
   const teraz = useTeraz();
   const widoczny = hasAccessToLokal || matchesFilter;
@@ -464,6 +472,17 @@ export default function PulpitHome({
       wiek: dniOd(sw.created_at),
     });
   }
+  // Płatne wydarzenia po czasie (0.75.0) — rozlicza się je w „Do decyzji”.
+  for (const w of wydarzeniaDoDecyzji({ wydarzenia, lokalOk: matchesFilter, calaSiec, teraz })) {
+    sprawy.push({
+      klucz: `wydarzenie:${w.id}`,
+      typ: "wydarzenie",
+      kto: w.tytul,
+      tag: { ton: "warn", Icon: Coins, tekst: "Do rozliczenia" },
+      meta: `${w.lokal || "cała sieć"} · ${dzienKrotki(w.data)} · ${uczestnicyWydarzenia(wydarzeniaUczestnicy, w.id).length} os.`,
+      wiek: dniOd(w.data),
+    });
+  }
   for (const a of absences.filter((x) => x.status === "pending" && matchesFilter(x.lokal))) {
     const dni = countWorkdays(a.start_date, a.end_date);
     sprawy.push({
@@ -539,6 +558,7 @@ export default function PulpitHome({
     porzucona: ["zmiana bez końca", "zmiany bez końca", "zmian bez końca"],
     probny: ["osoba na próbę", "osoby na próbę", "osób na próbę"],
     gielda: ["zamiana z giełdy", "zamiany z giełdy", "zamian z giełdy"],
+    wydarzenie: ["wydarzenie do rozliczenia", "wydarzenia do rozliczenia", "wydarzeń do rozliczenia"],
     wolne: ["wniosek o wolne", "wnioski o wolne", "wniosków o wolne"],
     korekta: ["korekta", "korekty", "korekt"],
     duplikat: ["możliwy duplikat", "możliwe duplikaty", "możliwych duplikatów"],
@@ -1075,6 +1095,26 @@ export default function PulpitHome({
               onStopka={() => setActiveTab("grafik")}
               data-panel-wydarzenia
             >
+              {(() => {
+                const czeka = sprawyWidoczne.filter((x) => x.typ === "wydarzenie");
+                return czeka.length ? (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("zatwierdzanie")}
+                    className="w-full text-left flex items-center gap-2 mt-3 rounded-lg bg-[#FDF0D8] text-[#8A5300] px-3 py-2 text-sm"
+                    data-wydarzenia-do-rozliczenia={czeka.length}
+                  >
+                    <AlertTriangle size={16} className="flex-none" />
+                    <span className="flex-1">
+                      <b>
+                        {czeka.length} {odmiana(czeka.length, ["wydarzenie do rozliczenia", "wydarzenia do rozliczenia", "wydarzeń do rozliczenia"])}
+                      </b>{" "}
+                      · {czeka[0].kto}
+                    </span>
+                    <ChevronRight size={16} className="flex-none" />
+                  </button>
+                ) : null;
+              })()}
               {!lista.length && (
                 <p className="text-sm text-[#6E6E66] pt-3">
                   Brak wydarzeń w najbliższych 7 dniach.{" "}

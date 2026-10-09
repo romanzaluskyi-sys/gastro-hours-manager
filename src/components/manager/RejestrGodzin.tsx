@@ -21,6 +21,7 @@ import React, { useState } from "react";
 import { ChevronLeft, ChevronRight, Clock, Download, Pencil, Plus, Search } from "lucide-react";
 import { toLocalYMD, trimTime } from "../../utils/grafik";
 import { pad, dlugosc, odmiana, DNI_KROTKIE } from "../../utils/czas";
+import { etykietaWydarzenia } from "../../utils/wydarzenia";
 
 const PROG_MIN = 15;
 const MIESIACE = ["Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec", "Lipiec",
@@ -124,6 +125,7 @@ function Statusy({ w }) {
         </span>
       )}
       {w.urlop && <span className={tagCls("info")}>Urlop</span>}
+      {w.wydarzenie && <span className={tagCls("info")}>Wydarzenie</span>}
       {w.poza && <span className={tagCls("neutral")}>Poza grafikiem</span>}
       {w.korekta && (
         <span className={tagCls("neutral")}>
@@ -158,7 +160,7 @@ function Wiersz({ w, onOpen, pierwszaKolumna }) {
           <div className="min-w-0 flex-1">
             <div className="font-bold text-[#171714] truncate">{pierwszaKolumna}</div>
             <div className="text-[13px] text-[#6E6E66] truncate">
-              {s.stanowisko} · {s.lokal}
+              {w.wydarzenie || s.stanowisko} · {s.lokal}
             </div>
           </div>
           <div className="text-right flex-shrink-0">
@@ -179,14 +181,14 @@ function Wiersz({ w, onOpen, pierwszaKolumna }) {
       {/* Komputer: jedna linia w siatce kolumn. */}
       <div className="hidden md:block min-w-0">
         <div className="font-bold text-[#171714] truncate">{pierwszaKolumna}</div>
-        <div className="text-[13px] leading-4 text-[#6E6E66] truncate">{s.stanowisko}</div>
+        <div className="text-[13px] leading-4 text-[#6E6E66] truncate">{w.wydarzenie || s.stanowisko}</div>
       </div>
       <div className="hidden md:block text-sm text-[#171714] truncate">{s.lokal}</div>
       <div className="hidden md:block text-sm tabular-nums text-[#6E6E66]">
         {w.plan ? (
           `${trimTime(w.plan.start_time)}–${trimTime(w.plan.end_time)}`
         ) : (
-          <i className="text-[13px]">{w.urlop ? "—" : "brak w grafiku"}</i>
+          <i className="text-[13px]">{w.urlop ? "—" : w.wydarzenie ? "wydarzenie" : "brak w grafiku"}</i>
         )}
       </div>
       <div className="hidden md:block text-sm font-bold tabular-nums text-[#171714]">{fakt}</div>
@@ -216,6 +218,7 @@ export default function RejestrGodzin({
   onNameClick,
   onGoToApprovals,
   ukryte = {}, // wpisy usuwane w tej chwili ("Cofnij" jeszcze możliwe)
+  wydarzenia = [], // tytuł zamiast stanowiska przy godzinach z wydarzenia (0.75.0)
 }) {
   const dzis = new Date();
   const [month, setMonth] = useState(dzis.getMonth());
@@ -263,7 +266,8 @@ export default function RejestrGodzin({
   );
   const faktDnia = {};
   shifts.forEach((s) => {
-    if (s.is_urlop || s.start_time.getMonth() !== month || s.start_time.getFullYear() !== year) return;
+    // Godziny z wydarzenia (0.75.0) nie mają pary w grafiku — jak urlop.
+    if (s.is_urlop || s.wydarzenie_id || s.start_time.getMonth() !== month || s.start_time.getFullYear() !== year) return;
     const k = `${kluczOsoby(s)}|${toLocalYMD(s.start_time)}`;
     (faktDnia[k] = faktDnia[k] || []).push(s);
   });
@@ -287,7 +291,7 @@ export default function RejestrGodzin({
     )
     .map((s) => {
       const ymd = toLocalYMD(s.start_time);
-      const plan = s.is_urlop ? null : planDla[s.id] || null;
+      const plan = s.is_urlop || s.wydarzenie_id ? null : planDla[s.id] || null;
       const live = !s.end_time && ymd === dzisYMD;
       const minuty = s.end_time
         ? Math.round((s.end_time - s.start_time) / 60000)
@@ -306,8 +310,9 @@ export default function RejestrGodzin({
         minuty,
         delta,
         urlop: !!s.is_urlop,
+        wydarzenie: etykietaWydarzenia(s, wydarzenia),
         bezKonca: !s.end_time && !live,
-        poza: !s.is_urlop && !plan,
+        poza: !s.is_urlop && !s.wydarzenie_id && !plan,
         decyzja: !!pendingByShiftId[s.id],
         korekta: ostatniaKorekta(s.id),
       };
@@ -330,7 +335,7 @@ export default function RejestrGodzin({
     .filter((w) => {
       if (!q) return true;
       const s = w.s;
-      return `${s.user_name} ${s.stanowisko} ${s.lokal} ${dzienEtykieta(w.ymd)} ${w.ymd} ${hhmm(
+      return `${s.user_name} ${s.stanowisko} ${w.wydarzenie || ""} ${s.lokal} ${dzienEtykieta(w.ymd)} ${w.ymd} ${hhmm(
         s.start_time
       )} ${hhmm(s.end_time)}`
         .toLowerCase()

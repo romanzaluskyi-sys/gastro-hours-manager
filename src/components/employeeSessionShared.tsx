@@ -64,6 +64,8 @@ import {
   koniecWydarzenia,
   godzinyTekst,
   minutyWydarzenia,
+  etykietaWydarzenia,
+  faktIPlanZWydarzeniami,
 } from "../utils/wydarzenia";
 import PulsPrzypomnienie from "./manager/PulsPrzypomnienie";
 // Ten sam modal, co w karcie dnia i na ekranie kierownika zmiany — wpisanie
@@ -332,12 +334,13 @@ export const opisWiadomosci = (n) => {
   const w = (kat, ton, ikona, tytul, akcja = null, plak = null) => ({ kat, ton, ikona, tytul, akcja, plak });
   switch (typ) {
     // Wydarzenia (0.74.0) — zdania z utils/wydarzenia.ts (tekstNowego,
-    // tekstZmiany, tekstOdwolania). Plakietka własna: „czas pracy” przy
+    // tekstZmiany, tekstOdwolania, od 0.75.0 tekstRozliczenia). Plakietka własna: „czas pracy” przy
     // płatnym, „zmiana”, „odwołane”. Te same zdania rozpoznaje
     // api/_lib/wiadomosci.js.
     case "wydarzenie":
       if (/^Wydarzenie odwołane/.test(t)) return w("ev", "no", "wydarzenie", "Wydarzenie odwołane", "grafik", "odwołane");
       if (/^Zmiana w wydarzeniu/.test(t)) return w("ev", "warn", "wydarzenie", "Zmiana w wydarzeniu", "grafik", "zmiana");
+      if (/^Godziny z wydarzenia/.test(t)) return w("ev", "ok", "wydarzenie", "Godziny z wydarzenia dopisane", null, "czas pracy");
       return /płatny czas pracy/.test(t)
         ? w("ev", "ok", "wydarzenie", "Nowe wydarzenie", "grafik", "czas pracy")
         : w("ev", "info", "wydarzenie", "Nowe wydarzenie", "grafik");
@@ -1006,12 +1009,15 @@ export const EmployeeSessionScreens = ({
   // grafikiem” jest w obu miejscach ta sama. Dzień dzisiejszy należy do planu,
   // także wtedy, gdy zmiana właśnie trwa. Od 0.61.0 Raport pokazuje liczby
   // (norma, ponad/do normy, z grafikiem) zamiast jednego zdania.
-  const raportRozbicie = faktIPlanMiesiaca({
+  // Od 0.75.0 plan obejmuje też płatne wydarzenia (`faktIPlanZWydarzeniami`).
+  const raportRozbicie = faktIPlanZWydarzeniami({
     shifts,
     planShifts,
     user: employee,
     rok: raportYear,
     mies: raportMonth + 1,
+    wydarzenia,
+    uczestnicy: wydarzeniaUczestnicy,
   });
   const recentShiftsForZgloszenie = shifts
     .filter((s) => s.user_id === employee.id)
@@ -3514,7 +3520,7 @@ export const EmployeeSessionScreens = ({
     // Godziny miesiąca: fakt do wczoraj + grafik od dziś — ta sama prognoza co
     // w Raporcie („Z grafikiem wyjdzie”), żeby dwa ekrany nie mówiły co innego.
     const godzinyMiesiaca = (rok, mies) => {
-      const r = faktIPlanMiesiaca({ shifts, planShifts, user: employee, rok, mies });
+      const r = faktIPlanZWydarzeniami({ shifts, planShifts, user: employee, rok, mies, wydarzenia, uczestnicy: wydarzeniaUczestnicy });
       return r.fakt + r.plan;
     };
     const etat = naEtacie(employee);
@@ -4687,6 +4693,10 @@ export const EmployeeSessionScreens = ({
             {zaplanowana ? (
               <small className="basis-full text-[13px] font-bold text-[#6E6E66]">
                 w grafiku · jeszcze nie przepracowane
+              </small>
+            ) : s.wydarzenie_id ? (
+              <small className="basis-full text-[13px] font-bold text-[#1F7A4A]" data-wpis-wydarzenia>
+                wydarzenie · {etykietaWydarzenia(s, wydarzenia)}
               </small>
             ) : czeka ? (
               <small className="basis-full flex items-center gap-1 text-[13px] font-bold text-[#8A5300]">

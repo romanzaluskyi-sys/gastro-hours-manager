@@ -457,10 +457,18 @@ const poprzedniMiesiac = (h) => {
       // Grafiku (Ceglana) zaczynają od pustej listy; Pulpit przy „Cała sieć” je widzi.
       const [wydarzenia, setWydarzenia] = useState(() => {
         const d = new Date(); d.setDate(d.getDate() + 2);
+        // 0.75.0: płatna inwentaryzacja WCZORAJ w Bułce, nierozliczona — sprawa
+        // w „Do decyzji” (Ala i Cezary).
+        const wcz = new Date(); wcz.setDate(wcz.getDate() - 1);
         return [{ id: "wb1", lokal: "Bułka i Jacek", data: ymd(d), typ: "grupa", tytul: "Urodziny — 25 osób",
-          godz_od: "18:00:00", godz_do: "21:00:00", platne: false, zakres: "grafik", liczba_gosci: 25 }];
+          godz_od: "18:00:00", godz_do: "21:00:00", platne: false, zakres: "grafik", liczba_gosci: 25 },
+          { id: "wp1", lokal: "Bułka i Jacek", data: ymd(wcz), typ: "inwentaryzacja", tytul: "Inwentaryzacja magazynu",
+          godz_od: "22:30:00", godz_do: "23:30:00", platne: true, zakres: "wszyscy" }];
       });
-      const [wydarzeniaUczestnicy, setWydarzeniaUczestnicy] = useState([]);
+      const [wydarzeniaUczestnicy, setWydarzeniaUczestnicy] = useState([
+        { id: "wu1", wydarzenie_id: "wp1", user_id: "u1", user_name: "Ala" },
+        { id: "wu2", wydarzenie_id: "wp1", user_id: "u3", user_name: "Cezary" },
+      ]);
       window.__wydarzenia = wydarzenia;
       window.__uczestnicy = wydarzeniaUczestnicy;
 
@@ -2227,6 +2235,43 @@ const poprzedniMiesiac = (h) => {
             !!panelW && !!panelW.querySelector('[data-wydarzenie-pulpitu="wb1"]') && /25 gości/.test(panelW.textContent),
             panelW && panelW.textContent.slice(0, 200));
           sprawdz("Pulpit: odwołane wydarzenie nie stoi na liście", !!panelW && !/Zebranie zespołu/.test(panelW.textContent));
+
+          // Rozliczenie płatnego (0.75.0): sprawa na Pulpicie i w „Do decyzji”,
+          // odznaczenie Cezarego, „Zapisz godziny (1)”, 6 s „Cofnij”, zapis.
+          sprawdz("Pulpit: ostrzeżenie „1 wydarzenie do rozliczenia” w panelu wydarzeń",
+            !!panelW.querySelector('[data-wydarzenia-do-rozliczenia="1"]'));
+          const menuZ = [...document.querySelectorAll("#app aside button")].find((x) => x.textContent.includes("Zatwierdzanie zmian"));
+          const znaczekPrzed = Number((/(\d+)$/.exec(menuZ.textContent) || [])[1]);
+          await kl(menuZ, 400);
+          const karta = () => document.querySelector('#app [data-rozliczenie-wydarzenia="wp1"]');
+          sprawdz("„Do decyzji”: karta „Wydarzenia do rozliczenia” z Alą i Cezarym, po godzinie",
+            !!karta() && /Wydarzenia do rozliczenia/.test(document.querySelector("#app").textContent) &&
+              karta().querySelectorAll("[data-uczestnik-rozliczenia]").length === 2 && /1 h/.test(karta().textContent),
+            karta() && karta().textContent);
+          await kl(karta().querySelector('[data-uczestnik-rozliczenia="u3"]'));
+          const przyciskZ = [...karta().closest("article").querySelectorAll("button")].find((b) => /Zapisz godziny/.test(b.textContent));
+          sprawdz("odznaczony Cezary: „Kto był · 1 z 2”, „Zapisz godziny (1)”",
+            /Kto był · 1 z 2/.test(karta().textContent) && /Zapisz godziny \(1\)/.test(przyciskZ.textContent));
+          const przedR = window.__zapisy.length;
+          await kl(przyciskZ, 300);
+          sprawdz("karta znika od razu, zapis czeka 6 s („Cofnij”)",
+            !karta() && window.__zapisy.length === przedR);
+          await czekaj(6800);
+          const noweR = window.__zapisy.slice(przedR);
+          const zmR = noweR.filter((z) => z[0] === "shifts" && typeof z[1] === "object");
+          sprawdz("rozliczenie: jedna zmiana Ali z wydarzenie_id, lokal wydarzenia, 22:30–23:30",
+            zmR.length === 1 && zmR[0][1].user_id === "u1" && zmR[0][1].wydarzenie_id === "wp1" && zmR[0][1].lokal === "Bułka i Jacek" &&
+              new Date(zmR[0][1].start_time).getHours() === 22 && new Date(zmR[0][1].end_time).getMinutes() === 30,
+            JSON.stringify(zmR.map((z) => z[1])));
+          sprawdz("…ślad w shift_edits (manual_add) i wiadomość „Godziny z wydarzenia dopisane” tylko do Ali",
+            noweR.some((z) => z[0] === "shift_edits" && z[1].source === "manual_add") &&
+              noweR.filter((z) => z[0] === "notifications" && /^Godziny z wydarzenia dopisane: Inwentaryzacja magazynu/.test(z[1].message)).map((z) => z[1].user_name).join() === "Ala");
+          sprawdz("…obecność: Ala tak (z shift_id), Cezary nie; wydarzenie rozliczone",
+            noweR.some((z) => z[0] === "wydarzenia_uczestnicy" && z[1] === "wu1" && z[2].obecny === true && z[2].shift_id) &&
+              noweR.some((z) => z[0] === "wydarzenia_uczestnicy" && z[1] === "wu2" && z[2].obecny === false && !z[2].shift_id) &&
+              noweR.some((z) => z[0] === "wydarzenia" && z[1] === "wp1" && z[2].rozliczone_at && z[2].rozliczone_przez === "Roman"));
+          const znaczekPo = Number((/(\d+)$/.exec(menuZ.textContent) || [0, 0])[1]);
+          sprawdz("znaczek „Zatwierdzanie zmian” spada o jeden", znaczekPo === znaczekPrzed - 1, `${znaczekPrzed} → ${znaczekPo}`);
         }
       } catch (e) {
         sprawdz("Wydarzenia: przebieg bez wyjątku", false, e.message);

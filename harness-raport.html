@@ -195,6 +195,12 @@ const poprzedniMiesiac = (h) => {
       // jeszcze godzin) i z planu (bo plan brał tylko dni PO dzisiejszym),
       // więc liczba rosła dopiero po zamknięciu zmiany i wyglądało to jak
       // zgubiony dzień.
+      // 0.75.0: godziny z ROZLICZONEGO płatnego wydarzenia — wiersz `shifts`
+      // z `wydarzenie_id`. Raport ma pokazać przy nim tytuł wydarzenia.
+      if (kto === "etat") {
+        wszystkieShifts.push({ id: "shWyd", user_id: user.id, user_name: user.name, lokal: "Ceglana",
+          stanowisko: "Kucharz", wydarzenie_id: "ev1", ...wTymMiesiacu(2, 18, 19) });
+      }
       const trybDzis = new URLSearchParams(location.search).get("dzis");
       if (trybDzis) {
         const a = new Date(teraz.getFullYear(), teraz.getMonth(), teraz.getDate(), 9);
@@ -251,6 +257,9 @@ const poprzedniMiesiac = (h) => {
             start_time: "10:00", end_time: "18:00", published_at: "2020-01-01T00:00:00Z" },
         ],
         shiftSwaps: [], setShiftSwaps: () => {},
+        wydarzenia: [{ id: "ev1", data: ymdMies(2), lokal: "Ceglana", typ: "zebranie", tytul: "Zebranie zespołu",
+          godz_od: "18:00", godz_do: "19:00", platne: true, rozliczone_at: "2020-01-01T00:00:00Z" }],
+        wydarzeniaUczestnicy: [{ id: "wu1", wydarzenie_id: "ev1", user_id: "u1", user_name: "Bo" }],
         showMsg: (m, t) => console.log("showMsg:", t, m),
       };
 
@@ -319,6 +328,9 @@ const poprzedniMiesiac = (h) => {
         sprawdz("etat: kreska normy i fakt wobec normy",
           /norma \d/.test(t) && /(Do normy|Ponad normą|Dokładnie w normie)/.test(t), t.slice(0, 200));
         sprawdz("etat: prognoza „Z grafikiem wyjdzie”", /Z grafikiem wyjdzie/.test(t), t.slice(0, 200));
+        const wpisWyd = document.querySelector("#app [data-wpis-wydarzenia]");
+        sprawdz("godziny z rozliczonego wydarzenia: przy wpisie „wydarzenie · Zebranie zespołu”",
+          !!wpisWyd && /wydarzenie · Zebranie zespołu/.test(wpisWyd.textContent));
         sprawdz("etat: „Jeszcze w grafiku” pod listą zmian",
           /jeszcze w grafiku/i.test(document.getElementById("app").innerText));
         sprawdz("przy zmianie jest flaga korekty (48 px)",

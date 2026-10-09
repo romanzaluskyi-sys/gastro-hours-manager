@@ -688,7 +688,10 @@ export default function RaportyIKoszty({
   }).length;
   const brakiMies = (sprawy.braki || []).filter((b) => wMiesiacu(b.plan && b.plan.date)).length;
   const porzuconeMies = (sprawy.porzucone || []).filter((p) => wMiesiacu(p.shift && p.shift.start_time)).length;
-  const doDecyzjiMies = korektyMies + brakiMies + porzuconeMies;
+  // Płatne wydarzenie bez rozliczenia (0.75.0) to godziny, których jeszcze
+  // nie ma w Rejestrze — tak samo zmienią rozliczenie jak brak odbicia.
+  const wydarzeniaMies = (sprawy.wydarzenia || []).filter((w) => wMiesiacu(w.data)).length;
+  const doDecyzjiMies = korektyMies + brakiMies + porzuconeMies + wydarzeniaMies;
   const korektyKierownika = (shiftEdits || []).filter(
     (e) => wMiesiacu(e.new_date || e.old_date) && widoczny(e.new_lokal || e.old_lokal)
   ).length;
@@ -878,6 +881,7 @@ export default function RaportyIKoszty({
             korektyMies > 0 && `korekty: ${korektyMies}`,
             brakiMies > 0 && `bez odbicia: ${brakiMies}`,
             porzuconeMies > 0 && `bez zakończenia: ${porzuconeMies}`,
+            wydarzeniaMies > 0 && `wydarzenia: ${wydarzeniaMies}`,
           ]
             .filter(Boolean)
             .concat("każda zmieni godziny")

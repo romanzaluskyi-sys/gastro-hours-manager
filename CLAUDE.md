@@ -192,7 +192,17 @@ i powiadamia od razu, bez publikacji, i nie liczy się do obsady.
 ⚠️ **Płatne wydarzenie NIE jest wierszem `grafik_shifts`** — inaczej trzeba by
 je wyłączać z obsady, giełdy, „bez odbicia”, porzuconych, Aktywnych i
 publikacji. Godziny dolicza `platneMinutyOsoby` (bez czasu w zmianie osoby),
-fakt — `shifts.wydarzenie_id` po rozliczeniu (etap W4, 0.75.0).
+fakt — `shifts.wydarzenie_id` po rozliczeniu (0.75.0).
+⚠️ **Rozliczenie płatnego = sprawa w „Do decyzji”** (`wydarzeniaDoDecyzji` —
+karta w ZatwierdzanieZmian, `shellBadges`, `sprawy` w PulpitHome) i zapis
+WYŁĄCZNIE przez `rozliczWydarzenie`, który liczy odcinki z BAZY tuż przed
+zapisem (ta sama ochrona co `rozliczBrakOdbicia`). „Cała sieć” rozlicza tylko
+właściciel — tylko on może ją zmienić w bazie.
+⚠️ **Godziny płatnych doliczają się do planu w trzech miejscach**: wiersz osoby
+w Grafiku (`godzinyWydarzenOsoby`), budżet dnia (`kosztWydarzenDnia` →
+`budzetDnia({ dodatki })`) i „Z grafikiem wyjdzie” (`faktIPlanZWydarzeniami`).
+Wiersz `shifts` z `wydarzenie_id` pokazuje tytuł (`etykietaWydarzenia`) i nie
+paruje się z grafikiem.
 ⚠️ **Polityki `wydarzenia` są osobne na select/insert/update/delete** (odczyt
 szerszy niż zapis), a odczyt stoi na KOLUMNACH wiersza — przy funkcji z listą
 id INSERT … RETURNING od kierownika lokalu odbijałby się od RLS.
