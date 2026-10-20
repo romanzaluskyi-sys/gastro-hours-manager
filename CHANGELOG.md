@@ -5,6 +5,26 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.77.0 — 2026-10-20
+
+- **„Nie pamiętam PIN-u”.** Na ekranie logowania jest teraz taki link: wpisujesz
+  swój e-mail, dostajesz wiadomość z przyciskiem i ustawiasz nowy PIN sam, bez
+  dzwonienia do kierownika. Link działa raz i wygasa po godzinie. Pracownik,
+  który loguje się z prywatnego telefonu, ustawia w ten sposób także PIN
+  swojego profilu na tablecie. Kto korzysta tylko z tabletu, dalej prosi o nowy
+  PIN kierownika.
+- **PIN-y nie są już nigdzie zapisane wprost.** Baza trzyma tylko ich
+  zaszyfrowany ślad, więc nikt — także kierownik — nie odczyta cudzego PIN-u.
+  W karcie pracownika zamiast PIN-u stoi „PIN jest ustawiony”, a pole służy do
+  wpisania nowego (puste = bez zmian).
+- **Ochrona przed zgadywaniem na tablecie.** Po 10 złych PIN-ach w 15 minut
+  profil się blokuje i tablet mówi o tym wprost. Kierownik odblokowuje go od
+  razu, ustawiając w karcie nowy PIN.
+- **„Zdejmij blokadę PIN-em”** w karcie pracownika kiosku — profil otworzy się
+  na tablecie bez PIN-u, a logowanie z prywatnego telefonu przestanie działać.
+- Kierownik lokalu może zmienić PIN tabletu swojego lokalu (dotąd serwer
+  odmawiał).
+
 ## 0.76.0 — 2026-10-09
 
 - **Godziny wpisane po czasie zatrzyma też baza.** Okna z karty lokalu („start

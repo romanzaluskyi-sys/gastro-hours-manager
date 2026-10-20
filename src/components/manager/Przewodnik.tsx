@@ -27,6 +27,16 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.77.0",
+    date: "2026-10-20",
+    items: [
+      "„Nie pamiętam PIN-u” na ekranie logowania: link na e-mail i nowy PIN bez kierownika.",
+      "PIN-u nie widać już nigdzie, także w karcie pracownika — karta mówi tylko, czy jest ustawiony, a pole służy do wpisania nowego.",
+      "Profil na tablecie blokuje się na 15 minut po 10 złych PIN-ach; nowy PIN w karcie zdejmuje blokadę od razu.",
+      "„Zdejmij blokadę PIN-em” w karcie pracownika kiosku.",
+    ],
+  },
+  {
     version: "0.76.0",
     date: "2026-10-09",
     items: [
@@ -1039,7 +1049,7 @@ const SECTIONS = [
   {
     Icon: Users,
     title: "Pracownicy",
-    body: "Lista i karta osoby: dane, logowanie (e-mail i PIN), miejsce pracy, umowa i wynagrodzenie (zlecenie — stawka godzinowa, umowa o pracę — wymiar i kwota; normę liczy aplikacja), dokumenty, urlop, ostatni dzień pracy i notatki. „Braki w danych” pokazuje, komu brakuje terminów albo wynagrodzenia. Usunąć na zawsze można tylko z Archiwum.",
+    body: "Lista i karta osoby: dane, logowanie (e-mail i PIN), miejsce pracy, umowa i wynagrodzenie (zlecenie — stawka godzinowa, umowa o pracę — wymiar i kwota; normę liczy aplikacja), dokumenty, urlop, ostatni dzień pracy i notatki. „Braki w danych” pokazuje, komu brakuje terminów albo wynagrodzenia. PIN-u nie widać — karta mówi tylko, czy jest, a zapomniany ustawia się od nowa (albo pracownik sam: „Nie pamiętam PIN-u” na ekranie logowania). Usunąć na zawsze można tylko z Archiwum.",
   },
   {
     Icon: BarChart3,

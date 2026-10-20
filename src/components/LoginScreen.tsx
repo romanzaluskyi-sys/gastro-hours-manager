@@ -9,11 +9,23 @@ import {
   Smartphone,
   ArrowRight,
   ChevronDown,
+  Mail,
+  Lock,
 } from "lucide-react";
 import { APP_VERSION, PRODUKT, TENANT, DEMO } from "../config";
 import { KONTA_DEMO, DEMO_PIN, kontoDemo, zuzyjRoleZAdresu } from "../demo";
 import { api } from "../api/supabase";
-import { zaloguj, wczytajKonto, widokDlaRoli, wyloguj } from "../api/auth";
+import {
+  zaloguj,
+  wczytajKonto,
+  widokDlaRoli,
+  wyloguj,
+  przypomnijPin,
+  ustawNowyPin,
+  tokenNowegoPinu,
+  zapomnijTokenNowegoPinu,
+} from "../api/auth";
+import { poprawnyPin, slabyPin } from "../utils/piny";
 import ShiftroMark from "./ShiftroMark";
 import {
   fieldLabelCls,
@@ -33,6 +45,12 @@ const LoginScreen = ({ setCurrentUser, setCurrentView, dbError, komunikat = "" }
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
   const [loguje, setLoguje] = useState(false);
+  // „Nie pamiętam PIN-u” (0.77.0): login → przypomnij (e-mail z linkiem) →
+  // nowy (po kliknięciu w link, token przyszedł w adresie — api/auth.ts).
+  const [tryb, setTryb] = useState(() => (tokenNowegoPinu() ? "nowy" : "login"));
+  const [info, setInfo] = useState("");
+  const [nowyPin, setNowyPin] = useState("");
+  const [nowyPin2, setNowyPin2] = useState("");
 
   // ⚠️ Od 0.42.0 hasło sprawdza SUPABASE AUTH, a nie przeglądarka.
   //
@@ -76,6 +94,54 @@ const LoginScreen = ({ setCurrentUser, setCurrentView, dbError, komunikat = "" }
       setError(err.message || "Nie udało się zalogować.");
     }
     setLoguje(false);
+  };
+
+  const zmienTryb = (nowy) => {
+    setTryb(nowy);
+    setError("");
+    setInfo("");
+  };
+
+  const handlePrzypomnij = async (e) => {
+    e.preventDefault();
+    const wpisany = String(email || "").trim().toLowerCase();
+    if (!wpisany) return setError("Podaj e-mail konta.");
+    setError("");
+    setInfo("");
+    setLoguje(true);
+    try {
+      const odp = await przypomnijPin(wpisany);
+      setInfo(odp.info || "Jeśli to konto istnieje, wysłaliśmy link na ten adres.");
+    } catch (err) {
+      setError(err.message || "Nie udało się wysłać linku.");
+    }
+    setLoguje(false);
+  };
+
+  const handleNowyPin = async (e) => {
+    e.preventDefault();
+    if (!poprawnyPin(nowyPin)) return setError("PIN ma mieć dokładnie 6 cyfr.");
+    if (nowyPin !== nowyPin2) return setError("PIN-y się różnią — wpisz ten sam dwa razy.");
+    setError("");
+    setLoguje(true);
+    let adres = "";
+    try {
+      adres = (await ustawNowyPin(tokenNowegoPinu(), nowyPin)).email;
+    } catch (err) {
+      setLoguje(false);
+      setError(err.message || "Nie udało się ustawić PIN-u.");
+      return;
+    }
+    // Token jest już zużyty — ponowne wejście na ten ekran nic by nie dało.
+    zapomnijTokenNowegoPinu();
+    setLoguje(false);
+    if (adres) {
+      setEmail(adres);
+      await zalogujDanymi(adres, nowyPin);
+    } else {
+      zmienTryb("login");
+      setInfo("PIN zmieniony — zaloguj się nowym.");
+    }
   };
 
   // Wersja demonstracyjna: link „w nowej karcie” (`?jako=tablet`) loguje od
@@ -138,62 +204,174 @@ const LoginScreen = ({ setCurrentUser, setCurrentView, dbError, komunikat = "" }
             <p className="text-sm font-mono mt-1 text-[#8A3A2B]">{dbError}</p>
           </div>
         )}
-        <form
-          onSubmit={handleLogin}
-          className={`space-y-4 ${dbError ? "opacity-50 pointer-events-none" : ""}`}
-        >
-          <div>
-            <span className={fieldLabelCls}>Email konta</span>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className={selectElCls}
-              placeholder="lokal@gmail.com"
-              required
-            />
+        {info && (
+          <div className="bg-[#E7F3EC] border-l-4 border-[#1F7A4A] p-4 mb-6 rounded" data-info-logowania>
+            <p className="text-sm font-bold text-[#1F4D33]">{info}</p>
           </div>
-          <div>
-            <span className={fieldLabelCls}>PIN</span>
-            <input
-              type="password"
-              value={pin}
-              onChange={(e) => setPin(e.target.value)}
-              className={`${selectElCls} text-center tracking-[0.4em]`}
-              placeholder="••••••"
-              required
-            />
-          </div>
-          {error && (
-            <p className="text-[#DE3A22] text-sm text-center font-bold">{error}</p>
-          )}
-          {/* ⚠️ Przycisk musi być zablokowany na czas żądania. Logowanie
-              chodzi teraz do serwera, więc między kliknięciem a odpowiedzią
-              jest realna chwila — a na tablecie z opornym ekranem ludzie
-              klikają drugi raz. Dwa równoległe logowania tym samym hasłem to
-              dwie sesje i wyścig o to, która zapisze się w localStorage. */}
-          <button
-            type="submit"
-            disabled={loguje}
-            className={`${ctaPrimaryCls} flex items-center justify-center gap-2 ${
-              loguje ? "opacity-60" : ""
-            }`}
+        )}
+        {tryb === "login" && (
+          <form
+            onSubmit={handleLogin}
+            className={`space-y-4 ${dbError ? "opacity-50 pointer-events-none" : ""}`}
           >
-            {loguje ? (
-              <>
-                <RefreshCw size={20} className="animate-spin" /> Logowanie…
-              </>
-            ) : (
-              <>
-                <LogIn size={20} /> Zaloguj się
-              </>
+            <div>
+              <span className={fieldLabelCls}>Email konta</span>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className={selectElCls}
+                placeholder="lokal@gmail.com"
+                required
+              />
+            </div>
+            <div>
+              <span className={fieldLabelCls}>PIN</span>
+              <input
+                type="password"
+                value={pin}
+                onChange={(e) => setPin(e.target.value)}
+                className={`${selectElCls} text-center tracking-[0.4em]`}
+                placeholder="••••••"
+                required
+              />
+            </div>
+            {error && (
+              <p className="text-[#DE3A22] text-sm text-center font-bold">{error}</p>
             )}
+            {/* ⚠️ Przycisk musi być zablokowany na czas żądania. Logowanie
+                chodzi teraz do serwera, więc między kliknięciem a odpowiedzią
+                jest realna chwila — a na tablecie z opornym ekranem ludzie
+                klikają drugi raz. Dwa równoległe logowania tym samym hasłem to
+                dwie sesje i wyścig o to, która zapisze się w localStorage. */}
+            <button
+              type="submit"
+              disabled={loguje}
+              className={`${ctaPrimaryCls} flex items-center justify-center gap-2 ${
+                loguje ? "opacity-60" : ""
+              }`}
+            >
+              {loguje ? (
+                <>
+                  <RefreshCw size={20} className="animate-spin" /> Logowanie…
+                </>
+              ) : (
+                <>
+                  <LogIn size={20} /> Zaloguj się
+                </>
+              )}
+            </button>
+          </form>
+        )}
+        {tryb === "login" && (
+          <button
+            type="button"
+            onClick={() => zmienTryb("przypomnij")}
+            className="block mx-auto mt-4 text-[13px] font-bold text-[#3A3A35] underline"
+            data-nie-pamietam
+          >
+            Nie pamiętam PIN-u
           </button>
-        </form>
-        <p className={`${helperTextCls} text-center mt-5`}>
-          Kiosk / Tablet Służbowy loguje się tymi samymi danymi zapisanymi w
-          przeglądarce urządzenia.
-        </p>
+        )}
+        {tryb === "przypomnij" && (
+          <form onSubmit={handlePrzypomnij} className="space-y-4" data-przypomnij-pin>
+            <p className="text-[14px] text-[#3A3A35] leading-relaxed">
+              Wpisz e-mail, którym się logujesz. Wyślemy na niego link — po kliknięciu ustawisz nowy
+              PIN. Kto loguje się tylko na tablecie, prosi o nowy PIN kierownika.
+            </p>
+            <div>
+              <span className={fieldLabelCls}>Email konta</span>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className={selectElCls}
+                required
+              />
+            </div>
+            {error && <p className="text-[#DE3A22] text-sm text-center font-bold">{error}</p>}
+            <button
+              type="submit"
+              disabled={loguje}
+              className={`${ctaPrimaryCls} flex items-center justify-center gap-2 ${loguje ? "opacity-60" : ""}`}
+            >
+              {loguje ? <RefreshCw size={20} className="animate-spin" /> : <Mail size={20} />} Wyślij link
+            </button>
+            <button
+              type="button"
+              onClick={() => zmienTryb("login")}
+              className="block mx-auto text-[13px] font-bold text-[#3A3A35] underline"
+            >
+              Wróć do logowania
+            </button>
+          </form>
+        )}
+        {tryb === "nowy" && (
+          <form onSubmit={handleNowyPin} className="space-y-4" data-nowy-pin>
+            <p className="text-[14px] text-[#3A3A35] leading-relaxed">
+              Ustaw nowy PIN — sześć cyfr. Stary przestanie działać. Jeśli tym PIN-em otwierasz też
+              swój profil na tablecie, tam zmieni się razem z nim.
+            </p>
+            <div>
+              <span className={fieldLabelCls}>Nowy PIN</span>
+              <input
+                type="password"
+                inputMode="numeric"
+                autoComplete="new-password"
+                maxLength="6"
+                value={nowyPin}
+                onChange={(e) => setNowyPin(e.target.value.replace(/[^0-9]/g, ""))}
+                className={`${selectElCls} text-center tracking-[0.4em]`}
+                placeholder="••••••"
+                required
+              />
+            </div>
+            <div>
+              <span className={fieldLabelCls}>Powtórz PIN</span>
+              <input
+                type="password"
+                inputMode="numeric"
+                autoComplete="new-password"
+                maxLength="6"
+                value={nowyPin2}
+                onChange={(e) => setNowyPin2(e.target.value.replace(/[^0-9]/g, ""))}
+                className={`${selectElCls} text-center tracking-[0.4em]`}
+                placeholder="••••••"
+                required
+              />
+            </div>
+            {slabyPin(nowyPin) && (
+              <p className="text-[13px] font-bold text-[#8A5300] text-center">
+                Łatwy do zgadnięcia PIN — lepiej wybierz inny.
+              </p>
+            )}
+            {error && <p className="text-[#DE3A22] text-sm text-center font-bold">{error}</p>}
+            <button
+              type="submit"
+              disabled={loguje}
+              className={`${ctaPrimaryCls} flex items-center justify-center gap-2 ${loguje ? "opacity-60" : ""}`}
+            >
+              {loguje ? <RefreshCw size={20} className="animate-spin" /> : <Lock size={20} />} Ustaw PIN i zaloguj się
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                // Link wygasł albo już zużyty — droga do nowego.
+                zapomnijTokenNowegoPinu();
+                zmienTryb("przypomnij");
+              }}
+              className="block mx-auto text-[13px] font-bold text-[#3A3A35] underline"
+            >
+              Link nie działa? Poproś o nowy
+            </button>
+          </form>
+        )}
+        {tryb === "login" && (
+          <p className={`${helperTextCls} text-center mt-5`}>
+            Kiosk / Tablet Służbowy loguje się tymi samymi danymi zapisanymi w
+            przeglądarce urządzenia.
+          </p>
+        )}
       </div>
     </div>
   );

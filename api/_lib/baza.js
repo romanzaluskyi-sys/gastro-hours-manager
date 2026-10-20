@@ -66,6 +66,17 @@ const dodajJesliNowy = async (tabela, dane) => {
   return true;
 };
 
+const usun = async (tabela, filtr) => {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${tabela}?${filtr}`, {
+    method: "DELETE",
+    headers: { ...headers, Prefer: "return=minimal" },
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(`Błąd usuwania ${tabela}: ${res.status} ${t.slice(0, 200)}`);
+  }
+};
+
 const zakoduj = (v) => encodeURIComponent(v);
 
-module.exports = { brakBazy, pobierz, zmien, dodajJesliNowy, zakoduj };
+module.exports = { brakBazy, pobierz, zmien, dodajJesliNowy, usun, zakoduj };

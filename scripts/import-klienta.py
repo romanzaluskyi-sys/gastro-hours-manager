@@ -559,7 +559,8 @@ def zapisz(b, plan, stan):
         else:
             aid = b.auth("POST", "users", {"email": u["email"], "password": pin, "email_confirm": True,
                                            "user_metadata": {"name": u["name"], "rola": u["role"]}})["id"]
-        b.patch("users", f"id=eq.{ids[u['name']]}", {"auth_id": aid} if prywatny else {"pin": pin, "auth_id": aid})
+        # Hasło jest w Auth — kopii w kartotece nie trzymamy (migracja 0045).
+        b.patch("users", f"id=eq.{ids[u['name']]}", {"auth_id": aid})
         if not prywatny:  # PIN z arkusza osoba już zna
             piny.append((u["name"], u["role"], u["email"], pin))
 

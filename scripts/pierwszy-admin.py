@@ -204,15 +204,14 @@ def main():
         auth_id = nowe["id"]
 
     # --- 4. Kartoteka ---
-    # `pin` w kartotece i hasło w Auth to ta sama rzecz — pilnuje tego potem
-    # `ustaw-haslo.js`, a tutaj ten skrypt. Puste `allowed_lokale` u admina
-    # znaczy „wszystkie" (moje_lokale / hasAccessToLokal).
+    # PIN jest WYŁĄCZNIE hasłem w Auth — kartoteka nie trzyma jego kopii
+    # (migracja 0045). Puste `allowed_lokale` u admina znaczy „wszystkie"
+    # (moje_lokale / hasAccessToLokal).
     albo_koniec(
         zapytanie, args.url, klucz, "/rest/v1/users", "POST",
         {
             "name": imie,
             "email": email,
-            "pin": pin,
             "role": "admin",
             "active": True,
             "archived": False,

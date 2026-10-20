@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { czekaNaDecyzje } from "../../utils/probni";
 import { getMonthName } from "../../utils/format";
+import { slabyPin } from "../../utils/piny";
 import { countWorkdays, URLOP_HOURS_PER_DAY } from "../../utils/absences";
 import { odmiana } from "../../utils/czas";
 import {
@@ -134,24 +135,12 @@ const brakiOsoby = (u) => {
   return braki;
 };
 
-// PIN łatwy do zgadnięcia: jedna cyfra, ciąg (123456, 654321) albo powtarzany
-// wzór (121212, 123123). Na tablecie stojącym na sali to pierwsze, co ktoś
-// spróbuje.
-const slabyPin = (pin) => {
-  const p = String(pin || "");
-  if (!/^\d{6}$/.test(p)) return false;
-  if (/^(\d)\1+$/.test(p)) return true;
-  const cyfry = p.split("").map(Number);
-  const rosnaco = cyfry.every((c, i) => i === 0 || c === (cyfry[i - 1] + 1) % 10);
-  const malejaco = cyfry.every((c, i) => i === 0 || c === (cyfry[i - 1] + 9) % 10);
-  if (rosnaco || malejaco) return true;
-  return p.slice(0, 2).repeat(3) === p || p.slice(0, 3).repeat(2) === p;
-};
-
 // Porównanie karty z tym, co jest zapisane — od tego zależy pasek "Zapisz".
 // Pola techniczne i wyliczane pomijamy; tablica i tekst po przecinku to ta
 // sama wartość; puste, null i false też.
-const POMIJANE = ["ma_kiosk_pin", "notatki_updated_by", "notatki_updated_at", "created_at"];
+// `pin` i `kiosk_pin` widok oddaje puste (0045) — porównujemy `nowy_pin` i
+// `usun_pin`, które istnieją tylko w karcie.
+const POMIJANE = ["ma_kiosk_pin", "pin", "kiosk_pin", "notatki_updated_by", "notatki_updated_at", "created_at"];
 const norm = (v) => {
   if (v == null || v === false) return "";
   if (Array.isArray(v)) return v.filter(Boolean).map(String).sort().join(",");
@@ -428,8 +417,18 @@ export default function Pracownicy({
       ]
     : [];
 
-  const pin = editingUser ? (editingUser.role === "open" ? editingUser.kiosk_pin : editingUser.pin) || "" : "";
+  // Pole PIN jest od 0.77.0 polem NOWEGO PIN-u: aplikacja nie zna obecnego
+  // (baza trzyma hash, migracja 0045), więc puste znaczy „bez zmian”.
+  const pin = editingUser ? String(editingUser.nowy_pin || "") : "";
   const pinZaKrotki = pin.length > 0 && pin.length !== 6;
+  // Czy PIN już jest: pracownik kiosku — kłódka, reszta — konto w Auth.
+  const maPin = editingUser
+    ? editingUser.role === "open"
+      ? !!editingUser.ma_kiosk_pin && !editingUser.usun_pin
+      : !!editingUser.auth_id
+    : false;
+  // Nowe konto logujące się do aplikacji bez PIN-u nie ma czym się zalogować.
+  const pinWymagany = isEmailPinRequired && !editingUser?.auth_id;
 
   const urlopy = editingUser?.id
     ? absences
@@ -749,7 +748,15 @@ export default function Pracownicy({
               <Sekcja id="sekcja-logowanie" tytul="Kontakt i logowanie">
                 <div className="grid md:grid-cols-2 gap-3">
                   <Pole
-                    etykieta={isEmailPinRequired ? "PIN (6 cyfr)" : "PIN blokady (6 cyfr)"}
+                    etykieta={
+                      maPin
+                        ? isEmailPinRequired
+                          ? "Nowy PIN (6 cyfr)"
+                          : "Nowy PIN blokady (6 cyfr)"
+                        : isEmailPinRequired
+                        ? "PIN (6 cyfr)"
+                        : "PIN blokady (6 cyfr)"
+                    }
                     podpis={
                       <>
                         {slabyPin(pin) && (
@@ -762,32 +769,53 @@ export default function Pracownicy({
                             <AlertTriangle size={14} /> PIN ma mieć dokładnie 6 cyfr
                           </p>
                         )}
-                        <p className={podpisCls}>
-                          {isEmailPinRequired
+                        {/* Stan PIN-u zamiast samego PIN-u (0.77.0): baza trzyma
+                            hash, więc nikt — także kierownik — nie zobaczy już
+                            obecnego. Zapomniany PIN ustawia się od nowa. */}
+                        <p className={podpisCls} data-stan-pinu>
+                          {editingUser.usun_pin
+                            ? "Blokada zostanie zdjęta po zapisaniu — profil na tablecie otworzy się bez PIN-u, a logowanie z telefonu przestanie działać."
+                            : maPin
+                            ? isEmailPinRequired
+                              ? "PIN jest ustawiony. Zostaw puste, żeby go nie zmieniać. Zapomniany PIN ta osoba zmieni sama: „Nie pamiętam PIN-u” na ekranie logowania."
+                              : "PIN jest ustawiony. Zostaw puste, żeby go nie zmieniać. Ten sam PIN otwiera profil na tablecie i loguje na prywatnym telefonie."
+                            : isEmailPinRequired
                             ? "Tym PIN-em i e-mailem ta osoba loguje się do aplikacji."
                             : "Ten sam PIN otwiera profil na tablecie i loguje na prywatnym telefonie."}
                         </p>
+                        {!isEmailPinRequired && editingUser.ma_kiosk_pin && !pin && (
+                          <button
+                            type="button"
+                            onClick={() => ustaw({ usun_pin: !editingUser.usun_pin })}
+                            className="mt-1.5 text-[12px] font-bold text-[#B3261E] underline"
+                            data-usun-pin
+                          >
+                            {editingUser.usun_pin ? "Nie zdejmuj blokady" : "Zdejmij blokadę PIN-em"}
+                          </button>
+                        )}
                       </>
                     }
                   >
                     <span className="flex gap-2">
-                      {/* PIN ukryty do "Pokaż" — karta bywa otwierana przy
-                          ludziach. `new-password`, żeby przeglądarka nie
-                          proponowała zapisania go jako hasła kierownika.
-                          ⚠️ maxLength 6: do 0.41.1 stało tu 4 i nie dało się
-                          wpisać szóstej cyfry (CLAUDE.md, "Logowanie"). */}
+                      {/* Pokazywany tylko NOWY PIN, ukryty do "Pokaż" — karta
+                          bywa otwierana przy ludziach. `new-password`, żeby
+                          przeglądarka nie proponowała zapisania go jako hasła
+                          kierownika. ⚠️ maxLength 6: do 0.41.1 stało tu 4 i nie
+                          dało się wpisać szóstej cyfry (CLAUDE.md, "Logowanie"). */}
                       <input
                         type={pokazPin ? "text" : "password"}
                         inputMode="numeric"
                         autoComplete="new-password"
                         value={pin}
                         onChange={(e) =>
-                          ustaw(editingUser.role === "open" ? { kiosk_pin: e.target.value } : { pin: e.target.value })
+                          ustaw({ nowy_pin: e.target.value.replace(/[^0-9]/g, ""), usun_pin: false })
                         }
                         maxLength="6"
-                        placeholder={isEmailPinRequired ? "" : "brak — kiosk nie pyta o PIN"}
+                        placeholder={
+                          maPin ? "•••••• ustawiony" : isEmailPinRequired ? "" : "brak — kiosk nie pyta o PIN"
+                        }
                         className={`${poleCls} tracking-[0.2em] ${slabyPin(pin) || pinZaKrotki ? polePusteCls : ""}`}
-                        required={isEmailPinRequired}
+                        required={pinWymagany}
                       />
                       <button
                         type="button"
@@ -807,9 +835,9 @@ export default function Pracownicy({
                            mówimy o tym wprost, bo samo wpisanie jednego z nich
                            nie daje nic i wyglądałoby na awarię. */
                         <p className={podpisCls}>
-                          {editingUser.kiosk_pin && editingUser.email
+                          {(maPin || pin) && editingUser.email
                             ? "Ta osoba może zalogować się na swoim telefonie: tym e-mailem i PIN-em blokady. Zakres widocznych bloków ustawia właściciel w Ustawienia → Lokale."
-                            : editingUser.kiosk_pin || editingUser.email
+                            : maPin || pin || editingUser.email
                             ? "Do logowania na własnym telefonie potrzebne są OBA pola — PIN blokady i e-mail. Na razie działa tylko Tablet Służbowy."
                             : "Bez PIN-u i e-maila pracownik korzysta wyłącznie z Tabletu Służbowego."}
                         </p>

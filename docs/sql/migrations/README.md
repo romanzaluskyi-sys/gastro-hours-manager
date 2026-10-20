@@ -80,6 +80,8 @@ wykonalne.
 | `0039` | powiadomienia e-mail: `notifications.dane/email_at/email_info`, `users.email_powiadomienia` (+ w `users_widok`), `email_raporty` — PRZED deployem 0.70.0 | nowe |
 | `0040` | godziny i grafik per lokal: `shifts`, `grafik_shifts` (Etap 3c-2, porcja 3) + helpery `widoczni_ludzie`, `lokale_mojego_grafiku`, `zmiany_z_gieldy`; zapis grafiku tylko dla kierownika | nowe |
 | `0041` | `notifications` znowu zawężone (zdejmuje ręczne „zalogowani” z 23.09), telefon widzi tylko swoje — PO deployu 0.70.3 i odświeżeniu tabletów | nowe |
+| `0042`–`0044` | unikalny start zmiany, Wydarzenia, okna wpisu w bazie (patrz CLAUDE.md) | nowe |
+| `0045` | PIN-y bez jawnego tekstu: `users.pin` zawsze NULL, `kiosk_pin` jako hash bcrypt (trigger `chron_piny`, zapis z aplikacji pomijany), `limity_pin` + limit prób w `sprawdz_kiosk_pin`, `users_widok` bez PIN-ów — PO deployu 0.77.0 i odświeżeniu tabletów | nowe |
 
 ⚠️ Numer `0036` należał wcześniej do migracji "InitPlan" (ponowne zawężenie
 `notifications` i 15 innych tabel). Nigdy nie weszła na żadną bazę — padła

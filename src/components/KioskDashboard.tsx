@@ -314,9 +314,9 @@ const KioskDashboard = ({
   //
   // ⚠️ Stąd wynika twardy warunek na dane: KAŻDY ustawiony `kiosk_pin` musi
   // mieć sześć cyfr. Krótszego nie da się tu wpisać, więc profil z PIN-em
-  // czterocyfrowym byłby nie do otwarcia. Pole w karcie pracownika ma
-  // `maxLength="6"`, a zapytanie sprawdzające, czy w bazie nie został jakiś
-  // krótszy, jest w docs/sql/tools/ostatnie-bledy.sql.
+  // czterocyfrowym byłby nie do otwarcia. Od migracji 0045 nowy PIN krótszy
+  // niż sześć cyfr odrzuca sama baza (trigger `chron_piny`); stary, sprzed
+  // 0.41.2, poprawia się, ustawiając PIN w karcie od nowa.
   const DLUGOSC_PIN = 6;
 
   // ⚠️ PIN sprawdza BAZA, nie przeglądarka (migracja 0027, RPC
@@ -348,8 +348,16 @@ const KioskDashboard = ({
         return;
       }
       nieudanyPin("Niepoprawny PIN, spróbuj ponownie");
-    } catch {
-      nieudanyPin("Nie udało się sprawdzić PIN-u — sprawdź połączenie");
+    } catch (e) {
+      // ⚠️ Po 10 złych próbach w 15 minut baza blokuje profil (migracja
+      // 0045) i mówi to WYJĄTKIEM, nie `false` — inaczej dobry PIN dostawałby
+      // „niepoprawny”. Komunikat bazy pokazujemy wprost, bo mówi, co zrobić.
+      const tekst = String((e && e.message) || "");
+      nieudanyPin(
+        tekst.startsWith("Za dużo prób")
+          ? tekst
+          : "Nie udało się sprawdzić PIN-u — sprawdź połączenie"
+      );
     } finally {
       setPinSprawdza(false);
     }

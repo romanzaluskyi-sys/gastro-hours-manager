@@ -73,6 +73,7 @@ async function zaladuj(sciezka) {
 const ENV = {
   SUPABASE_URL: "https://baza.test",
   SUPABASE_SERVICE_KEY: "klucz-serwisowy",
+  SUPABASE_KEY: "klucz-publiczny",
   CRON_SECRET: "sekret",
   BREVO_API_KEY: "klucz-brevo",
   EMAIL_FROM: "powiadomienia@shiftro.pl",
@@ -84,6 +85,7 @@ const cryptoStub = {
     update: (t) => ({ digest: () => btoa(unescape(encodeURIComponent(`${klucz}|${t}`))) }),
   }),
   timingSafeEqual: (a, b) => a.s === b.s,
+  randomBytes: () => ({ toString: () => "losowe-" + Math.random().toString(36).slice(2) }),
 };
 const BufferStub = { from: (s) => ({ s: String(s), length: String(s).length }) };
 const cjsCache = new Map();
@@ -105,7 +107,8 @@ async function cjs(sciezka) {
 }
 
 // --- atrapa Supabase i Brevo --------------------------------------------
-const stan = { tabele: {}, maile: [], patche: [], raporty: new Set(), brevo: () => ({ status: 201 }) };
+const stan = { tabele: {}, maile: [], patche: [], raporty: new Set(), brevo: () => ({ status: 201 }),
+  auth: [], tokeny: {}, usuniecia: [] };
 const odp = (status, body) =>
   new Response(status === 204 ? null : typeof body === "string" ? body : JSON.stringify(body), { status });
 window.fetch = ((prawdziwy) => async (url, opcje = {}) => {
@@ -117,6 +120,28 @@ window.fetch = ((prawdziwy) => async (url, opcje = {}) => {
     const r = stan.brevo(body);
     if (r.status < 300) stan.maile.push(body);
     return odp(r.status, r.status < 300 ? { messageId: "m" + stan.maile.length } : { message: "odmowa" });
+  }
+  // GoTrue (api/admin/ustaw-haslo.js, 0.77.0): token kierownika, hasła,
+  // link odzyskiwania i jego sprawdzenie.
+  if (u.pathname.startsWith("/auth/v1/")) {
+    const sc = u.pathname.slice("/auth/v1/".length);
+    const body = opcje.body ? JSON.parse(opcje.body) : {};
+    const naglowki = opcje.headers || {};
+    stan.auth.push({ metoda, sc, body });
+    if (sc === "user") {
+      const kto = stan.tokeny[String(naglowki.Authorization || "").slice(7)];
+      return kto ? odp(200, { id: kto }) : odp(401, { msg: "invalid JWT" });
+    }
+    if (sc === "admin/generate_link") return odp(200, { hashed_token: "hash-" + body.email, action_link: "x" });
+    if (sc === "verify") {
+      return body.token_hash === "hash-dobry"
+        ? odp(200, { access_token: "z-linku", user: { id: "auth-ala", email: "ala@test.pl" } })
+        : odp(403, { msg: "Token has expired or is invalid" });
+    }
+    if (sc.startsWith("admin/users/") && metoda === "PUT") return odp(200, { id: sc.split("/").pop() });
+    if (sc === "admin/users" && metoda === "POST") return odp(200, { id: "auth-nowe" });
+    if (sc === "logout") return odp(204, "");
+    return odp(400, { msg: "atrapa nie zna " + sc });
   }
   const tabela = u.pathname.split("/rest/v1/")[1];
   const wiersze = stan.tabele[tabela] || [];
@@ -158,6 +183,14 @@ window.fetch = ((prawdziwy) => async (url, opcje = {}) => {
   if (metoda === "POST" && tabela === "notifications") {
     (stan.tabele.notifications = stan.tabele.notifications || []).push(JSON.parse(opcje.body));
     return odp(201, "");
+  }
+  if (metoda === "POST" && tabela === "limity_pin") {
+    (stan.tabele.limity_pin = stan.tabele.limity_pin || []).push({ ...JSON.parse(opcje.body), kiedy: new Date().toISOString() });
+    return odp(201, "");
+  }
+  if (metoda === "DELETE") {
+    stan.usuniecia.push({ tabela, filtr: u.search });
+    return odp(204, "");
   }
   if (metoda === "POST" && tabela === "email_raporty") {
     const body = JSON.parse(opcje.body);
@@ -633,6 +666,88 @@ const USERS = [
     sprawdz("wiadomość mówi, ile zmian zostało w Grafiku po ostatnim dniu",
       /zostały 2 zmiany po tej dacie/.test((stan.tabele.notifications.find((n) => /Odchodzi/.test(n.message)) || {}).message || ""));
     sprawdz("odpowiedź wymienia wyłączonych", JSON.stringify(r.json.wylaczone) === JSON.stringify(["Odchodzi", "Tablet"]), JSON.stringify(r.json));
+
+    log(""); log("— api/admin/ustaw-haslo (PIN-y, 0.77.0) —");
+    const pinApi = await cjs("/api/admin/ustaw-haslo.js");
+    const wolaj = async (body, token) => {
+      const r = odpowiedz();
+      await pinApi({ method: "POST", body, headers: token ? { authorization: "Bearer " + token } : {} }, r);
+      return r;
+    };
+    stan.auth = []; stan.maile = []; stan.patche = []; stan.usuniecia = [];
+    stan.brevo = () => ({ status: 201 });
+    stan.tokeny = { "tok-roman": "auth-roman", "tok-ola": "auth-ola" };
+    stan.tabele = {
+      limity_pin: [],
+      users: [
+        { id: "k1", name: "Roman", role: "admin", auth_id: "auth-roman", active: true, archived: false, email: "roman@test.pl" },
+        { id: "k2", name: "Ola", role: "manager_lokalu", allowed_lokale: "Sunset", auth_id: "auth-ola", active: true, archived: false, email: "ola@test.pl" },
+        { id: "p1", name: "Ala", role: "open", default_lokal: "Ceglana", auth_id: "auth-ala", active: true, archived: false, email: "ala@test.pl" },
+        { id: "t2", name: "Tablet Sunset", role: "kiosk", default_lokal: "", allowed_lokale: "Sunset", auth_id: "auth-t2", active: true, archived: false, email: "tablet@test.pl" },
+        { id: "p2", name: "Stary", role: "closed", auth_id: "auth-stary", active: false, archived: false, email: "stary@test.pl" },
+      ],
+    };
+    const ostatniAuth = (sc) => [...stan.auth].reverse().find((a) => a.sc === sc);
+    const patchPinu = (id) => [...stan.patche].reverse().find((x) => x.tabela === "users" && x.filtr.includes(id) && "kiosk_pin" in x.body);
+
+    // „Nie pamiętam PIN-u”
+    r = await wolaj({ akcja: "przypomnij", email: " Ala@Test.pl " });
+    const mailPin = stan.maile[stan.maile.length - 1] || { to: [{}] };
+    sprawdz("przypomnij: link idzie mailem do właściciela adresu",
+      r.kod === 200 && stan.maile.length === 1 && mailPin.to[0].email === "ala@test.pl" &&
+        mailPin.htmlContent.includes("https://app.test/?nowy_pin=hash-ala%40test.pl"),
+      JSON.stringify(r.json));
+    sprawdz("przypomnij: pracownik kiosku wie, że PIN zmieni się też na tablecie",
+      /profil na tablecie/.test(mailPin.htmlContent));
+    const infoIstnieje = r.json && r.json.info;
+    const linkowPrzed = stan.auth.filter((a) => a.sc === "admin/generate_link").length;
+    r = await wolaj({ akcja: "przypomnij", email: "nikt@test.pl" });
+    sprawdz("przypomnij: nieznany adres — ta sama odpowiedź, bez maila i bez linku",
+      r.kod === 200 && r.json.info === infoIstnieje && stan.maile.length === 1 &&
+        stan.auth.filter((a) => a.sc === "admin/generate_link").length === linkowPrzed);
+    r = await wolaj({ akcja: "przypomnij", email: "stary@test.pl" });
+    sprawdz("przypomnij: konto nieaktywne nie dostaje linku", r.kod === 200 && stan.maile.length === 1);
+    await wolaj({ akcja: "przypomnij", email: "ala@test.pl" });
+    await wolaj({ akcja: "przypomnij", email: "ala@test.pl" });
+    r = await wolaj({ akcja: "przypomnij", email: "ala@test.pl" });
+    sprawdz("przypomnij: czwarta prośba w godzinę = 429", r.kod === 429 && stan.maile.length === 3, `${r.kod} / ${stan.maile.length}`);
+
+    // Nowy PIN z linku
+    r = await wolaj({ akcja: "nowy", token: "hash-zly", haslo: "385920" });
+    sprawdz("nowy: zużyty albo zły link = 400 z wyjaśnieniem", r.kod === 400 && /wygasł/.test(r.json.error));
+    const weryfikacjePrzed = stan.auth.filter((a) => a.sc === "verify").length;
+    r = await wolaj({ akcja: "nowy", token: "hash-dobry", haslo: "12345" });
+    sprawdz("nowy: PIN krótszy niż 6 cyfr odrzucony, zanim link zostanie zużyty",
+      r.kod === 400 && stan.auth.filter((a) => a.sc === "verify").length === weryfikacjePrzed);
+    r = await wolaj({ akcja: "nowy", token: "hash-dobry", haslo: "385920" });
+    const put = ostatniAuth("admin/users/auth-ala");
+    sprawdz("nowy: hasło w Auth i blokada na tablecie zmieniają się razem",
+      r.kod === 200 && r.json.email === "ala@test.pl" && put && put.body.password === "385920" &&
+        patchPinu("p1") && patchPinu("p1").body.kiosk_pin === "385920",
+      JSON.stringify(r.json));
+    sprawdz("nowy: sesja z linku od razu zamknięta", !!ostatniAuth("logout"));
+
+    // Kierownik w karcie
+    r = await wolaj({ user_id: "p1", haslo: "111222" });
+    sprawdz("kierownik: bez tokenu = 401", r.kod === 401);
+    r = await wolaj({ user_id: "p1", haslo: "111222" }, "tok-ola");
+    sprawdz("kierownik lokalu: cudzy lokal = 403", r.kod === 403, JSON.stringify(r.json));
+    r = await wolaj({ user_id: "t2", haslo: "246810" }, "tok-ola");
+    sprawdz("kierownik lokalu: tablet swojego lokalu (allowed_lokale) = OK, tylko hasło",
+      r.kod === 200 && ostatniAuth("admin/users/auth-t2").body.password === "246810" && !patchPinu("t2"),
+      JSON.stringify(r.json));
+    r = await wolaj({ user_id: "t2", haslo: "12ab56" }, "tok-roman");
+    sprawdz("kierownik: PIN nie z samych cyfr odrzucony", r.kod === 400);
+    r = await wolaj({ user_id: "t2", usun: true }, "tok-roman");
+    sprawdz("kierownik: PIN-u konta logującego się nie da się usunąć", r.kod === 400);
+    r = await wolaj({ user_id: "p1", usun: true }, "tok-roman");
+    const putUsun = ostatniAuth("admin/users/auth-ala");
+    sprawdz("kierownik: zdjęcie blokady czyści kiosk_pin i zamyka logowanie z telefonu",
+      r.kod === 200 && patchPinu("p1").body.kiosk_pin === null && putUsun.body.password !== "385920" &&
+        String(putUsun.body.password).length > 6,
+      JSON.stringify(r.json));
+    sprawdz("kierownik: nowy PIN zdejmuje też blokadę po zbyt wielu próbach",
+      stan.usuniecia.some((d) => d.tabela === "limity_pin" && d.filtr.includes("klucz=eq.p1")));
 
     log("");
     log(`ZDANYCH ${zdanych}, OBLANYCH ${oblanych}`, oblanych ? "zle" : "ok");

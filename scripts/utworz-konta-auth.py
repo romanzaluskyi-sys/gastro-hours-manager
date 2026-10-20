@@ -164,6 +164,19 @@ def main():
         "&archived=eq.false&active=eq.true&order=role.asc",
     )
 
+    # ⚠️ Po migracji 0045 kartoteka nie ma już PIN-ów jawnym tekstem: `pin` jest
+    # pusty, a `kiosk_pin` to hash. Ten skrypt nie ma wtedy z czego brać haseł
+    # i założyłby konta z hasłem z hasha — czyli konta, do których nikt się
+    # nie zaloguje. Konto zakłada dziś karta pracownika (ustaw PIN →
+    # api/admin/ustaw-haslo.js) albo scripts/import-klienta.py.
+    if any((u.get("kiosk_pin") or "").startswith("$2") for u in users):
+        print(
+            "Ta baza ma już migrację 0045 (PIN-y jako hash) — ten skrypt jest dla niej\n"
+            "nieaktualny. Konto w Auth zakłada karta pracownika: ustaw PIN i zapisz.",
+            file=sys.stderr,
+        )
+        return 1
+
     # --- 1. PIN-y na tablecie: wszystkie do co najmniej 6 znaków ---
     # Robimy to przed zakładaniem kont, żeby hasło w Auth i kolumna w bazie
     # powstały z tej samej wartości. Odwrotna kolejność zostawiłaby cztery
