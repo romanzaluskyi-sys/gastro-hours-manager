@@ -26,7 +26,7 @@
 const crypto = require("crypto");
 const { jestKontemDemo } = require("../_lib/demoKonta");
 const { pobierz, zmien, dodajJesliNowy, usun, zakoduj } = require("../_lib/baza");
-const { adresAplikacji, brakPoczty, wyslij } = require("../_lib/poczta");
+const { adresAplikacji, wyslij } = require("../_lib/poczta");
 const { koperta, tytul, akapit, przycisk, notka } = require("../_lib/szablon");
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -234,12 +234,32 @@ const ODPOWIEDZ_PRZYPOMNIJ = {
   info: "Jeśli to konto istnieje i ma dostęp do aplikacji, wysłaliśmy na ten adres link do ustawienia nowego PIN-u. Sprawdź też folder Spam.",
 };
 
+// Dokąd prowadzi link z maila. ⚠️ Na podglądzie PR-a (Vercel Preview) — na TEN
+// podgląd, nie na APP_URL: produkcja ma jeszcze starą wersję, która nie zna
+// `?nowy_pin=`, więc test na Preview kończyłby się zwykłym ekranem logowania.
+// VERCEL_ENV / VERCEL_BRANCH_URL / VERCEL_URL ustawia sam Vercel — nie bierzemy
+// adresu z nagłówka Host, bo ten podaje wołający, a link niesie token do konta.
+const adresLinku = () => {
+  if (process.env.VERCEL_ENV === "preview") {
+    const podglad = process.env.VERCEL_BRANCH_URL || process.env.VERCEL_URL;
+    if (podglad) return `https://${podglad}`;
+  }
+  return adresAplikacji();
+};
+
 const przypomnij = async (req, res) => {
-  const brak = brakPoczty();
+  // Do tego maila wystarczą Brevo i adres aplikacji — bez CRON_SECRET (ten
+  // podpisuje tylko link „Ustawienia powiadomień”, którego tu nie ma).
+  const brak = [
+    !process.env.BREVO_API_KEY && "BREVO_API_KEY",
+    !process.env.EMAIL_FROM && "EMAIL_FROM",
+    !adresLinku() && "APP_URL",
+  ].filter(Boolean);
   if (brak.length) {
+    // Nazwy zmiennych tylko do logów — to publiczny adres (CLAUDE.md, zdrowie.js).
+    console.error("nowy-pin: brak zmiennych", brak.join(", "), process.env.VERCEL_ENV || "");
     return res.status(500).json({
       error: "Wysyłka maili nie jest skonfigurowana — PIN zmieni kierownik w karcie pracownika.",
-      brakujace: brak,
     });
   }
   const email = String((req.body || {}).email || "").trim().toLowerCase();
@@ -277,7 +297,7 @@ const przypomnij = async (req, res) => {
   // ⚠️ Samo otwarcie linku niczego nie zużywa — token idzie do Auth dopiero
   // z nowym PIN-em (akcja "nowy"). Skanery linków w skrzynkach otwierają
   // każdy link; gdyby wejście zużywało token, link nie działałby człowiekowi.
-  const url = `${adresAplikacji()}/?nowy_pin=${zakoduj(token)}`;
+  const url = `${adresLinku()}/?nowy_pin=${zakoduj(token)}`;
   const naTablecie = kto.role === "open";
   const temat = "Nowy PIN do aplikacji";
   const html = koperta({

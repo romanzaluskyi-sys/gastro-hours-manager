@@ -816,6 +816,27 @@ const USERS = [
     r = await wolaj({ akcja: "przypomnij", email: "ala@test.pl" });
     sprawdz("przypomnij: czwarta prośba w godzinę = 429", r.kod === 429 && stan.maile.length === 3, `${r.kod} / ${stan.maile.length}`);
 
+    // Podgląd PR-a (Vercel Preview): link ma prowadzić na TEN podgląd, nie na
+    // produkcję, która nie zna jeszcze `?nowy_pin=`.
+    stan.tabele.limity_pin = [];
+    ENV.VERCEL_ENV = "preview";
+    ENV.VERCEL_BRANCH_URL = "gastro-git-claude-piny.vercel.app";
+    r = await wolaj({ akcja: "przypomnij", email: "ala@test.pl" });
+    const mailPodglad = stan.maile[stan.maile.length - 1] || {};
+    sprawdz("przypomnij na Preview: link prowadzi na podgląd, nie na APP_URL",
+      r.kod === 200 && String(mailPodglad.htmlContent).includes("https://gastro-git-claude-piny.vercel.app/?nowy_pin="),
+      String(mailPodglad.htmlContent).match(/https:\/\/[^"?]+\/\?nowy_pin=/)?.[0]);
+    delete ENV.VERCEL_ENV; delete ENV.VERCEL_BRANCH_URL;
+    // Brak Brevo: czytelny komunikat, ale bez nazw zmiennych (publiczny adres).
+    const kluczBrevo = ENV.BREVO_API_KEY;
+    delete ENV.BREVO_API_KEY;
+    stan.tabele.limity_pin = [];
+    r = await wolaj({ akcja: "przypomnij", email: "ala@test.pl" });
+    sprawdz("przypomnij bez Brevo: 500 z wyjaśnieniem, bez nazw zmiennych",
+      r.kod === 500 && /nie jest skonfigurowana/.test(r.json.error) && !JSON.stringify(r.json).includes("BREVO"),
+      JSON.stringify(r.json));
+    ENV.BREVO_API_KEY = kluczBrevo;
+
     // Nowy PIN z linku
     r = await wolaj({ akcja: "nowy", token: "hash-zly", haslo: "385920" });
     sprawdz("nowy: zużyty albo zły link = 400 z wyjaśnieniem", r.kod === 400 && /wygasł/.test(r.json.error));
