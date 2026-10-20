@@ -24,6 +24,8 @@
 // cron nie ma ekranu, więc nikt by tego nie zobaczył. Brak zmiennej kończy się
 // teraz błędem 500 z wyjaśnieniem — cron widoczny jako czerwony w Vercelu jest
 // nieporównanie lepszy niż cron piszący po cichu do cudzej bazy.
+const { zPrzebiegiem } = require("../_lib/przebieg");
+
 const SUPABASE_URL = process.env.SUPABASE_URL;
 // ⚠️ SERVICE ROLE, nie publishable. Od Etapu 3c polityki RLS nie wydają
 // niczego anonimowym, a klucz publishable to właśnie anonim — cron pisałby
@@ -74,7 +76,7 @@ const powiadom = async (lokal, message) => {
   if (!res.ok) throw new Error(`Błąd zapisu powiadomienia: ${res.status}`);
 };
 
-module.exports = async function handler(req, res) {
+module.exports = zPrzebiegiem("check-puls", async function handler(req, res) {
   // ⚠️ Sprawdzenie PRZED porównaniem nagłówka, nie po. Przy nieustawionym
   // CRON_SECRET `Bearer ${process.env.CRON_SECRET}` daje dosłowny string
   // "Bearer undefined" — i każdy, kto wyśle taki nagłówek, przechodzi
@@ -130,4 +132,4 @@ module.exports = async function handler(req, res) {
   }
 
   return res.status(200).json({ dzien: wczoraj, wynik, failures });
-};
+});

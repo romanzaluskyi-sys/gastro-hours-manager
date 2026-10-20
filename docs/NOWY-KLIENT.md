@@ -77,6 +77,15 @@ python3 scripts/klienci.py sprawdz                 # wersja, migracje, zmienne, 
 `klienci.py sprawdz` puść po każdym wydaniu: klient, u którego migracja nie
 weszła albo build się nie udał, wygląda z zewnątrz dokładnie jak działający.
 
+Od 0.77.0 to samo chodzi **codziennie samo** (`.github/workflows/monitoring.yml`,
+8:30 UTC) i sprawdza też crony (czy każdy miał udany przebieg — dziennik z
+migracji 0046) i błędy aplikacji z doby. Czerwony przebieg = e-mail od GitHuba.
+**Nowy klient → dopisz go do obu sekretów repozytorium** (Settings → Secrets and
+variables → Actions): `KLIENCI_JSON` (cała treść `klienci.json`) i
+`SHIFTRO_SEKRETY_CRONA` (`{"slug": "CRON_SECRET", …}`). Bez tego monitoring
+zgłosi go jako „brak sekretu” — to celowe: klient, którego nikt nie pilnuje, ma
+być widoczny.
+
 ## 1. Baza
 
 1. Nowy projekt w Supabase (region: Frankfurt — najbliżej Polski).

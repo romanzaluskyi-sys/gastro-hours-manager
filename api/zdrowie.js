@@ -1,4 +1,6 @@
-// Stan JEDNEGO wdrożenia: wersja, komplet zmiennych, baza, Brevo. Wołają go
+// Stan JEDNEGO wdrożenia: wersja, komplet zmiennych, baza, Brevo, a od 0.77.0
+// także crony (czy każdy miał udany przebieg w swoim oknie — dziennik z 0046) i
+// błędy aplikacji z ostatniej doby. Wołają go
 // `scripts/nowy-klient.py` (sprawdzenie po uruchomieniu klienta) i
 // `scripts/klienci.py sprawdz` (przegląd wszystkich klientów naraz).
 //
@@ -38,6 +40,100 @@ const WYMAGANE = [
 ];
 
 const bezUkosnika = (s) => (s || "").trim().replace(/\/+$/, "");
+
+// --- Monitoring (0.77.0, migracja 0046) -------------------------------------
+// Jakie crony mają chodzić i jak długo wolno nie mieć UDANEGO przebiegu.
+// Harmonogram Vercela czytamy z vercel.json (jedno źródło), a wysyłkę maili —
+// pg_cron w bazie co 5 minut (docs/sql/tools/email-harmonogram.sql) — dopisujemy
+// ręcznie, bo vercel.json o niej nie wie.
+let HARMONOGRAM = [];
+try {
+  HARMONOGRAM = (require("../vercel.json").crons || []).map((c) => c.path.split("/").pop());
+} catch (e) {
+  HARMONOGRAM = [];
+}
+const GODZINA = 3600 * 1000;
+// Dobowe: 26 h — zapas na przesunięcie wywołania przez Vercel. Wysyłka maili:
+// trzy opuszczone przebiegi z rzędu to już nie przypadek.
+const OKNA = { "wyslij-maile": 20 * 60 * 1000 };
+const oknoCrona = (nazwa) => OKNA[nazwa] || 26 * GODZINA;
+
+const oczekiwaneCrony = (demo) => [
+  // demo-reset stoi w vercel.json wszystkich klientów, ale pracuje tylko w demo.
+  ...HARMONOGRAM.filter((n) => demo || n !== "demo-reset"),
+  // Demo maili nie wysyła (docs/DEMO.md) — nie ma tam też harmonogramu.
+  ...(demo ? [] : ["wyslij-maile"]),
+];
+
+// Kiedy błędy aplikacji to już sygnał, a nie szum. „Właściwe pytanie do tej
+// tabeli brzmi «co się POWTARZA»” (CLAUDE.md, „Błędy aplikacji”) — stąd próg
+// na jeden komunikat, a nie tylko na sumę.
+const PROG_BLEDOW_DOBA = 20;
+const PROG_POWTORZEN = 5;
+
+const sprawdzCrony = async (pobierzRest, demo) => {
+  const teraz = Date.now();
+  const od = new Date(teraz - 48 * GODZINA).toISOString();
+  const r = await pobierzRest(
+    `cron_przebiegi?select=nazwa,start_at,ok,kod,info&start_at=gt.${encodeURIComponent(od)}&order=start_at.desc&limit=2000`
+  );
+  if (r.brakTabeli) return { ok: false, problemy: ["brak dziennika cronów — migracja 0046"], lista: [] };
+  const wiersze = r.wiersze;
+  const pierwszy = (await pobierzRest("cron_przebiegi?select=start_at&order=start_at.asc&limit=1")).wiersze[0];
+  const dziennikOd = pierwszy ? Date.parse(pierwszy.start_at) : null;
+
+  const problemy = [];
+  const lista = oczekiwaneCrony(demo).map((nazwa) => {
+    const moje = wiersze.filter((w) => w.nazwa === nazwa);
+    const ostatni = moje[0] || null;
+    const ostatniOk = moje.find((w) => w.ok) || null;
+    const okno = oknoCrona(nazwa);
+    let stan = "ok";
+    if (ostatni && !ostatni.ok) {
+      stan = "błąd";
+      problemy.push(`cron ${nazwa}: ostatni przebieg ${ostatni.kod}${ostatni.info ? ` — ${String(ostatni.info).slice(0, 120)}` : ""}`);
+    } else if (!ostatniOk || teraz - Date.parse(ostatniOk.start_at) > okno) {
+      // Dziennik młodszy niż okno crona: nie wiemy jeszcze, czy coś nie
+      // przyszło, czy po prostu nie było kiedy. Pierwszy dzień po migracji
+      // nie może świecić na czerwono za wszystkie crony naraz.
+      if (dziennikOd == null || teraz - dziennikOd < okno) {
+        stan = "bez pomiaru";
+      } else {
+        stan = "brak przebiegu";
+        problemy.push(
+          `cron ${nazwa}: brak udanego przebiegu ${ostatniOk ? `od ${ostatniOk.start_at.slice(0, 16).replace("T", " ")} UTC` : "w ostatnich 48 h"}`
+        );
+      }
+    }
+    return { nazwa, stan, ostatni: ostatni ? ostatni.start_at : null, ostatni_ok: ostatniOk ? ostatniOk.start_at : null };
+  });
+  return { ok: !problemy.length, problemy, lista };
+};
+
+const sprawdzBledy = async (pobierzRest) => {
+  const od = new Date(Date.now() - 24 * GODZINA).toISOString();
+  const r = await pobierzRest(
+    `app_errors?select=komunikat,ekran&created_at=gt.${encodeURIComponent(od)}&limit=1000`
+  );
+  if (r.brakTabeli) return { ok: true, ostatnie_24h: null, najczestsze: [], problemy: [] };
+  const ile = {};
+  for (const w of r.wiersze) {
+    const k = String(w.komunikat || "(bez komunikatu)").slice(0, 120);
+    ile[k] = (ile[k] || 0) + 1;
+  }
+  const najczestsze = Object.entries(ile)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([komunikat, n]) => ({ komunikat, ile: n }));
+  const problemy = [];
+  if (r.wiersze.length >= PROG_BLEDOW_DOBA) {
+    problemy.push(`błędy aplikacji: ${r.wiersze.length} w ostatnich 24 h`);
+  }
+  if (najczestsze[0] && najczestsze[0].ile >= PROG_POWTORZEN) {
+    problemy.push(`błąd powtarza się ${najczestsze[0].ile}× w 24 h: ${najczestsze[0].komunikat}`);
+  }
+  return { ok: !problemy.length, ostatnie_24h: r.wiersze.length, najczestsze, problemy };
+};
 
 module.exports = async function handler(req, res) {
   // ⚠️ Sprawdzenie obecności PRZED porównaniem — inaczej nieustawiony sekret
@@ -101,6 +197,41 @@ module.exports = async function handler(req, res) {
     }
   }
 
+  // Crony i błędy aplikacji (0.77.0). Błąd odczytu nie wywraca reszty — mówi
+  // o sobie w `problemy`.
+  let crony = null;
+  let bledy = null;
+  if (baza.ok) {
+    const klucz = process.env.SUPABASE_SERVICE_KEY;
+    const pobierzRest = async (sciezka) => {
+      const r = await fetch(`${urlApi}/rest/v1/${sciezka}`, {
+        headers: { apikey: klucz, Authorization: `Bearer ${klucz}` },
+      });
+      if (r.status === 404) return { brakTabeli: true, wiersze: [] };
+      if (!r.ok) {
+        const tekst = await r.text().catch(() => "");
+        // PostgREST na nieistniejącą tabelę: 404 albo 42P01 / PGRST205 w treści.
+        if (/42P01|PGRST205|does not exist|Could not find the table/.test(tekst)) {
+          return { brakTabeli: true, wiersze: [] };
+        }
+        throw new Error(`${r.status} ${tekst.slice(0, 120)}`);
+      }
+      return { brakTabeli: false, wiersze: await r.json() };
+    };
+    try {
+      crony = await sprawdzCrony(pobierzRest, demo);
+      problemy.push(...crony.problemy);
+    } catch (e) {
+      problemy.push(`dziennik cronów: ${String(e.message || e).slice(0, 120)}`);
+    }
+    try {
+      bledy = await sprawdzBledy(pobierzRest);
+      problemy.push(...bledy.problemy);
+    } catch (e) {
+      problemy.push(`błędy aplikacji: ${String(e.message || e).slice(0, 120)}`);
+    }
+  }
+
   // Brevo: samo "czy klucz działa" — GET /account niczego nie wysyła i nie
   // zużywa limitu. Szczegóły konta zostają w Brevo.
   let brevo = demo ? "wyłączone (demo)" : "brak klucza";
@@ -125,5 +256,7 @@ module.exports = async function handler(req, res) {
     problemy,
     baza,
     brevo,
+    crony: crony && crony.lista,
+    bledy: bledy && { ostatnie_24h: bledy.ostatnie_24h, najczestsze: bledy.najczestsze },
   });
 };

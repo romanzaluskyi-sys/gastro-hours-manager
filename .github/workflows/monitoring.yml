@@ -1,0 +1,62 @@
+# Codzienny przegląd wszystkich klientów (0.77.0).
+#
+# `scripts/klienci.py sprawdz` pyta /api/zdrowie każdego wdrożenia: wersja,
+# migracje, zmienne, Brevo, crony (dziennik z migracji 0046) i błędy aplikacji z
+# ostatniej doby. Coś nie tak = kod wyjścia 1 = czerwony przebieg, a GitHub
+# wysyła wtedy e-mail temu, kto ostatnio zmienił harmonogram w tym pliku
+# (Settings → Notifications → Actions musi mieć włączone powiadomienia o
+# nieudanych przebiegach). Bez tego pliku cron, który przestał chodzić, nie
+# dawał żadnego objawu, dopóki ktoś z lokalu nie zadzwonił.
+#
+# Sekrety repozytorium (Settings → Secrets and variables → Actions):
+#   KLIENCI_JSON            — treść klienci.json (bez sekretów; ten plik jest
+#                             poza gitem)
+#   SHIFTRO_SEKRETY_CRONA   — {"emka": "<CRON_SECRET>", "demo": "<CRON_SECRET>"}
+#
+# ⚠️ Świadomie BEZ SUPABASE_PAT: ten token otwiera wszystkie bazy na koncie (SQL
+# na produkcji). CRON_SECRET otwiera tylko crony i /api/zdrowie jednego klienta.
+name: Monitoring
+
+on:
+  schedule:
+    # 8:30 UTC = 10:30 latem / 9:30 zimą — po ostatnim porannym cronie
+    # (check-odbicia, 8:00 UTC), więc dzisiejsze przebiegi już są w dzienniku.
+    - cron: "30 8 * * *"
+  workflow_dispatch:
+
+jobs:
+  zdrowie:
+    name: Zdrowie klientów
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rejestr klientów
+        env:
+          KLIENCI_JSON: ${{ secrets.KLIENCI_JSON }}
+        run: |
+          if [ -z "$KLIENCI_JSON" ]; then
+            echo "::error::Brak sekretu KLIENCI_JSON — wklej treść klienci.json w Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          printf '%s' "$KLIENCI_JSON" > klienci.json
+
+      - name: Przegląd
+        shell: bash
+        env:
+          SHIFTRO_SEKRETY_CRONA: ${{ secrets.SHIFTRO_SEKRETY_CRONA }}
+        run: |
+          if [ -z "$SHIFTRO_SEKRETY_CRONA" ]; then
+            echo "::error::Brak sekretu SHIFTRO_SEKRETY_CRONA ({\"slug\": \"CRON_SECRET\"})."
+            exit 1
+          fi
+          {
+            echo '### Zdrowie klientów'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          set +e
+          python3 scripts/klienci.py sprawdz | tee -a "$GITHUB_STEP_SUMMARY"
+          wynik=${PIPESTATUS[0]}
+          set -e
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          exit "$wynik"

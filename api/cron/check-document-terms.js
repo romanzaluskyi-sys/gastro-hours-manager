@@ -29,6 +29,7 @@
 // cron nie ma ekranu, więc nikt by tego nie zobaczył. Brak zmiennej kończy się
 // teraz błędem 500 z wyjaśnieniem — cron widoczny jako czerwony w Vercelu jest
 // nieporównanie lepszy niż cron piszący po cichu do cudzej bazy.
+
 const SUPABASE_URL = process.env.SUPABASE_URL;
 // ⚠️ SERVICE ROLE, nie publishable. Od Etapu 3c polityki RLS nie wydają
 // niczego anonimowym, a klucz publishable to właśnie anonim — cron pisałby
@@ -177,7 +178,10 @@ const buildEmployeeMessage = (term, expiryStr, days) => {
   return `Twój termin: ${term.subject} dobiega końca w dniu ${dateFmt}, do zakończenia pozostało ${days} dni. Zgłoś się do kierownika, aby go zaktualizować.`;
 };
 
-module.exports = async function handler(req, res) {
+// Dziennik przebiegów (migracja 0046) — patrz api/_lib/przebieg.js.
+const { zPrzebiegiem } = require("../_lib/przebieg");
+
+module.exports = zPrzebiegiem("check-document-terms", async function handler(req, res) {
   // ⚠️ Sprawdzenie PRZED porównaniem nagłówka, nie po. Przy nieustawionym
   // CRON_SECRET `Bearer ${process.env.CRON_SECRET}` daje dosłowny string
   // "Bearer undefined" — i każdy, kto wyśle taki nagłówek, przechodzi
@@ -264,4 +268,4 @@ module.exports = async function handler(req, res) {
     console.error("check-document-terms failed:", err);
     res.status(500).json({ ok: false, error: err.message || String(err) });
   }
-};
+});

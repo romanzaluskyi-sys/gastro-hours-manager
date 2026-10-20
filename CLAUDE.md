@@ -260,6 +260,29 @@ Dziś:
   (`extensions.crypt/gen_salt` w formacie bcrypt) — łańcuch `0000`–`0045` na
   pustej bazie i 18 przypadków na danych (2026-10-20).
 
+## Monitoring — od 0.77.0 (migracja `0046`)
+
+Do 0.76.0 cron, który padł albo przestał się wywoływać (zmieniony sekret,
+wyłączony pg_cron), nie zostawiał śladu poza logami Vercela — i wyglądał jak
+spokojny dzień. Dziś trzy warstwy:
+- **Dziennik `cron_przebiegi`** — każdy cron w `api/cron/` jest owinięty
+  `zPrzebiegiem("nazwa", …)` (`api/_lib/przebieg.js`): status HTTP, czas, skrót
+  odpowiedzi; sprzątanie po 30 dniach. Liczą się tylko wywołania z `Bearer
+  CRON_SECRET` (podgląd raportu z linku i 401 to nie przebieg). Zapis nigdy nie
+  rzuca. ⚠️ **Nowy cron → owiń go tak samo**, inaczej monitoring go nie widzi.
+- **`/api/zdrowie`** liczy z dziennika, czy każdy oczekiwany cron miał UDANY
+  przebieg w oknie (dobowe: 26 h, `wyslij-maile` z pg_cron: 20 min). Lista
+  oczekiwanych = `vercel.json` + `wyslij-maile`, `demo-reset` tylko w demo,
+  `wyslij-maile` tylko poza demo. ⚠️ Dziennik młodszy niż okno = „bez pomiaru”,
+  nie alarm (pierwszy dzień po migracji). Do tego `app_errors` z doby: alarm od
+  20 błędów albo od 5 powtórzeń tego samego komunikatu.
+- **`.github/workflows/monitoring.yml`** — codziennie 8:30 UTC
+  `klienci.py sprawdz`; czerwony przebieg = e-mail od GitHuba. Sekrety
+  `KLIENCI_JSON` i `SHIFTRO_SEKRETY_CRONA` — ⚠️ świadomie BEZ `SUPABASE_PAT`
+  (otwiera SQL wszystkich baz). Nowy klient → dopisz go do obu sekretów.
+- Sprawdziany: `harness-email.html` (dziennik, okna, „bez pomiaru”, demo,
+  powtórzenia błędów, baza bez 0046).
+
 ## Logowanie i dostęp do danych — Etap 3 (0.41.0–0.70.3)
 
 **Stan od 0.70.3 (wszystkie migracje `0025`–`0041` w repo):** logowanie przez
@@ -673,8 +696,12 @@ api/                         — root-level, POZA src/ — funkcje Vercel Cron
   _lib/demoDane.js, demoKonta.js — generator danych demo i konta demo
   zdrowie.js                   — stan wdrożenia za CRON_SECRET: wersja, brakujące
                                  zmienne (same nazwy), czy front i crony patrzą
-                                 na tę samą bazę, liczba migracji, Brevo. Woła
-                                 go nowy-klient.py i klienci.py
+                                 na tę samą bazę, liczba migracji, Brevo, crony
+                                 (dziennik 0046) i błędy z doby. Woła go
+                                 nowy-klient.py, klienci.py i monitoring
+  _lib/przebieg.js             — `zPrzebiegiem(nazwa, handler)`: KAŻDY cron się
+                                 nim owija i zapisuje przebieg do
+                                 `cron_przebiegi` — patrz "Monitoring"
   admin/
     ustaw-haslo.js             — JEDYNE miejsce zmiany PIN-u: kierownik w karcie,
                                  „Nie pamiętam PIN-u” i nowy PIN z linku (akcje

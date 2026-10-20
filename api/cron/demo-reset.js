@@ -22,6 +22,7 @@
 const C = require("../_lib/czas");
 const K = require("../_lib/demoKonta");
 const { generuj, KOLEJNOSC } = require("../_lib/demoDane");
+const { zPrzebiegiem } = require("../_lib/przebieg");
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SERWIS = process.env.SUPABASE_SERVICE_KEY;
@@ -154,7 +155,7 @@ const ktoWola = async (req) => {
   return (u.email || "").toLowerCase() === K.KONTA[0].email ? "przycisk" : null;
 };
 
-module.exports = async function handler(req, res) {
+module.exports = zPrzebiegiem("demo-reset", async function handler(req, res) {
   // ⚠️ Pierwszy bezpiecznik — u każdego klienta poza demo kończymy tutaj.
   if (process.env.DEMO !== "tak") {
     return res.status(200).json({ pominieto: "To nie jest wdrożenie demo (brak DEMO=tak)." });
@@ -207,4 +208,4 @@ module.exports = async function handler(req, res) {
     wynik.error = e.message;
     return res.status(500).json(wynik);
   }
-};
+});

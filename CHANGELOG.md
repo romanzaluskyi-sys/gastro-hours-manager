@@ -24,6 +24,11 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
   na tablecie bez PIN-u, a logowanie z prywatnego telefonu przestanie działać.
 - Kierownik lokalu może zmienić PIN tabletu swojego lokalu (dotąd serwer
   odmawiał).
+- **Codzienne sprawdzanie, czy wszystko chodzi.** Każde automatyczne zadanie
+  (przypomnienia, raport kierownika, maile) zapisuje, czy się udało, a raz
+  dziennie przegląd wszystkich klientów sprawdza, czy żadne nie padło ani nie
+  zamilkło i czy w aplikacji nie powtarzają się błędy. Problem trafia mailem do
+  właściciela systemu, zanim ktoś z lokalu zauważy, że czegoś brakuje.
 
 ## 0.76.0 — 2026-10-09
 

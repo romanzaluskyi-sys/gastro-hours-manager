@@ -19,6 +19,7 @@ const { brakPoczty, wyslij, podpisOk } = require("../_lib/poczta");
 const { policz, czyPusty, ROLE_KIEROWNIKA } = require("../_lib/raport");
 const { mailRaportu } = require("../_lib/raportMail");
 const C = require("../_lib/czas");
+const { zPrzebiegiem } = require("../_lib/przebieg");
 
 // Wszystko dla całej sieci naraz — raport każdego kierownika to filtr na tych
 // samych wierszach, więc dwóch kierowników nie zobaczy dwóch wersji prawdy.
@@ -84,7 +85,7 @@ const kierownicy = (users) =>
       u.email_powiadomienia !== false
   );
 
-module.exports = async function handler(req, res) {
+module.exports = zPrzebiegiem("raport-kierownika", async function handler(req, res) {
   const q = req.query || {};
   const podglad = !!q.u;
 
@@ -176,4 +177,4 @@ module.exports = async function handler(req, res) {
     }
   }
   return res.status(wynik.bledy.length ? 207 : 200).json(wynik);
-};
+});

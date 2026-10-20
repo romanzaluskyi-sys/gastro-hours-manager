@@ -34,6 +34,7 @@ const CHANGELOG = [
       "PIN-u nie widać już nigdzie, także w karcie pracownika — karta mówi tylko, czy jest ustawiony, a pole służy do wpisania nowego.",
       "Profil na tablecie blokuje się na 15 minut po 10 złych PIN-ach; nowy PIN w karcie zdejmuje blokadę od razu.",
       "„Zdejmij blokadę PIN-em” w karcie pracownika kiosku.",
+      "Codzienne sprawdzanie, czy automatyczne zadania (przypomnienia, raporty, maile) chodzą i czy nie powtarzają się błędy.",
     ],
   },
   {
