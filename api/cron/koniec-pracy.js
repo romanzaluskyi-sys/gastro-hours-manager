@@ -21,10 +21,11 @@
 
 const { brakBazy, pobierz, zmien, dodajJesliNowy, zakoduj } = require("../_lib/baza");
 const C = require("../_lib/czas");
+const { zPrzebiegiem } = require("../_lib/przebieg");
 
 const dataPL = (d) => d.split("-").reverse().join(".");
 
-module.exports = async function handler(req, res) {
+module.exports = zPrzebiegiem("koniec-pracy", async function handler(req, res) {
   if (!process.env.CRON_SECRET) {
     return res.status(500).json({ error: "CRON_SECRET nie jest ustawiony w tym projekcie Vercel." });
   }
@@ -92,4 +93,4 @@ module.exports = async function handler(req, res) {
     }
   }
   return res.status(wynik.bledy.length ? 207 : 200).json(wynik);
-};
+});

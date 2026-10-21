@@ -197,19 +197,85 @@ export const idZalogowanego = () => wczytajSesje()?.user_id || null;
 // CUDZEGO hasła wymaga klucza SERVICE ROLE — a ten omija RLS i nie ma prawa
 // znaleźć się w przeglądarce. Front wysyła tylko swój token; kim jest i czy
 // wolno mu, rozstrzyga serwer.
-export const ustawHasloPracownika = async (userId, haslo) => {
+//
+// ⚠️ Od 0.77.0 (migracja 0046) to JEDYNA droga zmiany PIN-u: baza pomija PIN
+// w zwykłym zapisie karty, a blokadę na tablecie (`kiosk_pin`) zapisuje serwer
+// razem z hasłem. `usun: true` zdejmuje blokadę pracownikowi kiosku.
+export const ustawHasloPracownika = async (userId, haslo, { usun = false } = {}) => {
   const t = await token();
   if (!t) throw new Error("Brak sesji — zaloguj się ponownie.");
   const res = await fetch("/api/admin/ustaw-haslo", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` },
-    body: JSON.stringify({ user_id: userId, haslo }),
+    body: JSON.stringify(usun ? { user_id: userId, usun: true } : { user_id: userId, haslo }),
   });
   const odp = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error(odp.error || `Nie udało się ustawić PIN-u (${res.status}).`);
   }
   return odp;
+};
+
+// „Nie pamiętam PIN-u” (0.77.0). Bez sesji — człowiek właśnie nie może się
+// zalogować. Ten sam endpoint co wyżej, inna `akcja`.
+const bezSesji = async (dane, domyslny) => {
+  let res;
+  try {
+    res = await fetch("/api/admin/ustaw-haslo", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(dane),
+    });
+  } catch (e) {
+    throw new Error("Brak połączenia — spróbuj za chwilę.");
+  }
+  const odp = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(odp.error || `${domyslny} (${res.status}).`);
+  return odp;
+};
+
+export const przypomnijPin = (email) =>
+  bezSesji({ akcja: "przypomnij", email }, "Nie udało się wysłać linku");
+
+export const ustawNowyPin = (tokenZLinku, haslo) =>
+  bezSesji({ akcja: "nowy", token: tokenZLinku, haslo }, "Nie udało się ustawić PIN-u");
+
+// Token z linku w mailu (`?nowy_pin=…`). Czytamy go RAZ, przy ładowaniu
+// modułu, i od razu czyścimy pasek adresu — token w historii przeglądarki to
+// klucz do konta. Trzymamy go w sessionStorage, żeby odświeżenie strony nie
+// zgubiło formularza; znika po udanym ustawieniu PIN-u.
+const KLUCZ_TOKENU = "shiftro_nowy_pin";
+try {
+  const p = new URLSearchParams(window.location.search);
+  const t = p.get("nowy_pin");
+  if (t) {
+    window.sessionStorage.setItem(KLUCZ_TOKENU, t);
+    p.delete("nowy_pin");
+    const reszta = p.toString();
+    window.history.replaceState(
+      null,
+      "",
+      window.location.pathname + (reszta ? `?${reszta}` : "") + window.location.hash
+    );
+  }
+} catch (e) {
+  // Prywatne okno bez sessionStorage — link trzeba będzie otworzyć ponownie.
+}
+
+export const tokenNowegoPinu = () => {
+  try {
+    return window.sessionStorage.getItem(KLUCZ_TOKENU) || "";
+  } catch (e) {
+    return "";
+  }
+};
+
+export const zapomnijTokenNowegoPinu = () => {
+  try {
+    window.sessionStorage.removeItem(KLUCZ_TOKENU);
+  } catch (e) {
+    /* jw. */
+  }
 };
 
 // Dokąd trafia dana rola po zalogowaniu.

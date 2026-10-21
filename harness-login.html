@@ -94,12 +94,14 @@ const PAKIETY = {
 const prawdziwyFetch = window.fetch.bind(window);
 const HASLO = "123456";
 window.__logowania = [];
+window.__piny = [];
+window.__noweHaslo = null;
 window.fetch = (url, opcje) => {
   const u = String(url);
   if (u.includes("/auth/v1/token")) {
     const body = JSON.parse((opcje && opcje.body) || "{}");
     window.__logowania.push(body.email);
-    if (body.password !== HASLO) {
+    if (body.password !== HASLO && body.password !== window.__noweHaslo) {
       return Promise.resolve({ ok: false, status: 400, json: async () => ({ error: "invalid_grant" }) });
     }
     return Promise.resolve({ ok: true, status: 200, json: async () => ({
@@ -108,6 +110,23 @@ window.fetch = (url, opcje) => {
     }) });
   }
   if (u.includes("/auth/v1/logout")) return Promise.resolve({ ok: true, status: 204, json: async () => ({}) });
+  // „Nie pamiętam PIN-u” (0.77.0) — endpoint serwera, nie GoTrue.
+  if (u.includes("/api/admin/ustaw-haslo")) {
+    const body = JSON.parse((opcje && opcje.body) || "{}");
+    window.__piny.push(body);
+    if (body.akcja === "przypomnij") {
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({ ok: true,
+        info: "Jeśli to konto istnieje i ma dostęp do aplikacji, wysłaliśmy na ten adres link." }) });
+    }
+    if (body.akcja === "nowy") {
+      if (body.token !== "tok-z-maila") {
+        return Promise.resolve({ ok: false, status: 400, json: async () => ({
+          error: "Ten link wygasł albo został już użyty. Poproś o nowy na ekranie logowania." }) });
+      }
+      window.__noweHaslo = body.haslo;
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({ ok: true, email: "roman@x.pl" }) });
+    }
+  }
   return prawdziwyFetch(url, opcje);
 };
 
@@ -210,6 +229,7 @@ const poprzedniMiesiac = (h) => {
 (async () => {
   try {
     localStorage.removeItem("shiftro_auth");
+    sessionStorage.removeItem("shiftro_nowy_pin");
 
     const LS = (await import(await zaladuj("/src/components/LoginScreen"))).default;
 
@@ -228,7 +248,8 @@ const poprzedniMiesiac = (h) => {
     const { createElement: h } = React;
     const zalogowany = [];
     const widoki = [];
-    ReactDOM.createRoot(document.getElementById("app")).render(
+    const korzen = ReactDOM.createRoot(document.getElementById("app"));
+    korzen.render(
       h("div", { style: { padding: 20 } },
         h(LS, {
           setCurrentUser: (u) => zalogowany.push(u),
@@ -279,6 +300,58 @@ const poprzedniMiesiac = (h) => {
       String(widoki));
     sprawdz("e-mail poszedł do Auth małymi literami",
       window.__logowania[window.__logowania.length - 1] === "roman@x.pl");
+
+    // --- „Nie pamiętam PIN-u” (0.77.0) ---
+    const tekst = () => document.getElementById("app").innerText || "";
+    const klikTekst = (t) => {
+      const el = [...document.querySelectorAll("#app button")].find((b) => b.textContent.trim().includes(t));
+      if (!el) throw new Error("nie ma przycisku: " + t);
+      el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    };
+    klikTekst("Nie pamiętam PIN-u"); await czekaj(200);
+    sprawdz("„Nie pamiętam PIN-u” otwiera prośbę o link", !!document.querySelector("[data-przypomnij-pin]"));
+    wpisz("email", "  Roman@X.pl ");
+    document.querySelector("[data-przypomnij-pin]").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await czekaj(300);
+    const prosba = window.__piny[window.__piny.length - 1] || {};
+    sprawdz("prośba idzie do serwera z e-mailem małymi literami",
+      prosba.akcja === "przypomnij" && prosba.email === "roman@x.pl", JSON.stringify(prosba));
+    sprawdz("odpowiedź nie mówi, czy konto istnieje", /Jeśli to konto istnieje/.test(tekst()));
+
+    // Ekran po kliknięciu w link: token czeka w sessionStorage (api/auth.ts
+    // czyta go z adresu przy ładowaniu i czyści pasek adresu).
+    korzen.unmount();
+    sessionStorage.setItem("shiftro_nowy_pin", "tok-z-maila");
+    const zalogowany2 = [];
+    const korzen2 = ReactDOM.createRoot(document.getElementById("app"));
+    korzen2.render(h("div", { style: { padding: 20 } },
+      h(LS, { setCurrentUser: (u) => zalogowany2.push(u), setCurrentView: () => {}, dbError: null })));
+    await czekaj(400);
+    sprawdz("link z maila otwiera „Ustaw nowy PIN”", !!document.querySelector("[data-nowy-pin]"));
+    const pola = () => document.querySelectorAll("[data-nowy-pin] input[type=password]");
+    const ustawPole = (el, v) => {
+      Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set.call(el, v);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    };
+    const wyslijNowy = () => document.querySelector("[data-nowy-pin]").dispatchEvent(
+      new Event("submit", { bubbles: true, cancelable: true }));
+    ustawPole(pola()[0], "385920"); ustawPole(pola()[1], "385921");
+    wyslijNowy(); await czekaj(300);
+    const przedNowym = window.__piny.length;
+    sprawdz("różne PIN-y nie idą do serwera", /PIN-y się różnią/.test(tekst()) &&
+      !window.__piny.some((b) => b.akcja === "nowy"));
+    ustawPole(pola()[1], "385920");
+    wyslijNowy(); await czekaj(600);
+    const nowy = window.__piny[window.__piny.length - 1] || {};
+    sprawdz("nowy PIN idzie do serwera z tokenem z linku",
+      window.__piny.length === przedNowym + 1 && nowy.akcja === "nowy" && nowy.token === "tok-z-maila" && nowy.haslo === "385920",
+      JSON.stringify(nowy));
+    sprawdz("po ustawieniu PIN-u loguje od razu nowym PIN-em",
+      zalogowany2.length === 1 && window.__logowania[window.__logowania.length - 1] === "roman@x.pl",
+      JSON.stringify(zalogowany2));
+    sprawdz("zużyty token znika z sessionStorage", !sessionStorage.getItem("shiftro_nowy_pin"));
+    korzen2.unmount();
+    localStorage.removeItem("shiftro_auth");
 
     if (status.className !== "zle") {
       status.textContent = `ekran logowania zamontowany — logowanie ${zdanych}/${zdanych + oblanych}`;

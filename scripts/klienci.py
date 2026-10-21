@@ -11,7 +11,20 @@ działający, dopóki ktoś tam nie zadzwoni.
 
 CRON_SECRET bierze z Vault bazy klienta (przez SUPABASE_PAT), więc nic nie
 trzeba trzymać lokalnie.
+
+Od 0.77.0 `sprawdz` mówi też o cronach (czy każdy miał udany przebieg w swoim
+oknie — dziennik z migracji 0045) i o błędach aplikacji z ostatniej doby. Kod
+wyjścia 1 = coś wymaga uwagi; na tym stoi codzienny monitoring
+(.github/workflows/monitoring.yml).
+
+Monitoring w GitHub Actions NIE dostaje SUPABASE_PAT (ten token otwiera
+wszystkie bazy na koncie). Zamiast tego sekrety cronów podaje się wprost:
+
+    SHIFTRO_SEKRETY_CRONA='{"emka": "…", "demo": "…"}' python3 scripts/klienci.py sprawdz
+
+CRON_SECRET otwiera tylko crony i /api/zdrowie danego klienta.
 """
+import json
 import os
 import sys
 
@@ -28,19 +41,33 @@ def lista(rej):
 
 
 def sprawdz(rej):
-    pat = wymagaj_env("SUPABASE_PAT", "Supabase → Account → Access Tokens")
+    sekrety = None
+    if os.environ.get("SHIFTRO_SEKRETY_CRONA"):
+        try:
+            sekrety = json.loads(os.environ["SHIFTRO_SEKRETY_CRONA"])
+        except json.JSONDecodeError:
+            sys.exit("SHIFTRO_SEKRETY_CRONA to nie jest poprawny JSON ({\"slug\": \"sekret\"}).")
+        pat = None
+    else:
+        pat = wymagaj_env("SUPABASE_PAT", "Supabase → Account → Access Tokens")
     wersja = wersja_lokalna()
     migracji = len(list((ROOT / "docs" / "sql" / "migrations").glob("*.sql")))
     print(f"\n  Repozytorium: wersja {wersja}, migracji {migracji}\n")
     zle = 0
     for k in rej["klienci"]:
         uwagi = []
-        try:
-            sekret = sekret_crona_z_vault(pat, k["supabase_ref"])
-        except BladApi as e:
-            sekret, uwagi = None, [f"Vault niedostępny ({e.kod})"]
+        if sekrety is not None:
+            sekret = sekrety.get(k["slug"])
+            if not sekret:
+                uwagi.append("brak sekretu w SHIFTRO_SEKRETY_CRONA")
+        else:
+            try:
+                sekret = sekret_crona_z_vault(pat, k["supabase_ref"])
+            except BladApi as e:
+                sekret, uwagi = None, [f"Vault niedostępny ({e.kod})"]
         if not sekret:
-            uwagi.append("brak CRON_SECRET w Vault — uruchom nowy-klient.py dla tego klienta")
+            if sekrety is None:
+                uwagi.append("brak CRON_SECRET w Vault — uruchom nowy-klient.py dla tego klienta")
             z = {}
         else:
             z = zdrowie(k["domena"], sekret)
@@ -59,8 +86,15 @@ def sprawdz(rej):
             if z.get("blad"):
                 uwagi.append(str(z["blad"]))
         zle += bool(uwagi)
+        # Błędy z doby pokazujemy zawsze — także pod progiem alarmu, żeby było
+        # widać, czy coś zaczyna rosnąć.
+        b = (z.get("bledy") or {}) if sekret else {}
+        dopisek = f" · błędy 24 h: {b['ostatnie_24h']}" if b.get("ostatnie_24h") is not None else ""
+        bez_pomiaru = [c["nazwa"] for c in (z.get("crony") or []) if c.get("stan") == "bez pomiaru"]
+        if bez_pomiaru:
+            dopisek += f" · crony bez pomiaru: {len(bez_pomiaru)}"
         print(f"  {'✓' if not uwagi else '✗'} {k['slug']:<16} {k['domena']:<26} "
-              + ("w porządku" if not uwagi else "; ".join(uwagi)))
+              + ("w porządku" if not uwagi else "; ".join(uwagi)) + dopisek)
     print()
     return 1 if zle else 0
 

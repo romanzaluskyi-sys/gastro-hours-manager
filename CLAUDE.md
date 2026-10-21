@@ -213,6 +213,87 @@ trzy miejsca.
 ⚠️ **Nowa tabela, której potrzebuje ekran → dane w `demoDane.js`** (tu:
 `wydarzenia`, `wydarzenia_uczestnicy` w `KOLEJNOSC`).
 
+## PIN-y — od 0.77.0 (migracja `0046`)
+
+Do 0.76.0 `users.pin` był KOPIĄ hasła do Auth jawnym tekstem (kierownik widział
+ją w karcie pod „Pokaż”), a `users.kiosk_pin` — blokada na tablecie i zarazem
+hasło pracownika z prywatnym telefonem — też leżał jawnie i wychodził
+kierownikowi w `users_widok`. `sprawdz_kiosk_pin` dało się wołać bez limitu.
+
+Dziś:
+- **`users.pin` jest zawsze NULL**, `kiosk_pin` trzyma hash bcrypt (pgcrypto).
+  `ma_kiosk_pin` (kłódka) liczy się dalej z niepustej wartości, bez zmian.
+- **PIN-y zmienia WYŁĄCZNIE serwer** — [`api/admin/ustaw-haslo.js`](api/admin/ustaw-haslo.js)
+  kluczem SERVICE ROLE (hasło w Auth i `kiosk_pin` jednym wywołaniem), skrypty
+  i reset demo. Trigger `chron_piny` na `users`: zapis PIN-u z aplikacji (jest
+  `auth.uid()`) **po cichu pomija** — nie odrzuca, bo karta (także w starym
+  bundlu) wysyła cały wiersz z pustymi PIN-ami z widoku; sześć jawnych cyfr od
+  serwera zamienia w hash; `pin` zawsze zeruje.
+- **`users_widok` oddaje `pin` i `kiosk_pin` PUSTE, także kierownikowi** (kolumny
+  zostają, bo stare bundle je czytają). Odpowiedź PATCH/POST z tabeli `users`
+  niesie hash — `handleSaveUser` go wycina przed zapisem w stanie.
+- **Karta pracownika: pole PIN = NOWY PIN** (`editingUser.nowy_pin`, puste = bez
+  zmian), stan „PIN jest ustawiony” z `ma_kiosk_pin` / `auth_id`, przycisk
+  „Zdejmij blokadę PIN-em” (`usun_pin`) dla pracownika kiosku — zdejmuje też
+  logowanie z telefonu (losowe hasło w Auth). Payload karty NIE niesie żadnego
+  PIN-u (sprawdza `harness-panel.html`).
+- **Limit prób**: 10 złych PIN-ów w 15 min na osobę → `sprawdz_kiosk_pin` rzuca
+  „Za dużo prób…” (wyjątek, nie `false` — KioskDashboard pokazuje to zdanie).
+  Profil spoza lokalu tabletu dostaje `false` bez liczenia próby. Nowy PIN z
+  karty czyści licznik. Tabela `limity_pin` (migracja `0045`, bez polityk, tylko serwer) liczy
+  też prośby o reset (3 na adres na godzinę).
+- **„Nie pamiętam PIN-u”** (LoginScreen): `akcja: "przypomnij"` → serwer bierze
+  token z `admin/generate_link` (Supabase NIE wysyła maila) i wysyła link
+  `?nowy_pin=<hashed_token>` przez Brevo; `akcja: "nowy"` → `verify` (token
+  zużywa się DOPIERO tu, nie przy otwarciu linku — skanery w skrzynkach),
+  hasło w Auth + `kiosk_pin` dla roli `open`, sesja z linku od razu zamknięta.
+  Odpowiedź na prośbę jest ta sama dla istniejącego i nieistniejącego adresu.
+  Token z adresu czyta `api/auth.ts` przy ładowaniu i czyści pasek adresu.
+- **Każda zmiana PIN-u zostawia ślad i daje znać właścicielowi konta**
+  (`odnotujZmiane` w `ustaw-haslo.js`): wiersz w `piny_zmiany` (migracja `0046`:
+  kto, komu, kiedy, `sposob` = `kierownik` / `kierownik_usunal` /
+  `reset_mailem`; czyta kierownik swoich ludzi, pisze tylko serwer), wiadomość
+  `type = 'pin'` dla `open`/`closed` i e-mail od razu, BEZ sprawdzania
+  `email_powiadomienia` (bezpieczeństwo) — wiersz `notifications` dostaje od
+  razu `email_at`, żeby kolejka nie wysłała drugiego. Karta pracownika pokazuje
+  „Ostatnia zmiana PIN-u”. Ślad i mail są best-effort: nie cofają zmiany.
+- ⚠️ **Trzy akcje w JEDNYM pliku `api/`**, bo projekt ma 12 funkcji Vercela — tyle,
+  ile pozwala plan Hobby. Dokładając funkcję w `api/`, policz je.
+- ⚠️ **Kolejność: `0045` (same nowe tabele, `limity_pin` i dziennik cronów) wolno
+  puścić kiedykolwiek — także przed deployem, żeby „Nie pamiętam PIN-u” dało się
+  sprawdzić na Preview (chodzi na bazie produkcyjnej). `0046` dopiero PO deployu
+  0.77.0.** Nowy front działa na starej bazie;
+  stary front na nowej bazie wymaga wpisania PIN-u przy zapisie karty
+  kierownika/tabletu (pole `required`, a widok oddaje je puste).
+- ⚠️ `scripts/utworz-konta-auth.py` po `0046` odmawia pracy (nie ma z czego brać
+  haseł). Konto w Auth zakłada karta (ustaw PIN) albo `import-klienta.py`.
+- Lokalny sprawdzian migracji: Postgres 16 z atrapą `auth.uid()` i pgcrypto
+  (`extensions.crypt/gen_salt` w formacie bcrypt) — łańcuch `0000`–`0046` na
+  pustej bazie i 18 przypadków na danych (2026-10-20).
+
+## Monitoring — od 0.77.0 (migracja `0045`)
+
+Do 0.76.0 cron, który padł albo przestał się wywoływać (zmieniony sekret,
+wyłączony pg_cron), nie zostawiał śladu poza logami Vercela — i wyglądał jak
+spokojny dzień. Dziś trzy warstwy:
+- **Dziennik `cron_przebiegi`** — każdy cron w `api/cron/` jest owinięty
+  `zPrzebiegiem("nazwa", …)` (`api/_lib/przebieg.js`): status HTTP, czas, skrót
+  odpowiedzi; sprzątanie po 30 dniach. Liczą się tylko wywołania z `Bearer
+  CRON_SECRET` (podgląd raportu z linku i 401 to nie przebieg). Zapis nigdy nie
+  rzuca. ⚠️ **Nowy cron → owiń go tak samo**, inaczej monitoring go nie widzi.
+- **`/api/zdrowie`** liczy z dziennika, czy każdy oczekiwany cron miał UDANY
+  przebieg w oknie (dobowe: 26 h, `wyslij-maile` z pg_cron: 20 min). Lista
+  oczekiwanych = `vercel.json` + `wyslij-maile`, `demo-reset` tylko w demo,
+  `wyslij-maile` tylko poza demo. ⚠️ Dziennik młodszy niż okno = „bez pomiaru”,
+  nie alarm (pierwszy dzień po migracji). Do tego `app_errors` z doby: alarm od
+  20 błędów albo od 5 powtórzeń tego samego komunikatu.
+- **`.github/workflows/monitoring.yml`** — codziennie 8:30 UTC
+  `klienci.py sprawdz`; czerwony przebieg = e-mail od GitHuba. Sekrety
+  `KLIENCI_JSON` i `SHIFTRO_SEKRETY_CRONA` — ⚠️ świadomie BEZ `SUPABASE_PAT`
+  (otwiera SQL wszystkich baz). Nowy klient → dopisz go do obu sekretów.
+- Sprawdziany: `harness-email.html` (dziennik, okna, „bez pomiaru”, demo,
+  powtórzenia błędów, baza bez 0045).
+
 ## Logowanie i dostęp do danych — Etap 3 (0.41.0–0.70.3)
 
 **Stan od 0.70.3 (wszystkie migracje `0025`–`0041` w repo):** logowanie przez
@@ -531,9 +612,10 @@ Trzy poziomy widoczności w widoku:
   świadomie: z nich liczy się NORMA GODZIN w Raporcie pracownika, a Raport
   pokazuje się także na tablecie, gdzie patrzącym nie jest właściciel konta. To
   są godziny, nie pieniądze — `stawka` i `wynagrodzenie_mies` zostają zakryte.
-- **własne albo kierownik** — `email, pin, kiosk_pin, stawka,
+- **własne albo kierownik** — `email, stawka,
   wynagrodzenie_mies, telefon, data_urodzenia, data_zatrudnienia,
-  sanepid_*, umowa_*, ostatni_dzien`.
+  sanepid_*, umowa_*, ostatni_dzien`. (`pin` i `kiosk_pin` od `0046` PUSTE dla
+  wszystkich — patrz „PIN-y”.)
 - **tylko kierownik** — `notatki` i jej ślad. To notatnik prowadzącego, nie
   dokument dla zainteresowanego.
 
@@ -578,12 +660,14 @@ może — dlatego robi to [`api/admin/ustaw-haslo.js`](api/admin/ustaw-haslo.js)
 Funkcja weryfikuje token wołającego W SUPABASE (samodzielne rozkodowanie JWT
 bez sprawdzenia podpisu znaczyłoby tyle, co uwierzenie na słowo komuś, kto
 właśnie prosi o zmianę cudzego hasła), sprawdza rolę i — dla
-`manager_lokalu` — czy pracownik jest z jego lokalu. Zakłada też konto, gdy
-pracownik dostaje e-mail i PIN po raz pierwszy.
+`manager_lokalu` — czy pracownik jest z jego lokalu (`default_lokal` ALBO
+`allowed_lokale` — od 0.77.0, wcześniej tablet był poza zasięgiem kierownika
+lokalu). Zakłada też konto, gdy pracownik dostaje e-mail i PIN po raz pierwszy.
+Od 0.77.0 zapisuje także `kiosk_pin` — patrz „PIN-y”.
 
 ⚠️ **Wymaga NOWEJ zmiennej `SUPABASE_SERVICE_KEY` w Vercelu.** Bez niej
-endpoint zwraca 500 z wyjaśnieniem, a kierownik widzi "PIN na tablecie
-zmieniony, ale hasło do logowania NIE". Klucz omija RLS — nigdy w repo, nigdy
+endpoint zwraca 500 z wyjaśnieniem, a kierownik widzi „Zapisano pracownika.
+UWAGA: PIN NIE został zmieniony — …”. Klucz omija RLS — nigdy w repo, nigdy
 z przedrostkiem `REACT_APP_`, nigdy w przeglądarce.
 
 ## Struktura plików
@@ -623,12 +707,17 @@ api/                         — root-level, POZA src/ — funkcje Vercel Cron
   _lib/demoDane.js, demoKonta.js — generator danych demo i konta demo
   zdrowie.js                   — stan wdrożenia za CRON_SECRET: wersja, brakujące
                                  zmienne (same nazwy), czy front i crony patrzą
-                                 na tę samą bazę, liczba migracji, Brevo. Woła
-                                 go nowy-klient.py i klienci.py
+                                 na tę samą bazę, liczba migracji, Brevo, crony
+                                 (dziennik 0045) i błędy z doby. Woła go
+                                 nowy-klient.py, klienci.py i monitoring
+  _lib/przebieg.js             — `zPrzebiegiem(nazwa, handler)`: KAŻDY cron się
+                                 nim owija i zapisuje przebieg do
+                                 `cron_przebiegi` — patrz "Monitoring"
   admin/
-    ustaw-haslo.js             — zmiana PIN-u pracownika RAZEM z hasłem jego
-                                 konta w Auth; wymaga SUPABASE_SERVICE_KEY,
-                                 patrz "Logowanie i dostęp do danych" wyżej
+    ustaw-haslo.js             — JEDYNE miejsce zmiany PIN-u: kierownik w karcie,
+                                 „Nie pamiętam PIN-u” i nowy PIN z linku (akcje
+                                 w jednym pliku); wymaga SUPABASE_SERVICE_KEY,
+                                 patrz "PIN-y" wyżej
 vercel.json                  — harmonogram crona
 .github/workflows/ci.yml     — CI na każdym PR-ze: zgodność numeru wersji i
                                  przebieg harnessów. ⚠️ Świadomie BEZ zadania
@@ -766,6 +855,8 @@ src/
                                   zadania_moje, migracja 0038) — JEDYNE
                                   miejsce, które do niej pisze (Zadania,
                                   Skrzynka, Puls)
+    piny.ts                     poprawnyPin / slabyPin — karta pracownika i
+                                  ekran „Nowy PIN” (0.77.0)
     bezczynnosc.ts              automatyczne wylogowanie po 60 min (poza
                                   tabletem) — patrz Roadmap p.6
     uuid.ts                     nowyUuid() — id nadawane w przeglądarce dla
@@ -1396,10 +1487,11 @@ grupowanie i stany. Rzeczy, których nie widać:
   „Dodaj pracownika" przy różnicy pyta o porzucenie zmian.
 - ⚠️ **Po zapisie karta zostaje otwarta** (`handleSaveUser` ustawia
   `editingUser` na zapisany wiersz, nie na null).
-- **PIN: `type="password"` + `autoComplete="new-password"`** — ukryty do
-  „Pokaż" i bez propozycji zapisania go jako hasła kierownika. `maxLength` 6
-  zostaje (harness szuka formularza po nim). Ostrzeżenie `slabyPin`: jedna
-  cyfra, ciąg ±1, powtarzany wzór.
+- **PIN: `type="password"` + `autoComplete="new-password"`** — od 0.77.0 to
+  pole NOWEGO PIN-u (obecnego nikt nie zna — patrz „PIN-y”), ukryte do „Pokaż”
+  i bez propozycji zapisania go jako hasła kierownika. `maxLength` 6 zostaje
+  (harness szuka formularza po nim). Ostrzeżenie `slabyPin` (`utils/piny.ts`):
+  jedna cyfra, ciąg ±1, powtarzany wzór.
 - **Archiwizacja pyta raz**: krok „Tak, archiwizuj" w karcie woła
   `handleArchiveEntity(..., { potwierdzone: true })`, które wtedy pomija
   `window.confirm`. Zmiany w grafiku dalej idą przez PrzepiszZmianyModal.
@@ -2325,7 +2417,7 @@ zakresem — wymaga Grafiku, którego nie ma.
   active, archived, stanowisko, sanepid_expiry, sanepid_last_notified,
   umowa_expiry, umowa_last_notified, kiosk_pin`. `sanepid_expiry`/
   `umowa_expiry`: `date`, nullable — terminy dokumentów pracownika, patrz
-  "Panel kierownika" wyżej. `kiosk_pin` (text, nullable, 4 LUB 6 cyfr — docelowo 6, patrz "Logowanie i
+  "Panel kierownika" wyżej. `kiosk_pin` (text, nullable — od `0046` HASH bcrypt sześciu cyfr, nie same cyfry; `pin` od `0046` zawsze NULL, patrz "PIN-y"; wcześniej 4 LUB 6 cyfr — docelowo 6, patrz "Logowanie i
   dostęp do danych"; klawiatura tabletu obsługuje obie długości, dodana
   2026-08-31) — blokada PIN-em na kiosku, patrz "Panel kierownika" i
   "Tablet Służbowy" wyżej; NIE mylić z kolumną `pin` (6-cyfrowy PIN

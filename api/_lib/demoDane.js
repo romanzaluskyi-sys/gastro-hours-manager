@@ -295,7 +295,7 @@ const generuj = ({ dzis = C.ymd(), teraz = new Date() } = {}) => {
     "Olena Kovalenko": null,                   // brak → „Braki w danych”
   };
   const user = (u) => ({
-    email: null, pin: "", kiosk_pin: null, active: true, archived: false,
+    email: null, kiosk_pin: null, active: true, archived: false,
     default_lokal: null, default_stanowisko: null, allowed_lokale: "", allowed_stanowiska: null,
     stawka: null, typ_umowy: null, wymiar_etatu: null, wynagrodzenie_mies: null,
     umowa_bezterminowa: false, umowa_expiry: null, sanepid_expiry: null,
@@ -307,11 +307,11 @@ const generuj = ({ dzis = C.ymd(), teraz = new Date() } = {}) => {
 
   T.users.push(user({
     id: uuidZ(`user:${WLASCICIELKA}`), name: WLASCICIELKA, role: "admin",
-    email: konto("kierownik").email, pin: K.PIN, data_zatrudnienia: "2019-03-01",
+    email: konto("kierownik").email, data_zatrudnienia: "2019-03-01",
   }));
   T.users.push(user({
     id: uuidZ(`user:${TABLET_BISTRO}`), name: TABLET_BISTRO, role: "kiosk",
-    email: konto("tablet").email, pin: K.PIN, allowed_lokale: BISTRO,
+    email: konto("tablet").email, allowed_lokale: BISTRO,
   }));
   T.users.push(user({
     id: uuidZ(`user:${TABLET_PIZZERIA}`), name: TABLET_PIZZERIA, role: "kiosk", allowed_lokale: PIZZERIA,
@@ -331,12 +331,13 @@ const generuj = ({ dzis = C.ymd(), teraz = new Date() } = {}) => {
     });
     if (p.konto === "telefon") {
       // Prywatny telefon: e-mail + kiosk_pin. Ten sam PIN blokuje jego profil na tablecie.
+      // Jawne cyfry — baza zapisze je hashem (trigger `chron_piny`, migracja 0046);
+      // hasło do logowania kontom demo zakłada osobno reset demo w Auth.
       w.email = konto("telefon").email;
       w.kiosk_pin = K.PIN;
       // Może dziś zamknąć Puls (0.73.0) — „Więcej → Zamknięcie dnia” na telefonie.
       w.puls_do = dzis;
     }
-    if (p.rola === "manager_lokalu") w.pin = "";
     T.users.push(w);
     osoby[p.name] = { ...p, id: w.id };
   });

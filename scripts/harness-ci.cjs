@@ -20,7 +20,12 @@
 const { chromium } = require("playwright");
 
 const POMIJANE = new Set(["harness-karta.html"]);
-const LIMIT_MS = 90000;
+// ⚠️ To GÓRNA granica — harness, który skończył, wychodzi od razu. Ile trwa
+// najdłuższy: harness-panel.html przeklikuje cały panel i ma ~78 s samych
+// pauz (`czekaj`) plus ładowanie modułów przez Babel. Przy 90 s wystarczyło
+// dopisać kilka sprawdzianów (0.77.0, PIN-y), żeby wypadł za limit i wyglądał
+// na zepsuty („ładowanie…”). Stąd zapas, a w wyniku — czas każdego przebiegu.
+const LIMIT_MS = 180000;
 const ADRES = process.env.HARNESS_URL || "http://127.0.0.1:8765";
 
 const fs = require("fs");
@@ -72,6 +77,7 @@ const czyGotowy = () => {
     strona.on("pageerror", (e) => konsola.push("pageerror: " + e.message.slice(0, 300)));
 
     let stan = null;
+    const start = Date.now();
     try {
       await strona.goto(`${ADRES}/${plik}`, { waitUntil: "domcontentloaded", timeout: 30000 });
       const doKiedy = Date.now() + LIMIT_MS;
@@ -84,12 +90,15 @@ const czyGotowy = () => {
       stan = { gotowy: false, podsumowanie: "wyjątek: " + e.message.slice(0, 200) };
     }
 
+    const sekundy = Math.round((Date.now() - start) / 1000);
     const zdany =
       stan && stan.gotowy && !stan.zle && !stan.blad && !stan.oblanych;
     wyniki.push({ plik, zdany, stan, konsola });
     console.log(
-      `${zdany ? "  OK  " : " BŁĄD "} ${plik.padEnd(26)} ${
-        (stan && stan.podsumowanie) || "nie doszedł do końca w limicie czasu"
+      `${zdany ? "  OK  " : " BŁĄD "} ${plik.padEnd(26)} ${String(sekundy).padStart(3)} s  ${
+        stan && !stan.gotowy && !stan.zle && !stan.blad
+          ? `nie doszedł do końca w ${LIMIT_MS / 1000} s (stan: ${stan.podsumowanie || "—"})`
+          : (stan && stan.podsumowanie) || "nie doszedł do końca w limicie czasu"
       }`
     );
     if (!zdany && konsola.length) {

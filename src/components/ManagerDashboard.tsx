@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import { api } from "../api/supabase";
 import { nowyUuid } from "../utils/uuid";
 import { ustawHasloPracownika } from "../api/auth";
+import { poprawnyPin } from "../utils/piny";
 import { sendToGoogleSheets } from "../api/googleSheets";
 import { createEmployeeNotification } from "../api/notifications";
 import { formatNotificationText } from "../utils/format";
@@ -574,6 +575,14 @@ const ManagerDashboard = ({
     e.preventDefault();
     try {
       const dataToSave = { ...editingUser };
+      // Nowy PIN wpisany w karcie (pole puste = bez zmiany) i prośba o
+      // zdjęcie blokady. To NIE są kolumny — idą osobno, przez serwer, niżej.
+      const nowyPin = String(editingUser.nowy_pin || "").trim();
+      const usunPin = !!editingUser.usun_pin && !nowyPin;
+      if (nowyPin && !poprawnyPin(nowyPin)) {
+        showMsg("PIN ma mieć dokładnie 6 cyfr.", "error");
+        return;
+      }
       // ⚠️ Kolumny WYLICZANE trzeba wyrzucić z payloadu. Payload powstaje z
       // rozsypania wiersza pobranego z bazy, więc niesie wszystko, co baza
       // oddała — a Postgres odrzuca CAŁY zapis, gdy w środku jest kolumna
@@ -583,13 +592,10 @@ const ManagerDashboard = ({
       //
       // Dopisując kolejną kolumnę wyliczaną, dopisz ją TUTAJ.
       for (const wyliczana of ["ma_kiosk_pin"]) delete dataToSave[wyliczana];
-      if (dataToSave.role === "open") {
-        // E-mail ZOSTAJE: razem z kiosk_pin daje pracownikowi dostęp do jego
-        // ekranów z prywatnego telefonu. Czyścimy tylko `pin` — sześciocyfrowy
-        // PIN logowania, którego konto otwarte nie używa (loguje się PIN-em
-        // blokady, patrz LoginScreen).
-        dataToSave.pin = "";
-      }
+      // ⚠️ PIN-ów NIE wysyłamy w zapisie karty (0.77.0, migracja 0046): baza
+      // trzyma `kiosk_pin` jako hash, `pin` jest zawsze pusty, a zapis z
+      // aplikacji i tak by je pominęła. Zmienia je wyłącznie serwer.
+      for (const pole of ["pin", "kiosk_pin", "nowy_pin", "usun_pin", "__pin_odswiez"]) delete dataToSave[pole];
       // Logowanie porównuje e-mail dosłownie, a klawiatura telefonu lubi
       // dopisać spację i wielką literę — normalizujemy przy zapisie, żeby
       // "nie ma takiego użytkownika" nie brało się z niewidocznej różnicy.
@@ -654,49 +660,48 @@ const ManagerDashboard = ({
             : null;
       }
 
+      // Odpowiedź z tabeli `users` niesie hash blokady (0046) — w stanie
+      // aplikacji nie ma mu po co leżeć.
+      const bezPinow = (w) => ({ ...w, pin: null, kiosk_pin: null });
       let zapisany;
       if (editingUser.id) {
-        zapisany = await api.patch("users", editingUser.id, dataToSave);
+        zapisany = bezPinow(await api.patch("users", editingUser.id, dataToSave));
         setUsers(users.map((user) => (user.id === zapisany.id ? zapisany : user)));
       } else {
         delete dataToSave.id;
-        zapisany = await api.post("users", dataToSave);
+        zapisany = bezPinow(await api.post("users", dataToSave));
         setUsers([...users, zapisany]);
       }
 
-      // ⚠️ PIN jest DWIEMA rzeczami naraz: wpisem w kartotece (blokada profilu
-      // na tablecie) i hasłem konta w Supabase Auth (logowanie z prywatnego
-      // telefonu). Zapis samej kolumny rozjechałby je po cichu — tablet
-      // otwierałby się nowym PIN-em, a logowanie dalej chciało starego.
-      // Konto otwarte loguje się `kiosk_pin`, reszta `pin` (patrz LoginScreen).
-      const pinTeraz =
-        String((dataToSave.role === "open" ? dataToSave.kiosk_pin : dataToSave.pin) || "");
-      const pinPrzed = String(
-        (existingUser
-          ? existingUser.role === "open"
-            ? existingUser.kiosk_pin
-            : existingUser.pin
-          : "") || ""
-      );
+      // ⚠️ PIN jest DWIEMA rzeczami naraz: hasłem konta w Supabase Auth i — u
+      // pracownika kiosku — blokadą profilu na tablecie. Obie zmienia serwer
+      // jednym wywołaniem (api/admin/ustaw-haslo.js), więc nie mogą się już
+      // rozjechać tak jak do 0.76.0.
       let ostrzezenie = "";
-      if (pinTeraz && pinTeraz !== pinPrzed) {
+      if (nowyPin || usunPin) {
         try {
-          await ustawHasloPracownika(zapisany.id, pinTeraz);
+          await ustawHasloPracownika(zapisany.id, nowyPin, { usun: usunPin });
+          // Kłódka i „ma konto” zmieniają się po stronie serwera — bierzemy
+          // świeży wiersz z widoku (bez PIN-ów), zamiast zgadywać.
+          const swiezy = (await api.get("users_widok", `id=eq.${zapisany.id}`))[0];
+          const poZmianie = swiezy
+            ? bezPinow(swiezy)
+            : zapisany.role === "open"
+            ? { ...zapisany, ma_kiosk_pin: !!nowyPin }
+            : zapisany;
+          zapisany = poZmianie;
+          setUsers((poprzedni) => poprzedni.map((u) => (u.id === poZmianie.id ? poZmianie : u)));
         } catch (e) {
           // Kartoteka jest już zapisana, więc NIE udajemy, że nic się nie
-          // stało — ale i nie cofamy zapisu. Mówimy dokładnie, co się
-          // rozjechało, bo to jedyna informacja, z którą da się coś zrobić.
-          ostrzezenie =
-            ` UWAGA: PIN na tablecie zmieniony, ale hasło do logowania NIE — ${
-              e.message || "nieznany błąd"
-            }`;
+          // stało — ale i nie cofamy zapisu. Mówimy dokładnie, czego brakuje.
+          ostrzezenie = ` UWAGA: PIN NIE został zmieniony — ${e.message || "nieznany błąd"}`;
         }
       }
-
       // Karta zostaje otwarta z tym, co zapisano (0.52.0) — pasek "Zapisz"
       // znika, bo nie ma już różnic, a kierownik widzi wynik zamiast pustego
       // miejsca po karcie.
-      setEditingUser({ ...zapisany });
+      // `__pin_odswiez` — karta odczyta wtedy na nowo „Ostatnią zmianę PIN-u”.
+      setEditingUser({ ...zapisany, ...(nowyPin || usunPin ? { __pin_odswiez: Date.now() } : {}) });
       const poKoncu = wylaczonePoKoncu
         ? " Ostatni dzień pracy minął — konto jest teraz nieaktywne (nie w archiwum)."
         : "";

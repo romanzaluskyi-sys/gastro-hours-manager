@@ -73,6 +73,7 @@ async function zaladuj(sciezka) {
 const ENV = {
   SUPABASE_URL: "https://baza.test",
   SUPABASE_SERVICE_KEY: "klucz-serwisowy",
+  SUPABASE_KEY: "klucz-publiczny",
   CRON_SECRET: "sekret",
   BREVO_API_KEY: "klucz-brevo",
   EMAIL_FROM: "powiadomienia@shiftro.pl",
@@ -84,6 +85,7 @@ const cryptoStub = {
     update: (t) => ({ digest: () => btoa(unescape(encodeURIComponent(`${klucz}|${t}`))) }),
   }),
   timingSafeEqual: (a, b) => a.s === b.s,
+  randomBytes: () => ({ toString: () => "losowe-" + Math.random().toString(36).slice(2) }),
 };
 const BufferStub = { from: (s) => ({ s: String(s), length: String(s).length }) };
 const cjsCache = new Map();
@@ -93,7 +95,11 @@ async function cjs(sciezka) {
   const baza = sciezka.slice(0, sciezka.lastIndexOf("/"));
   const mapa = {};
   for (const [, d] of kod.matchAll(/require\("(\.[^"]+)"\)/g)) {
-    mapa[d] = await cjs(new URL(baza + "/" + d + (d.endsWith(".js") ? "" : ".js"), location.origin).pathname);
+    const sciezkaD = new URL(baza + "/" + d + (/\.(js|json)$/.test(d) ? "" : ".js"), location.origin).pathname;
+    // JSON (version.json, vercel.json w api/zdrowie.js) — jak w Node: sam obiekt.
+    mapa[d] = d.endsWith(".json")
+      ? await (await fetch(sciezkaD + "?cb=" + Date.now())).json()
+      : await cjs(sciezkaD);
   }
   const module = { exports: {} };
   const req = (n) => (n === "crypto" ? cryptoStub : mapa[n]);
@@ -105,7 +111,8 @@ async function cjs(sciezka) {
 }
 
 // --- atrapa Supabase i Brevo --------------------------------------------
-const stan = { tabele: {}, maile: [], patche: [], raporty: new Set(), brevo: () => ({ status: 201 }) };
+const stan = { tabele: {}, maile: [], patche: [], raporty: new Set(), brevo: () => ({ status: 201 }),
+  auth: [], tokeny: {}, usuniecia: [] };
 const odp = (status, body) =>
   new Response(status === 204 ? null : typeof body === "string" ? body : JSON.stringify(body), { status });
 window.fetch = ((prawdziwy) => async (url, opcje = {}) => {
@@ -118,7 +125,32 @@ window.fetch = ((prawdziwy) => async (url, opcje = {}) => {
     if (r.status < 300) stan.maile.push(body);
     return odp(r.status, r.status < 300 ? { messageId: "m" + stan.maile.length } : { message: "odmowa" });
   }
+  // GoTrue (api/admin/ustaw-haslo.js, 0.77.0): token kierownika, hasła,
+  // link odzyskiwania i jego sprawdzenie.
+  if (u.pathname.startsWith("/auth/v1/")) {
+    const sc = u.pathname.slice("/auth/v1/".length);
+    const body = opcje.body ? JSON.parse(opcje.body) : {};
+    const naglowki = opcje.headers || {};
+    stan.auth.push({ metoda, sc, body });
+    if (sc === "user") {
+      const kto = stan.tokeny[String(naglowki.Authorization || "").slice(7)];
+      return kto ? odp(200, { id: kto }) : odp(401, { msg: "invalid JWT" });
+    }
+    if (sc === "admin/generate_link") return odp(200, { hashed_token: "hash-" + body.email, action_link: "x" });
+    if (sc === "verify") {
+      return body.token_hash === "hash-dobry"
+        ? odp(200, { access_token: "z-linku", user: { id: "auth-ala", email: "ala@test.pl" } })
+        : odp(403, { msg: "Token has expired or is invalid" });
+    }
+    if (sc.startsWith("admin/users/") && metoda === "PUT") return odp(200, { id: sc.split("/").pop() });
+    if (sc === "admin/users" && metoda === "POST") return odp(200, { id: "auth-nowe" });
+    if (sc === "logout") return odp(204, "");
+    return odp(400, { msg: "atrapa nie zna " + sc });
+  }
   const tabela = u.pathname.split("/rest/v1/")[1];
+  if (stan.brakTabel && stan.brakTabel.has(tabela)) {
+    return odp(404, { code: "PGRST205", message: `Could not find the table 'public.${tabela}'` });
+  }
   const wiersze = stan.tabele[tabela] || [];
   const p = u.searchParams;
   if (metoda === "GET") {
@@ -138,6 +170,13 @@ window.fetch = ((prawdziwy) => async (url, opcje = {}) => {
     if (tabela === "notifications" && p.get("email_at") === "is.null") {
       w = w.filter((r) => r.audience == null || r.audience === "employee");
     }
+    // order=kolumna.desc i limit — tylko gdy kod o nie prosi (dziennik cronów
+    // w api/zdrowie.js polega na kolejności jak Postgres).
+    if (tabela === "cron_przebiegi" && p.get("order")) {
+      const [kol, kier] = p.get("order").split(".");
+      w = [...w].sort((a, b) => (String(a[kol]) < String(b[kol]) ? -1 : 1) * (kier === "desc" ? -1 : 1));
+    }
+    if (tabela === "cron_przebiegi" && p.get("limit")) w = w.slice(0, Number(p.get("limit")));
     return odp(200, w);
   }
   if (metoda === "PATCH") {
@@ -158,6 +197,22 @@ window.fetch = ((prawdziwy) => async (url, opcje = {}) => {
   if (metoda === "POST" && tabela === "notifications") {
     (stan.tabele.notifications = stan.tabele.notifications || []).push(JSON.parse(opcje.body));
     return odp(201, "");
+  }
+  if (metoda === "POST" && tabela === "piny_zmiany") {
+    (stan.tabele.piny_zmiany = stan.tabele.piny_zmiany || []).push(JSON.parse(opcje.body));
+    return odp(201, "");
+  }
+  if (metoda === "POST" && tabela === "cron_przebiegi") {
+    (stan.tabele.cron_przebiegi = stan.tabele.cron_przebiegi || []).push(JSON.parse(opcje.body));
+    return odp(201, "");
+  }
+  if (metoda === "POST" && tabela === "limity_pin") {
+    (stan.tabele.limity_pin = stan.tabele.limity_pin || []).push({ ...JSON.parse(opcje.body), kiedy: new Date().toISOString() });
+    return odp(201, "");
+  }
+  if (metoda === "DELETE") {
+    stan.usuniecia.push({ tabela, filtr: u.search });
+    return odp(204, "");
   }
   if (metoda === "POST" && tabela === "email_raporty") {
     const body = JSON.parse(opcje.body);
@@ -633,6 +688,225 @@ const USERS = [
     sprawdz("wiadomość mówi, ile zmian zostało w Grafiku po ostatnim dniu",
       /zostały 2 zmiany po tej dacie/.test((stan.tabele.notifications.find((n) => /Odchodzi/.test(n.message)) || {}).message || ""));
     sprawdz("odpowiedź wymienia wyłączonych", JSON.stringify(r.json.wylaczone) === JSON.stringify(["Odchodzi", "Tablet"]), JSON.stringify(r.json));
+
+    log(""); log("— monitoring: dziennik cronów i /api/zdrowie (0.77.0) —");
+    {
+      // Dziennik przebiegów: koniec-pracy jest już owinięty (api/_lib/przebieg.js).
+      stan.tabele.cron_przebiegi = [];
+      stan.tabele.users = [];
+      r = odpowiedz();
+      await koniecPracy(zadanie({}, "Bearer zly"), r);
+      sprawdz("dziennik: wywołanie bez sekretu nie jest przebiegiem", stan.tabele.cron_przebiegi.length === 0);
+      r = odpowiedz();
+      await koniecPracy(zadanie(), r);
+      const wpis = stan.tabele.cron_przebiegi[0] || {};
+      sprawdz("dziennik: przebieg z harmonogramu zapisany (nazwa, kod, ok, czas)",
+        stan.tabele.cron_przebiegi.length === 1 && wpis.nazwa === "koniec-pracy" && wpis.kod === 200 &&
+          wpis.ok === true && typeof wpis.czas_ms === "number" && !!wpis.start_at,
+        JSON.stringify(wpis));
+      sprawdz("dziennik: odpowiedź crona nietknięta", r.kod === 200 && Array.isArray(r.json.wylaczone));
+
+      const zdrowieApi = await cjs("/api/zdrowie.js");
+      const zdrowieZ = async () => { const o = odpowiedz(); await zdrowieApi(zadanie(), o); return o.json; };
+      const godzTemu = (h) => new Date(Date.now() - h * 3600000).toISOString();
+      const CRONY = ["demo-reset", "check-document-terms", "capture-weather", "check-puls", "check-odbicia",
+        "check-porzucone", "raport-kierownika", "koniec-pracy"];
+      stan.tabele.schema_migrations = [{ version: "0045" }];
+      stan.tabele.app_errors = [];
+
+      // 1. Dziennik dopiero założony — nic nie może świecić na czerwono.
+      stan.tabele.cron_przebiegi = [];
+      let z = await zdrowieZ();
+      const nazwy = (z.crony || []).map((c) => c.nazwa);
+      sprawdz("zdrowie: oczekiwane crony z vercel.json + wysyłka maili, bez demo-reset poza demo",
+        nazwy.includes("wyslij-maile") && nazwy.includes("check-odbicia") && !nazwy.includes("demo-reset"),
+        nazwy.join(","));
+      sprawdz("zdrowie: pusty dziennik = „bez pomiaru”, bez alarmu",
+        (z.crony || []).every((c) => c.stan === "bez pomiaru") && !(z.problemy || []).some((x) => /cron/.test(x)),
+        JSON.stringify(z.problemy));
+
+      // 2. Dziennik od trzech dni: check-puls zamilkł, raport padł, maile 30 min temu.
+      stan.tabele.cron_przebiegi = [
+        { nazwa: "check-odbicia", start_at: godzTemu(72), ok: true, kod: 200 },
+        ...CRONY.filter((n) => n !== "check-puls" && n !== "demo-reset")
+          .map((n) => ({ nazwa: n, start_at: godzTemu(5), ok: true, kod: 200 })),
+        { nazwa: "check-puls", start_at: godzTemu(30), ok: true, kod: 200 },
+        { nazwa: "raport-kierownika", start_at: godzTemu(1), ok: false, kod: 500, info: "Brevo 401: klucz" },
+        { nazwa: "wyslij-maile", start_at: godzTemu(0.5), ok: true, kod: 200 },
+      ];
+      z = await zdrowieZ();
+      const pr = (z.problemy || []).join(" | ");
+      sprawdz("zdrowie: cron bez udanego przebiegu ponad 26 h = alarm", /cron check-puls: brak udanego przebiegu/.test(pr), pr);
+      sprawdz("zdrowie: nieudany ostatni przebieg = alarm z kodem i przyczyną",
+        /cron raport-kierownika: ostatni przebieg 500 — Brevo 401/.test(pr), pr);
+      sprawdz("zdrowie: wysyłka maili ma okno 20 min", /cron wyslij-maile/.test(pr), pr);
+      sprawdz("zdrowie: crony w porządku nie alarmują", !/check-odbicia|koniec-pracy|capture-weather/.test(pr), pr);
+      sprawdz("zdrowie: problemy z cronów = ok false", z.ok === false);
+
+      // 3. Demo: demo-reset oczekiwany, maili nie ma.
+      ENV.DEMO = "tak";
+      z = await zdrowieZ();
+      const nazwyDemo = (z.crony || []).map((c) => c.nazwa);
+      sprawdz("zdrowie (demo): demo-reset oczekiwany, wysyłka maili nie",
+        nazwyDemo.includes("demo-reset") && !nazwyDemo.includes("wyslij-maile"), nazwyDemo.join(","));
+      delete ENV.DEMO;
+
+      // 4. Błędy aplikacji: powtarzający się komunikat to sygnał, pojedyncze nie.
+      stan.tabele.cron_przebiegi = [];
+      const blad = (k) => ({ komunikat: k, ekran: "Grafik", created_at: godzTemu(2) });
+      stan.tabele.app_errors = [blad("a is undefined"), blad("a is undefined"), blad("b"), blad("c")];
+      z = await zdrowieZ();
+      sprawdz("zdrowie: kilka różnych błędów — liczba bez alarmu",
+        z.bledy && z.bledy.ostatnie_24h === 4 && !(z.problemy || []).some((x) => /błąd|błędy/.test(x)),
+        JSON.stringify(z.bledy));
+      stan.tabele.app_errors = [...Array(6)].map(() => blad("Cannot read properties of null (reading 'lokal')"));
+      z = await zdrowieZ();
+      sprawdz("zdrowie: ten sam błąd 6× w dobie = alarm z treścią",
+        (z.problemy || []).some((x) => /powtarza się 6×.*reading 'lokal'/.test(x)), JSON.stringify(z.problemy));
+      sprawdz("zdrowie: najczęstszy błąd na liście, bez danych osób",
+        z.bledy.najczestsze[0].ile === 6 && !JSON.stringify(z.bledy).includes("user_name"));
+
+      // 5. Baza bez 0045 — mówi wprost, czego brakuje.
+      stan.brakTabel = new Set(["cron_przebiegi"]);
+      z = await zdrowieZ();
+      sprawdz("zdrowie: baza bez dziennika = „migracja 0045”", (z.problemy || []).some((x) => /migracja 0045/.test(x)),
+        JSON.stringify(z.problemy));
+      stan.brakTabel = null;
+      stan.tabele.app_errors = [];
+    }
+
+    log(""); log("— api/admin/ustaw-haslo (PIN-y, 0.77.0) —");
+    const pinApi = await cjs("/api/admin/ustaw-haslo.js");
+    const wolaj = async (body, token) => {
+      const r = odpowiedz();
+      await pinApi({ method: "POST", body, headers: token ? { authorization: "Bearer " + token } : {} }, r);
+      return r;
+    };
+    stan.auth = []; stan.maile = []; stan.patche = []; stan.usuniecia = [];
+    stan.brevo = () => ({ status: 201 });
+    stan.tokeny = { "tok-roman": "auth-roman", "tok-ola": "auth-ola" };
+    stan.tabele = {
+      limity_pin: [],
+      users: [
+        { id: "k1", name: "Roman", role: "admin", auth_id: "auth-roman", active: true, archived: false, email: "roman@test.pl" },
+        { id: "k2", name: "Ola", role: "manager_lokalu", allowed_lokale: "Sunset", auth_id: "auth-ola", active: true, archived: false, email: "ola@test.pl" },
+        { id: "p1", name: "Ala", role: "open", default_lokal: "Ceglana", auth_id: "auth-ala", active: true, archived: false, email: "ala@test.pl" },
+        { id: "t2", name: "Tablet Sunset", role: "kiosk", default_lokal: "", allowed_lokale: "Sunset", auth_id: "auth-t2", active: true, archived: false, email: "tablet@test.pl" },
+        { id: "p2", name: "Stary", role: "closed", auth_id: "auth-stary", active: false, archived: false, email: "stary@test.pl" },
+      ],
+    };
+    const ostatniAuth = (sc) => [...stan.auth].reverse().find((a) => a.sc === sc);
+    const patchPinu = (id) => [...stan.patche].reverse().find((x) => x.tabela === "users" && x.filtr.includes(id) && "kiosk_pin" in x.body);
+
+    // „Nie pamiętam PIN-u”
+    r = await wolaj({ akcja: "przypomnij", email: " Ala@Test.pl " });
+    const mailPin = stan.maile[stan.maile.length - 1] || { to: [{}] };
+    sprawdz("przypomnij: link idzie mailem do właściciela adresu",
+      r.kod === 200 && stan.maile.length === 1 && mailPin.to[0].email === "ala@test.pl" &&
+        mailPin.htmlContent.includes("https://app.test/?nowy_pin=hash-ala%40test.pl"),
+      JSON.stringify(r.json));
+    sprawdz("przypomnij: pracownik kiosku wie, że PIN zmieni się też na tablecie",
+      /profil na tablecie/.test(mailPin.htmlContent));
+    // Brevo odrzuca pusty obiekt nagłówków („headers is blank”) — mail bez
+    // linku „Wypisz” ma ich nie wysyłać wcale.
+    sprawdz("przypomnij: bez pustego obiektu headers (Brevo 400 „headers is blank”)",
+      !("headers" in mailPin) || Object.keys(mailPin.headers || {}).length > 0, JSON.stringify(mailPin.headers));
+    const infoIstnieje = r.json && r.json.info;
+    const linkowPrzed = stan.auth.filter((a) => a.sc === "admin/generate_link").length;
+    r = await wolaj({ akcja: "przypomnij", email: "nikt@test.pl" });
+    sprawdz("przypomnij: nieznany adres — ta sama odpowiedź, bez maila i bez linku",
+      r.kod === 200 && r.json.info === infoIstnieje && stan.maile.length === 1 &&
+        stan.auth.filter((a) => a.sc === "admin/generate_link").length === linkowPrzed);
+    r = await wolaj({ akcja: "przypomnij", email: "stary@test.pl" });
+    sprawdz("przypomnij: konto nieaktywne nie dostaje linku", r.kod === 200 && stan.maile.length === 1);
+    await wolaj({ akcja: "przypomnij", email: "ala@test.pl" });
+    await wolaj({ akcja: "przypomnij", email: "ala@test.pl" });
+    r = await wolaj({ akcja: "przypomnij", email: "ala@test.pl" });
+    sprawdz("przypomnij: czwarta prośba w godzinę = 429", r.kod === 429 && stan.maile.length === 3, `${r.kod} / ${stan.maile.length}`);
+
+    // Podgląd PR-a (Vercel Preview): link ma prowadzić na TEN podgląd, nie na
+    // produkcję, która nie zna jeszcze `?nowy_pin=`.
+    stan.tabele.limity_pin = [];
+    ENV.VERCEL_ENV = "preview";
+    ENV.VERCEL_BRANCH_URL = "gastro-git-claude-piny.vercel.app";
+    r = await wolaj({ akcja: "przypomnij", email: "ala@test.pl" });
+    const mailPodglad = stan.maile[stan.maile.length - 1] || {};
+    sprawdz("przypomnij na Preview: link prowadzi na podgląd, nie na APP_URL",
+      r.kod === 200 && String(mailPodglad.htmlContent).includes("https://gastro-git-claude-piny.vercel.app/?nowy_pin="),
+      String(mailPodglad.htmlContent).match(/https:\/\/[^"?]+\/\?nowy_pin=/)?.[0]);
+    delete ENV.VERCEL_ENV; delete ENV.VERCEL_BRANCH_URL;
+    // Brak Brevo: czytelny komunikat, ale bez nazw zmiennych (publiczny adres).
+    const kluczBrevo = ENV.BREVO_API_KEY;
+    delete ENV.BREVO_API_KEY;
+    stan.tabele.limity_pin = [];
+    r = await wolaj({ akcja: "przypomnij", email: "ala@test.pl" });
+    sprawdz("przypomnij bez Brevo: 500 z wyjaśnieniem, bez nazw zmiennych",
+      r.kod === 500 && /nie jest skonfigurowana/.test(r.json.error) && !JSON.stringify(r.json).includes("BREVO"),
+      JSON.stringify(r.json));
+    ENV.BREVO_API_KEY = kluczBrevo;
+
+    // Nowy PIN z linku
+    r = await wolaj({ akcja: "nowy", token: "hash-zly", haslo: "385920" });
+    sprawdz("nowy: zużyty albo zły link = 400 z wyjaśnieniem", r.kod === 400 && /wygasł/.test(r.json.error));
+    const weryfikacjePrzed = stan.auth.filter((a) => a.sc === "verify").length;
+    r = await wolaj({ akcja: "nowy", token: "hash-dobry", haslo: "12345" });
+    sprawdz("nowy: PIN krótszy niż 6 cyfr odrzucony, zanim link zostanie zużyty",
+      r.kod === 400 && stan.auth.filter((a) => a.sc === "verify").length === weryfikacjePrzed);
+    r = await wolaj({ akcja: "nowy", token: "hash-dobry", haslo: "385920" });
+    const put = ostatniAuth("admin/users/auth-ala");
+    sprawdz("nowy: hasło w Auth i blokada na tablecie zmieniają się razem",
+      r.kod === 200 && r.json.email === "ala@test.pl" && put && put.body.password === "385920" &&
+        patchPinu("p1") && patchPinu("p1").body.kiosk_pin === "385920",
+      JSON.stringify(r.json));
+    sprawdz("nowy: sesja z linku od razu zamknięta", !!ostatniAuth("logout"));
+    // Ślad i wiadomość po zmianie (0046): jedyny sygnał, że ktoś zmienił cudzy PIN.
+    const zmiany = () => stan.tabele.piny_zmiany || [];
+    const ostatniaZmiana = () => zmiany()[zmiany().length - 1] || {};
+    sprawdz("nowy: dziennik zmian — sama osoba, link z maila",
+      ostatniaZmiana().user_id === "p1" && ostatniaZmiana().sposob === "reset_mailem" && ostatniaZmiana().kto_id === "p1",
+      JSON.stringify(ostatniaZmiana()));
+    const wiadPin = (stan.tabele.notifications || []).filter((n) => n.type === "pin");
+    sprawdz("nowy: wiadomość w aplikacji, już oznaczona jako wysłana mailem (bez drugiego maila z kolejki)",
+      wiadPin.length === 1 && wiadPin[0].user_name === "Ala" && !!wiadPin[0].email_at && /link z e-maila/.test(wiadPin[0].message),
+      JSON.stringify(wiadPin));
+    const mailZmiana = stan.maile[stan.maile.length - 1] || { to: [{}] };
+    sprawdz("nowy: e-mail „Twój PIN został zmieniony” do właściciela konta, bez PIN-u w treści",
+      mailZmiana.subject === "Twój PIN został zmieniony" && mailZmiana.to[0].email === "ala@test.pl" &&
+        !mailZmiana.htmlContent.includes("385920"),
+      mailZmiana.subject);
+
+    // Kierownik w karcie
+    r = await wolaj({ user_id: "p1", haslo: "111222" });
+    sprawdz("kierownik: bez tokenu = 401", r.kod === 401);
+    r = await wolaj({ user_id: "p1", haslo: "111222" }, "tok-ola");
+    sprawdz("kierownik lokalu: cudzy lokal = 403", r.kod === 403, JSON.stringify(r.json));
+    r = await wolaj({ user_id: "t2", haslo: "246810" }, "tok-ola");
+    sprawdz("kierownik lokalu: tablet swojego lokalu (allowed_lokale) = OK, tylko hasło",
+      r.kod === 200 && ostatniAuth("admin/users/auth-t2").body.password === "246810" && !patchPinu("t2"),
+      JSON.stringify(r.json));
+    sprawdz("kierownik: dziennik mówi, KTO zmienił PIN i komu",
+      ostatniaZmiana().user_id === "t2" && ostatniaZmiana().kto_name === "Ola" && ostatniaZmiana().sposob === "kierownik",
+      JSON.stringify(ostatniaZmiana()));
+    const mailTablet = stan.maile[stan.maile.length - 1] || { to: [{}] };
+    sprawdz("kierownik: mail o zmianie idzie na adres konta (tu: tablet) z imieniem kierownika",
+      mailTablet.to[0].email === "tablet@test.pl" && /Ola ustawił\(a\) Ci nowy PIN/.test(mailTablet.htmlContent));
+    sprawdz("kierownik: tablet nie dostaje wiadomości w aplikacji (nie ma takiej zakładki)",
+      !(stan.tabele.notifications || []).some((n) => n.type === "pin" && n.user_name === "Tablet Sunset"));
+    r = await wolaj({ user_id: "t2", haslo: "12ab56" }, "tok-roman");
+    sprawdz("kierownik: PIN nie z samych cyfr odrzucony", r.kod === 400);
+    r = await wolaj({ user_id: "t2", usun: true }, "tok-roman");
+    sprawdz("kierownik: PIN-u konta logującego się nie da się usunąć", r.kod === 400);
+    r = await wolaj({ user_id: "p1", usun: true }, "tok-roman");
+    const putUsun = ostatniAuth("admin/users/auth-ala");
+    sprawdz("kierownik: zdjęcie blokady czyści kiosk_pin i zamyka logowanie z telefonu",
+      r.kod === 200 && patchPinu("p1").body.kiosk_pin === null && putUsun.body.password !== "385920" &&
+        String(putUsun.body.password).length > 6,
+      JSON.stringify(r.json));
+    sprawdz("kierownik: zdjęcie blokady w dzienniku i w wiadomości dla pracownika",
+      ostatniaZmiana().sposob === "kierownik_usunal" &&
+        (stan.tabele.notifications || []).some((n) => n.type === "pin" && /zdjął\(-ęła\) blokadę/.test(n.message)));
+    sprawdz("kierownik: nowy PIN zdejmuje też blokadę po zbyt wielu próbach",
+      stan.usuniecia.some((d) => d.tabela === "limity_pin" && d.filtr.includes("klucz=eq.p1")));
 
     log("");
     log(`ZDANYCH ${zdanych}, OBLANYCH ${oblanych}`, oblanych ? "zle" : "ok");

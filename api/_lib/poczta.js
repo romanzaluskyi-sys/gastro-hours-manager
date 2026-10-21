@@ -87,7 +87,9 @@ const wyslij = async ({ adres, imie, temat, html, tekst, userId, tag }) => {
         subject: temat,
         htmlContent: html,
         textContent: tekst,
-        headers: naglowki,
+        // ⚠️ Pusty obiekt Brevo odrzuca („headers is blank”, 400) — a mail bez
+        // linku „Wypisz” (nowy PIN, 0.77.0) nie ma żadnych nagłówków.
+        headers: Object.keys(naglowki).length ? naglowki : undefined,
         tags: tag ? [tag] : undefined,
       }),
     });

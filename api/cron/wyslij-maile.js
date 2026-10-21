@@ -21,6 +21,7 @@ const { brakBazy, pobierz, zmien, zakoduj } = require("../_lib/baza");
 const { brakPoczty, wyslij } = require("../_lib/poczta");
 const { mailPracownika } = require("../_lib/wiadomosci");
 const C = require("../_lib/czas");
+const { zPrzebiegiem } = require("../_lib/przebieg");
 
 // Wiadomość musi chwilę "odleżeć": publikacja grafiku SKLEJA kolejne
 // wysyłki w jeden wiersz (upsertGrafikNotification) — bez odstępu pracownik
@@ -48,7 +49,7 @@ const odbiorca = (users, nazwa) => {
   return { user, adres: user.email.trim() };
 };
 
-module.exports = async function handler(req, res) {
+module.exports = zPrzebiegiem("wyslij-maile", async function handler(req, res) {
   // Sekret PRZED porównaniem — `Bearer undefined` nie może otwierać endpointu
   // (patrz check-odbicia.js).
   if (!process.env.CRON_SECRET) {
@@ -146,4 +147,4 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: e.message, ...wynik });
   }
   return res.status(200).json(wynik);
-};
+});

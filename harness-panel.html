@@ -59,6 +59,20 @@ const stub = (kod) => URL.createObjectURL(new Blob([kod], { type: "text/javascri
 
 // Atrapa Supabase — nic nie leci do sieci, każdy zapis wraca z wymyślonym id.
 window.__zapisy = [];
+// PIN-y zmienia serwer (api/admin/ustaw-haslo.js, 0.77.0) — atrapa zapisuje
+// wywołania zamiast wysyłać je do sieci. Sesję do tego wywołania testy
+// podstawiają tylko na czas zapisu karty (localStorage jest wspólny dla
+// wszystkich harnessów na tym adresie).
+window.__ustawHaslo = [];
+const prawdziwyFetch = window.fetch.bind(window);
+window.fetch = async (url, opcje) => {
+  if (String(url).includes("/api/admin/ustaw-haslo")) {
+    window.__ustawHaslo.push(JSON.parse((opcje && opcje.body) || "{}"));
+    return new Response(JSON.stringify({ ok: true, akcja: "zmienione" }),
+      { status: 200, headers: { "Content-Type": "application/json" } });
+  }
+  return prawdziwyFetch(url, opcje);
+};
 const API_STUB = stub(`
   // Atrapa trzyma dane w pamięci, więc api.get po zapisie zwraca to, co
   // zapisano — inaczej ekrany, które odświeżają się z bazy, wyglądałyby na
@@ -503,15 +517,15 @@ const poprzedniMiesiac = (h) => {
           // — patrz sprawdzian na końcu pliku.
           { id: "u1", name: "Ala", stawka: 32, typ_umowy: "zlecenie", active: true,
             archived: false, role: "open", default_lokal: "Bułka i Jacek",
-            default_stanowisko: "Kucharz", kiosk_pin: "123456", ma_kiosk_pin: true },
+            default_stanowisko: "Kucharz", ma_kiosk_pin: true },
           // Umowa o pracę — norma z kalendarza, koszt = kwota z umowy.
           { id: "u2", name: "Bo", typ_umowy: "umowa_o_prace", wymiar_etatu: 1,
             wynagrodzenie_mies: 5200, active: true, archived: false, role: "closed",
-            email: "bo@x.pl", pin: "123456", default_lokal: "Ceglana",
+            email: "bo@x.pl", auth_id: "auth-x", default_lokal: "Ceglana",
             default_stanowisko: "Kucharz" },
           // Pół etatu i pusta kwota — karta ma pokazać normę, ale nie koszt.
           { id: "u3", name: "Cezary", typ_umowy: "umowa_o_prace", wymiar_etatu: 0.5,
-            active: true, archived: false, role: "closed", email: "c@x.pl", pin: "123456",
+            active: true, archived: false, role: "closed", email: "c@x.pl", auth_id: "auth-x",
             default_lokal: "Ceglana", default_stanowisko: "Kucharz" },
           // Nic nie wypełnione — nie może wywrócić karty ani pokazać zmyślonej liczby.
           { id: "u4", name: "Dorota", active: true, archived: false, role: "open",
@@ -521,14 +535,14 @@ const poprzedniMiesiac = (h) => {
           // osób wymyślało ludzi, których wtedy jeszcze nie zatrudniono.
           { id: "u7", name: "Filip", typ_umowy: "umowa_o_prace", wymiar_etatu: 1,
             wynagrodzenie_mies: 4000, active: true, archived: false, role: "closed",
-            email: "f@x.pl", pin: "123456", default_lokal: "Ceglana",
+            email: "f@x.pl", auth_id: "auth-x", default_lokal: "Ceglana",
             default_stanowisko: "Kucharz" },
           // Ćwierć etatu (norma 44 h we wrześniu) z 48 odbitymi godzinami —
           // jedyny w tej atrapie przypadek NADWYŻKI ponad normę, czyli kwoty
           // z umowy powiększonej o dopłacone godziny.
           { id: "u8", name: "Gosia", typ_umowy: "umowa_o_prace", wymiar_etatu: 0.25,
             wynagrodzenie_mies: 1400, active: true, archived: false, role: "closed",
-            email: "g@x.pl", pin: "123456", default_lokal: "Ceglana",
+            email: "g@x.pl", auth_id: "auth-x", default_lokal: "Ceglana",
             default_stanowisko: "Kelner" },
           // Stare konto: typ umowy siedzi jeszcze w kolumnie `etat`.
           { id: "u5", name: "Ewa", etat: "zlecenie", stawka: 31.4, active: true,
@@ -1028,20 +1042,62 @@ const poprzedniMiesiac = (h) => {
       try {
         klik("Pracownicy"); await czekaj(400);
         klik("Ala"); await czekaj(400);
-        const form = [...document.querySelectorAll("form")]
+        const formKarty = () => [...document.querySelectorAll("form")]
           .find((f) => f.querySelector('input[maxlength="6"]') || /Zapisz/.test(f.textContent));
+        const form = formKarty();
         if (!form) throw new Error("nie znalazłem formularza karty pracownika");
-        form.requestSubmit ? form.requestSubmit() : form.dispatchEvent(
-          new Event("submit", { bubbles: true, cancelable: true }));
-        await czekaj(500);
+        const wyslijKarte = async () => {
+          const f = formKarty();
+          f.requestSubmit ? f.requestSubmit() : f.dispatchEvent(
+            new Event("submit", { bubbles: true, cancelable: true }));
+          await czekaj(500);
+        };
+        const wpiszPin = (v) => {
+          const el = formKarty().querySelector('input[maxlength="6"]');
+          Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, v);
+          el.dispatchEvent(new Event("input", { bubbles: true }));
+        };
+        // Sesja tylko na czas tego kroku — ustawHasloPracownika woła serwer
+        // z tokenem zalogowanego kierownika.
+        localStorage.setItem("shiftro_auth", JSON.stringify({ access_token: "t", refresh_token: "r",
+          expires_at: 9999999999, user_id: "auth-roman" }));
+        try {
+          wpiszPin("385920"); await czekaj(200);
+          await wyslijKarte();
 
-        const zapisyUsers = window.__zapisy.filter((z) => z[0] === "users");
-        const ostatni = zapisyUsers[zapisyUsers.length - 1];
-        sprawdz("karta pracownika w ogóle się zapisuje", !!ostatni,
-          JSON.stringify(window.__zapisy.map((z) => z[0])));
-        sprawdz("payload nie niesie kolumny wyliczanej ma_kiosk_pin",
-          !!ostatni && !("ma_kiosk_pin" in (ostatni[2] || ostatni[1] || {})),
-          String(JSON.stringify(ostatni && (ostatni[2] || ostatni[1]))).slice(0, 200));
+          const zapisyUsers = window.__zapisy.filter((z) => z[0] === "users");
+          const ostatni = zapisyUsers[zapisyUsers.length - 1];
+          const payload = (ostatni && (ostatni[2] || ostatni[1])) || {};
+          sprawdz("karta pracownika w ogóle się zapisuje", !!ostatni,
+            JSON.stringify(window.__zapisy.map((z) => z[0])));
+          sprawdz("payload nie niesie kolumny wyliczanej ma_kiosk_pin",
+            !!ostatni && !("ma_kiosk_pin" in payload), String(JSON.stringify(payload)).slice(0, 200));
+          sprawdz("payload karty nie niesie żadnego PIN-u (0046)",
+            !!ostatni && !["pin", "kiosk_pin", "nowy_pin", "usun_pin"].some((k) => k in payload),
+            Object.keys(payload).join(","));
+          const wyw = window.__ustawHaslo[window.__ustawHaslo.length - 1];
+          sprawdz("nowy PIN idzie do serwera razem z id osoby",
+            !!wyw && wyw.user_id === "u1" && wyw.haslo === "385920" && !wyw.usun, JSON.stringify(wyw));
+
+          const przedUsunieciem = window.__ustawHaslo.length;
+          const usun = document.querySelector("#app [data-usun-pin]");
+          sprawdz("pracownik kiosku z PIN-em ma „Zdejmij blokadę”", !!usun);
+          if (usun) {
+            usun.dispatchEvent(new MouseEvent("click", { bubbles: true })); await czekaj(200);
+            await wyslijKarte();
+            const w2 = window.__ustawHaslo[window.__ustawHaslo.length - 1];
+            sprawdz("zdjęcie blokady = jedno wywołanie serwera z usun: true",
+              window.__ustawHaslo.length === przedUsunieciem + 1 && !!w2 && w2.usun === true && !w2.haslo,
+              JSON.stringify(w2));
+            sprawdz("po zdjęciu blokady karta mówi, że PIN-u nie ma",
+              !/PIN jest ustawiony/.test((document.querySelector("#app [data-stan-pinu]") || {}).textContent || ""));
+            // Z powrotem z PIN-em — dalsze sprawdziany karty Ali go zakładają.
+            wpiszPin("385920"); await czekaj(200);
+            await wyslijKarte();
+          }
+        } finally {
+          localStorage.removeItem("shiftro_auth");
+        }
       } catch (e) {
         sprawdz("przebieg bez wyjątku", false, e.message);
       }
@@ -1371,11 +1427,31 @@ const poprzedniMiesiac = (h) => {
             `${przedFiltrem} → ${poFiltrze.join(", ")}`);
           klikP(document.querySelector("#app [data-filtr-braki]")); await czekaj(200);
 
+          // Dziennik zmian PIN-u (0046) — karta pokazuje ostatnią, najnowszą.
+          window.__tabele.piny_zmiany = [
+            { id: 1, user_id: "u1", sposob: "kierownik", kto_name: "Roman", kiedy: "2026-09-01T08:00:00Z" },
+            { id: 2, user_id: "u1", sposob: "reset_mailem", kto_name: "Ala", kiedy: "2026-10-20T16:40:00Z" },
+          ];
+          // Karta Ali bywa już otwarta (wcześniejszy zapis) — przez inną osobę,
+          // żeby karta odczytała dziennik na nowo.
+          klikP(document.querySelector('#app [data-osoba-listy="Bo"]')); await czekaj(300);
           klikP(document.querySelector('#app [data-osoba-listy="Ala"]')); await czekaj(300);
           sprawdz("karta bez zmian nie pokazuje paska „Zapisz”", !document.querySelector("#app [data-pasek-zapisu]"));
+          const zmianaPinu = (document.querySelector("#app [data-ostatnia-zmiana-pinu]") || {}).textContent || "";
+          sprawdz("karta: ostatnia zmiana PIN-u (najnowsza, kto i jak)",
+            /20\.10\.2026/.test(zmianaPinu) && /link z e-maila/.test(zmianaPinu), zmianaPinu);
+          // 0.77.0: aplikacja nie zna obecnego PIN-u (hash w bazie, 0046) —
+          // pole jest polem NOWEGO PIN-u, a karta mówi tylko, czy PIN jest.
           const pinPole = document.querySelector('#app [data-karta-pracownika] input[maxlength="6"]');
-          sprawdz("PIN ukryty do „Pokaż”, łatwy PIN ostrzega",
-            !!pinPole && pinPole.type === "password" && !!document.querySelector("#app [data-slaby-pin]"));
+          const stanPinu = () => (document.querySelector("#app [data-stan-pinu]") || {}).textContent || "";
+          sprawdz("PIN: pole puste, karta mówi „PIN jest ustawiony”",
+            !!pinPole && pinPole.type === "password" && pinPole.value === "" && /PIN jest ustawiony/.test(stanPinu()),
+            stanPinu());
+          wpiszP(pinPole, "111111"); await czekaj(200);
+          sprawdz("nowy łatwy PIN ostrzega i pokazuje pasek „Zapisz”",
+            !!document.querySelector("#app [data-slaby-pin]") && !!document.querySelector("#app [data-pasek-zapisu]"));
+          wpiszP(document.querySelector('#app [data-karta-pracownika] input[maxlength="6"]'), ""); await czekaj(200);
+          sprawdz("wyczyszczony PIN = karta bez zmian", !document.querySelector("#app [data-pasek-zapisu]"));
           const imie = () => document.querySelector('#app [data-sekcja="sekcja-dane"] input[type=text]');
           wpiszP(imie(), "Ala Nowak"); await czekaj(200);
           sprawdz("zmiana pola pokazuje pasek „Niezapisane zmiany”",
