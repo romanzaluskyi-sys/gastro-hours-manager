@@ -595,7 +595,7 @@ const ManagerDashboard = ({
       // ⚠️ PIN-ów NIE wysyłamy w zapisie karty (0.77.0, migracja 0046): baza
       // trzyma `kiosk_pin` jako hash, `pin` jest zawsze pusty, a zapis z
       // aplikacji i tak by je pominęła. Zmienia je wyłącznie serwer.
-      for (const pole of ["pin", "kiosk_pin", "nowy_pin", "usun_pin"]) delete dataToSave[pole];
+      for (const pole of ["pin", "kiosk_pin", "nowy_pin", "usun_pin", "__pin_odswiez"]) delete dataToSave[pole];
       // Logowanie porównuje e-mail dosłownie, a klawiatura telefonu lubi
       // dopisać spację i wielką literę — normalizujemy przy zapisie, żeby
       // "nie ma takiego użytkownika" nie brało się z niewidocznej różnicy.
@@ -700,7 +700,8 @@ const ManagerDashboard = ({
       // Karta zostaje otwarta z tym, co zapisano (0.52.0) — pasek "Zapisz"
       // znika, bo nie ma już różnic, a kierownik widzi wynik zamiast pustego
       // miejsca po karcie.
-      setEditingUser({ ...zapisany });
+      // `__pin_odswiez` — karta odczyta wtedy na nowo „Ostatnią zmianę PIN-u”.
+      setEditingUser({ ...zapisany, ...(nowyPin || usunPin ? { __pin_odswiez: Date.now() } : {}) });
       const poKoncu = wylaczonePoKoncu
         ? " Ostatni dzień pracy minął — konto jest teraz nieaktywne (nie w archiwum)."
         : "";

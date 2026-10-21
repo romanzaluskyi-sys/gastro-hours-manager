@@ -276,6 +276,44 @@ where public.widzi_wszystko()
       );
 
 -- --------------------------------------------------------------------------
+-- 6. Dziennik zmian PIN-u: kto, komu, kiedy i jak.
+--
+-- Kierownik lokalu może ustawić PIN każdemu ze swojego lokalu, a od 0.77.0
+-- każdy może go zmienić sam linkiem z maila. Bez śladu nikt by nie wiedział,
+-- że cudzy PIN zmieniono — dlatego zmiana zostawia wiersz tutaj, a osoba,
+-- której PIN się zmienił, dostaje wiadomość i e-mail (api/admin/ustaw-haslo.js).
+--   sposob: 'kierownik' (karta pracownika), 'kierownik_usunal' (zdjęta blokada),
+--           'reset_mailem' („Nie pamiętam PIN-u”, wtedy kto_* = sama osoba).
+--
+-- Pisze WYŁĄCZNIE serwer (klucz serwisowy; brak polityki insert). Czyta
+-- kierownik — swoich ludzi (`moi_ludzie()`, ta sama odpowiedź co w polityce
+-- kartoteki), właściciel wszystkich. Karta pracownika pokazuje ostatnią zmianę.
+-- --------------------------------------------------------------------------
+create table if not exists piny_zmiany (
+  id bigint generated always as identity primary key,
+  user_id uuid not null,
+  user_name text,
+  kto_id uuid,
+  kto_name text,
+  sposob text not null,
+  kiedy timestamptz not null default now()
+);
+create index if not exists piny_zmiany_osoba on piny_zmiany (user_id, kiedy desc);
+alter table piny_zmiany enable row level security;
+
+drop policy if exists piny_zmiany_odczyt on piny_zmiany;
+create policy piny_zmiany_odczyt on piny_zmiany
+  for select to authenticated
+  using (
+    (select public.jest_kierownikiem())
+    and (
+      (select public.widzi_wszystko())
+      or user_id = any ((select public.moi_ludzie())::uuid[])
+    )
+  );
+grant select on piny_zmiany to authenticated;
+
+-- --------------------------------------------------------------------------
 -- Sprawdzenie (ostatnie zapytanie — jego wynik pokazuje migrate.py):
 --   jawne_piny          — ma być 0;
 --   kiosk_bez_hasha     — ma być 0;

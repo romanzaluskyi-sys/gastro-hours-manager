@@ -389,6 +389,12 @@ export const opisWiadomosci = (n) => {
       if (/zapisał\(a\) ją/.test(t)) return w("kor", "ok", "korekta", "Koniec zmiany zapisany");
       if (/odrzucona/.test(t)) return w("kor", "no", "uwaga", "Zmiana bez końca odrzucona", "korekta");
       return w("kor", "warn", "uwaga", "Zmiana bez zakończenia", "korekta");
+    // 0.77.0 — zmiana PIN-u (api/admin/ustaw-haslo.js, `tekstZmiany`).
+    // Powiadomienie bezpieczeństwa: ma rzucać się w oczy, stąd „uwaga”.
+    case "pin":
+      return /zdjął\(-ęła\) blokadę/.test(t)
+        ? w("inne", "warn", "uwaga", "Blokada PIN-em zdjęta")
+        : w("inne", "warn", "uwaga", "PIN został zmieniony");
     case "sanepid":
       return w("inne", "warn", "dokument", "Termin książeczki sanepid");
     case "umowa":

@@ -20,6 +20,10 @@ CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 - **Ochrona przed zgadywaniem na tablecie.** Po 10 złych PIN-ach w 15 minut
   profil się blokuje i tablet mówi o tym wprost. Kierownik odblokowuje go od
   razu, ustawiając w karcie nowy PIN.
+- **Każda zmiana PIN-u daje znać.** Osoba, której PIN się zmienił, dostaje od
+  razu e-mail i wiadomość w aplikacji: kiedy i kto go zmienił (kierownik w
+  karcie albo ona sama linkiem z maila). Jeśli to nie ona — od razu wie, że ma
+  powiedzieć kierownikowi. W karcie pracownika widać „Ostatnią zmianę PIN-u”.
 - **„Zdejmij blokadę PIN-em”** w karcie pracownika kiosku — profil otworzy się
   na tablecie bez PIN-u, a logowanie z prywatnego telefonu przestanie działać.
 - Kierownik lokalu może zmienić PIN tabletu swojego lokalu (dotąd serwer

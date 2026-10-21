@@ -28,6 +28,7 @@ const { jestKontemDemo } = require("../_lib/demoKonta");
 const { pobierz, zmien, dodajJesliNowy, usun, zakoduj } = require("../_lib/baza");
 const { adresAplikacji, wyslij } = require("../_lib/poczta");
 const { koperta, tytul, akapit, przycisk, notka } = require("../_lib/szablon");
+const C = require("../_lib/czas");
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;              // publishable
@@ -130,6 +131,94 @@ const ustawKioskPin = async (cel, haslo) => {
 const hasloNiedoZgadniecia = () => crypto.randomBytes(24).toString("base64");
 
 // --------------------------------------------------------------------------
+// Po każdej zmianie: dziennik i wiadomość dla osoby, której PIN się zmienił
+// (migracja 0046, `piny_zmiany`). Jedyny sygnał, że ktoś zmienił CUDZY PIN —
+// kierownik lokalu w karcie albo ktoś z dostępem do czyjejś skrzynki.
+//
+// ⚠️ Oba kroki są best-effort: PIN jest już zmieniony, więc błąd zapisu
+// śladu ani maila nie może zamienić udanej zmiany w komunikat o błędzie.
+// ⚠️ Mail idzie OD RAZU i bez sprawdzania `email_powiadomienia` — to
+// powiadomienie bezpieczeństwa, nie kopia wiadomości. Wiersz w `notifications`
+// dostaje od razu `email_at`, żeby kolejka (wyslij-maile) nie wysłała drugiego.
+// --------------------------------------------------------------------------
+const kiedyTeraz = () => {
+  const d = new Date();
+  const [y, m, dz] = C.ymd(d).split("-");
+  return `${dz}.${m}.${y} o ${C.hhmm(d)}`;
+};
+
+const tekstZmiany = (cel, kto, sposob) => {
+  const kiedy = kiedyTeraz();
+  if (sposob === "reset_mailem") {
+    return `Twój PIN został zmieniony ${kiedy} — przez link z e-maila „Nie pamiętam PIN-u”. Jeśli to nie Ty, od razu powiedz kierownikowi.`;
+  }
+  if (sposob === "kierownik_usunal") {
+    return `${kto.name} zdjął(-ęła) blokadę PIN-em z Twojego profilu na tablecie ${kiedy}. Logowanie z prywatnego telefonu jest wyłączone, dopóki nie dostaniesz nowego PIN-u.`;
+  }
+  if (kto && kto.id === cel.id) return `Twój PIN został zmieniony ${kiedy} w karcie pracownika.`;
+  return `${kto.name} ustawił(a) Ci nowy PIN ${kiedy}. Jeśli o to nie prosiłeś(-aś), zgłoś to kierownikowi albo właścicielowi.`;
+};
+
+const odnotujZmiane = async (cel, kto, sposob) => {
+  const tekst = tekstZmiany(cel, kto, sposob);
+  try {
+    await dodajJesliNowy("piny_zmiany", {
+      user_id: cel.id,
+      user_name: cel.name,
+      kto_id: kto ? kto.id : cel.id,
+      kto_name: kto ? kto.name : cel.name,
+      sposob,
+    });
+  } catch (e) {
+    // Baza bez 0046 nie ma tej tabeli — zmiana PIN-u działa i tak.
+    console.error("pin: dziennik zmian nie zapisany", e.message);
+  }
+  // Wiadomość w aplikacji czyta pracownik (tablet, telefon); kierownik i
+  // tablet takiej zakładki nie mają — im wystarczy mail.
+  if (cel.role === "open" || cel.role === "closed") {
+    try {
+      const teraz = new Date().toISOString();
+      await dodajJesliNowy("notifications", {
+        audience: "employee",
+        user_name: cel.name,
+        type: "pin",
+        message: tekst,
+        is_read: false,
+        email_at: teraz,
+        email_info: "pominięto: powiadomienie o PIN-ie wysłane osobno",
+      });
+    } catch (e) {
+      console.error("pin: wiadomość nie zapisana", e.message);
+    }
+  }
+  const adres = String(cel.email || "").trim().toLowerCase();
+  if (adres && process.env.BREVO_API_KEY && process.env.EMAIL_FROM && !jestKontemDemo(adres)) {
+    const temat = sposob === "kierownik_usunal" ? "Blokada PIN-em zdjęta" : "Twój PIN został zmieniony";
+    try {
+      await wyslij({
+        adres,
+        imie: cel.name,
+        temat,
+        html: koperta({
+          temat,
+          zajawka: tekst,
+          prawo: "",
+          tresc:
+            tytul(temat) +
+            akapit(tekst.replace(/[<>&"]/g, "")) +
+            notka("Sam PIN nigdy nie jest wysyłany e-mailem. Tej wiadomości nie da się wyłączyć — dotyczy bezpieczeństwa Twojego konta."),
+          stopka: "Dostajesz tę wiadomość, bo zmienił się PIN do Twojego konta",
+        }),
+        tekst,
+        tag: "pin-zmieniony",
+      });
+    } catch (e) {
+      console.error("pin: mail o zmianie nie wyszedł", e.message);
+    }
+  }
+};
+
+// --------------------------------------------------------------------------
 // 1. Kierownik w karcie pracownika
 // --------------------------------------------------------------------------
 const ustawPrzezKierownika = async (req, res) => {
@@ -200,6 +289,7 @@ const ustawPrzezKierownika = async (req, res) => {
       // telefonu ma przestać działać, a nie zostać przy starym haśle.
       if (cel.auth_id) await ustawHasloAuth(cel, hasloNiedoZgadniecia());
       await ustawKioskPin(cel, null);
+      await odnotujZmiane(cel, wolajacy, "kierownik_usunal");
       return res.status(200).json({ ok: true, akcja: "usuniete" });
     }
     if (email) akcja = await ustawHasloAuth(cel, haslo);
@@ -210,6 +300,7 @@ const ustawPrzezKierownika = async (req, res) => {
         `Hasło do logowania zmienione, ale blokada na tablecie NIE (${e.message}). Spróbuj zapisać PIN jeszcze raz.`
       );
     }
+    await odnotujZmiane(cel, wolajacy, "kierownik");
     return res.status(200).json({ ok: true, akcja });
   }
 
@@ -221,6 +312,7 @@ const ustawPrzezKierownika = async (req, res) => {
     return res.status(400).json({ error: "Najpierw wpisz e-mail — PIN jest hasłem do logowania tym adresem." });
   }
   const akcja = await ustawHasloAuth(cel, haslo);
+  await odnotujZmiane(cel, wolajacy, "kierownik");
   return res.status(200).json({ ok: true, akcja });
 };
 
@@ -372,6 +464,7 @@ const nowyPin = async (req, res) => {
   await ustawHasloAuth(cel, haslo);
   if (cel.role === "open") await ustawKioskPin(cel, haslo);
   await zamknijSesje();
+  await odnotujZmiane(cel, null, "reset_mailem");
   return res.status(200).json({ ok: true, email });
 };
 

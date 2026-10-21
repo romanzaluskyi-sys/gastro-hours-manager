@@ -39,6 +39,7 @@ import {
 import { czekaNaDecyzje } from "../../utils/probni";
 import { getMonthName } from "../../utils/format";
 import { slabyPin } from "../../utils/piny";
+import { api } from "../../api/supabase";
 import { countWorkdays, URLOP_HOURS_PER_DAY } from "../../utils/absences";
 import { odmiana } from "../../utils/czas";
 import {
@@ -140,7 +141,20 @@ const brakiOsoby = (u) => {
 // sama wartość; puste, null i false też.
 // `pin` i `kiosk_pin` widok oddaje puste (0046) — porównujemy `nowy_pin` i
 // `usun_pin`, które istnieją tylko w karcie.
-const POMIJANE = ["ma_kiosk_pin", "pin", "kiosk_pin", "notatki_updated_by", "notatki_updated_at", "created_at"];
+const POMIJANE = ["ma_kiosk_pin", "pin", "kiosk_pin", "__pin_odswiez", "notatki_updated_by", "notatki_updated_at", "created_at"];
+
+// Dziennik zmian PIN-u (migracja 0046) — jak ostatnia zmiana wygląda w karcie.
+const SPOSOB_ZMIANY = {
+  kierownik: (z) => `ustawił(a) ${z.kto_name || "kierownik"}`,
+  kierownik_usunal: (z) => `blokadę zdjął(-ęła) ${z.kto_name || "kierownik"}`,
+  reset_mailem: () => "sam(a), link z e-maila",
+};
+const opisZmianyPinu = (z) => {
+  const d = new Date(z.kiedy);
+  const dwa = (n) => String(n).padStart(2, "0");
+  const kiedy = `${dwa(d.getDate())}.${dwa(d.getMonth() + 1)}.${d.getFullYear()} ${dwa(d.getHours())}:${dwa(d.getMinutes())}`;
+  return `${kiedy} · ${(SPOSOB_ZMIANY[z.sposob] || (() => z.sposob))(z)}`;
+};
 const norm = (v) => {
   if (v == null || v === false) return "";
   if (Array.isArray(v)) return v.filter(Boolean).map(String).sort().join(",");
@@ -251,6 +265,26 @@ export default function Pracownicy({
     setPokazPin(false);
     setPotwierdzArchiwum(false);
   }, [editingUser?.id]);
+
+  // Ostatnia zmiana PIN-u tej osoby (dziennik z 0046). Baza bez tabeli albo
+  // błąd odczytu = brak podpisu, nie błąd karty. `__pin_odswiez` ustawia
+  // handleSaveUser po zmianie PIN-u, żeby podpis odświeżył się od razu.
+  const [ostatniaZmianaPinu, setOstatniaZmianaPinu] = useState(null);
+  useEffect(() => {
+    let aktualne = true;
+    setOstatniaZmianaPinu(null);
+    if (!editingUser?.id) return undefined;
+    api
+      .get("piny_zmiany", `user_id=eq.${editingUser.id}`)
+      .then((w) => {
+        if (!aktualne || !Array.isArray(w) || !w.length) return;
+        setOstatniaZmianaPinu([...w].sort((a, b) => (a.kiedy < b.kiedy ? 1 : -1))[0]);
+      })
+      .catch(() => {});
+    return () => {
+      aktualne = false;
+    };
+  }, [editingUser?.id, editingUser?.__pin_odswiez]);
 
   // Usunięcie wpisu urlopu — z 6 s na "Cofnij" zamiast window.confirm.
   const { odlozone, toast, decyduj, cofnij } = useOdlozoneDecyzje({
@@ -783,6 +817,11 @@ export default function Pracownicy({
                             ? "Tym PIN-em i e-mailem ta osoba loguje się do aplikacji."
                             : "Ten sam PIN otwiera profil na tablecie i loguje na prywatnym telefonie."}
                         </p>
+                        {ostatniaZmianaPinu && (
+                          <p className={podpisCls} data-ostatnia-zmiana-pinu>
+                            Ostatnia zmiana PIN-u: {opisZmianyPinu(ostatniaZmianaPinu)}
+                          </p>
+                        )}
                         {!isEmailPinRequired && editingUser.ma_kiosk_pin && !pin && (
                           <button
                             type="button"

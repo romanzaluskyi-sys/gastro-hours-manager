@@ -198,6 +198,10 @@ window.fetch = ((prawdziwy) => async (url, opcje = {}) => {
     (stan.tabele.notifications = stan.tabele.notifications || []).push(JSON.parse(opcje.body));
     return odp(201, "");
   }
+  if (metoda === "POST" && tabela === "piny_zmiany") {
+    (stan.tabele.piny_zmiany = stan.tabele.piny_zmiany || []).push(JSON.parse(opcje.body));
+    return odp(201, "");
+  }
   if (metoda === "POST" && tabela === "cron_przebiegi") {
     (stan.tabele.cron_przebiegi = stan.tabele.cron_przebiegi || []).push(JSON.parse(opcje.body));
     return odp(201, "");
@@ -855,6 +859,21 @@ const USERS = [
         patchPinu("p1") && patchPinu("p1").body.kiosk_pin === "385920",
       JSON.stringify(r.json));
     sprawdz("nowy: sesja z linku od razu zamknięta", !!ostatniAuth("logout"));
+    // Ślad i wiadomość po zmianie (0046): jedyny sygnał, że ktoś zmienił cudzy PIN.
+    const zmiany = () => stan.tabele.piny_zmiany || [];
+    const ostatniaZmiana = () => zmiany()[zmiany().length - 1] || {};
+    sprawdz("nowy: dziennik zmian — sama osoba, link z maila",
+      ostatniaZmiana().user_id === "p1" && ostatniaZmiana().sposob === "reset_mailem" && ostatniaZmiana().kto_id === "p1",
+      JSON.stringify(ostatniaZmiana()));
+    const wiadPin = (stan.tabele.notifications || []).filter((n) => n.type === "pin");
+    sprawdz("nowy: wiadomość w aplikacji, już oznaczona jako wysłana mailem (bez drugiego maila z kolejki)",
+      wiadPin.length === 1 && wiadPin[0].user_name === "Ala" && !!wiadPin[0].email_at && /link z e-maila/.test(wiadPin[0].message),
+      JSON.stringify(wiadPin));
+    const mailZmiana = stan.maile[stan.maile.length - 1] || { to: [{}] };
+    sprawdz("nowy: e-mail „Twój PIN został zmieniony” do właściciela konta, bez PIN-u w treści",
+      mailZmiana.subject === "Twój PIN został zmieniony" && mailZmiana.to[0].email === "ala@test.pl" &&
+        !mailZmiana.htmlContent.includes("385920"),
+      mailZmiana.subject);
 
     // Kierownik w karcie
     r = await wolaj({ user_id: "p1", haslo: "111222" });
@@ -865,6 +884,14 @@ const USERS = [
     sprawdz("kierownik lokalu: tablet swojego lokalu (allowed_lokale) = OK, tylko hasło",
       r.kod === 200 && ostatniAuth("admin/users/auth-t2").body.password === "246810" && !patchPinu("t2"),
       JSON.stringify(r.json));
+    sprawdz("kierownik: dziennik mówi, KTO zmienił PIN i komu",
+      ostatniaZmiana().user_id === "t2" && ostatniaZmiana().kto_name === "Ola" && ostatniaZmiana().sposob === "kierownik",
+      JSON.stringify(ostatniaZmiana()));
+    const mailTablet = stan.maile[stan.maile.length - 1] || { to: [{}] };
+    sprawdz("kierownik: mail o zmianie idzie na adres konta (tu: tablet) z imieniem kierownika",
+      mailTablet.to[0].email === "tablet@test.pl" && /Ola ustawił\(a\) Ci nowy PIN/.test(mailTablet.htmlContent));
+    sprawdz("kierownik: tablet nie dostaje wiadomości w aplikacji (nie ma takiej zakładki)",
+      !(stan.tabele.notifications || []).some((n) => n.type === "pin" && n.user_name === "Tablet Sunset"));
     r = await wolaj({ user_id: "t2", haslo: "12ab56" }, "tok-roman");
     sprawdz("kierownik: PIN nie z samych cyfr odrzucony", r.kod === 400);
     r = await wolaj({ user_id: "t2", usun: true }, "tok-roman");
@@ -875,6 +902,9 @@ const USERS = [
       r.kod === 200 && patchPinu("p1").body.kiosk_pin === null && putUsun.body.password !== "385920" &&
         String(putUsun.body.password).length > 6,
       JSON.stringify(r.json));
+    sprawdz("kierownik: zdjęcie blokady w dzienniku i w wiadomości dla pracownika",
+      ostatniaZmiana().sposob === "kierownik_usunal" &&
+        (stan.tabele.notifications || []).some((n) => n.type === "pin" && /zdjął\(-ęła\) blokadę/.test(n.message)));
     sprawdz("kierownik: nowy PIN zdejmuje też blokadę po zbyt wielu próbach",
       stan.usuniecia.some((d) => d.tabela === "limity_pin" && d.filtr.includes("klucz=eq.p1")));
 

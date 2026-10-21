@@ -249,6 +249,14 @@ Dziś:
   hasło w Auth + `kiosk_pin` dla roli `open`, sesja z linku od razu zamknięta.
   Odpowiedź na prośbę jest ta sama dla istniejącego i nieistniejącego adresu.
   Token z adresu czyta `api/auth.ts` przy ładowaniu i czyści pasek adresu.
+- **Każda zmiana PIN-u zostawia ślad i daje znać właścicielowi konta**
+  (`odnotujZmiane` w `ustaw-haslo.js`): wiersz w `piny_zmiany` (migracja `0046`:
+  kto, komu, kiedy, `sposob` = `kierownik` / `kierownik_usunal` /
+  `reset_mailem`; czyta kierownik swoich ludzi, pisze tylko serwer), wiadomość
+  `type = 'pin'` dla `open`/`closed` i e-mail od razu, BEZ sprawdzania
+  `email_powiadomienia` (bezpieczeństwo) — wiersz `notifications` dostaje od
+  razu `email_at`, żeby kolejka nie wysłała drugiego. Karta pracownika pokazuje
+  „Ostatnia zmiana PIN-u”. Ślad i mail są best-effort: nie cofają zmiany.
 - ⚠️ **Trzy akcje w JEDNYM pliku `api/`**, bo projekt ma 12 funkcji Vercela — tyle,
   ile pozwala plan Hobby. Dokładając funkcję w `api/`, policz je.
 - ⚠️ **Kolejność: `0045` (same nowe tabele, `limity_pin` i dziennik cronów) wolno
