@@ -314,7 +314,7 @@ const KioskDashboard = ({
   //
   // ⚠️ Stąd wynika twardy warunek na dane: KAŻDY ustawiony `kiosk_pin` musi
   // mieć sześć cyfr. Krótszego nie da się tu wpisać, więc profil z PIN-em
-  // czterocyfrowym byłby nie do otwarcia. Od migracji 0045 nowy PIN krótszy
+  // czterocyfrowym byłby nie do otwarcia. Od migracji 0046 nowy PIN krótszy
   // niż sześć cyfr odrzuca sama baza (trigger `chron_piny`); stary, sprzed
   // 0.41.2, poprawia się, ustawiając PIN w karcie od nowa.
   const DLUGOSC_PIN = 6;
@@ -350,7 +350,7 @@ const KioskDashboard = ({
       nieudanyPin("Niepoprawny PIN, spróbuj ponownie");
     } catch (e) {
       // ⚠️ Po 10 złych próbach w 15 minut baza blokuje profil (migracja
-      // 0045) i mówi to WYJĄTKIEM, nie `false` — inaczej dobry PIN dostawałby
+      // 0046) i mówi to WYJĄTKIEM, nie `false` — inaczej dobry PIN dostawałby
       // „niepoprawny”. Komunikat bazy pokazujemy wprost, bo mówi, co zrobić.
       const tekst = String((e && e.message) || "");
       nieudanyPin(

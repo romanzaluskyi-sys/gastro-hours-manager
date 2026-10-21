@@ -1,5 +1,5 @@
 // Stan JEDNEGO wdrożenia: wersja, komplet zmiennych, baza, Brevo, a od 0.77.0
-// także crony (czy każdy miał udany przebieg w swoim oknie — dziennik z 0046) i
+// także crony (czy każdy miał udany przebieg w swoim oknie — dziennik z 0045) i
 // błędy aplikacji z ostatniej doby. Wołają go
 // `scripts/nowy-klient.py` (sprawdzenie po uruchomieniu klienta) i
 // `scripts/klienci.py sprawdz` (przegląd wszystkich klientów naraz).
@@ -41,7 +41,7 @@ const WYMAGANE = [
 
 const bezUkosnika = (s) => (s || "").trim().replace(/\/+$/, "");
 
-// --- Monitoring (0.77.0, migracja 0046) -------------------------------------
+// --- Monitoring (0.77.0, migracja 0045) -------------------------------------
 // Jakie crony mają chodzić i jak długo wolno nie mieć UDANEGO przebiegu.
 // Harmonogram Vercela czytamy z vercel.json (jedno źródło), a wysyłkę maili —
 // pg_cron w bazie co 5 minut (docs/sql/tools/email-harmonogram.sql) — dopisujemy
@@ -77,7 +77,7 @@ const sprawdzCrony = async (pobierzRest, demo) => {
   const r = await pobierzRest(
     `cron_przebiegi?select=nazwa,start_at,ok,kod,info&start_at=gt.${encodeURIComponent(od)}&order=start_at.desc&limit=2000`
   );
-  if (r.brakTabeli) return { ok: false, problemy: ["brak dziennika cronów — migracja 0046"], lista: [] };
+  if (r.brakTabeli) return { ok: false, problemy: ["brak dziennika cronów — migracja 0045"], lista: [] };
   const wiersze = r.wiersze;
   const pierwszy = (await pobierzRest("cron_przebiegi?select=start_at&order=start_at.asc&limit=1")).wiersze[0];
   const dziennikOd = pierwszy ? Date.parse(pierwszy.start_at) : null;

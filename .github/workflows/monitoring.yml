@@ -1,7 +1,7 @@
 # Codzienny przegląd wszystkich klientów (0.77.0).
 #
 # `scripts/klienci.py sprawdz` pyta /api/zdrowie każdego wdrożenia: wersja,
-# migracje, zmienne, Brevo, crony (dziennik z migracji 0046) i błędy aplikacji z
+# migracje, zmienne, Brevo, crony (dziennik z migracji 0045) i błędy aplikacji z
 # ostatniej doby. Coś nie tak = kod wyjścia 1 = czerwony przebieg, a GitHub
 # wysyła wtedy e-mail temu, kto ostatnio zmienił harmonogram w tym pliku
 # (Settings → Notifications → Actions musi mieć włączone powiadomienia o

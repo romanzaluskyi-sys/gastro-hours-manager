@@ -1072,7 +1072,7 @@ const poprzedniMiesiac = (h) => {
             JSON.stringify(window.__zapisy.map((z) => z[0])));
           sprawdz("payload nie niesie kolumny wyliczanej ma_kiosk_pin",
             !!ostatni && !("ma_kiosk_pin" in payload), String(JSON.stringify(payload)).slice(0, 200));
-          sprawdz("payload karty nie niesie żadnego PIN-u (0045)",
+          sprawdz("payload karty nie niesie żadnego PIN-u (0046)",
             !!ostatni && !["pin", "kiosk_pin", "nowy_pin", "usun_pin"].some((k) => k in payload),
             Object.keys(payload).join(","));
           const wyw = window.__ustawHaslo[window.__ustawHaslo.length - 1];
@@ -1429,7 +1429,7 @@ const poprzedniMiesiac = (h) => {
 
           klikP(document.querySelector('#app [data-osoba-listy="Ala"]')); await czekaj(300);
           sprawdz("karta bez zmian nie pokazuje paska „Zapisz”", !document.querySelector("#app [data-pasek-zapisu]"));
-          // 0.77.0: aplikacja nie zna obecnego PIN-u (hash w bazie, 0045) —
+          // 0.77.0: aplikacja nie zna obecnego PIN-u (hash w bazie, 0046) —
           // pole jest polem NOWEGO PIN-u, a karta mówi tylko, czy PIN jest.
           const pinPole = document.querySelector('#app [data-karta-pracownika] input[maxlength="6"]');
           const stanPinu = () => (document.querySelector("#app [data-stan-pinu]") || {}).textContent || "";

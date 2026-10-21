@@ -213,7 +213,7 @@ trzy miejsca.
 ⚠️ **Nowa tabela, której potrzebuje ekran → dane w `demoDane.js`** (tu:
 `wydarzenia`, `wydarzenia_uczestnicy` w `KOLEJNOSC`).
 
-## PIN-y — od 0.77.0 (migracja `0045`)
+## PIN-y — od 0.77.0 (migracja `0046`)
 
 Do 0.76.0 `users.pin` był KOPIĄ hasła do Auth jawnym tekstem (kierownik widział
 ją w karcie pod „Pokaż”), a `users.kiosk_pin` — blokada na tablecie i zarazem
@@ -240,7 +240,7 @@ Dziś:
 - **Limit prób**: 10 złych PIN-ów w 15 min na osobę → `sprawdz_kiosk_pin` rzuca
   „Za dużo prób…” (wyjątek, nie `false` — KioskDashboard pokazuje to zdanie).
   Profil spoza lokalu tabletu dostaje `false` bez liczenia próby. Nowy PIN z
-  karty czyści licznik. Tabela `limity_pin` (bez polityk, tylko serwer) liczy
+  karty czyści licznik. Tabela `limity_pin` (migracja `0045`, bez polityk, tylko serwer) liczy
   też prośby o reset (3 na adres na godzinę).
 - **„Nie pamiętam PIN-u”** (LoginScreen): `akcja: "przypomnij"` → serwer bierze
   token z `admin/generate_link` (Supabase NIE wysyła maila) i wysyła link
@@ -251,16 +251,19 @@ Dziś:
   Token z adresu czyta `api/auth.ts` przy ładowaniu i czyści pasek adresu.
 - ⚠️ **Trzy akcje w JEDNYM pliku `api/`**, bo projekt ma 12 funkcji Vercela — tyle,
   ile pozwala plan Hobby. Dokładając funkcję w `api/`, policz je.
-- ⚠️ **Kolejność: deploy 0.77.0 PRZED `0045`.** Nowy front działa na starej bazie;
+- ⚠️ **Kolejność: `0045` (same nowe tabele, `limity_pin` i dziennik cronów) wolno
+  puścić kiedykolwiek — także przed deployem, żeby „Nie pamiętam PIN-u” dało się
+  sprawdzić na Preview (chodzi na bazie produkcyjnej). `0046` dopiero PO deployu
+  0.77.0.** Nowy front działa na starej bazie;
   stary front na nowej bazie wymaga wpisania PIN-u przy zapisie karty
   kierownika/tabletu (pole `required`, a widok oddaje je puste).
-- ⚠️ `scripts/utworz-konta-auth.py` po `0045` odmawia pracy (nie ma z czego brać
+- ⚠️ `scripts/utworz-konta-auth.py` po `0046` odmawia pracy (nie ma z czego brać
   haseł). Konto w Auth zakłada karta (ustaw PIN) albo `import-klienta.py`.
 - Lokalny sprawdzian migracji: Postgres 16 z atrapą `auth.uid()` i pgcrypto
-  (`extensions.crypt/gen_salt` w formacie bcrypt) — łańcuch `0000`–`0045` na
+  (`extensions.crypt/gen_salt` w formacie bcrypt) — łańcuch `0000`–`0046` na
   pustej bazie i 18 przypadków na danych (2026-10-20).
 
-## Monitoring — od 0.77.0 (migracja `0046`)
+## Monitoring — od 0.77.0 (migracja `0045`)
 
 Do 0.76.0 cron, który padł albo przestał się wywoływać (zmieniony sekret,
 wyłączony pg_cron), nie zostawiał śladu poza logami Vercela — i wyglądał jak
@@ -281,7 +284,7 @@ spokojny dzień. Dziś trzy warstwy:
   `KLIENCI_JSON` i `SHIFTRO_SEKRETY_CRONA` — ⚠️ świadomie BEZ `SUPABASE_PAT`
   (otwiera SQL wszystkich baz). Nowy klient → dopisz go do obu sekretów.
 - Sprawdziany: `harness-email.html` (dziennik, okna, „bez pomiaru”, demo,
-  powtórzenia błędów, baza bez 0046).
+  powtórzenia błędów, baza bez 0045).
 
 ## Logowanie i dostęp do danych — Etap 3 (0.41.0–0.70.3)
 
@@ -603,7 +606,7 @@ Trzy poziomy widoczności w widoku:
   są godziny, nie pieniądze — `stawka` i `wynagrodzenie_mies` zostają zakryte.
 - **własne albo kierownik** — `email, stawka,
   wynagrodzenie_mies, telefon, data_urodzenia, data_zatrudnienia,
-  sanepid_*, umowa_*, ostatni_dzien`. (`pin` i `kiosk_pin` od `0045` PUSTE dla
+  sanepid_*, umowa_*, ostatni_dzien`. (`pin` i `kiosk_pin` od `0046` PUSTE dla
   wszystkich — patrz „PIN-y”.)
 - **tylko kierownik** — `notatki` i jej ślad. To notatnik prowadzącego, nie
   dokument dla zainteresowanego.
@@ -697,7 +700,7 @@ api/                         — root-level, POZA src/ — funkcje Vercel Cron
   zdrowie.js                   — stan wdrożenia za CRON_SECRET: wersja, brakujące
                                  zmienne (same nazwy), czy front i crony patrzą
                                  na tę samą bazę, liczba migracji, Brevo, crony
-                                 (dziennik 0046) i błędy z doby. Woła go
+                                 (dziennik 0045) i błędy z doby. Woła go
                                  nowy-klient.py, klienci.py i monitoring
   _lib/przebieg.js             — `zPrzebiegiem(nazwa, handler)`: KAŻDY cron się
                                  nim owija i zapisuje przebieg do
@@ -2406,7 +2409,7 @@ zakresem — wymaga Grafiku, którego nie ma.
   active, archived, stanowisko, sanepid_expiry, sanepid_last_notified,
   umowa_expiry, umowa_last_notified, kiosk_pin`. `sanepid_expiry`/
   `umowa_expiry`: `date`, nullable — terminy dokumentów pracownika, patrz
-  "Panel kierownika" wyżej. `kiosk_pin` (text, nullable — od `0045` HASH bcrypt sześciu cyfr, nie same cyfry; `pin` od `0045` zawsze NULL, patrz "PIN-y"; wcześniej 4 LUB 6 cyfr — docelowo 6, patrz "Logowanie i
+  "Panel kierownika" wyżej. `kiosk_pin` (text, nullable — od `0046` HASH bcrypt sześciu cyfr, nie same cyfry; `pin` od `0046` zawsze NULL, patrz "PIN-y"; wcześniej 4 LUB 6 cyfr — docelowo 6, patrz "Logowanie i
   dostęp do danych"; klawiatura tabletu obsługuje obie długości, dodana
   2026-08-31) — blokada PIN-em na kiosku, patrz "Panel kierownika" i
   "Tablet Służbowy" wyżej; NIE mylić z kolumną `pin` (6-cyfrowy PIN

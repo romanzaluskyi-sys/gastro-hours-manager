@@ -1,4 +1,4 @@
-// Dziennik przebiegów cronów (0.77.0, migracja 0046) — monitoring.
+// Dziennik przebiegów cronów (0.77.0, migracja 0045) — monitoring.
 //
 // Każdy cron owija swój handler: `module.exports = zPrzebiegiem("nazwa", handler)`.
 // Po odpowiedzi zapisujemy do `cron_przebiegi`, jak poszło (status HTTP,
@@ -7,7 +7,7 @@
 // się wywoływać, nie zostawiał żadnego śladu.
 //
 // ⚠️ Zapis NIGDY nie rzuca i nie zmienia odpowiedzi crona — monitoring, który
-// wywraca to, co monitoruje, jest gorszy niż żaden. Baza bez 0046 = brak zapisu.
+// wywraca to, co monitoruje, jest gorszy niż żaden. Baza bez 0045 = brak zapisu.
 //
 // ⚠️ Liczymy tylko wywołania z poprawnym `Bearer CRON_SECRET` — czyli z
 // harmonogramu (Vercel Cron, pg_cron) albo ręczne z sekretem. Podgląd raportu

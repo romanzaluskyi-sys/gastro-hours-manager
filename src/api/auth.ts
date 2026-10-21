@@ -198,7 +198,7 @@ export const idZalogowanego = () => wczytajSesje()?.user_id || null;
 // znaleźć się w przeglądarce. Front wysyła tylko swój token; kim jest i czy
 // wolno mu, rozstrzyga serwer.
 //
-// ⚠️ Od 0.77.0 (migracja 0045) to JEDYNA droga zmiany PIN-u: baza pomija PIN
+// ⚠️ Od 0.77.0 (migracja 0046) to JEDYNA droga zmiany PIN-u: baza pomija PIN
 // w zwykłym zapisie karty, a blokadę na tablecie (`kiosk_pin`) zapisuje serwer
 // razem z hasłem. `usun: true` zdejmuje blokadę pracownikowi kiosku.
 export const ustawHasloPracownika = async (userId, haslo, { usun = false } = {}) => {

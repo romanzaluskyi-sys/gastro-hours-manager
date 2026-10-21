@@ -1,4 +1,4 @@
--- 0045 — PIN-y przestają leżeć w bazie jawnym tekstem (0.77.0)
+-- 0046 — PIN-y przestają leżeć w bazie jawnym tekstem (0.77.0)
 --
 -- STAN PRZED:
 --   * `users.pin` — kopia HASŁA do Supabase Auth (kierownik, tablet, `closed`)
@@ -25,8 +25,8 @@
 --     (`limity_pin`). Ta sama tabela liczy prośby o reset PIN-u e-mailem.
 --
 -- ⚠️ KOLEJNOŚĆ: ta migracja idzie PO deployu 0.77.0 i odświeżeniu tabletów
--- (ta sama zasada co 0029/0030). Nowa aplikacja działa na bazie bez 0045
--- (zmienia PIN przez serwer, nie czyta go z widoku), stara na bazie z 0045
+-- (ta sama zasada co 0029/0030). Nowa aplikacja działa na bazie bez 0046
+-- (zmienia PIN przez serwer, nie czyta go z widoku), stara na bazie z 0046
 -- działa gorzej: karta kierownika/tabletu ma tam PIN jako pole wymagane, a
 -- widok oddaje je puste — zapis karty wymagałby wpisania PIN-u od nowa.
 --
@@ -53,19 +53,9 @@ end;
 $$;
 
 -- --------------------------------------------------------------------------
--- 2. Limity prób. Bez żadnej polityki: pisze i czyta wyłącznie funkcja
---    `security definer` i klucz serwisowy (jak `email_raporty` w 0039).
---    rodzaj 'kiosk' → klucz = users.id (PIN na tablecie),
---    rodzaj 'reset' → klucz = e-mail (prośba „Nie pamiętam PIN-u”).
+-- 2. Limity prób — tabela `limity_pin` powstaje w 0045 (sama tabela nic nie
+--    zmienia, więc mogła wejść przed deployem; tu tylko z niej korzystamy).
 -- --------------------------------------------------------------------------
-create table if not exists limity_pin (
-  id bigint generated always as identity primary key,
-  rodzaj text not null,
-  klucz text not null,
-  kiedy timestamptz not null default now()
-);
-create index if not exists limity_pin_szukaj on limity_pin (rodzaj, klucz, kiedy);
-alter table limity_pin enable row level security;
 
 -- --------------------------------------------------------------------------
 -- 3. Trigger: PIN-y zmienia tylko serwer, a `kiosk_pin` zapisuje się hashem.
@@ -248,8 +238,8 @@ select
   u.wymiar_etatu,
   -- własne albo kierownik
   case when w.wolno then u.email end                  as email,
-  null::text                                          as pin,        -- 0045: nie wychodzi
-  null::text                                          as kiosk_pin,  -- 0045: nie wychodzi
+  null::text                                          as pin,        -- 0046: nie wychodzi
+  null::text                                          as kiosk_pin,  -- 0046: nie wychodzi
   case when w.wolno then u.stawka end                 as stawka,
   case when w.wolno then u.wynagrodzenie_mies end     as wynagrodzenie_mies,
   case when w.wolno then u.telefon end                as telefon,

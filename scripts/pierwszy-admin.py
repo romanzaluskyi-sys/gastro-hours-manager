@@ -205,7 +205,7 @@ def main():
 
     # --- 4. Kartoteka ---
     # PIN jest WYŁĄCZNIE hasłem w Auth — kartoteka nie trzyma jego kopii
-    # (migracja 0045). Puste `allowed_lokale` u admina znaczy „wszystkie"
+    # (migracja 0046). Puste `allowed_lokale` u admina znaczy „wszystkie"
     # (moje_lokale / hasAccessToLokal).
     albo_koniec(
         zapytanie, args.url, klucz, "/rest/v1/users", "POST",

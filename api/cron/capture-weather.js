@@ -122,7 +122,7 @@ const zapisz = async (wiersze) => {
   }
 };
 
-// Dziennik przebiegów (migracja 0046) — patrz api/_lib/przebieg.js.
+// Dziennik przebiegów (migracja 0045) — patrz api/_lib/przebieg.js.
 const { zPrzebiegiem } = require("../_lib/przebieg");
 
 module.exports = zPrzebiegiem("capture-weather", async function handler(req, res) {

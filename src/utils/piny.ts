@@ -4,7 +4,7 @@
 // PIN ma DOKŁADNIE sześć cyfr: klawiatura tabletu zatwierdza sama na szóstej
 // cyfrze, a Supabase Auth nie przyjmie krótszego hasła. Tę samą regułę
 // sprawdza serwer (api/admin/ustaw-haslo.js) i baza (trigger `chron_piny`,
-// migracja 0045) — tu jest po to, żeby człowiek dowiedział się o tym przed
+// migracja 0046) — tu jest po to, żeby człowiek dowiedział się o tym przed
 // wysłaniem, a nie z komunikatu błędu.
 
 export const DLUGOSC_PINU = 6;

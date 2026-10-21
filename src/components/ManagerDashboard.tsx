@@ -592,7 +592,7 @@ const ManagerDashboard = ({
       //
       // Dopisując kolejną kolumnę wyliczaną, dopisz ją TUTAJ.
       for (const wyliczana of ["ma_kiosk_pin"]) delete dataToSave[wyliczana];
-      // ⚠️ PIN-ów NIE wysyłamy w zapisie karty (0.77.0, migracja 0045): baza
+      // ⚠️ PIN-ów NIE wysyłamy w zapisie karty (0.77.0, migracja 0046): baza
       // trzyma `kiosk_pin` jako hash, `pin` jest zawsze pusty, a zapis z
       // aplikacji i tak by je pominęła. Zmienia je wyłącznie serwer.
       for (const pole of ["pin", "kiosk_pin", "nowy_pin", "usun_pin"]) delete dataToSave[pole];
@@ -660,7 +660,7 @@ const ManagerDashboard = ({
             : null;
       }
 
-      // Odpowiedź z tabeli `users` niesie hash blokady (0045) — w stanie
+      // Odpowiedź z tabeli `users` niesie hash blokady (0046) — w stanie
       // aplikacji nie ma mu po co leżeć.
       const bezPinow = (w) => ({ ...w, pin: null, kiosk_pin: null });
       let zapisany;

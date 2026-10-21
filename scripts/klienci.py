@@ -13,7 +13,7 @@ CRON_SECRET bierze z Vault bazy klienta (przez SUPABASE_PAT), więc nic nie
 trzeba trzymać lokalnie.
 
 Od 0.77.0 `sprawdz` mówi też o cronach (czy każdy miał udany przebieg w swoim
-oknie — dziennik z migracji 0046) i o błędach aplikacji z ostatniej doby. Kod
+oknie — dziennik z migracji 0045) i o błędach aplikacji z ostatniej doby. Kod
 wyjścia 1 = coś wymaga uwagi; na tym stoi codzienny monitoring
 (.github/workflows/monitoring.yml).
 

@@ -707,7 +707,7 @@ const USERS = [
       const godzTemu = (h) => new Date(Date.now() - h * 3600000).toISOString();
       const CRONY = ["demo-reset", "check-document-terms", "capture-weather", "check-puls", "check-odbicia",
         "check-porzucone", "raport-kierownika", "koniec-pracy"];
-      stan.tabele.schema_migrations = [{ version: "0046" }];
+      stan.tabele.schema_migrations = [{ version: "0045" }];
       stan.tabele.app_errors = [];
 
       // 1. Dziennik dopiero założony — nic nie może świecić na czerwono.
@@ -762,10 +762,10 @@ const USERS = [
       sprawdz("zdrowie: najczęstszy błąd na liście, bez danych osób",
         z.bledy.najczestsze[0].ile === 6 && !JSON.stringify(z.bledy).includes("user_name"));
 
-      // 5. Baza bez 0046 — mówi wprost, czego brakuje.
+      // 5. Baza bez 0045 — mówi wprost, czego brakuje.
       stan.brakTabel = new Set(["cron_przebiegi"]);
       z = await zdrowieZ();
-      sprawdz("zdrowie: baza bez dziennika = „migracja 0046”", (z.problemy || []).some((x) => /migracja 0046/.test(x)),
+      sprawdz("zdrowie: baza bez dziennika = „migracja 0045”", (z.problemy || []).some((x) => /migracja 0045/.test(x)),
         JSON.stringify(z.problemy));
       stan.brakTabel = null;
       stan.tabele.app_errors = [];

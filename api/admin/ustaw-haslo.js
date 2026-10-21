@@ -1,4 +1,4 @@
-// PIN-y — JEDYNE miejsce, które je zmienia (od 0.77.0, migracja 0045).
+// PIN-y — JEDYNE miejsce, które je zmienia (od 0.77.0, migracja 0046).
 //
 // Trzy wywołania pod jednym adresem (`akcja` w treści żądania):
 //   * bez akcji — kierownik ustawia albo usuwa PIN pracownika w karcie;
@@ -15,7 +15,7 @@
 // „nie pamiętam PIN-u” zgłoszone tydzień później. Zmiana cudzego hasła wymaga
 // klucza SERVICE ROLE, którego front mieć nie może.
 //
-// ⚠️ Od 0045 baza trzyma `kiosk_pin` jako hash (trigger `chron_piny` liczy go
+// ⚠️ Od 0046 baza trzyma `kiosk_pin` jako hash (trigger `chron_piny` liczy go
 // sam, gdy dostanie sześć cyfr), a zapis PIN-u z aplikacji pomija. Dlatego
 // kolumnę zapisujemy TUTAJ, kluczem serwisowym, jawnymi cyframi.
 //
@@ -118,7 +118,7 @@ const ustawHasloAuth = async (cel, haslo) => {
 };
 
 // Blokada na tablecie + jej licznik prób. Nowy PIN zdejmuje też blokadę po
-// zbyt wielu próbach (migracja 0045) — to jest droga kierownika do odblokowania
+// zbyt wielu próbach (migracja 0046) — to jest droga kierownika do odblokowania
 // profilu przed upływem kwadransa.
 const ustawKioskPin = async (cel, haslo) => {
   await zmien("users", `id=eq.${cel.id}`, { kiosk_pin: haslo });

@@ -178,7 +178,7 @@ const buildEmployeeMessage = (term, expiryStr, days) => {
   return `Twój termin: ${term.subject} dobiega końca w dniu ${dateFmt}, do zakończenia pozostało ${days} dni. Zgłoś się do kierownika, aby go zaktualizować.`;
 };
 
-// Dziennik przebiegów (migracja 0046) — patrz api/_lib/przebieg.js.
+// Dziennik przebiegów (migracja 0045) — patrz api/_lib/przebieg.js.
 const { zPrzebiegiem } = require("../_lib/przebieg");
 
 module.exports = zPrzebiegiem("check-document-terms", async function handler(req, res) {

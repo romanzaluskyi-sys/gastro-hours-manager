@@ -138,7 +138,7 @@ const brakiOsoby = (u) => {
 // Porównanie karty z tym, co jest zapisane — od tego zależy pasek "Zapisz".
 // Pola techniczne i wyliczane pomijamy; tablica i tekst po przecinku to ta
 // sama wartość; puste, null i false też.
-// `pin` i `kiosk_pin` widok oddaje puste (0045) — porównujemy `nowy_pin` i
+// `pin` i `kiosk_pin` widok oddaje puste (0046) — porównujemy `nowy_pin` i
 // `usun_pin`, które istnieją tylko w karcie.
 const POMIJANE = ["ma_kiosk_pin", "pin", "kiosk_pin", "notatki_updated_by", "notatki_updated_at", "created_at"];
 const norm = (v) => {
@@ -418,7 +418,7 @@ export default function Pracownicy({
     : [];
 
   // Pole PIN jest od 0.77.0 polem NOWEGO PIN-u: aplikacja nie zna obecnego
-  // (baza trzyma hash, migracja 0045), więc puste znaczy „bez zmian”.
+  // (baza trzyma hash, migracja 0046), więc puste znaczy „bez zmian”.
   const pin = editingUser ? String(editingUser.nowy_pin || "") : "";
   const pinZaKrotki = pin.length > 0 && pin.length !== 6;
   // Czy PIN już jest: pracownik kiosku — kłódka, reszta — konto w Auth.

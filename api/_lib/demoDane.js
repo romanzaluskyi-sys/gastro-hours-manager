@@ -331,7 +331,7 @@ const generuj = ({ dzis = C.ymd(), teraz = new Date() } = {}) => {
     });
     if (p.konto === "telefon") {
       // Prywatny telefon: e-mail + kiosk_pin. Ten sam PIN blokuje jego profil na tablecie.
-      // Jawne cyfry — baza zapisze je hashem (trigger `chron_piny`, migracja 0045);
+      // Jawne cyfry — baza zapisze je hashem (trigger `chron_piny`, migracja 0046);
       // hasło do logowania kontom demo zakłada osobno reset demo w Auth.
       w.email = konto("telefon").email;
       w.kiosk_pin = K.PIN;
