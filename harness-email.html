@@ -803,6 +803,10 @@ const USERS = [
       JSON.stringify(r.json));
     sprawdz("przypomnij: pracownik kiosku wie, że PIN zmieni się też na tablecie",
       /profil na tablecie/.test(mailPin.htmlContent));
+    // Brevo odrzuca pusty obiekt nagłówków („headers is blank”) — mail bez
+    // linku „Wypisz” ma ich nie wysyłać wcale.
+    sprawdz("przypomnij: bez pustego obiektu headers (Brevo 400 „headers is blank”)",
+      !("headers" in mailPin) || Object.keys(mailPin.headers || {}).length > 0, JSON.stringify(mailPin.headers));
     const infoIstnieje = r.json && r.json.info;
     const linkowPrzed = stan.auth.filter((a) => a.sc === "admin/generate_link").length;
     r = await wolaj({ akcja: "przypomnij", email: "nikt@test.pl" });
