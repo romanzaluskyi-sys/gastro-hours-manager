@@ -517,12 +517,14 @@ const poprzedniMiesiac = (h) => {
           // — patrz sprawdzian na końcu pliku.
           { id: "u1", name: "Ala", stawka: 32, typ_umowy: "zlecenie", active: true,
             archived: false, role: "open", default_lokal: "Bułka i Jacek",
-            default_stanowisko: "Kucharz", ma_kiosk_pin: true },
+            default_stanowisko: "Kucharz", ma_kiosk_pin: true,
+            // Poziom na stanowisku (0.78.0) — klucz w wierszu = baza z 0047.
+            poziomy_stanowisk: { Kucharz: 1 } },
           // Umowa o pracę — norma z kalendarza, koszt = kwota z umowy.
           { id: "u2", name: "Bo", typ_umowy: "umowa_o_prace", wymiar_etatu: 1,
             wynagrodzenie_mies: 5200, active: true, archived: false, role: "closed",
             email: "bo@x.pl", auth_id: "auth-x", default_lokal: "Ceglana",
-            default_stanowisko: "Kucharz" },
+            default_stanowisko: "Kucharz", poziomy_stanowisk: { Kucharz: 3 } },
           // Pół etatu i pusta kwota — karta ma pokazać normę, ale nie koszt.
           { id: "u3", name: "Cezary", typ_umowy: "umowa_o_prace", wymiar_etatu: 0.5,
             active: true, archived: false, role: "closed", email: "c@x.pl", auth_id: "auth-x",
@@ -1095,6 +1097,31 @@ const poprzedniMiesiac = (h) => {
             wpiszPin("385920"); await czekaj(200);
             await wyslijKarte();
           }
+
+          // Poziom na stanowisku (0.78.0): przełącznik w karcie, zapis w
+          // payloadzie, pasek „Zapisz zmiany” widzi zmianę obiektu jsonb.
+          const wierszPoziomu = () => document.querySelector('#app [data-poziom-stanowiska="Kucharz"]');
+          sprawdz("karta ma sekcję „Poziom na stanowiskach”", !!document.querySelector("#app [data-poziomy-stanowisk]"));
+          sprawdz("poziom z bazy stoi w karcie (Kucharz: 1 — wdrażany)",
+            !!wierszPoziomu() && /1 — wdrażany/.test(wierszPoziomu().textContent),
+            wierszPoziomu() ? wierszPoziomu().textContent : "brak wiersza");
+          if (wierszPoziomu()) {
+            const trzy = [...wierszPoziomu().querySelectorAll("button")].find((b) => b.textContent.trim() === "3");
+            trzy.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            await czekaj(200);
+            sprawdz("zmiana poziomu pokazuje pasek „Zapisz zmiany”", /Zapisz/.test(document.querySelector("#app").textContent) &&
+              /3 — może szkolić/.test(wierszPoziomu().textContent));
+            await wyslijKarte();
+            const zu = window.__zapisy.filter((z) => z[0] === "users");
+            const pl = (zu[zu.length - 1] || [])[2] || {};
+            sprawdz("zapis karty niesie poziomy_stanowisk { Kucharz: 3 }",
+              JSON.stringify(pl.poziomy_stanowisk) === JSON.stringify({ Kucharz: 3 }), JSON.stringify(pl.poziomy_stanowisk));
+            // Z powrotem na 1 — dalsze sprawdziany Grafiku liczą na atrapę.
+            const jeden = [...wierszPoziomu().querySelectorAll("button")].find((b) => b.textContent.trim() === "1");
+            jeden.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            await czekaj(150);
+            await wyslijKarte();
+          }
         } finally {
           localStorage.removeItem("shiftro_auth");
         }
@@ -1605,6 +1632,16 @@ const poprzedniMiesiac = (h) => {
             panel() ? panel().textContent.slice(0, 160) : "brak panelu");
           const kandydat = [...panel().querySelectorAll("[data-kandydat]")].find((b) => !b.disabled && !b.hasAttribute("data-bez-stanowiska"));
           sprawdz("panel pokazuje kandydatów z godzinami w miesiącu", !!kandydat && /h/.test(kandydat.textContent));
+          // Kropki poziomu przy osobach, które mają poziom na stanowisku luki.
+          const zPoziomem = ({ Kucharz: ["Ala", "Bo"] })[stLuki] || [];
+          const widoczniZPoziomem = zPoziomem.filter((n) => panel().querySelector(`[data-kandydat="${n}"]`));
+          sprawdz("kandydaci z poziomem na tym stanowisku mają kropki",
+            widoczniZPoziomem.every((n) => panel().querySelector(`[data-kandydat="${n}"] [data-poziom]`)),
+            `stanowisko ${stLuki}, z poziomem na liście: ${widoczniZPoziomem.join(",") || "nikt"}`);
+          sprawdz("kandydat bez poziomu na tym stanowisku nie ma kropek",
+            [...panel().querySelectorAll("[data-kandydat]")]
+              .filter((b) => !zPoziomem.includes(b.getAttribute("data-kandydat")))
+              .every((b) => !b.querySelector("[data-poziom]")));
           const szybkie = (k) => [...panel().querySelectorAll(`[data-godzina-szybka^="${k}|"]`)];
           sprawdz("szybkie godziny osobno dla początku i końca (z luką)",
             szybkie("poczatek").some((b) => b.textContent === odLuki.slice(0, 5)) &&

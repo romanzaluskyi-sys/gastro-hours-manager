@@ -213,6 +213,29 @@ trzy miejsca.
 ⚠️ **Nowa tabela, której potrzebuje ekran → dane w `demoDane.js`** (tu:
 `wydarzenia`, `wydarzenia_uczestnicy` w `KOLEJNOSC`).
 
+## Poziom na stanowisku — od 0.78.0 (migracja `0047`)
+
+`users.poziomy_stanowisk` (jsonb) = `{ "Bar": 3, "Kasa": 2 }`: 1 — wdrażany,
+2 — samodzielny, 3 — może szkolić. Całość w [`utils/poziomy.ts`](src/utils/poziomy.ts);
+ekrany: karta pracownika (sekcja „Miejsce pracy”), panel przypisania i nagłówek
+dnia w Grafiku, „Więcej → Moje stanowiska” u pracownika. Sprawdzian:
+`harness-poziomy.html` (+ karta i kandydaci w `harness-panel.html`).
+- ⚠️ **Klucz to NAZWA stanowiska**, nie para ze lokalem — tak samo jak
+  `allowed_stanowiska` (makieta rysowała poziom per lokal; świadomie nie).
+- ⚠️ **Brak wpisu = „nieustawiony”, NIE poziom 1.** Inaczej po wdrożeniu każda
+  zmiana świeciłaby „tylko poziom 1”. Nowe stanowisko dopisane w karcie (także
+  „Dopisz do karty” z Grafiku) dostaje 1 JAWNIE (`zPoziomemStartowym`).
+- **Sygnał „tylko poziom 1”** (`sygnalyPoziomu`): odcinki, w których na
+  stanowisku stoją wyłącznie osoby z poziomem 1. Osoba bez poziomu przerywa
+  sygnał. Sygnał, nie blokada — tak jak dziury w obsadzie i Kodeks.
+- **Kolumna JAWNA w `users_widok`** (na końcu listy — `create or replace view`
+  dokłada kolumny tylko na końcu): tablet ogląda „Moje stanowiska” oczami
+  swojego konta, a ono kolumny „własne albo kierownik” dostaje puste.
+- **Zapis tylko na bazie z `0047`** (`bazaZnaPoziomy` — klucz w wierszach z
+  widoku). `handleSaveUser` zapisuje wyłącznie stanowiska z karty
+  (`poziomyDoZapisu`); `norm` w Pracownicy.tsx porównuje obiekt jsonb, inaczej
+  pasek „Zapisz zmiany” nie widziałby zmiany poziomu.
+
 ## PIN-y — od 0.77.0 (migracja `0046`)
 
 Do 0.76.0 `users.pin` był KOPIĄ hasła do Auth jawnym tekstem (kierownik widział
@@ -857,6 +880,8 @@ src/
                                   Skrzynka, Puls)
     piny.ts                     poprawnyPin / slabyPin — karta pracownika i
                                   ekran „Nowy PIN” (0.77.0)
+    poziomy.ts                  poziom doświadczenia na stanowisku i sygnał
+                                  „tylko poziom 1” (0.78.0)
     bezczynnosc.ts              automatyczne wylogowanie po 60 min (poza
                                   tabletem) — patrz Roadmap p.6
     uuid.ts                     nowyUuid() — id nadawane w przeglądarce dla
@@ -2096,6 +2121,9 @@ odpadają. Zamiast tego dwa pliki w katalogu głównym, uruchamiane przez
   (wszyscy z lokalu / tylko z grafiku / stanowiska / cała sieć), godziny
   płatnych bez czasu w zmianie (także przez północ), odcinki do rozliczenia,
   koszt, listy i teksty wiadomości;
+- `harness-poziomy.html` — poziom na stanowisku: odczyt (brak = nieustawiony),
+  zapis tylko stanowisk z karty, sygnał „tylko poziom 1” (przez północ, osoba
+  bez poziomu, usunięte i wyłączone konta);
 - `harness-bledy.html` — dziennik błędów: limit zapisów na sesję, odsiewanie
   powtórzeń, komplet pól wiersza i to, czy `ErrorBoundary` pokazuje ekran
   zamiast białej strony. `fetch` jest podmieniony, nic nie leci do sieci.

@@ -63,6 +63,7 @@ import { activeSwapFor, pendingSwapDelta, wycofajOfertyDlaZmian, wzajemnaZmiana 
 import { addUrlopDirectly, addNiedostepnoscDirectly } from "../../utils/absences";
 import { stanowiskoShort, findStanowisko } from "../../utils/stanowiska";
 import { normaMiesiaca } from "../../utils/umowy";
+import { bazaZnaPoziomy, sygnalyPoziomu, zPoziomemStartowym } from "../../utils/poziomy";
 import { ostrzezeniaKodeksu } from "../../utils/kodeks";
 import { countWorkdays, URLOP_HOURS_PER_DAY } from "../../utils/absences";
 import { fetchDailyForecast, describeWeatherCode } from "../../utils/weather";
@@ -196,6 +197,25 @@ function EtykietaObsady({ p, activeStanowiska, lokal, onLuka, duza = false }) {
       <span className="truncate">
         {tekst}
         {p.required === 0 ? " ?" : ""}
+      </span>
+    </span>
+  );
+}
+
+// Sygnał „same osoby z poziomem 1” (0.78.0) — bursztynowy obrys, bez
+// akcji: to informacja dla kierownika, nie brak do obsadzenia.
+function EtykietaPoziomu({ s, activeStanowiska, lokal, duza = false }) {
+  const rozmiar = duza ? "text-sm px-2.5 py-2 w-full" : "text-[12px] px-1.5 py-[2px]";
+  return (
+    <span
+      className={`flex items-center rounded-[5px] font-extrabold tabular-nums border-[1.5px] border-[#8A5300] text-[#8A5300] bg-white ${rozmiar}`}
+      title={`${s.stanowisko}, ${s.from}–${s.to}: tylko osoby z poziomem 1 (${s.osoby.join(", ")}). Sygnał, nie blokada.`}
+      data-poziom1={`${s.stanowisko}|${s.from}|${s.to}`}
+    >
+      <span className="truncate">
+        {duza
+          ? `${s.stanowisko} ${krotkaGodzina(s.from)}–${krotkaGodzina(s.to)}: tylko poziom 1 (${s.osoby.join(", ")})`
+          : `poz. 1 · ${stanowiskoShort(activeStanowiska, lokal, s.stanowisko)} ${krotkaGodzina(s.from)}–${krotkaGodzina(s.to)}`}
       </span>
     </span>
   );
@@ -706,6 +726,7 @@ function LokalSection({
     const b = dniBudzetu[i];
     const pogoda = forecast[d];
     const problemy = problemyObsady(stat);
+    const sygnaly = sygnalyPoziomu({ planShifts, users, lokal, date: d });
     return (
       <th
         key={d}
@@ -752,6 +773,9 @@ function LokalSection({
                 lokal={lokal}
                 onLuka={(pp) => onLuka(d, pp)}
               />
+            ))}
+            {sygnaly.map((sg, si) => (
+              <EtykietaPoziomu key={`p1-${sg.stanowisko}-${sg.from}-${si}`} s={sg} activeStanowiska={activeStanowiska} lokal={lokal} />
             ))}
             {problemy.length === 0 && maWymagania[i] && (
               <span className="flex items-center gap-1 rounded-[5px] px-1.5 py-[3px] text-[12px] font-extrabold bg-[#E2F3E9] text-[#1F7A4A]">
@@ -805,6 +829,7 @@ function LokalSection({
     const stat = dayStats[i];
     const b = dniBudzetu[i];
     const problemy = problemyObsady(stat);
+    const sygnaly = sygnalyPoziomu({ planShifts, users, lokal, date: d });
     const zmianyDnia = planWeek
       .filter((s) => s.lokal === lokal && s.date === d)
       .concat(usunieteTydzien.filter((s) => s.date === d).map((s) => ({ ...s, __usunieta: true })))
@@ -872,12 +897,15 @@ function LokalSection({
             )}
           </div>
         )}
-        {problemy.length > 0 && (
+        {(problemy.length > 0 || sygnaly.length > 0) && (
           <div className={`${kartaCls} overflow-hidden`}>
             <div className="px-3.5 py-2.5 border-b-[2px] border-[#171714] font-['Archivo'] font-extrabold">Obsada</div>
             <div className="p-3 flex flex-col gap-1.5">
               {problemy.map((p, pi) => (
                 <EtykietaObsady key={pi} p={p} activeStanowiska={activeStanowiska} lokal={lokal} onLuka={(pp) => onLuka(d, pp)} duza />
+              ))}
+              {sygnaly.map((sg, si) => (
+                <EtykietaPoziomu key={`p1-${si}`} s={sg} activeStanowiska={activeStanowiska} lokal={lokal} duza />
               ))}
             </div>
           </div>
@@ -1475,7 +1503,10 @@ export default function GrafikTydzien({
   const handleAddStanowisko = async (user, stanowisko) => {
     try {
       const lista = [...new Set([...storedStanowiskaArr(user), stanowisko])].filter((n) => n && n !== user.default_stanowisko);
-      const zapisany = await api.patch("users", user.id, { allowed_stanowiska: lista.length > 0 ? lista.join(",") : null });
+      const zmiany = { allowed_stanowiska: lista.length > 0 ? lista.join(",") : null };
+      // Dopisane stanowisko dostaje poziom 1 (0.78.0) — tylko na bazie z 0047.
+      if (bazaZnaPoziomy(users)) zmiany.poziomy_stanowisk = zPoziomemStartowym(user, stanowisko);
+      const zapisany = await api.patch("users", user.id, zmiany);
       setUsers((users || []).map((u) => (u.id === zapisany.id ? zapisany : u)));
       showMsg(`${stanowisko} dopisane do karty: ${user.name}.`);
     } catch (err) {

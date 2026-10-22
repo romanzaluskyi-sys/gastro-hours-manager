@@ -301,7 +301,9 @@ const poprzedniMiesiac = (h) => {
         // Ma dziś prawo zamknąć Puls (puls_do) — ekran „Zamknięcie dnia” (0.73.0).
         { id: "u3", name: "Cezary", role: "open", active: true, archived: false,
           puls_do: (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })(),
-          default_lokal: "Ceglana", default_stanowisko: "Kucharz" },
+          default_lokal: "Ceglana", default_stanowisko: "Kucharz",
+          // Poziom na stanowisku (0.78.0) — „Więcej → Moje stanowiska”.
+          poziomy_stanowisk: { Kucharz: 3 } },
         // Z PIN-em blokady — po kliknięciu ma wyjść klawiatura, nie konto.
         // Pracuje tego samego dnia co Bo: przy "oddaj" jej nie ma, przy
         // "zamień się" jest — bo wtedy oddaje własną zmianę.
@@ -1003,6 +1005,18 @@ const poprzedniMiesiac = (h) => {
         await klikPrzycisk("Nie, zostaw zalogowany");
         sprawdz("„Nie, zostaw zalogowany” zamyka pytanie i zostawia sesję",
           !document.querySelector("#app [data-pytanie-wyloguj]") && !!wiecej("zglos"));
+
+        // --- Moje stanowiska (0.78.0) — tylko podgląd poziomu ---
+        sprawdz("Więcej: wiersz „Moje stanowiska”", !!wiecej("stanowiska"));
+        wiecej("stanowiska").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(250);
+        const mojeSt = document.querySelector('#app [data-moje-stanowisko="Kucharz"]');
+        sprawdz("Moje stanowiska: Kucharz, główne, poziom 3 z kropkami",
+          !!mojeSt && /główne/.test(mojeSt.textContent) && /Poziom 3 — może szkolić/.test(mojeSt.textContent) &&
+            !!mojeSt.querySelector('[data-poziom="3"]'),
+          mojeSt ? mojeSt.textContent : "brak wiersza");
+        sprawdz("Moje stanowiska: legenda trzech poziomów", widac("Co znaczą poziomy") && widac("1 — wdrażany"));
+        await otworzZakladke("Więcej");
 
         // --- Zamknięcie dnia (0.73.0, EmployeeCloseDayMobile/Tablet) ---
         // Trzy wpisy: lodówka (norma 0–5 °C, obowiązkowa), dostawa i sprzątanie.

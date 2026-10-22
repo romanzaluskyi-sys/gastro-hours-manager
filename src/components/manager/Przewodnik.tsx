@@ -27,6 +27,15 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.78.0",
+    date: "2026-10-22",
+    items: [
+      "Poziom doświadczenia na każdym stanowisku w karcie pracownika: 1 — wdrażany, 2 — samodzielny, 3 — może szkolić.",
+      "Grafik: kropki poziomu przy kandydatach i sygnał, gdy na stanowisku stoją same osoby z poziomem 1 (bez blokady).",
+      "Pracownik widzi swoje poziomy w „Więcej → Moje stanowiska”.",
+    ],
+  },
+  {
     version: "0.77.0",
     date: "2026-10-20",
     items: [

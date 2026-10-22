@@ -4,6 +4,7 @@ import { api } from "../api/supabase";
 import { nowyUuid } from "../utils/uuid";
 import { ustawHasloPracownika } from "../api/auth";
 import { poprawnyPin } from "../utils/piny";
+import { bazaZnaPoziomy, poziomyDoZapisu } from "../utils/poziomy";
 import { sendToGoogleSheets } from "../api/googleSheets";
 import { createEmployeeNotification } from "../api/notifications";
 import { formatNotificationText } from "../utils/format";
@@ -658,6 +659,13 @@ const ManagerDashboard = ({
           dataToSave.allowed_stanowiska.length > 0
             ? dataToSave.allowed_stanowiska.join(",")
             : null;
+      }
+      // Poziomy na stanowiskach (0.78.0, migracja 0047): tylko stanowiska, które
+      // osoba ma w karcie. Na bazie bez kolumny pole nie może pójść w zapisie —
+      // PostgREST odrzuciłby cały wiersz.
+      if ("poziomy_stanowisk" in dataToSave) {
+        if (bazaZnaPoziomy(users)) dataToSave.poziomy_stanowisk = poziomyDoZapisu(dataToSave);
+        else delete dataToSave.poziomy_stanowisk;
       }
 
       // Odpowiedź z tabeli `users` niesie hash blokady (0046) — w stanie

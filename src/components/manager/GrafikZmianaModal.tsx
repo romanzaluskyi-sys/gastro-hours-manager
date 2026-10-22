@@ -32,6 +32,7 @@ import {
   krotkaGodzina,
 } from "../../utils/grafik";
 import { uwagiPrzypisania } from "../../utils/kodeks";
+import { kropkiPoziomu, opisPoziomu, poziomNa, sygnalyPoziomu } from "../../utils/poziomy";
 import { naEtacie, normaMiesiaca } from "../../utils/umowy";
 import { kosztGodziny, zl } from "../../utils/budzet";
 import PoleCzasu from "./PoleCzasu";
@@ -247,7 +248,11 @@ export default function GrafikZmianaModal({
     // wyborze osoby albo dni.
     godziny: godzinyTeraz(u),
   }));
-  const sortuj = (a, b) => (a.przeszkoda ? 1 : 0) - (b.przeszkoda ? 1 : 0) || a.godziny - b.godziny;
+  // Przy równych godzinach wyżej stoi wyższy poziom na tym stanowisku.
+  const sortuj = (a, b) =>
+    (a.przeszkoda ? 1 : 0) - (b.przeszkoda ? 1 : 0) ||
+    a.godziny - b.godziny ||
+    (poziomNa(b.u, stanowisko) || 0) - (poziomNa(a.u, stanowisko) || 0);
   const lokalni = lista.filter((k) => zTegoLokalu(k.u) && (umie(k.u) || zawsze(k.u))).sort(sortuj);
   const obcy = lista.filter((k) => !zTegoLokalu(k.u) && umie(k.u) && !zawsze(k.u)).sort(sortuj);
   // Osoby BEZ tego stanowiska też są na liście — na końcu i na szaro, a po
@@ -293,6 +298,15 @@ export default function GrafikZmianaModal({
   const minutyBraku = (luki) => luki.reduce((a, g) => a + (g.minutes || 0) * (g.missing || 0), 0);
   const brakPrzed = minutyBraku(lukiPrzed);
   const brakPo = minutyBraku(lukiPo);
+  // Same osoby z poziomem 1 na tym stanowisku (0.78.0) — z wybraną osobą,
+  // jeśli jest. Sygnał, nie blokada.
+  const sygnalyPo = stanowisko
+    ? dni.flatMap((d) =>
+        sygnalyPoziomu({ planShifts: user && start && end ? [...planBez, ...probne(user)] : planBez, users, lokal, date: d })
+          .filter((sg) => sg.stanowisko === stanowisko)
+          .map((sg) => ({ ...sg, d }))
+      )
+    : [];
   const lokalRow = (lokale || []).find((l) => l.name === lokal) || null;
   const stawkaH = user ? kosztGodziny(user, lokalRow, rok, mies) : null;
   const uwagi = user ? uwagiDla(user) : [];
@@ -353,7 +367,19 @@ export default function GrafikZmianaModal({
           {inicjaly(u.name)}
         </span>
         <span className="min-w-0">
-          <span className="block font-extrabold truncate">{u.name}</span>
+          <span className="flex items-center gap-1.5 min-w-0">
+            <span className="font-extrabold truncate">{u.name}</span>
+            {poziomNa(u, stanowisko) && (
+              <span
+                className={`flex-shrink-0 text-[11px] tracking-[1px] ${on ? "text-white" : "text-[#171714]"}`}
+                title={`Poziom ${poziomNa(u, stanowisko)} — ${opisPoziomu(poziomNa(u, stanowisko)).nazwa}`}
+                aria-label={`poziom ${poziomNa(u, stanowisko)}`}
+                data-poziom={poziomNa(u, stanowisko)}
+              >
+                {kropkiPoziomu(poziomNa(u, stanowisko))}
+              </span>
+            )}
+          </span>
           <span className={`block text-[12px] leading-4 truncate ${on ? "text-white/80" : "text-[#6E6E66]"}`}>
             {przeszkoda
               ? przeszkoda
@@ -625,6 +651,21 @@ export default function GrafikZmianaModal({
                   </>
                 );
               })()}
+            </div>
+          )}
+
+          {sygnalyPo.length > 0 && (
+            <div className="rounded-lg px-3 py-2.5 border-[2px] border-[#8A5300] bg-[#FDF0D8] text-sm text-[#8A5300]" data-sygnal-poziomu>
+              {sygnalyPo.map((sg, i) => (
+                <b key={i} className="flex items-start gap-1.5">
+                  <AlertTriangle size={15} className="flex-shrink-0 mt-0.5" />
+                  <span>
+                    {dni.length > 1 ? `${dzienKrotko(sg.d)} · ` : ""}
+                    {sg.stanowisko} {trimTime(sg.from)}–{trimTime(sg.to)}: tylko osoby z poziomem 1 ({sg.osoby.join(", ")})
+                  </span>
+                </b>
+              ))}
+              <span className="text-[13px]">Sygnał, nie blokada.</span>
             </div>
           )}
 

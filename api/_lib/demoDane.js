@@ -294,13 +294,29 @@ const generuj = ({ dzis = C.ymd(), teraz = new Date() } = {}) => {
     "Dmytro Bondarenko": C.dodajDni(dzis, -3), // po terminie
     "Olena Kovalenko": null,                   // brak → „Braki w danych”
   };
+  // Poziom na stanowisku (0.78.0, migracja 0047). Dmytro jest na Zmywaku sam
+  // i ma poziom 1 — Grafik pokaże przy nim sygnał „tylko poziom 1”. Osoby
+  // spoza listy mają poziomy nieustawione (tak wygląda baza tuż po wdrożeniu).
+  const POZIOMY_DEMO = {
+    "Agnieszka Kowalczyk": { Kuchnia: 3 },
+    "Tomasz Zieliński": { Kuchnia: 2 },
+    "Rafał Grabowski": { Kuchnia: 2, "Pomoc kuchenna": 3 },
+    "Olena Kovalenko": { "Pomoc kuchenna": 2, Zmywak: 2 },
+    "Dmytro Bondarenko": { Zmywak: 1 },
+    [K.KONTA[2].imie]: { Sala: 2, Bar: 1 },
+    "Julia Mazur": { Sala: 3, Bar: 2 },
+    "Kacper Wójcik": { Bar: 3, Sala: 2 },
+    "Michał Kamiński": { Pizzaiolo: 3 },
+    "Oksana Shevchenko": { Pizzaiolo: 1 },
+    "Wiktoria Jankowska": { Bar: 2, Sala: 1 },
+  };
   const user = (u) => ({
     email: null, kiosk_pin: null, active: true, archived: false,
     default_lokal: null, default_stanowisko: null, allowed_lokale: "", allowed_stanowiska: null,
     stawka: null, typ_umowy: null, wymiar_etatu: null, wynagrodzenie_mies: null,
     umowa_bezterminowa: false, umowa_expiry: null, sanepid_expiry: null,
     telefon: null, data_zatrudnienia: null, notatki: null, email_powiadomienia: false,
-    probny_status: null, probny_od: null, probny_przez: null,
+    probny_status: null, probny_od: null, probny_przez: null, poziomy_stanowisk: null,
     ...u,
   });
   const konto = (klucz) => K.KONTA.find((k) => k.klucz === klucz);
@@ -328,6 +344,7 @@ const generuj = ({ dzis = C.ymd(), teraz = new Date() } = {}) => {
       umowa_bezterminowa: etat, umowa_expiry: etat ? null : `${dzis.slice(0, 4)}-12-31`,
       sanepid_expiry: p.name in sanepid ? sanepid[p.name] : C.dodajDni(dzis, 120 + i * 17),
       data_zatrudnienia: C.dodajDni(dzis, -(200 + i * 41)),
+      poziomy_stanowisk: POZIOMY_DEMO[p.name] || null,
     });
     if (p.konto === "telefon") {
       // Prywatny telefon: e-mail + kiosk_pin. Ten sam PIN blokuje jego profil na tablecie.

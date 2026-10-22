@@ -5,6 +5,21 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.78.0 — 2026-10-22
+
+- **Poziom doświadczenia na stanowisku.** W karcie pracownika, przy każdym
+  stanowisku, na którym ktoś może pracować, kierownik ustawia poziom:
+  1 — wdrażany (pracuje z kimś obok), 2 — samodzielny, 3 — może szkolić.
+  Nowe stanowisko dopisane do karty dostaje od razu poziom 1. Kto nie ma
+  jeszcze ustawionego poziomu, ma „nieustawiony” — nic się przez to nie zmienia.
+- **Grafik pokazuje poziom przy kandydatach** (kropki ●○○ / ●●○ / ●●●), a przy
+  równej liczbie godzin wyżej stoi bardziej doświadczona osoba.
+- **„Tylko poziom 1”.** Gdy na stanowisku w jakiejś godzinie stoją same osoby z
+  poziomem 1, Grafik pokazuje to nad dniem i w panelu przypisania. To
+  sygnał, nie blokada — zmianę można zapisać jak zawsze.
+- **„Więcej → Moje stanowiska”** u pracownika (tablet i telefon): gdzie może
+  pracować i na jakim poziomie.
+
 ## 0.77.0 — 2026-10-20
 
 - **„Nie pamiętam PIN-u”.** Na ekranie logowania jest teraz taki link: wpisujesz

@@ -1,0 +1,156 @@
+<meta charset="utf-8">
+<title>Sprawdzian poziomów na stanowiskach</title>
+<style>
+  body { font: 14px/1.6 ui-monospace, Menlo, monospace; padding: 24px; background: #FBFAF9; color: #17120F; }
+  h1 { font: 700 18px/1.2 system-ui, sans-serif; }
+  .ok { color: #2C6A4F; } .zle { color: #DE3A22; font-weight: 700; }
+  pre { background: #F1EEEB; padding: 10px; overflow-x: auto; }
+</style>
+<h1>Sprawdzian utils/poziomy.ts (poziom doświadczenia na stanowisku, 0.78.0)</h1>
+<div id="out">ładowanie…</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js"></script>
+<script>
+const out = document.getElementById("out");
+const log = (txt, cls = "") => {
+  const d = document.createElement("div");
+  d.className = cls; d.textContent = txt; out.appendChild(d);
+};
+
+// Ten sam loader co w harness-dziennik.html.
+const cache = new Map();
+async function zaladuj(sciezka) {
+  if (cache.has(sciezka)) return cache.get(sciezka);
+  const p = new Promise(async (resolve, reject) => {
+    try {
+      let kod = null;
+      for (const ext of [".ts", ".tsx", ""]) {
+        const r = await fetch(sciezka + ext + "?cb=" + Date.now());
+        if (r.ok) { kod = await r.text(); break; }
+      }
+      if (kod === null) throw new Error("nie znaleziono " + sciezka);
+      const specyfikatory = [...kod.matchAll(/from\s+"(\.[^"]+)"/g)].map((m) => m[1]);
+      const baza = sciezka.slice(0, sciezka.lastIndexOf("/"));
+      const mapa = {};
+      for (const s of specyfikatory) {
+        const url = new URL(baza + "/" + s, location.origin).pathname;
+        mapa[s] = await zaladuj(url);
+      }
+      kod = kod.replace(/from\s+"(\.[^"]+)"/g, (m, s) => `from "${mapa[s]}"`);
+      const js = Babel.transform(kod, { presets: [["typescript", { allExtensions: true, isTSX: true }]] }).code;
+      resolve(URL.createObjectURL(new Blob([js], { type: "text/javascript" })));
+    } catch (e) { reject(e); }
+  });
+  cache.set(sciezka, p);
+  return p;
+}
+
+let zdanych = 0, oblanych = 0;
+const sprawdz = (nazwa, warunek, szczegol = "") => {
+  if (warunek) { zdanych++; log("  OK   " + nazwa, "ok"); }
+  else { oblanych++; log("  ŹLE  " + nazwa + (szczegol ? " — " + szczegol : ""), "zle"); }
+};
+const J = (x) => JSON.stringify(x);
+
+(async () => {
+  try {
+    out.textContent = "";
+    const P = await import(await zaladuj("/src/utils/poziomy"));
+    log("moduł załadowany razem z utils/grafik.ts", "ok");
+
+    log("");
+    log("— odczyt i zapis —");
+    const ala = { id: "a", name: "Ala", default_stanowisko: "Bar", allowed_stanowiska: "Kasa", poziomy_stanowisk: { Bar: 3, Kasa: 2 } };
+    sprawdz("poziom z obiektu", P.poziomNa(ala, "Bar") === 3 && P.poziomNa(ala, "Kasa") === 2);
+    sprawdz("brak wpisu = nieustawiony (null), nie 1", P.poziomNa(ala, "Kuchnia") === null,
+      "inaczej po wdrożeniu każda zmiana świeciłaby „tylko poziom 1”");
+    sprawdz("NULL w kolumnie = pusty zestaw", J(P.poziomyOsoby({ poziomy_stanowisk: null })) === "{}");
+    sprawdz("jsonb jako tekst też się czyta", P.poziomNa({ poziomy_stanowisk: '{"Bar":2}' }, "Bar") === 2);
+    sprawdz("zepsuty tekst nie wywraca odczytu", J(P.poziomyOsoby({ poziomy_stanowisk: "{nie" })) === "{}");
+    sprawdz("wartości spoza 1–3 odpadają",
+      J(P.poziomyOsoby({ poziomy_stanowisk: { Bar: 4, Kasa: 0, Sala: "2", Zmywak: 1.5 } })) === J({ Sala: 2 }));
+    sprawdz("tablica to nie obiekt poziomów", J(P.poziomyOsoby({ poziomy_stanowisk: [1, 2] })) === "{}");
+    sprawdz("zPoziomem zmienia jedno stanowisko",
+      J(P.zPoziomem(ala, "Kasa", 3)) === J({ Bar: 3, Kasa: 3 }));
+    sprawdz("zPoziomem z null usuwa wpis", J(P.zPoziomem(ala, "Kasa", null)) === J({ Bar: 3 }));
+    sprawdz("nowe stanowisko dostaje 1",
+      P.zPoziomemStartowym(ala, "Sala").Sala === 1);
+    sprawdz("istniejący poziom nie spada do 1 przy ponownym dopisaniu",
+      P.zPoziomemStartowym(ala, "Bar").Bar === 3);
+    sprawdz("do zapisu tylko stanowiska z karty",
+      J(P.poziomyDoZapisu({ ...ala, allowed_stanowiska: "", poziomy_stanowisk: { Bar: 3, Kasa: 2 } })) === J({ Bar: 3 }),
+      "odznaczone stanowisko traci poziom");
+    sprawdz("allowed_stanowiska jako tablica też działa",
+      J(P.poziomyDoZapisu({ ...ala, allowed_stanowiska: ["Kasa"] })) === J({ Bar: 3, Kasa: 2 }));
+    sprawdz("pusty zestaw zapisuje się jako NULL",
+      P.poziomyDoZapisu({ default_stanowisko: "Bar", poziomy_stanowisk: {} }) === null);
+    sprawdz("kropki", P.kropkiPoziomu(1) === "●○○" && P.kropkiPoziomu(3) === "●●●" && P.kropkiPoziomu(null) === "");
+    sprawdz("baza z kolumną: klucz w wierszu, nawet z NULL", P.bazaZnaPoziomy([{ id: 1, poziomy_stanowisk: null }]));
+    sprawdz("baza bez 0047: klucza nie ma wcale", !P.bazaZnaPoziomy([{ id: 1 }]) && !P.bazaZnaPoziomy([]));
+
+    log("");
+    log("— sygnał „tylko poziom 1” —");
+    const D = "2026-11-14", POPRZEDNI = "2026-11-13";
+    const L = "Marynata";
+    const ludzie = [
+      { id: "o", name: "Ola", poziomy_stanowisk: { Bar: 1 } },
+      { id: "k", name: "Kasia", poziomy_stanowisk: { Bar: 1 } },
+      { id: "m", name: "Marek", poziomy_stanowisk: { Bar: 3 } },
+      { id: "n", name: "Nowy", poziomy_stanowisk: null },
+    ];
+    const zm = (id, user_id, start, end, extra = {}) => ({
+      id, user_id, user_name: ludzie.find((u) => u.id === user_id).name, lokal: L, stanowisko: "Bar",
+      date: D, start_time: start, end_time: end, ...extra,
+    });
+    const syg = (plan) => P.sygnalyPoziomu({ planShifts: plan, users: ludzie, lokal: L, date: D });
+    const opis = (w) => w.map((x) => `${x.stanowisko} ${x.from}-${x.to} [${x.osoby.join(",")}]`).join("; ");
+
+    let w = syg([zm("1", "o", "14:00", "17:00")]);
+    sprawdz("sama Ola (1) 14–17 → sygnał", opis(w) === "Bar 14:00-17:00 [Ola]", opis(w));
+    sprawdz("długość odcinka w minutach", w[0] && w[0].minutes === 180);
+
+    w = syg([zm("1", "o", "14:00", "22:00"), zm("2", "m", "17:00", "22:00")]);
+    sprawdz("Marek (3) od 17 ucina sygnał do 14–17", opis(w) === "Bar 14:00-17:00 [Ola]", opis(w));
+
+    w = syg([zm("1", "o", "14:00", "18:00"), zm("2", "k", "16:00", "20:00")]);
+    sprawdz("dwie osoby z 1 jedna po drugiej = jeden odcinek 14–20",
+      opis(w) === "Bar 14:00-20:00 [Ola,Kasia]", opis(w));
+
+    w = syg([zm("1", "o", "14:00", "22:00"), zm("2", "n", "12:00", "22:00")]);
+    sprawdz("osoba bez poziomu przerywa sygnał (12–14 też nic — nieznana)", w.length === 0, opis(w));
+
+    w = syg([zm("1", "m", "10:00", "18:00")]);
+    sprawdz("sam poziom 3 = bez sygnału", w.length === 0);
+
+    w = syg([zm("1", "o", "14:00", "17:00", { stanowisko: "Kasa" })]);
+    sprawdz("poziom z innego stanowiska się nie liczy (Ola nie ma poziomu na Kasie)", w.length === 0, opis(w));
+
+    w = syg([zm("1", "o", "14:00", "17:00", { lokal: "Ceglana" })]);
+    sprawdz("zmiana w innym lokalu nie liczy się tutaj", w.length === 0);
+
+    w = syg([zm("1", "o", "14:00", "17:00", { deleted_at: "2026-11-01T10:00:00Z" })]);
+    sprawdz("zmiana oznaczona do usunięcia nie liczy się", w.length === 0);
+
+    w = syg([zm("1", "o", "14:00", "17:00", { __nieaktywny: true })]);
+    sprawdz("zmiana osoby z wyłączonym kontem nie liczy się", w.length === 0);
+
+    w = syg([zm("1", "o", "20:00", "02:00", { date: POPRZEDNI })]);
+    sprawdz("zmiana przez północ z wczoraj daje 00–02 dziś", opis(w) === "Bar 00:00-02:00 [Ola]", opis(w));
+
+    w = syg([zm("1", "o", "20:00", "00:00")]);
+    sprawdz("koniec o północy kończy się na 24:00 (zapis 00:00)", opis(w) === "Bar 20:00-00:00 [Ola]", opis(w));
+
+    w = syg([zm("1", "o", "09:00", "11:00"), zm("2", "k", "15:00", "17:00")]);
+    sprawdz("przerwa bez nikogo dzieli sygnał na dwa odcinki",
+      opis(w) === "Bar 09:00-11:00 [Ola]; Bar 15:00-17:00 [Kasia]", opis(w));
+
+    log("");
+    log(`ZDANYCH ${zdanych}, OBLANYCH ${oblanych}`, oblanych ? "zle" : "ok");
+  } catch (e) {
+    log("BŁĄD: " + (e && e.message), "zle");
+    const pre = document.createElement("pre");
+    pre.textContent = (e && e.stack) || String(e);
+    out.appendChild(pre);
+  }
+})();
+</script>

@@ -68,6 +68,7 @@ import {
   faktIPlanZWydarzeniami,
 } from "../utils/wydarzenia";
 import PulsPrzypomnienie from "./manager/PulsPrzypomnienie";
+import { POZIOMY, kropkiPoziomu, opisPoziomu, poziomNa } from "../utils/poziomy";
 // Ten sam modal, co w karcie dnia i na ekranie kierownika zmiany — wpisanie
 // pomiaru to ta sama czynność i ma wyglądać tak samo wszędzie.
 import ModalWpisu from "./manager/ModalWpisu";
@@ -114,6 +115,7 @@ import {
   faktIPlanMiesiaca, publishedShiftsFor,
   publishedShiftsOnDay,
   nextShiftFrom,
+  allowedStanowiskaArr,
 } from "../utils/grafik";
 import {
   buildEmployeeBlocks,
@@ -428,7 +430,7 @@ export const Shell = ({
   footer = null,
   children,
 }) => {
-  const activeTabKey = ["WIECEJ", "WIADOMOSCI", "ZGLOS"].includes(screen)
+  const activeTabKey = ["WIECEJ", "WIADOMOSCI", "ZGLOS", "STANOWISKA"].includes(screen)
     ? "WIECEJ"
     : screen;
   // Prywatny telefon pokazuje tylko bloki włączone dla lokalu; Tablet
@@ -5160,6 +5162,15 @@ export const EmployeeSessionScreens = ({
             onClick: () => setScreen("PULS"),
             dane: { "data-wiecej": "puls" },
           })}
+        {/* Poziom na stanowiskach (0.78.0) — tylko podgląd, ustawia kierownik. */}
+        {allowedStanowiskaArr(employee).length > 0 &&
+          wiersz({
+            Ikona: MapPin,
+            tytul: "Moje stanowiska",
+            podpis: "gdzie pracujesz i na jakim poziomie",
+            onClick: () => setScreen("STANOWISKA"),
+            dane: { "data-wiecej": "stanowiska" },
+          })}
         {bloki.includes("WIADOMOSCI") &&
           wiersz({
             Ikona: Mail,
@@ -5293,6 +5304,85 @@ export const EmployeeSessionScreens = ({
             </div>
           </div>
         )}
+      </Shell>
+    );
+  }
+
+  // ==========================================
+  // EKRAN: MOJE STANOWISKA (0.78.0, makieta EmployeeMyPositions)
+  // Tylko podgląd: stanowiska z karty i poziom na każdym. Poziom ustawia
+  // kierownik; brak = „nieustawiony”, nie „1”.
+  // ==========================================
+  if (screen === "STANOWISKA") {
+    const lista = allowedStanowiskaArr(employee);
+    return (
+      <Shell
+        screen={screen}
+        setScreen={setScreen}
+        onBack={onBack}
+        unreadCount={unreadCount}
+        taskBadgeCount={taskBadgeCount}
+        grafikBadgeCount={grafikBadgeCount}
+        bloki={bloki}
+        personName={onBack ? employee.name : null}
+        title="Moje stanowiska"
+        nowyWyglad
+      >
+        <div className="w-full max-w-[620px] mx-auto flex flex-col gap-3" data-moje-stanowiska>
+          <p className="text-[15px] leading-[21px] text-[#6E6E66] mx-0.5">
+            Gdzie możesz pracować i na jakim poziomie. Poziom ustawia kierownik.
+          </p>
+          <div className="grid gap-2.5">
+            {lista.map((nazwa) => {
+              const p = poziomNa(employee, nazwa);
+              const glowne = nazwa === employee.default_stanowisko;
+              return (
+                <div
+                  key={nazwa}
+                  className="flex items-center gap-3 min-h-[72px] px-3.5 py-2.5 border-2 border-[#B7B6AE] rounded-lg bg-white"
+                  data-moje-stanowisko={nazwa}
+                >
+                  <span className="min-w-0 flex-1">
+                    <b className="block text-[19px] font-extrabold text-[#171714]">
+                      {nazwa}
+                      {glowne && (
+                        <span className="ml-2 align-middle text-[12px] font-bold px-1.5 py-0.5 rounded bg-[#ECEBE6] text-[#171714]">
+                          główne
+                        </span>
+                      )}
+                    </b>
+                    <small className="text-[14px] leading-[18px] text-[#6E6E66]">
+                      {p ? `Poziom ${p} — ${opisPoziomu(p).nazwa}` : "Poziom nieustawiony"}
+                    </small>
+                  </span>
+                  {p && (
+                    <span className="text-[18px] tracking-[2px] text-[#171714]" aria-label={`poziom ${p}`} data-poziom={p}>
+                      {kropkiPoziomu(p)}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <section className="rounded-lg bg-[#ECEBE6] px-3.5 py-3">
+            <b className="block text-[15px] font-extrabold text-[#171714] mb-1">Co znaczą poziomy</b>
+            <ul className="text-[14px] leading-[20px] text-[#171714] flex flex-col gap-0.5">
+              {POZIOMY.map((x) => (
+                <li key={x.poziom}>
+                  <span className="tracking-[1px] mr-1.5">{kropkiPoziomu(x.poziom)}</span>
+                  {x.poziom} — {x.nazwa}: {x.opis}
+                </li>
+              ))}
+            </ul>
+          </section>
+          <button
+            type="button"
+            onClick={() => setScreen("WIECEJ")}
+            className="self-start inline-flex items-center gap-1 text-[15px] font-bold text-[#171714] underline"
+          >
+            <ChevronLeft size={18} /> Wróć do „Więcej”
+          </button>
+        </div>
       </Shell>
     );
   }
