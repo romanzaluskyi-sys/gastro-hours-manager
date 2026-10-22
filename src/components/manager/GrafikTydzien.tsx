@@ -60,11 +60,11 @@ import {
 import { budzetDnia, budzetTygodnia, zl, pct0, pct1 } from "../../utils/budzet";
 import { WierszeBudzetu } from "./GrafikBudzet";
 import { activeSwapFor, pendingSwapDelta, wycofajOfertyDlaZmian, wzajemnaZmiana } from "../../utils/swaps";
-import { addUrlopDirectly, addNiedostepnoscDirectly } from "../../utils/absences";
+import { addUrlopDirectly } from "../../utils/absences";
 import { stanowiskoShort, findStanowisko } from "../../utils/stanowiska";
 import { normaMiesiaca } from "../../utils/umowy";
 import { bazaZnaPoziomy, sygnalyPoziomu, zPoziomemStartowym } from "../../utils/poziomy";
-import { dyspozycjaNa, krotkoDyspozycji, przeszkodaDyspozycji, wiazeDyspozycja } from "../../utils/dyspozycja";
+import { dyspozycjaNa, krotkoDyspozycji, przeszkodaDyspozycji, wiazeDyspozycja, wpiszNieMogeZaPracownika } from "../../utils/dyspozycja";
 import { podmienProsbe, prosbyDnia, stanProsby, wycofaj as wycofajProsbe, zapytaj } from "../../utils/prosby";
 import { ostrzezeniaKodeksu } from "../../utils/kodeks";
 import { countWorkdays, URLOP_HOURS_PER_DAY } from "../../utils/absences";
@@ -582,7 +582,7 @@ function LokalSection({
             }`}
             data-nieobecnosc
           >
-            {abs.type === "urlop" ? "urlop" : "niedostępność"}
+            {abs.type === "urlop" ? "urlop" : "nie może"}
           </div>
         ) : null}
         {prosbyOsoby.map((p) => {
@@ -1329,6 +1329,7 @@ export default function GrafikTydzien({
   setPlanShifts,
   absences,
   dyspozycja = [],
+  setDyspozycja,
   dyspozycjaMiesiace = [],
   prosbyZapytaj = [],
   setProsby,
@@ -1462,7 +1463,12 @@ export default function GrafikTydzien({
           wolne.type === "urlop"
             ? `${data.user_name} ma tego dnia zatwierdzony urlop (${wolne.start_date} – ${wolne.end_date}).`
             : `${data.user_name} zgłosił(a) brak dostępności na ten dzień (${wolne.start_date} – ${wolne.end_date}).`,
-        podpowiedz: "Dostępność zgłasza pracownik w swojej aplikacji. Aby to obejść, poproś o wycofanie zgłoszenia.",
+        podpowiedz:
+          wolne.type === "urlop"
+            ? "Urlop zatwierdzony — żeby wpisać zmianę, najpierw trzeba go zdjąć w karcie pracownika."
+            : "Stara niedostępność działa jak dyspozycja „Nie mogę”: o jeden dzień można zapytać („Zapytaj”).",
+        // 0.81.0 — stara niedostępność to to samo co „Nie mogę”: daje „Zapytaj”.
+        dyspozycja: wolne.type !== "urlop",
       };
     }
     // Dyspozycja (0.79.0): wiążące „Nie mogę” albo godziny poza „Mogę w
@@ -1645,13 +1651,38 @@ export default function GrafikTydzien({
 
   // Wolne/urlop wpisane wprost z grafiku (utils/absences.ts).
   const handleAddAbsence = async ({ user, typ, od, doDnia, note }) => {
+    // „Nie może” (0.81.0) to dyspozycja wpisana przez kierownika, nie stara
+    // niedostępność w `absences` — jedno pojęcie zamiast dwóch (docs/DYSPOZYCJA.md, D4).
+    if (typ === "niedostepnosc") {
+      try {
+        const w = await wpiszNieMogeZaPracownika({
+          user,
+          od,
+          doDnia,
+          notatka: note,
+          dzis: dzisYMD,
+          dyspozycja,
+          kierownik: currentUser?.name,
+        });
+        if (setDyspozycja) setDyspozycja(w.dyspozycja);
+        setModalCtx(null);
+        showMsg(
+          (w.zapisane.length ? `Zapisano „Nie może” na ${w.zapisane.length} ${w.zapisane.length === 1 ? "dzień" : "dni"}.` : "Nic do zapisania.") +
+            (w.pominiete.length ? ` Pominięto ${w.pominiete.length} — tam pracownik sam zaznaczył, że może.` : "")
+        );
+        return true;
+      } catch (err) {
+        showMsg(`Błąd zapisu dyspozycji: ${err.message || "nieznany błąd"}`, "error");
+        return false;
+      }
+    }
     try {
-      const fn = typ === "urlop" ? addUrlopDirectly : addNiedostepnoscDirectly;
+      const fn = addUrlopDirectly;
       const { absence, createdShifts } = await fn({ user, startDate: od, endDate: doDnia, editorName: currentUser?.name, note });
       setAbsences([...(absences || []), absence]);
       if (createdShifts && createdShifts.length > 0 && setShifts) setShifts((prev) => [...prev, ...createdShifts]);
       setModalCtx(null);
-      showMsg(typ === "urlop" ? "Urlop zapisany." : "Niedostępność zapisana.");
+      showMsg("Urlop zapisany.");
       return true;
     } catch (err) {
       showMsg(`Błąd zapisu wolnego: ${err.message || "nieznany błąd"}`, "error");

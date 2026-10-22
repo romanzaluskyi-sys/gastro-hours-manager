@@ -870,7 +870,7 @@ export default function GrafikZmianaModal({
               <div className="flex gap-1.5">
                 {[
                   { key: "urlop", label: "Urlop" },
-                  { key: "niedostepnosc", label: "Niedostępność" },
+                  { key: "niedostepnosc", label: "Nie może" },
                 ].map((o) => (
                   <button
                     key={o.key}
@@ -912,7 +912,7 @@ export default function GrafikZmianaModal({
               <span className="text-[13px] text-[#6E6E66]">
                 {wolneForm.typ === "urlop"
                   ? "Urlop od razu zapisze się jako godziny (8 h za dzień roboczy), a pracownik dostanie powiadomienie."
-                  : "Niedostępność nie generuje godzin — blokuje tylko wpisywanie zmian w te dni."}
+                  : "Wpisze się do dyspozycji pracownika jako „Nie mogę” (bez godzin): Grafik nie pozwoli wpisać zmiany w te dni, o jeden dzień można zapytać. Dni, które pracownik sam zaznaczył, zostają bez zmian."}
               </span>
               <div className="flex gap-2">
                 <button type="button" className={btnObrysCls} onClick={() => setWolneForm(null)}>

@@ -28,6 +28,7 @@ import {
   podsumowanieMiesiaca,
   przesunMiesiac,
   urlopNa,
+  niedostepnoscNa,
   wpisMiesiaca,
   wyslijMiesiac,
   zakresyCiagle,
@@ -111,8 +112,11 @@ export default function DyspozycjaEkran({
     const urlop = urlopNa(absences, employee, d);
     const zmiana = zmianaOpublikowanaNa(planShifts, employee, d);
     const blokada = dzienZablokowany({ dateStr: d, dzis, planShifts, user: employee });
-    const klucz = urlop ? (urlop.status === "approved" ? "urlopOk" : "urlop") : wpis ? wpis.stan : "pusty";
-    return { wpis, urlop, zmiana, blokada, klucz };
+    // Stara niedostępność (absences, sprzed 0.79.0) to to samo „Nie mogę” —
+    // widać ją tu tylko do odczytu, bo wpisał ją kierownik.
+    const stara = !wpis && !urlop ? niedostepnoscNa(absences, employee, d) : null;
+    const klucz = urlop ? (urlop.status === "approved" ? "urlopOk" : "urlop") : wpis ? wpis.stan : stara ? "nie" : "pusty";
+    return { wpis, urlop, zmiana, blokada, klucz, stara };
   };
 
   const czekajace = prosbyDoOdpowiedzi(prosby, employee);
@@ -158,6 +162,13 @@ export default function DyspozycjaEkran({
         `Na ${dzienKrotki(d)} masz już zmianę w grafiku (${trimTime(s.zmiana.start_time)}–${trimTime(
           s.zmiana.end_time
         )}). Grafik obowiązuje — jeśli nie możesz przyjść, daj znać kierownikowi.`,
+        "error"
+      );
+      return;
+    }
+    if (s.stara) {
+      showMsg(
+        `${dzienKrotki(d)}: kierownik wpisał wcześniej, że wtedy nie możesz („Nie mogę”). Żeby to zmienić, napisz do kierownika.`,
         "error"
       );
       return;
@@ -297,7 +308,7 @@ export default function DyspozycjaEkran({
       ? "urlop"
       : s.wpis?.stan === "godziny"
       ? godzinyTekst(s.wpis)
-      : s.wpis?.stan === "nie"
+      : s.wpis?.stan === "nie" || s.stara
       ? "nie"
       : "";
     return (
@@ -307,7 +318,7 @@ export default function DyspozycjaEkran({
         onClick={() => dotknijDnia(d)}
         disabled={s.blokada === "minął"}
         aria-pressed={zaznaczony}
-        aria-label={`${dzienKrotki(d)}: ${s.urlop ? "urlop" : opisDyspozycji(s.wpis)}${s.zmiana ? ", zmiana w grafiku" : ""}`}
+        aria-label={`${dzienKrotki(d)}: ${s.urlop ? "urlop" : s.stara ? "Nie mogę" : opisDyspozycji(s.wpis)}${s.zmiana ? ", zmiana w grafiku" : ""}`}
         data-dzien-dyspozycji={d}
         data-stan={s.klucz}
         className={`relative min-h-[54px] md:min-h-[72px] rounded-lg border-2 px-1 pt-1 pb-1 flex flex-col items-start text-left ${
@@ -321,7 +332,7 @@ export default function DyspozycjaEkran({
             <Lock size={10} /> {trimTime(s.zmiana.start_time).replace(/:00$/, "")}
           </span>
         )}
-        {s.wpis?.autor === "kierownik" && (
+        {(s.wpis?.autor === "kierownik" || s.stara) && (
           <span className="absolute top-1 right-1 text-[9px] font-extrabold" title="wpisał kierownik">
             K
           </span>
@@ -376,8 +387,8 @@ export default function DyspozycjaEkran({
           >
             <b className="w-[74px] text-[15px] font-extrabold">{dzienKrotki(d)}</b>
             <span className="flex-1 text-[15px] font-semibold">
-              {s.urlop ? (s.urlop.status === "approved" ? "Urlop · zatwierdzony" : "Urlop · czeka") : opisDyspozycji(s.wpis)}
-              {s.wpis?.autor === "kierownik" && <small className="block text-[12px] font-medium">wpisał kierownik</small>}
+              {s.urlop ? (s.urlop.status === "approved" ? "Urlop · zatwierdzony" : "Urlop · czeka") : s.stara ? "Nie mogę" : opisDyspozycji(s.wpis)}
+              {(s.wpis?.autor === "kierownik" || s.stara) && <small className="block text-[12px] font-medium">wpisał kierownik</small>}
             </span>
             {s.zmiana && (
               <span className="inline-flex items-center gap-1 text-[13px] font-bold">

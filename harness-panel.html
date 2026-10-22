@@ -1774,6 +1774,34 @@ const poprzedniMiesiac = (h) => {
               JSON.stringify(nowe.map((z) => z[0])));
             sprawdz("„Zapytaj”: panel zamknięty, nad dniem „zapytano”, w kratce „czeka na zgodę”",
               !panel() && !!sekcja().querySelector('[data-zapytano="Cezary"]') && !!sekcja().querySelector('[data-prosba-w-kratce="czeka"]'));
+
+            // „Nie może” z panelu (0.81.0): zapisuje DYSPOZYCJĘ, nie `absences`.
+            lukaZap.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            await czekaj(300);
+            const kto = [...panel().querySelectorAll("[data-kandydat]")].find((b) => !b.disabled);
+            const imie = kto && kto.getAttribute("data-kandydat");
+            kto.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            await czekaj(200);
+            [...panel().querySelectorAll("button")].find((b) => b.textContent.trim() === "Wolne / urlop")
+              .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            await czekaj(200);
+            const wolnePanel = panel().querySelector("[data-wolne-panelu]");
+            [...wolnePanel.querySelectorAll("button")].find((b) => b.textContent.trim() === "Nie może")
+              .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            await czekaj(150);
+            sprawdz("„Nie może” mówi, że wpisze się do dyspozycji", /do dyspozycji pracownika jako „Nie mogę”/.test(panel().querySelector("[data-wolne-panelu]").textContent));
+            const przedNieMoze = window.__zapisy.length;
+            [...panel().querySelector("[data-wolne-panelu]").querySelectorAll("button")].find((b) => b.textContent.trim() === "Zapisz wolne")
+              .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            await czekaj(400);
+            const noweNM = window.__zapisy.slice(przedNieMoze);
+            const dysp = noweNM.filter((z) => z[0] === "dyspozycja").map((z) => z[1]);
+            sprawdz("„Nie może” = wiersz dyspozycji „nie” dla tej osoby, bez `absences`",
+              dysp.length === 1 && dysp[0].stan === "nie" && dysp[0].user_name === imie && !noweNM.some((z) => z[0] === "absences"),
+              JSON.stringify(noweNM.map((z) => [z[0], z[1] && z[1].stan])));
+            sprawdz("„Nie może”: wiadomość „Kierownik wpisał Ci w dyspozycji”",
+              noweNM.some((z) => z[0] === "notifications" && /^Kierownik wpisał Ci w dyspozycji/.test((z[1] || {}).message || "")));
+            sprawdz("„Nie może”: panel zamknięty", !panel());
           }
 
           G().querySelector("[data-zobacz-szkic]").dispatchEvent(new MouseEvent("click", { bubbles: true }));

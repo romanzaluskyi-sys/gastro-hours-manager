@@ -507,6 +507,7 @@ const USERS = [
       ["Kierownik pyta (Zapytaj)", { type: "dyspozycja",
         message: "Kierownik pyta, czy możesz: sob 17.10, 16:00–22:00, Kelner · Ceglana. Odpowiedz w Dyspozycji." }],
       ["Pytanie wycofane", { type: "dyspozycja", message: "Kierownik wycofał pytanie o zmianę: sob 17.10, 16:00–22:00, Kelner · Ceglana." }],
+      ["Nie może od kierownika", { type: "dyspozycja", message: "Kierownik wpisał Ci w dyspozycji „Nie mogę”: 12.11–14.11. Wpisał(a): Roman." }],
       ["Nieznany typ", { type: "cos_nowego", message: "Zwykła wiadomość." }],
     ];
     const GRAFIK_ALI = [
@@ -541,6 +542,10 @@ const USERS = [
         sprawdz("„Zapytaj” (0.80.0): temat, szczegóły zmiany, przycisk do Dyspozycji",
           m.temat === "Kierownik pyta, czy możesz przyjść" && m.html.includes("sob 17.10, 16:00–22:00") &&
             m.html.includes(">Odpowiedz w Dyspozycji&nbsp;") && m.html.includes("?otworz=dyspozycja"), m.temat);
+      }
+      if (nazwa === "Nie może od kierownika") {
+        sprawdz("„Nie może” od kierownika (0.81.0): osobny temat, przycisk do Dyspozycji",
+          m.temat === "Kierownik wpisał Ci „Nie mogę”" && m.html.includes("?otworz=dyspozycja"), m.temat);
       }
       if (nazwa === "Pytanie wycofane") {
         sprawdz("„Zapytaj” wycofane: osobny temat, CTA do grafiku", m.temat === "Pytanie o zmianę wycofane" && m.html.includes("?otworz=grafik"), m.temat);

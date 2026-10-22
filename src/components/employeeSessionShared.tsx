@@ -402,9 +402,10 @@ export const opisWiadomosci = (n) => {
     // 0.80.0 — „Zapytaj” kierownika (utils/prosby.ts: tekstProsby,
     // tekstWycofania). Te same zdania rozpoznaje api/_lib/wiadomosci.js.
     case "dyspozycja":
-      return /^Kierownik wycofał pytanie/.test(t)
-        ? w("grafik", "info", "grafik", "Pytanie o zmianę wycofane")
-        : w("grafik", "warn", "grafik", "Kierownik pyta, czy możesz", "dyspozycja");
+      if (/^Kierownik wycofał pytanie/.test(t)) return w("grafik", "info", "grafik", "Pytanie o zmianę wycofane");
+      // 0.81.0 — „Nie może” wpisane przez kierownika (utils/dyspozycja.ts, tekstNieMogeOdKierownika).
+      if (/^Kierownik wpisał Ci w dyspozycji/.test(t)) return w("kor", "info", "wolne", "Kierownik wpisał Ci „Nie mogę”", "dyspozycja");
+      return w("grafik", "warn", "grafik", "Kierownik pyta, czy możesz", "dyspozycja");
     case "sanepid":
       return w("inne", "warn", "dokument", "Termin książeczki sanepid");
     case "umowa":

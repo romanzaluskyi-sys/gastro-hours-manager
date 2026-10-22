@@ -108,6 +108,7 @@ const ManagerDashboard = ({
   absences,
   setAbsences,
   dyspozycja = [],
+  setDyspozycja,
   dyspozycjaMiesiace = [],
   prosby = [],
   setProsby,
@@ -1426,6 +1427,7 @@ const ManagerDashboard = ({
             absences={absences}
             setAbsences={setAbsences}
             dyspozycja={dyspozycja}
+            setDyspozycja={setDyspozycja}
             dyspozycjaMiesiace={dyspozycjaMiesiace}
             prosby={prosby}
             setProsby={setProsby}

@@ -57,6 +57,7 @@ export default function Grafik({
   onResolveSwap,
   absences,
   dyspozycja = [],
+  setDyspozycja,
   dyspozycjaMiesiace = [],
   prosby = [],
   setProsby,
@@ -519,6 +520,7 @@ export default function Grafik({
           setPlanShifts={setPlanShifts}
           absences={absences}
           dyspozycja={dyspozycja}
+          setDyspozycja={setDyspozycja}
           dyspozycjaMiesiace={dyspozycjaMiesiace}
           prosbyZapytaj={prosby}
           setProsby={setProsby}

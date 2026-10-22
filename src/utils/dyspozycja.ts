@@ -22,6 +22,7 @@
 // zmiany dojdzie w kolejnym etapie (D4).
 
 import { api } from "../api/supabase";
+import { createEmployeeNotification } from "../api/notifications";
 import { addDaysYMD, isSameUser, shiftSegmentsOnDate, timeToMin, trimTime } from "./grafik";
 
 export const STANY = {
@@ -148,6 +149,21 @@ export const urlopNa = (absences, user, dateStr) =>
       (a.user_id ? String(a.user_id) === String(user.id) : a.user_name === user.name)
   ) || null;
 
+// Stara niedostępność (`absences.type = 'niedostepnosc'`, zatwierdzona) — do
+// 0.79.0 jedyna droga powiedzenia „nie mogę”. Od 0.81.0 to TO SAMO co
+// dyspozycja „Nie mogę”: blokuje, daje „Zapytaj” i stoi w kalendarzu
+// pracownika jako „Nie mogę” (tylko do odczytu). Nowych nikt już nie zakłada;
+// przyszłe przenosi migracja 0050.
+export const niedostepnoscNa = (absences, user, dateStr) =>
+  (absences || []).find(
+    (a) =>
+      a.type === "niedostepnosc" &&
+      a.status === "approved" &&
+      a.start_date <= dateStr &&
+      dateStr <= a.end_date &&
+      (a.user_id ? String(a.user_id) === String(user.id) : a.user_name === user.name)
+  ) || null;
+
 // Czego NIE wolno zmienić z ekranu pracownika i dlaczego.
 export const dzienZablokowany = ({ dateStr, dzis, planShifts, user }) => {
   if (dateStr < dzis) return "minął";
@@ -175,6 +191,7 @@ export const dniPozostale = ({ miesiac, dzis, user, dyspozycja, absences, planSh
       d >= dzis &&
       !dyspozycjaNa(dyspozycja, user, d) &&
       !urlopNa(absences, user, d) &&
+      !niedostepnoscNa(absences, user, d) &&
       !zmianaOpublikowanaNa(planShifts, user, d)
   );
 
@@ -263,6 +280,38 @@ export const wyslijMiesiac = async ({ user, miesiac, pozostale, dzis, dyspozycja
   };
 };
 
+// Kierownik wpisuje „Nie mogę” w imieniu pracownika (0.81.0 — zastępuje dawne
+// „Niedostępność” z panelu zmiany w Grafiku). Wpis kierownika wiąże od razu.
+// ⚠️ Dni, które pracownik zaznaczył SAM, zostają bez zmian — trigger
+// `dyspozycja_autor` i tak by ich nie przepuścił; wracają w `pominiete`.
+// Zwraca { dyspozycja, zapisane: [dni], pominiete: [dni] }.
+export const tekstNieMogeOdKierownika = (kto, od, doDnia) => {
+  const f = (d) => `${d.slice(8, 10)}.${d.slice(5, 7)}`;
+  return `Kierownik wpisał Ci w dyspozycji „Nie mogę”: ${od === doDnia ? f(od) : `${f(od)}–${f(doDnia)}`}.${kto ? ` Wpisał(a): ${kto}.` : ""}`;
+};
+export const wpiszNieMogeZaPracownika = async ({ user, od, doDnia, notatka, dzis, dyspozycja, kierownik }) => {
+  const dni = [];
+  for (let d = od < dzis ? dzis : od; d <= doDnia; d = addDaysYMD(d, 1)) dni.push(d);
+  const pominiete = dni.filter((d) => {
+    const w = dyspozycjaNa(dyspozycja, user, d);
+    return w && w.autor === "pracownik" && w.stan !== "nie";
+  });
+  const juzNie = dni.filter((d) => {
+    const w = dyspozycjaNa(dyspozycja, user, d);
+    return w && w.autor === "pracownik" && w.stan === "nie";
+  });
+  const doZapisu = dni.filter((d) => !pominiete.includes(d) && !juzNie.includes(d));
+  const lista = doZapisu.length ? await zapiszDni({ user, dni: doZapisu, stan: "nie", notatka, dyspozycja }) : dyspozycja;
+  if (doZapisu.length) {
+    try {
+      await createEmployeeNotification(user.name, tekstNieMogeOdKierownika(kierownik, doZapisu[0], doZapisu[doZapisu.length - 1]), "dyspozycja");
+    } catch (e) {
+      // wpis jest zapisany i widać go w Dyspozycji — wiadomość best-effort
+    }
+  }
+  return { dyspozycja: lista, zapisane: doZapisu, pominiete };
+};
+
 // Podsumowanie miesiąca przed wysłaniem (kafle „Mogę / Nie mogę / Urlop”).
 export const podsumowanieMiesiaca = ({ miesiac, user, dyspozycja, absences }) => {
   const dni = dniMiesiaca(miesiac);
@@ -271,7 +320,7 @@ export const podsumowanieMiesiaca = ({ miesiac, user, dyspozycja, absences }) =>
     moge: w.filter((x) => x && x.stan !== "nie").length,
     cale: w.filter((x) => x && x.stan === "moge").length,
     wGodzinach: w.filter((x) => x && x.stan === "godziny").length,
-    nie: w.filter((x) => x && x.stan === "nie").length,
+    nie: dni.filter((d, i) => (w[i] && w[i].stan === "nie") || (!w[i] && niedostepnoscNa(absences, user, d))).length,
     urlop: dni.filter((d) => urlopNa(absences, user, d)).length,
   };
 };

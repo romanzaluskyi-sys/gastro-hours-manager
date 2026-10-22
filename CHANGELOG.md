@@ -5,6 +5,18 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.81.0 — 2026-10-22
+
+- **„Nie może” to teraz jedno pojęcie.** Dawna „niedostępność” i „Nie mogę” z
+  Dyspozycji działają tak samo: blokują wpisanie zmiany, pozwalają kierownikowi
+  zapytać o jeden dzień („Zapytaj”), a w kratce Grafiku stoi „nie może”.
+- **Kierownik wpisuje „Nie może” do dyspozycji pracownika** (panel zmiany →
+  „Wolne / urlop” → „Nie może”). Pracownik widzi to w swoim kalendarzu z
+  dopiskiem „wpisał kierownik” i dostaje wiadomość. Dni, które pracownik sam
+  zaznaczył, zostają bez zmian.
+- **Stara niedostępność widać w Dyspozycji pracownika** jako „Nie mogę”
+  (tylko do odczytu). Przyszłe dni ze starych wpisów przechodzą do dyspozycji.
+
 ## 0.80.0 — 2026-10-22
 
 - **„Zapytaj” w Grafiku.** Osoba, która w dyspozycji tego dnia nie może (albo

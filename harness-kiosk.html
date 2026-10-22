@@ -248,7 +248,7 @@ const poprzedniMiesiac = (h) => {
       // Urlop i niedostępność Bo w BIEŻĄCYM miesiącu (0.62.1) — kalendarz
       // miesiąca ma je pokazać w komórce, bez klikania. Stan (od 0.79.0): wniosek
       // urlopowy z Dyspozycji ma od razu trafić do listy, jak w App.
-      const [absences, setAbsences] = useState((() => {
+      const [absences, setAbsences] = useState(() => { const lista = (() => {
           const d = new Date();
           const dzien = (o) => {
             const x = new Date(d.getFullYear(), d.getMonth(), d.getDate() > 3 ? d.getDate() - o : d.getDate() + o);
@@ -260,7 +260,7 @@ const poprzedniMiesiac = (h) => {
             { id: "ab2", user_id: "u2", user_name: "Bo", status: "approved", type: "niedostepnosc",
               start_date: dzien(3), end_date: dzien(3) },
           ];
-        })());
+        })(); window.__absencesKiosk = lista; return lista; });
       // Dyspozycja (0.79.0) — stan jak w App, żeby zapis z ekranu był widać od razu.
       const [dyspozycja, setDyspozycja] = useState([]);
       // Dwie prośby „Zapytaj” do Cezarego na 5. i 6. dzień przyszłego miesiąca.
@@ -1056,6 +1056,20 @@ const poprzedniMiesiac = (h) => {
         sprawdz("zlecenie: arkusz bez „Urlop”, z wyjaśnieniem",
           !document.querySelector('#app [data-opcja-dyspozycji="urlop"]') && !!document.querySelector("#app [data-bez-urlopu]"));
         await klikPrzycisk("Anuluj");
+
+        // Stara niedostępność (absences, 0.81.0): Bo ma ją w bieżącym miesiącu —
+        // w Dyspozycji stoi jako „Nie mogę”, tylko do odczytu.
+        klik("Zmień"); await czekaj(300);
+        klik("Bo"); await czekaj(300);
+        await otworzZakladke("Więcej");
+        document.querySelector('#app [data-wiecej="dyspozycja"]').dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(300);
+        document.querySelector('#app [aria-label="Poprzedni miesiąc"]').dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(250);
+        const staraData = (window.__absencesKiosk || []).find((a) => a.id === "ab2")?.start_date;
+        const staraKom = staraData && document.querySelector(`#app [data-dzien-dyspozycji="${staraData}"]`);
+        sprawdz("stara niedostępność w kalendarzu Dyspozycji = „Nie mogę” (K)",
+          !!staraKom && staraKom.dataset.stan === "nie" && /K/.test(staraKom.textContent), staraKom ? staraKom.outerHTML.slice(0, 160) : `brak dnia ${staraData}`);
         klik("Zmień"); await czekaj(300);
         klik("Bo"); await czekaj(300);
         await otworzZakladke("Zadania");

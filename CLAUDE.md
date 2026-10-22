@@ -221,8 +221,13 @@ Logika: [`utils/dyspozycja.ts`](src/utils/dyspozycja.ts); ekran pracownika:
 Dyspozycja, blok `WOLNE`); sprawdzian `harness-dyspozycja.html`.
 - ⚠️ **Wolne (urlop, niedostępność) NIE jest już w Zgłoś.** Urlop wnioskuje się
   z kalendarza Dyspozycji (dalej `absences`, pending → kierownik), a
-  niedostępność to dyspozycja „Nie mogę” — nowych `absences.type =
-  'niedostepnosc'` od pracownika nie ma. Stare zostają i blokują jak dawniej.
+  niedostępność to dyspozycja „Nie mogę”.
+- ⚠️ **Od 0.81.0 „niedostępność” i „Nie mogę” to JEDNO pojęcie** (decyzja
+  właściciela). Nowych `absences.type = 'niedostepnosc'` nie zakłada już NIKT —
+  kierownik wpisuje „Nie może” do `dyspozycja` (`wpiszNieMogeZaPracownika`).
+  Stare zatwierdzone blokują dalej, ale dają „Zapytaj” (`dyspozycja: true` w
+  `przeszkodaDnia`) i stoją w kalendarzu pracownika jako „Nie mogę”
+  (`niedostepnoscNa`); przyszłe dni przenosi migracja `0050`.
 - ⚠️ **Wiąże tylko wysłany miesiąc albo wpis kierownika** (`wiazeDyspozycja`).
   Szkic leży w bazie (zapis od razu), ale Grafik go nie widzi.
 - ⚠️ **Blokada idzie przez TE SAME miejsca co urlop**: `przeszkodaDnia`

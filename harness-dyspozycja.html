@@ -165,11 +165,13 @@ const J = (x) => JSON.stringify(x);
     sprawdz("usunięta po wysłaniu nie blokuje", D.dzienZablokowany({ dateStr: "2026-11-07", dzis: "2026-10-22", planShifts: plan, user: ala }) === null);
     sprawdz("dzień miniony jest zablokowany", D.dzienZablokowany({ dateStr: "2026-10-21", dzis: "2026-10-22", planShifts: [], user: ala }) === "minął");
     const poz = D.dniPozostale({ miesiac: MIES, dzis: "2026-11-03", user: ala, dyspozycja: dysp, absences: urlopy, planShifts: plan });
-    sprawdz("pozostałe dni: od dziś, bez zaznaczonych, urlopu i opublikowanej zmiany",
-      poz.length === 30 - 2 - 4 - 2 - 1 && !poz.includes("2026-11-05") && poz.includes("2026-11-06") && !poz.includes("2026-11-24") && !poz.includes("2026-11-02"),
+    // Od 0.81.0 zatwierdzona stara niedostępność (27.11) to „Nie mogę” — też odpada.
+    sprawdz("pozostałe dni: od dziś, bez zaznaczonych, urlopu, starej niedostępności i opublikowanej zmiany",
+      poz.length === 30 - 2 - 4 - 2 - 1 - 1 && !poz.includes("2026-11-27") && !poz.includes("2026-11-05") && poz.includes("2026-11-06") && !poz.includes("2026-11-24") && !poz.includes("2026-11-02"),
       `${poz.length}: ${poz.slice(0, 5).join(",")}…`);
     const pod = D.podsumowanieMiesiaca({ miesiac: MIES, user: ala, dyspozycja: dysp, absences: urlopy });
-    sprawdz("podsumowanie miesiąca", pod.moge === 3 && pod.cale === 1 && pod.wGodzinach === 2 && pod.nie === 1 && pod.urlop === 2, J(pod));
+    sprawdz("podsumowanie miesiąca (stara niedostępność liczy się jako „nie mogę”)",
+      pod.moge === 3 && pod.cale === 1 && pod.wGodzinach === 2 && pod.nie === 2 && pod.urlop === 2, J(pod));
 
     log("");
     log("— zapis (atrapa api) —");
@@ -274,6 +276,43 @@ const J = (x) => JSON.stringify(x);
     sprawdz("zapytaj o przeszłość odmawia", /za późno/.test(zaPozno), zaPozno);
     const wyc = await PR.wycofaj(zap);
     sprawdz("wycofaj: status „wycofana”", wyc.status === "wycofana");
+
+    log("");
+    log("— stara niedostępność = „Nie mogę” (0.81.0) —");
+    const stare = [
+      { id: "n1", user_id: "a", type: "niedostepnosc", status: "approved", start_date: "2026-11-20", end_date: "2026-11-21" },
+      { id: "n2", user_id: "a", type: "niedostepnosc", status: "pending", start_date: "2026-11-25", end_date: "2026-11-25" },
+    ];
+    sprawdz("zatwierdzona stara niedostępność się liczy", !!D.niedostepnoscNa(stare, ala, "2026-11-21"));
+    sprawdz("czekająca stara niedostępność się nie liczy", !D.niedostepnoscNa(stare, ala, "2026-11-25"));
+    sprawdz("urlop to nie niedostępność", !D.niedostepnoscNa([{ ...stare[0], type: "urlop" }], ala, "2026-11-20"));
+    const pozS = D.dniPozostale({ miesiac: MIES, dzis: "2026-11-18", user: ala, dyspozycja: [], absences: stare, planShifts: [] });
+    sprawdz("„Pozostałe dni” pomija starą niedostępność", !pozS.includes("2026-11-20") && !pozS.includes("2026-11-21") && pozS.includes("2026-11-25"));
+    sprawdz("podsumowanie liczy starą niedostępność jako „nie mogę”",
+      D.podsumowanieMiesiaca({ miesiac: MIES, user: ala, dyspozycja: [], absences: stare }).nie === 2);
+
+    log("");
+    log("— „Nie może” od kierownika (wpiszNieMogeZaPracownika) —");
+    window.__tabele = { dyspozycja: [] }; window.__zapisy = [];
+    const wlasne = [
+      { id: "w1", user_id: "a", user_name: "Ala", date: "2026-11-12", stan: "moge", autor: "pracownik" },
+      { id: "w2", user_id: "a", user_name: "Ala", date: "2026-11-13", stan: "nie", autor: "pracownik" },
+      { id: "w3", user_id: "a", user_name: "Ala", date: "2026-11-14", stan: "godziny", od1: "16:00", do1: "22:00", autor: "kierownik" },
+    ];
+    window.__tabele.dyspozycja = wlasne.map((x) => ({ ...x }));
+    const nm = await D.wpiszNieMogeZaPracownika({ user: ala, od: "2026-11-09", doDnia: "2026-11-14", notatka: "chorobowe",
+      dzis: "2026-11-11", dyspozycja: wlasne, kierownik: "Roman" });
+    sprawdz("dni miniony pominięte, zakres od dziś", !nm.zapisane.includes("2026-11-10") && nm.zapisane[0] === "2026-11-11", J(nm.zapisane));
+    sprawdz("dzień, w którym pracownik sam „może”, zostaje (pominiete)", J(nm.pominiete) === J(["2026-11-12"]));
+    sprawdz("dzień, w którym pracownik sam „nie może”, nie jest nadpisywany", !nm.zapisane.includes("2026-11-13"));
+    sprawdz("wpis kierownika („tylko 16–22”) zmienia się na „nie”",
+      nm.zapisane.includes("2026-11-14") && D.dyspozycjaNa(nm.dyspozycja, ala, "2026-11-14").stan === "nie");
+    sprawdz("zapisane: 11 i 14", J(nm.zapisane) === J(["2026-11-11", "2026-11-14"]));
+    const wiad = (window.__tabele.notifications || [])[0] || {};
+    sprawdz("wiadomość „Kierownik wpisał Ci w dyspozycji „Nie mogę”” z zakresem i kto",
+      wiad.type === "dyspozycja" && /^Kierownik wpisał Ci w dyspozycji „Nie mogę”: 11\.11–14\.11\. Wpisał\(a\): Roman\.$/.test(wiad.message), wiad.message);
+    const pusto = await D.wpiszNieMogeZaPracownika({ user: ala, od: "2026-11-12", doDnia: "2026-11-12", dzis: "2026-11-11", dyspozycja: wlasne, kierownik: "Roman" });
+    sprawdz("nic do zapisania = bez wiadomości", pusto.zapisane.length === 0 && (window.__tabele.notifications || []).length === 1);
 
     log("");
     log(`ZDANYCH ${zdanych}, OBLANYCH ${oblanych}`, oblanych ? "zle" : "ok");

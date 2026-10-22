@@ -11,7 +11,7 @@ Wdrażane etapami. Każdy etap jest osobnym PR-em z Preview:
 | D1 | poziom 1·2·3 na stanowisku | 0.78.0 | `0047` | zrobione |
 | D2 | strona „Dyspozycja” + blokada w Grafiku, giełdzie, kopiowaniu i przepisaniu | 0.79.0 | `0048` | zrobione |
 | D3 | „Zapytaj” o jeden dzień (prośba kierownika, „Mogę / Nie mogę”) | 0.80.0 | `0049` | zrobione |
-| D4 | konflikt z wersją roboczą, „Prośba o zwolnienie ze zmiany” w „Do decyzji”, dyspozycja w karcie pracownika | — | — | do zrobienia |
+| D4 | jedno „Nie może” (stara niedostępność = dyspozycja), konflikt z wersją roboczą, „Prośba o zwolnienie ze zmiany” w „Do decyzji”, dyspozycja w karcie pracownika | 0.81.0 | `0050` | w toku: zrobione „jedno Nie może” |
 | D5 | termin w ustawieniach lokalu, przypomnienia (Pulpit, wiadomość, e-mail) | — | — | do zrobienia |
 
 ## Decyzje właściciela (22.10.2026)
@@ -131,3 +131,30 @@ pytanie naraz, zapis), `harness-kiosk.html` (karta na Pulpicie, „Mogę” prze
 RPC i zmiana w grafiku, „Nie mogę” z powodem), `harness-panel.html` (grupa
 „tylko Zapytaj”, potwierdzenie, zapis prośby, „zapytano” i „czeka na zgodę”),
 `harness-email.html` (dwa maile).
+
+## D4 — krok 1: jedno „Nie może” (0.81.0, migracja `0050`)
+
+Decyzja właściciela (22.10.2026): stara „niedostępność” (`absences.type =
+'niedostepnosc'`) i „Nie mogę” z Dyspozycji to TO SAMO.
+
+- **Kierownik wpisuje „Nie może” do `dyspozycja`** (panel zmiany → „Wolne /
+  urlop” → „Nie może”, `wpiszNieMogeZaPracownika`), nie do `absences`. Wpis
+  kierownika wiąże od razu. Dni, które pracownik zaznaczył SAM, zostają bez
+  zmian (trigger i tak by ich nie przepuścił); jego własne „nie” też nie jest
+  nadpisywane. Dawne `addNiedostepnoscDirectly` usunięte.
+- **Stara niedostępność daje „Zapytaj”** — `przeszkodaDnia` zwraca dla niej
+  `dyspozycja: true`, więc kandydat trafia do grupy „tylko Zapytaj”, a nie jest
+  po prostu wyłączony. Urlop dalej blokuje bez pytania.
+- **W kalendarzu pracownika** stara niedostępność stoi jako „Nie mogę” z „K”
+  (`niedostepnoscNa`), tylko do odczytu; „Pozostałe dni” jej nie nadpisuje, a
+  podsumowanie liczy ją jako „nie mogę”.
+- **Migracja `0050`** przepisuje PRZYSZŁE dni zatwierdzonych niedostępności do
+  `dyspozycja` jako wpis kierownika (`on conflict do nothing` — wpis
+  pracownika wygrywa). Wiersze `absences` zostają jako historia i dalej
+  blokują; aplikacja traktuje je tak samo jak „Nie mogę”.
+- Wiadomość: „Kierownik wpisał Ci w dyspozycji „Nie mogę”: …” (typ
+  `dyspozycja`) — rozpoznają ją `opisWiadomosci` i `api/_lib/wiadomosci.js`.
+- ⚠️ Zostaje świadomie: `scripts/import-grafik.py` dalej zakłada
+  `absences.niedostepnosc` dla URP bez godzin — działa to tak samo jak „Nie
+  mogę”, ale przy następnej zmianie tego skryptu warto przepiąć go na
+  `dyspozycja`.

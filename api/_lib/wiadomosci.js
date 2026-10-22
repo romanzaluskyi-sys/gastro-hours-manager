@@ -294,6 +294,9 @@ const opisz = (n, user, grafik, dzis) => {
     case "dyspozycja":
       if (/^Kierownik wycofał pytanie/.test(t))
         return { ton: "neutral", etykieta: "Grafik", tytul: "Pytanie o zmianę wycofane", lead: S.esc(t), cta: CTA.grafik };
+      // 0.81.0 — „Nie może” wpisane przez kierownika (tekstNieMogeOdKierownika).
+      if (/^Kierownik wpisał Ci w dyspozycji/.test(t))
+        return { ton: "info", ikona: "✳", etykieta: "Dyspozycja", tytul: "Kierownik wpisał Ci „Nie mogę”", lead: S.esc(t), cta: CTA.dyspozycja };
       return {
         ton: "warn",
         ikona: "?",

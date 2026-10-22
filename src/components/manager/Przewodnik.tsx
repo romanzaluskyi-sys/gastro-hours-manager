@@ -27,6 +27,14 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.81.0",
+    date: "2026-10-22",
+    items: [
+      "„Nie może” to jedno pojęcie: dawna niedostępność działa jak dyspozycja „Nie mogę” (blokuje, daje „Zapytaj”).",
+      "Kierownik wpisuje „Nie może” do dyspozycji pracownika z panelu zmiany; pracownik widzi to w kalendarzu i dostaje wiadomość.",
+    ],
+  },
+  {
     version: "0.80.0",
     date: "2026-10-22",
     items: [
