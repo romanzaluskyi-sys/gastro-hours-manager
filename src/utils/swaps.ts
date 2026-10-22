@@ -32,6 +32,7 @@ import {
   knowsStanowisko,
   poOstatnimDniu,
 } from "./grafik";
+import { przeszkodaDyspozycji } from "./dyspozycja";
 
 // Ustalenie właściciela: zmiany nie da się wystawić później niż 12 godzin
 // przed jej rozpoczęciem — bez tego ktoś wystawiałby zmianę o 8:50 na 9:00.
@@ -176,12 +177,16 @@ export const ofertyWystawione = ({ swaps, planShifts, user }) =>
 // trzech trybów: lista ofert na giełdzie, lista kandydatów przy oddaniu i
 // lista kandydatów przy zamianie muszą pokazywać ten sam zbiór ludzi —
 // inaczej ktoś widoczny w jednym miejscu znikałby w drugim bez wyjaśnienia.
-export const mozeWziac = (user, planShift, { planShifts, absences, pomijajZmianeId } = {}) => {
+// `dysp` = { dyspozycja, miesiace } (0.79.0) — wiążące „Nie mogę” / godziny
+// spoza dyspozycji wykluczają tak samo jak urlop. Bez niej — jak dawniej.
+export const mozeWziac = (user, planShift, { planShifts, absences, pomijajZmianeId, dysp } = {}) => {
   if (!user || !planShift) return false;
   // Na giełdę idzie konkretna PRACA, nie same godziny — propozycja ma sens
   // tylko dla kogoś, kto ma to stanowisko w swojej karcie.
   if (!knowsStanowisko(user, planShift.stanowisko)) return false;
   if (findBlockingAbsence(absences, user, planShift.date)) return false;
+  if (dysp && przeszkodaDyspozycji({ ...dysp, user, date: planShift.date, start_time: planShift.start_time, end_time: planShift.end_time }))
+    return false;
   const maJuzCos = (planShifts || []).some(
     (p) =>
       p.date === planShift.date &&
@@ -197,7 +202,7 @@ export const mozeWziac = (user, planShift, { planShifts, absences, pomijajZmiane
 // Kto może dostać tę zmianę — lista do wyboru przy "oddaj" i "zamień się".
 // Przy zamianie nie wymagamy wolnego dnia: kandydat oddaje wtedy swoją zmianę,
 // więc kolizję rozstrzyga dopiero wybór konkretnej zmiany (zmianyDoZamiany).
-export const kandydaciNaZmiane = ({ users, planShifts, absences, planShift, author, typ = "oddanie" }) =>
+export const kandydaciNaZmiane = ({ users, planShifts, absences, planShift, author, typ = "oddanie", dysp }) =>
   (users || [])
     .filter((u) => u.active && !u.archived && u.role !== "kiosk")
     .filter((u) => String(u.id) !== String(author?.id) && u.name !== author?.name)
@@ -205,7 +210,7 @@ export const kandydaciNaZmiane = ({ users, planShifts, absences, planShift, auth
       typ === "zamiana"
         ? knowsStanowisko(u, planShift.stanowisko) &&
           !findBlockingAbsence(absences, u, planShift.date)
-        : mozeWziac(u, planShift, { planShifts, absences })
+        : mozeWziac(u, planShift, { planShifts, absences, dysp })
     )
     .sort((a, b) => String(a.name).localeCompare(String(b.name), "pl"));
 
@@ -218,8 +223,8 @@ export const kandydaciNaZmiane = ({ users, planShifts, absences, planShift, auth
 //   - pracownicy i kierownik lokalu, nie właściciel (ten dostaje swoją
 //     wiadomość „wystawił(a) na giełdę”);
 //   - bez osób na próbę i po ostatnim dniu pracy.
-export const odbiorcyGieldy = ({ users, planShifts, absences, planShift, author }) =>
-  kandydaciNaZmiane({ users, planShifts, absences, planShift, author, typ: "oddanie" }).filter(
+export const odbiorcyGieldy = ({ users, planShifts, absences, planShift, author, dysp }) =>
+  kandydaciNaZmiane({ users, planShifts, absences, planShift, author, typ: "oddanie", dysp }).filter(
     (u) =>
       ["open", "closed", "manager_lokalu"].includes(u.role) &&
       u.probny_status !== "oczekuje" &&
@@ -240,7 +245,7 @@ export const tekstDoWziecia = (author, planShift) =>
 // Zmiany kandydata, które autor mógłby wziąć w zamian. Sprawdzamy je z punktu
 // widzenia AUTORA (to on je przejmie), bo to jego kalendarz decyduje, czy
 // zamiana ma sens — kandydat zwalnia swój dzień, oddając tę właśnie zmianę.
-export const zmianyDoZamiany = ({ planShifts, absences, kandydat, author, mojaZmiana }) =>
+export const zmianyDoZamiany = ({ planShifts, absences, kandydat, author, mojaZmiana, dysp }) =>
   (planShifts || [])
     .filter((p) => p.published_at && !p.deleted_at)
     .filter((p) => String(p.id) !== String(mojaZmiana?.id))
@@ -251,7 +256,7 @@ export const zmianyDoZamiany = ({ planShifts, absences, kandydat, author, mojaZm
     )
     .filter((p) => canOfferSwap(p))
     .filter((p) =>
-      mozeWziac(author, p, { planShifts, absences, pomijajZmianeId: mojaZmiana?.id })
+      mozeWziac(author, p, { planShifts, absences, pomijajZmianeId: mojaZmiana?.id, dysp })
     )
     .sort((a, b) => a.date.localeCompare(b.date));
 
@@ -266,7 +271,7 @@ export const wzajemnaZmiana = (swap, planShifts) =>
 // terminie (12 h), w dzień bez własnej zmiany i bez zatwierdzonego wolnego.
 // Jedno miejsce dla obu konsumentów — zakładki Grafik pracownika i listy
 // wyboru osoby na Tablecie Służbowym.
-export const offersForUser = ({ swaps, planShifts, absences, user }) =>
+export const offersForUser = ({ swaps, planShifts, absences, user, dysp }) =>
   (swaps || [])
     .filter(
       (sw) =>
@@ -294,6 +299,7 @@ export const offersForUser = ({ swaps, planShifts, absences, user }) =>
         planShifts,
         absences,
         pomijajZmianeId: typWymiany(sw) === "zamiana" ? sw.wzajemna_shift_id : null,
+        dysp,
       })
     )
     .sort((a, b) => a.ps.date.localeCompare(b.ps.date));
@@ -324,6 +330,7 @@ export const offerSwap = async ({
   users = null,
   planShifts = null,
   absences = null,
+  dysp = null,
 }) => {
   if (!canOfferSwap(planShift)) {
     throw new Error(
@@ -371,7 +378,7 @@ export const offerSwap = async ({
     // Każdy, kto może ją wziąć, dostaje wiadomość (i e-mail z crona
     // wyslij-maile). Nieudana wysyłka nie cofa oferty — ta już stoi.
     if (users) {
-      const odbiorcy = odbiorcyGieldy({ users, planShifts, absences, planShift, author });
+      const odbiorcy = odbiorcyGieldy({ users, planShifts, absences, planShift, author, dysp });
       await Promise.allSettled(
         odbiorcy.map((u) =>
           createEmployeeNotification(u.name, tekstDoWziecia(author, planShift), "swap", {
@@ -495,6 +502,7 @@ export const acceptSwap = async ({
   planShifts,
   absences,
   wzajemna = null,
+  dysp = null,
 }) => {
   // Oferta skierowana jest cudza dla wszystkich poza adresatem. Filtr w
   // offersForUser i tak jej nie pokaże, ale zapis musi bronić się sam —
@@ -504,6 +512,13 @@ export const acceptSwap = async ({
   }
   if (findBlockingAbsence(absences, taker, planShift.date)) {
     throw new Error("Masz na ten dzień zatwierdzone wolne.");
+  }
+  // Własna dyspozycja biorącego — ją widzi zawsze (RLS: swoje wiersze).
+  if (
+    dysp &&
+    przeszkodaDyspozycji({ ...dysp, user: taker, date: planShift.date, start_time: planShift.start_time, end_time: planShift.end_time })
+  ) {
+    throw new Error("W Twojej dyspozycji ten dzień albo te godziny są oznaczone jako „nie mogę”. Zmień dyspozycję, jeśli jednak możesz.");
   }
   const typ = typWymiany(swap);
   const kolizja = findOverlappingPlanShift(planShifts, {

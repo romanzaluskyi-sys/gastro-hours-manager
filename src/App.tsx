@@ -76,6 +76,9 @@ export default function App() {
   // Wydarzenia (0.74.0) — zebrania, grupy, kontrole; patrz utils/wydarzenia.ts.
   const [wydarzenia, setWydarzenia] = useState([]);
   const [wydarzeniaUczestnicy, setWydarzeniaUczestnicy] = useState([]);
+  // Dyspozycja (0.79.0) — kiedy pracownik może pracować; utils/dyspozycja.ts.
+  const [dyspozycja, setDyspozycja] = useState([]);
+  const [dyspozycjaMiesiace, setDyspozycjaMiesiace] = useState([]);
 
   const [currentView, setCurrentView] = useState("login");
   const [currentUser, setCurrentUser] = useState(null);
@@ -387,6 +390,27 @@ export default function App() {
     };
     loadWydarzenia();
 
+    // Dyspozycja — osobno i nieblokująco (baza bez 0048 = puste listy, a
+    // Grafik działa jak przed tą funkcją). W pollu, bo pracownik zmienia ją z
+    // telefonu, a kierownik układa grafik na otwartej karcie. Tydzień wstecz
+    // wystarcza: dyspozycja dotyczy dni, które dopiero będą.
+    const loadDyspozycja = () => {
+      const od = (() => {
+        const d = new Date();
+        d.setDate(d.getDate() - 7);
+        return toLocalYMD(d);
+      })();
+      api
+        .get("dyspozycja", `date=gte.${od}`)
+        .then((rows) => setDyspozycja(Array.isArray(rows) ? rows : []))
+        .catch((err) => console.error("Błąd pobierania dyspozycji:", err.message || err));
+      api
+        .get("dyspozycja_miesiace", `miesiac=gte.${od.slice(0, 7)}-01`)
+        .then((rows) => setDyspozycjaMiesiace(Array.isArray(rows) ? rows : []))
+        .catch((err) => console.error("Błąd pobierania miesięcy dyspozycji:", err.message || err));
+    };
+    loadDyspozycja();
+
     // ⚠️ Odbicia też muszą się odświeżać, nie tylko powiadomienia.
     //
     // `shifts` były pobierane RAZ, przy montowaniu, i nigdy więcej — a Tablet
@@ -433,6 +457,7 @@ export default function App() {
       loadShifts();
       loadUsers();
       loadWydarzenia();
+      loadDyspozycja();
     }, 45000);
     return () => clearInterval(pollInterval);
   }, [currentUser?.id]);
@@ -522,6 +547,10 @@ export default function App() {
           setShiftSwaps={setShiftSwaps}
           wydarzenia={wydarzenia}
           wydarzeniaUczestnicy={wydarzeniaUczestnicy}
+          dyspozycja={dyspozycja}
+          setDyspozycja={setDyspozycja}
+          dyspozycjaMiesiace={dyspozycjaMiesiace}
+          setDyspozycjaMiesiace={setDyspozycjaMiesiace}
           showMsg={showMsg}
         />
       )}
@@ -554,6 +583,10 @@ export default function App() {
           setShiftSwaps={setShiftSwaps}
           wydarzenia={wydarzenia}
           wydarzeniaUczestnicy={wydarzeniaUczestnicy}
+          dyspozycja={dyspozycja}
+          setDyspozycja={setDyspozycja}
+          dyspozycjaMiesiace={dyspozycjaMiesiace}
+          setDyspozycjaMiesiace={setDyspozycjaMiesiace}
           showMsg={showMsg}
         />
       )}
@@ -610,6 +643,10 @@ export default function App() {
           setWydarzenia={setWydarzenia}
           wydarzeniaUczestnicy={wydarzeniaUczestnicy}
           setWydarzeniaUczestnicy={setWydarzeniaUczestnicy}
+          dyspozycja={dyspozycja}
+          setDyspozycja={setDyspozycja}
+          dyspozycjaMiesiace={dyspozycjaMiesiace}
+          setDyspozycjaMiesiace={setDyspozycjaMiesiace}
           showMsg={showMsg}
         />
       )}

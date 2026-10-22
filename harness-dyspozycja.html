@@ -1,0 +1,240 @@
+<meta charset="utf-8">
+<title>Sprawdzian dyspozycji</title>
+<style>
+  body { font: 14px/1.6 ui-monospace, Menlo, monospace; padding: 24px; background: #FBFAF9; color: #17120F; }
+  h1 { font: 700 18px/1.2 system-ui, sans-serif; }
+  .ok { color: #2C6A4F; } .zle { color: #DE3A22; font-weight: 700; }
+  pre { background: #F1EEEB; padding: 10px; overflow-x: auto; }
+</style>
+<h1>Sprawdzian utils/dyspozycja.ts (0.79.0) i jej użycia w giełdzie i Grafiku</h1>
+<div id="out">ładowanie…</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js"></script>
+<script>
+const out = document.getElementById("out");
+const log = (txt, cls = "") => {
+  const d = document.createElement("div");
+  d.className = cls; d.textContent = txt; out.appendChild(d);
+};
+
+// Ten sam loader co w harness-dziennik.html, z jedną różnicą: api/supabase
+// jest podmienione na atrapę w pamięci (zapis dyspozycji idzie przez api).
+window.__tabele = {};
+window.__zapisy = [];
+const ATRAPA_API = URL.createObjectURL(new Blob([`
+  export const api = {
+    get: async (t) => (window.__tabele[t] || []).slice(),
+    post: async (t, d) => { window.__zapisy.push(["post", t, d]); const w = { id: "id-" + window.__zapisy.length, ...d };
+      (window.__tabele[t] = window.__tabele[t] || []).push(w); return w; },
+    patch: async (t, id, d) => { window.__zapisy.push(["patch", t, id, d]); const l = window.__tabele[t] || [];
+      const i = l.findIndex((w) => w.id === id); const w = { ...(l[i] || {}), id, ...d }; if (i >= 0) l[i] = w; return w; },
+    delete: async (t, id) => { window.__zapisy.push(["delete", t, id]); window.__tabele[t] = (window.__tabele[t] || []).filter((w) => w.id !== id); return true; },
+    patchByFilter: async () => true, dodajBezOdczytu: async () => true, rpc: async () => null,
+  };
+`], { type: "text/javascript" }));
+
+const cache = new Map();
+async function zaladuj(sciezka) {
+  if (sciezka.endsWith("/api/supabase")) return ATRAPA_API;
+  if (cache.has(sciezka)) return cache.get(sciezka);
+  const p = new Promise(async (resolve, reject) => {
+    try {
+      let kod = null;
+      for (const ext of [".ts", ".tsx", ""]) {
+        const r = await fetch(sciezka + ext + "?cb=" + Date.now());
+        if (r.ok) { kod = await r.text(); break; }
+      }
+      if (kod === null) throw new Error("nie znaleziono " + sciezka);
+      const specyfikatory = [...kod.matchAll(/from\s+"(\.[^"]+)"/g)].map((m) => m[1]);
+      const baza = sciezka.slice(0, sciezka.lastIndexOf("/"));
+      const mapa = {};
+      for (const s of specyfikatory) {
+        const url = new URL(baza + "/" + s, location.origin).pathname;
+        mapa[s] = await zaladuj(url);
+      }
+      kod = kod.replace(/from\s+"(\.[^"]+)"/g, (m, s) => `from "${mapa[s]}"`);
+      const js = Babel.transform(kod, { presets: [["typescript", { allExtensions: true, isTSX: true }]] }).code;
+      resolve(URL.createObjectURL(new Blob([js], { type: "text/javascript" })));
+    } catch (e) { reject(e); }
+  });
+  cache.set(sciezka, p);
+  return p;
+}
+
+let zdanych = 0, oblanych = 0;
+const sprawdz = (nazwa, warunek, szczegol = "") => {
+  if (warunek) { zdanych++; log("  OK   " + nazwa, "ok"); }
+  else { oblanych++; log("  ŹLE  " + nazwa + (szczegol ? " — " + szczegol : ""), "zle"); }
+};
+const J = (x) => JSON.stringify(x);
+
+(async () => {
+  try {
+    out.textContent = "";
+    const D = await import(await zaladuj("/src/utils/dyspozycja"));
+    const S = await import(await zaladuj("/src/utils/swaps"));
+    const G = await import(await zaladuj("/src/utils/grafik"));
+    log("moduły załadowane (dyspozycja, swaps, grafik; api = atrapa)", "ok");
+
+    const ala = { id: "a", name: "Ala", default_stanowisko: "Bar", active: true, archived: false, role: "open" };
+    const bo = { id: "b", name: "Bo", default_stanowisko: "Bar", active: true, archived: false, role: "open" };
+    const MIES = "2026-11-01";
+    const wyslany = [{ id: "m1", user_id: "a", miesiac: MIES, wyslano_at: "2026-10-14T10:00:00Z", pozostale: "bez" }];
+    const wpis = (date, stan, extra = {}) => ({ id: "w-" + date, user_id: "a", user_name: "Ala", date, stan, autor: "pracownik", ...extra });
+
+    log("");
+    log("— kiedy dyspozycja wiąże —");
+    const nie14 = wpis("2026-11-14", "nie");
+    sprawdz("miesiąc niewysłany = szkic, nie wiąże", !D.wiazeDyspozycja(nie14, []));
+    sprawdz("miesiąc wysłany = wiąże", D.wiazeDyspozycja(nie14, wyslany));
+    sprawdz("wpis kierownika wiąże zawsze (także bez wysłania)", D.wiazeDyspozycja({ ...nie14, autor: "kierownik" }, []));
+    sprawdz("wysłany INNY miesiąc nie wiąże tego", !D.wiazeDyspozycja(wpis("2026-12-03", "nie"), wyslany));
+    sprawdz("miesiąc z wpisem, ale bez wyslano_at = szkic",
+      !D.wiazeDyspozycja(nie14, [{ ...wyslany[0], wyslano_at: null }]));
+
+    log("");
+    log("— przeszkoda dla zmiany —");
+    const dysp = [
+      nie14,
+      wpis("2026-11-15", "godziny", { od1: "16:00:00", do1: "22:00:00" }),
+      wpis("2026-11-16", "moge"),
+      wpis("2026-11-17", "godziny", { od1: "08:00", do1: "10:00", od2: "16:00", do2: "00:00" }),
+    ];
+    const P = (date, s, e, miesiace = wyslany, user = ala) =>
+      D.przeszkodaDyspozycji({ dyspozycja: dysp, miesiace, user, date, start_time: s, end_time: e });
+    sprawdz("„Nie mogę” blokuje", P("2026-11-14", "10:00", "18:00")?.krotko === "dyspozycja: nie może");
+    sprawdz("szkic „Nie mogę” nie blokuje", P("2026-11-14", "10:00", "18:00", []) === null);
+    sprawdz("dzień bez zaznaczenia nie blokuje", P("2026-11-20", "10:00", "18:00") === null);
+    sprawdz("„Mogę cały dzień” nie blokuje", P("2026-11-16", "06:00", "23:00") === null);
+    sprawdz("zmiana w godzinach dyspozycji (16–22) przechodzi", P("2026-11-15", "16:00", "22:00") === null);
+    sprawdz("częściowo poza godzinami (14–22 przy 16–22) blokuje", P("2026-11-15", "14:00", "22:00")?.krotko === "dyspozycja: tylko 16–22",
+      J(P("2026-11-15", "14:00", "22:00")));
+    sprawdz("koniec po godzinach (16–23 przy 16–22) blokuje", !!P("2026-11-15", "16:00", "23:00"));
+    sprawdz("dwa przedziały: zmiana w drugim (17–23) przechodzi", P("2026-11-17", "17:00", "23:00") === null);
+    sprawdz("dwa przedziały: zmiana na przełomie (09–17) blokuje", !!P("2026-11-17", "09:00", "17:00"));
+    sprawdz("koniec 00:00 w dyspozycji = północ (16–00 przechodzi)", P("2026-11-17", "16:00", "00:00") === null);
+    sprawdz("zmiana przez północ: rano następnego dnia „Nie mogę” blokuje",
+      P("2026-11-13", "20:00", "02:00")?.dzien === "2026-11-14", J(P("2026-11-13", "20:00", "02:00")));
+    sprawdz("zmiana przez północ w dzień z godzinami: część nocna poza nimi blokuje",
+      !!P("2026-11-15", "20:00", "02:00"));
+    sprawdz("inna osoba nie dziedziczy cudzej dyspozycji", P("2026-11-14", "10:00", "18:00", wyslany, bo) === null);
+    sprawdz("brak godzin zmiany = nic nie sprawdzamy", P("2026-11-14", "", "") === null);
+
+    log("");
+    log("— opisy —");
+    sprawdz("opis godzin z dwoma przedziałami", D.opisDyspozycji(dysp[3]) === "Mogę 8–10, 16–24", D.opisDyspozycji(dysp[3]));
+    sprawdz("krótko do siatki", D.krotkoDyspozycji(dysp[1]) === "tylko 16–22" && D.krotkoDyspozycji(nie14) === "nie może");
+    sprawdz("bez wpisu = „Bez zaznaczenia”", D.opisDyspozycji(null) === "Bez zaznaczenia");
+
+    log("");
+    log("— godziny w formularzu —");
+    sprawdz("poprawne 16–22", D.bladGodzin({ od1: "16:00", do1: "22:00" }) === null);
+    sprawdz("koniec przed początkiem", !!D.bladGodzin({ od1: "22:00", do1: "16:00" }));
+    sprawdz("koniec o północy dozwolony", D.bladGodzin({ od1: "18:00", do1: "00:00" }) === null);
+    sprawdz("puste pola", !!D.bladGodzin({ od1: "", do1: "" }));
+    sprawdz("nachodzące przedziały", !!D.bladGodzin({ od1: "08:00", do1: "12:00", od2: "11:00", do2: "15:00" }));
+    sprawdz("rozłączne przedziały", D.bladGodzin({ od1: "08:00", do1: "12:00", od2: "16:00", do2: "22:00" }) === null);
+    const w = D.wierszDnia({ user: ala, dateStr: "2026-11-02", stan: "nie", od1: "10:00", do1: "12:00", notatka: "  " });
+    sprawdz("„Nie mogę” nie zapisuje godzin ani pustej notatki", w.od1 === null && w.do1 === null && w.notatka === null);
+    sprawdz("drugi przedział bez końca nie zapisuje się",
+      D.wierszDnia({ user: ala, dateStr: "2026-11-02", stan: "godziny", od1: "8:00", do1: "10:00", od2: "16:00", do2: "" }).od2 === null);
+
+    log("");
+    log("— kalendarz, urlop, pozostałe dni —");
+    sprawdz("dni miesiąca: listopad ma 30", D.dniMiesiaca(MIES).length === 30 && D.dniMiesiaca("2028-02-01").length === 29);
+    sprawdz("przesunięcie miesiąca przez rok", D.przesunMiesiac("2026-12-01", 1) === "2027-01-01" && D.przesunMiesiac("2026-01-01", -1) === "2025-12-01");
+    sprawdz("ciągłe zakresy urlopu", J(D.zakresyCiagle(["2026-11-20", "2026-11-18", "2026-11-19", "2026-11-25"])) ===
+      J([{ od: "2026-11-18", do: "2026-11-20" }, { od: "2026-11-25", do: "2026-11-25" }]));
+    sprawdz("zakres przez koniec miesiąca", J(D.zakresyCiagle(["2026-11-30", "2026-12-01"])) === J([{ od: "2026-11-30", do: "2026-12-01" }]));
+    const urlopy = [
+      { id: "u1", user_id: "a", type: "urlop", status: "pending", start_date: "2026-11-23", end_date: "2026-11-24" },
+      { id: "u2", user_id: "a", type: "urlop", status: "rejected", start_date: "2026-11-26", end_date: "2026-11-26" },
+      { id: "u3", user_id: "a", type: "niedostepnosc", status: "approved", start_date: "2026-11-27", end_date: "2026-11-27" },
+    ];
+    sprawdz("urlop czekający się liczy", !!D.urlopNa(urlopy, ala, "2026-11-24"));
+    sprawdz("urlop odrzucony się nie liczy", !D.urlopNa(urlopy, ala, "2026-11-26"));
+    sprawdz("stara niedostępność to nie urlop", !D.urlopNa(urlopy, ala, "2026-11-27"));
+    const plan = [
+      { id: "g1", user_id: "a", user_name: "Ala", date: "2026-11-05", start_time: "10:00", end_time: "18:00", published_at: "2026-10-20T10:00:00Z", lokal: "L", stanowisko: "Bar" },
+      { id: "g2", user_id: "a", user_name: "Ala", date: "2026-11-06", start_time: "10:00", end_time: "18:00", published_at: null, lokal: "L", stanowisko: "Bar" },
+      { id: "g3", user_id: "a", user_name: "Ala", date: "2026-11-07", start_time: "10:00", end_time: "18:00", published_at: "2026-10-20T10:00:00Z", deleted_at: "2026-10-21T10:00:00Z", lokal: "L", stanowisko: "Bar" },
+    ];
+    sprawdz("opublikowana zmiana blokuje dzień", D.dzienZablokowany({ dateStr: "2026-11-05", dzis: "2026-10-22", planShifts: plan, user: ala }) === "w grafiku");
+    sprawdz("wersja robocza nie blokuje", D.dzienZablokowany({ dateStr: "2026-11-06", dzis: "2026-10-22", planShifts: plan, user: ala }) === null);
+    sprawdz("usunięta po wysłaniu nie blokuje", D.dzienZablokowany({ dateStr: "2026-11-07", dzis: "2026-10-22", planShifts: plan, user: ala }) === null);
+    sprawdz("dzień miniony jest zablokowany", D.dzienZablokowany({ dateStr: "2026-10-21", dzis: "2026-10-22", planShifts: [], user: ala }) === "minął");
+    const poz = D.dniPozostale({ miesiac: MIES, dzis: "2026-11-03", user: ala, dyspozycja: dysp, absences: urlopy, planShifts: plan });
+    sprawdz("pozostałe dni: od dziś, bez zaznaczonych, urlopu i opublikowanej zmiany",
+      poz.length === 30 - 2 - 4 - 2 - 1 && !poz.includes("2026-11-05") && poz.includes("2026-11-06") && !poz.includes("2026-11-24") && !poz.includes("2026-11-02"),
+      `${poz.length}: ${poz.slice(0, 5).join(",")}…`);
+    const pod = D.podsumowanieMiesiaca({ miesiac: MIES, user: ala, dyspozycja: dysp, absences: urlopy });
+    sprawdz("podsumowanie miesiąca", pod.moge === 3 && pod.cale === 1 && pod.wGodzinach === 2 && pod.nie === 1 && pod.urlop === 2, J(pod));
+
+    log("");
+    log("— zapis (atrapa api) —");
+    window.__tabele = { dyspozycja: [] };
+    let lista = await D.zapiszDni({ user: ala, dni: ["2026-11-02", "2026-11-03"], stan: "godziny", godziny: { od1: "16:00", do1: "22:00" }, dyspozycja: [] });
+    sprawdz("dwa dni = dwa nowe wiersze", lista.length === 2 && lista.every((x) => x.stan === "godziny" && x.od1 === "16:00"));
+    lista = await D.zapiszDni({ user: ala, dni: ["2026-11-02"], stan: "nie", dyspozycja: lista });
+    sprawdz("istniejący dzień = patch, nie drugi wiersz", lista.length === 2 && D.dyspozycjaNa(lista, ala, "2026-11-02").stan === "nie" &&
+      window.__zapisy.some((z) => z[0] === "patch"));
+    lista = await D.zapiszDni({ user: ala, dni: ["2026-11-03"], stan: null, dyspozycja: lista });
+    sprawdz("stan null czyści dzień (delete)", lista.length === 1 && window.__zapisy.some((z) => z[0] === "delete"));
+    const wynik = await D.wyslijMiesiac({ user: ala, miesiac: MIES, pozostale: "nie", dzis: "2026-11-25", dyspozycja: lista, miesiace: [],
+      absences: [], planShifts: [], ktoWysyla: "Ala" });
+    sprawdz("wysłanie z „Nie mogę”: dni od 25 do 30 dostają „nie”", D.dniMiesiaca(MIES).filter((d) => d >= "2026-11-25")
+      .every((d) => D.dyspozycjaNa(wynik.dyspozycja, ala, d)?.stan === "nie"));
+    sprawdz("wysłanie zapisuje miesiąc z wyslano_at", wynik.miesiace.length === 1 && !!wynik.miesiace[0].wyslano_at && wynik.miesiace[0].pozostale === "nie");
+    sprawdz("po wysłaniu dyspozycja wiąże", D.wiazeDyspozycja(D.dyspozycjaNa(wynik.dyspozycja, ala, "2026-11-02"), wynik.miesiace));
+    const drugie = await D.wyslijMiesiac({ user: ala, miesiac: MIES, pozostale: "bez", dzis: "2026-11-25", dyspozycja: wynik.dyspozycja,
+      miesiace: wynik.miesiace, absences: [], planShifts: [] });
+    sprawdz("ponowne wysłanie = patch miesiąca, nie drugi wiersz", drugie.miesiace.length === 1 && drugie.miesiace[0].pozostale === "bez");
+
+    log("");
+    log("— giełda —");
+    const zmianaGieldy = { id: "z1", user_id: "b", user_name: "Bo", date: "2026-11-14", start_time: "10:00", end_time: "18:00",
+      stanowisko: "Bar", lokal: "L", published_at: "x" };
+    const d2 = { dyspozycja: [nie14], miesiace: wyslany };
+    sprawdz("bez dyspozycji Ala może wziąć", S.mozeWziac(ala, zmianaGieldy, { planShifts: [zmianaGieldy], absences: [] }));
+    sprawdz("z wiążącym „Nie mogę” nie może", !S.mozeWziac(ala, zmianaGieldy, { planShifts: [zmianaGieldy], absences: [], dysp: d2 }));
+    sprawdz("szkic „Nie mogę” nie wyklucza", S.mozeWziac(ala, zmianaGieldy, { planShifts: [zmianaGieldy], absences: [], dysp: { dyspozycja: [nie14], miesiace: [] } }));
+    const kandydaci = S.kandydaciNaZmiane({ users: [ala, bo], planShifts: [zmianaGieldy], absences: [], planShift: zmianaGieldy, author: bo, dysp: d2 });
+    sprawdz("kandydaci przy oddaniu pomijają osobę z „Nie mogę”", kandydaci.length === 0, kandydaci.map((u) => u.name).join(","));
+    let odmowa = "";
+    try {
+      await S.acceptSwap({ swap: { id: "s1", status: "na_gieldzie", author_user_id: "b", author_user_name: "Bo", grafik_shift_id: "z1" },
+        planShift: zmianaGieldy, taker: ala, planShifts: [zmianaGieldy], absences: [], dysp: d2 });
+    } catch (e) { odmowa = e.message; }
+    sprawdz("przyjęcie oferty wbrew własnej dyspozycji odmawia", /dyspozycji/.test(odmowa), odmowa);
+
+    log("");
+    log("— Grafik: kopiowanie tygodnia i przepisanie zmian —");
+    const pn = "2026-11-16";
+    const kopia = G.buildCopyFromPreviousWeek({
+      planShifts: [{ id: "k1", user_id: "a", user_name: "Ala", lokal: "L", stanowisko: "Bar", date: "2026-11-09", start_time: "10:00", end_time: "18:00" },
+                   { id: "k2", user_id: "a", user_name: "Ala", lokal: "L", stanowisko: "Bar", date: "2026-11-10", start_time: "10:00", end_time: "18:00" }],
+      absences: [], users: [ala], lokal: "L", weekStart: pn,
+      przeszkodaDodatkowa: (u, z) => D.przeszkodaDyspozycji({ dyspozycja: [wpis("2026-11-16", "nie")], miesiace: wyslany, user: u, date: z.date, start_time: z.start_time, end_time: z.end_time }) ? "dyspozycja" : null,
+    });
+    sprawdz("kopiowanie pomija dzień z „Nie mogę”, resztę kopiuje",
+      kopia.drafts.length === 1 && kopia.drafts[0].date === "2026-11-17" && kopia.skipped[0]?.powod === "dyspozycja", J(kopia));
+    window.__tabele = { grafik_shifts: [{ id: "p1" }, { id: "p2" }] };
+    const atrapa = (await import(ATRAPA_API)).api;
+    const przep = await G.przepiszZmiany({
+      zmiany: [{ id: "p1", date: "2026-11-14", start_time: "10:00", end_time: "18:00" }, { id: "p2", date: "2026-11-20", start_time: "10:00", end_time: "18:00" }],
+      doUzytkownika: ala, planShifts: [], absences: [], api: atrapa,
+      przeszkodaDodatkowa: (u, z) => D.przeszkodaDyspozycji({ dyspozycja: [nie14], miesiace: wyslany, user: u, date: z.date, start_time: z.start_time, end_time: z.end_time }) ? "nie może wg dyspozycji" : null,
+    });
+    sprawdz("przepisanie na następcę pomija jego „Nie mogę”",
+      przep.przepisane.length === 1 && przep.pominiete[0]?.powod === "nie może wg dyspozycji", J(przep.pominiete));
+
+    log("");
+    log(`ZDANYCH ${zdanych}, OBLANYCH ${oblanych}`, oblanych ? "zle" : "ok");
+  } catch (e) {
+    log("BŁĄD: " + (e && e.message), "zle");
+    const pre = document.createElement("pre");
+    pre.textContent = (e && e.stack) || String(e);
+    out.appendChild(pre);
+  }
+})();
+</script>

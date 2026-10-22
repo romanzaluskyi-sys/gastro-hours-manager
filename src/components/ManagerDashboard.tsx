@@ -5,6 +5,7 @@ import { nowyUuid } from "../utils/uuid";
 import { ustawHasloPracownika } from "../api/auth";
 import { poprawnyPin } from "../utils/piny";
 import { bazaZnaPoziomy, poziomyDoZapisu } from "../utils/poziomy";
+import { przeszkodaDyspozycji } from "../utils/dyspozycja";
 import { sendToGoogleSheets } from "../api/googleSheets";
 import { createEmployeeNotification } from "../api/notifications";
 import { formatNotificationText } from "../utils/format";
@@ -106,6 +107,8 @@ const ManagerDashboard = ({
   weatherForecasts,
   absences,
   setAbsences,
+  dyspozycja = [],
+  dyspozycjaMiesiace = [],
   planShifts,
   setPlanShifts,
   shiftSwaps,
@@ -812,6 +815,10 @@ const ManagerDashboard = ({
           planShifts,
           absences,
           api,
+          przeszkodaDodatkowa: (u, z) =>
+            przeszkodaDyspozycji({ dyspozycja, miesiace: dyspozycjaMiesiace, user: u, date: z.date, start_time: z.start_time, end_time: z.end_time })
+              ? "nie może wg dyspozycji"
+              : null,
         });
         const mapa = new Map(przepisane.map((z) => [String(z.id), z]));
         setPlanShifts(
@@ -1416,6 +1423,8 @@ const ManagerDashboard = ({
             onResolveSwap={handleResolveSwap}
             absences={absences}
             setAbsences={setAbsences}
+            dyspozycja={dyspozycja}
+            dyspozycjaMiesiace={dyspozycjaMiesiace}
             setShifts={setShifts}
             staffingRules={staffingRules}
             setStaffingRules={setStaffingRules}

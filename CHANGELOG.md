@@ -5,6 +5,26 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.79.0 — 2026-10-22
+
+- **Nowa strona „Dyspozycja”** (Więcej → Dyspozycja, a także przycisk „Moja
+  dyspozycja” na Pulpicie i w Grafiku). W kalendarzu miesiąca albo tygodnia
+  zaznaczasz dni: „Mogę cały dzień”, „Mogę w godzinach” (do dwóch przedziałów,
+  np. 8–10 i 16–22) albo „Nie mogę”. Można zaznaczyć kilka dni naraz i
+  powtórzyć jeden tydzień na cały miesiąc.
+- **Urlop wnioskuje się teraz z tego samego kalendarza** — dalej trafia do
+  kierownika do zatwierdzenia. „Wolne” zniknęło ze „Zgłoś”.
+- **„Wyślij dyspozycję”** — dopóki nie wyślesz miesiąca, kierownik go nie bierze
+  pod uwagę (wszystko i tak zapisuje się na bieżąco). Przy wysyłce wybierasz,
+  co z dniami bez zaznaczenia: „Bez ograniczeń” albo „Nie mogę”. Po wysłaniu
+  każda zmiana zapisuje się od razu.
+- **Grafik respektuje dyspozycję**: osoby, która w wysłanej dyspozycji nie może
+  danego dnia (albo może tylko w innych godzinach), nie da się wpisać na zmianę
+  — w panelu przypisania stoi wyłączona z powodem, a w pustej kratce widać
+  „nie może” albo „tylko 16–22”. Tak samo przy kopiowaniu tygodnia, przepisaniu
+  zmian na następcę i na giełdzie. Dni z już opublikowaną zmianą zostają bez
+  zmian — grafik obowiązuje.
+
 ## 0.78.0 — 2026-10-22
 
 - **Poziom doświadczenia na stanowisku.** W karcie pracownika, przy każdym

@@ -27,6 +27,15 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.79.0",
+    date: "2026-10-22",
+    items: [
+      "Nowa strona „Dyspozycja” u pracownika: kalendarz „mogę / w godzinach / nie mogę”, kilka dni naraz, powtórzenie tygodnia.",
+      "Urlop wnioskuje się z kalendarza Dyspozycji; „Wolne” zniknęło ze „Zgłoś”.",
+      "Grafik, kopiowanie tygodnia, przepisanie zmian i giełda nie wpiszą osoby wbrew jej wysłanej dyspozycji.",
+    ],
+  },
+  {
     version: "0.78.0",
     date: "2026-10-22",
     items: [

@@ -52,6 +52,10 @@ const PersonalDashboard = ({
   showMsg,
   wydarzenia = [],
   wydarzeniaUczestnicy = [],
+  dyspozycja = [],
+  setDyspozycja,
+  dyspozycjaMiesiace = [],
+  setDyspozycjaMiesiace,
 }) => {
   const myNotifications = notifications.filter(
     (n) => n.user_name === currentUser.name
@@ -97,6 +101,10 @@ const PersonalDashboard = ({
       setAbsences={setAbsences}
       wydarzenia={wydarzenia}
       wydarzeniaUczestnicy={wydarzeniaUczestnicy}
+      dyspozycja={dyspozycja}
+      setDyspozycja={setDyspozycja}
+      dyspozycjaMiesiace={dyspozycjaMiesiace}
+      setDyspozycjaMiesiace={setDyspozycjaMiesiace}
       onLogout={() => setCurrentView("login")}
     />
   );

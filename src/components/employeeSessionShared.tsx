@@ -69,6 +69,7 @@ import {
 } from "../utils/wydarzenia";
 import PulsPrzypomnienie from "./manager/PulsPrzypomnienie";
 import { POZIOMY, kropkiPoziomu, opisPoziomu, poziomNa } from "../utils/poziomy";
+import DyspozycjaEkran from "./DyspozycjaEkran";
 // Ten sam modal, co w karcie dnia i na ekranie kierownika zmiany — wpisanie
 // pomiaru to ta sama czynność i ma wyglądać tak samo wszędzie.
 import ModalWpisu from "./manager/ModalWpisu";
@@ -81,7 +82,7 @@ import {
   formatNotificationText,
 } from "../utils/format";
 import { stanowiskoShort, stanowiskoBadgeStyle } from "../utils/stanowiska";
-import { countWorkdays, URLOP_HOURS_PER_DAY } from "../utils/absences";
+import { countWorkdays } from "../utils/absences";
 import { zuzyjCel, CELE_PRACOWNIKA } from "../utils/linki";
 import {
   normaMiesiaca,
@@ -430,7 +431,7 @@ export const Shell = ({
   footer = null,
   children,
 }) => {
-  const activeTabKey = ["WIECEJ", "WIADOMOSCI", "ZGLOS", "STANOWISKA"].includes(screen)
+  const activeTabKey = ["WIECEJ", "WIADOMOSCI", "ZGLOS", "STANOWISKA", "DYSPOZYCJA"].includes(screen)
     ? "WIECEJ"
     : screen;
   // Prywatny telefon pokazuje tylko bloki włączone dla lokalu; Tablet
@@ -633,6 +634,10 @@ export const EmployeeSessionScreens = ({
   // Wydarzenia (0.74.0) — karta w Grafiku, przypomnienie na Pulpicie.
   wydarzenia = [],
   wydarzeniaUczestnicy = [],
+  dyspozycja = [],
+  setDyspozycja,
+  dyspozycjaMiesiace = [],
+  setDyspozycjaMiesiace,
 }) => {
   const [screen, setScreen] = useState("PULPIT");
   const [justClosed, setJustClosed] = useState(false);
@@ -829,15 +834,6 @@ export const EmployeeSessionScreens = ({
   // Kategoria „Zgłoś problem” — też na początku issue_text.
   const [zgKategoria, setZgKategoria] = useState(null);
 
-  // ---- "Wniosek o wolne" (type: absence) — patrz handleSendAbsence ----
-  const [zgAbsType, setZgAbsType] = useState("urlop"); // "urlop" | "niedostepnosc"
-  // Zakres wybiera się w kalendarzu: pierwszy dzień, potem ostatni; jeden
-  // dzień = dwa razy ten sam (albo tylko pierwszy). `zgAbsMies` to przesunięcie
-  // oglądanego miesiąca względem bieżącego.
-  const [zgAbsMies, setZgAbsMies] = useState(0);
-  const [zgAbsStart, setZgAbsStart] = useState("");
-  const [zgAbsEnd, setZgAbsEnd] = useState("");
-  const [zgAbsNote, setZgAbsNote] = useState("");
 
   // "own" = tylko wszyscy + moje stanowisko; "all" = wszystko dla lokalu
   // (przełącznik przydatny głównie na kiosku, gdzie kilka ról dzieli jedno
@@ -926,11 +922,15 @@ export const EmployeeSessionScreens = ({
   // Propozycje, które mogę wziąć, i zmiany, które już przejąłem/przejęłam,
   // a które czekają na zgodę kierownika (u mnie nie ma ich jeszcze w
   // grafiku, bo właścicielem wiersza wciąż jest autor oferty).
+  // Dyspozycja (0.79.0) — wiążące „Nie mogę” wyklucza z giełdy jak urlop.
+  // Na prywatnym telefonie widać tylko własną; kandydatów sprawdzi kierownik.
+  const dysp = { dyspozycja, miesiace: dyspozycjaMiesiace };
   const mojeOferty = offersForUser({
     swaps: shiftSwaps,
     planShifts,
     absences,
     user: employee,
+    dysp,
   });
   const mojePrzejete = claimedByUser({ swaps: shiftSwaps, planShifts, user: employee });
 
@@ -1140,11 +1140,6 @@ export const EmployeeSessionScreens = ({
       setZgText(zgTekstNaWejscie.current || "");
       zgTekstNaWejscie.current = null;
       setZgKorektaNote("");
-      setZgAbsType(moznaUrlop ? "urlop" : "niedostepnosc");
-      setZgAbsMies(0);
-      setZgAbsStart("");
-      setZgAbsEnd("");
-      setZgAbsNote("");
       // Bez chorągiewki z Raportu — najpierw lista zmian do wybrania.
       applyKorektaShiftDefaults(zgPrefillShiftId || null);
     }
@@ -1152,9 +1147,10 @@ export const EmployeeSessionScreens = ({
 
   // "Popraw zmianę" wymaga RAPORTU — bez listy swoich zmian pracownik nie
   // widzi, co właściwie poprawia (ustalenie właściciela).
+  // ⚠️ Wolne (urlop, niedostępność) NIE jest już w Zgłoś (0.79.0): przeszło do
+  // ekranu „Dyspozycja” (DyspozycjaEkran.tsx, ten sam blok WOLNE).
   const dostepneTypyZgloszen = [
     { key: "correction", label: "Popraw zmianę", Icon: Flag, blok: "RAPORT" },
-    { key: "absence", label: "Wolne", Icon: Palmtree, blok: "WOLNE" },
     { key: "problem", label: "Zgłoś problem", Icon: AlertTriangle, blok: "ZGLOS_PROBLEM" },
   ].filter((t) => bloki.includes(t.blok));
   // Urlop przysługuje z umowy o pracę (makieta 0.64.0: zlecenie widzi samą
@@ -1170,14 +1166,9 @@ export const EmployeeSessionScreens = ({
     setScreen("ZGLOS");
   };
 
-  // Skrót z zakładki Grafik — wniosek o wolne mieszka w "Zgłoś", ale
-  // najczęściej przychodzi do głowy przy oglądaniu grafiku, nie tam.
-  const openWniosekOWolne = () => {
-    zgTypNaWejscie.current = "absence";
-    setZgType("absence");
-    setZgPrefillShiftId(null);
-    setScreen("ZGLOS");
-  };
+  // Skrót z Pulpitu i Grafiku — dyspozycja (kiedy mogę, urlop) najczęściej
+  // przychodzi do głowy przy oglądaniu grafiku.
+  const openDyspozycja = () => setScreen("DYSPOZYCJA");
 
   const zamknijKreatorWymiany = () => {
     setSwapConfirmId(null);
@@ -1197,6 +1188,7 @@ export const EmployeeSessionScreens = ({
         users,
         planShifts,
         absences,
+        dysp,
       });
       setShiftSwaps([...(shiftSwaps || []), sw]);
       showMsg(
@@ -1235,6 +1227,7 @@ export const EmployeeSessionScreens = ({
         planShifts,
         absences,
         wzajemna: wzajemnaZmiana(swap, planShifts),
+        dysp,
       });
       setShiftSwaps((shiftSwaps || []).map((x) => (x.id === up.id ? up : x)));
       showMsg("Zgłoszenie wysłane — czeka na zgodę kierownika.");
@@ -1684,44 +1677,30 @@ export const EmployeeSessionScreens = ({
     setZgSaving(false);
   };
 
-  const handleSendAbsence = async () => {
-    // Kalendarz trzyma pierwszy i (opcjonalnie) ostatni dzień w kolejności
-    // kliknięć — porządkujemy dopiero tutaj.
-    const [odData, doData] = [zgAbsStart, zgAbsEnd || zgAbsStart].sort();
-    if (!odData) return showMsg("Zaznacz w kalendarzu, których dni dotyczy wniosek.", "error");
-    const typWolnego = moznaUrlop ? zgAbsType : "niedostepnosc";
-    setZgSaving(true);
-    try {
-      const lokal = employee.default_lokal || lokaleOptions[0]?.name || null;
-      const absence = await api.post("absences", {
-        user_id: employee.id,
-        user_name: employee.name,
+  // Wniosek o urlop z ekranu „Dyspozycja” (0.79.0) — ten sam zapis co dawny
+  // „Wniosek o wolne” w Zgłoś: wiersz `absences` (pending) i wiadomość dla
+  // kierownika lokalu. Niedostępność to dziś dyspozycja „Nie mogę”.
+  const wyslijWniosekUrlop = async ({ od, do: doData, note }) => {
+    const lokal = employee.default_lokal || lokaleOptions[0]?.name || null;
+    const absence = await api.post("absences", {
+      user_id: employee.id,
+      user_name: employee.name,
+      lokal,
+      start_date: od,
+      end_date: doData,
+      type: "urlop",
+      status: "pending",
+      note: note || null,
+      requested_by: "employee",
+    });
+    setAbsences((prev) => [...(prev || []), absence]);
+    if (lokal) {
+      await createManagerNotification(
         lokal,
-        start_date: odData,
-        end_date: doData,
-        type: typWolnego,
-        status: "pending",
-        note: zgAbsNote || null,
-        requested_by: "employee",
-      });
-      setAbsences([...absences, absence]);
-      if (lokal) {
-        await createManagerNotification(
-          lokal,
-          `${employee.name} prosi o ${
-            typWolnego === "urlop" ? "urlop" : "dni niedostępności"
-          } (${odData === doData ? odData : `${odData}–${doData}`}).`,
-          "absence_request"
-        );
-      }
-      setZgAbsStart("");
-      setZgAbsEnd("");
-      setZgAbsNote("");
-      showMsg("Wysłano · czeka na kierownika.");
-    } catch (err) {
-      showMsg(`Błąd połączenia: ${err.message || "nieznany błąd"}`, "error");
+        `${employee.name} prosi o urlop (${od === doData ? od : `${od}–${doData}`}).`,
+        "absence_request"
+      );
     }
-    setZgSaving(false);
   };
 
   // ---- odhaczenie zadania i zapis pomiaru — jedyne miejsce w tym pliku ----
@@ -3315,10 +3294,11 @@ export const EmployeeSessionScreens = ({
       stan === "off" &&
       bloki.includes("WOLNE") && (
         <button
-          onClick={openWniosekOWolne}
+          onClick={openDyspozycja}
           className="w-full flex items-center gap-2 min-h-[52px] px-3.5 rounded-lg bg-white border-2 border-[#171714] text-[16px] font-bold text-[#171714] mt-1 mb-2.5"
         >
-          <Palmtree size={18} /> Wniosek o wolne
+          <CalendarDays size={18} /> Moja dyspozycja
+          <span className="text-[13px] font-medium text-[#6E6E66]">kiedy możesz, urlop</span>
           <ChevronRight size={18} className="ml-auto text-[#6E6E66]" />
         </button>
       );
@@ -3565,11 +3545,11 @@ export const EmployeeSessionScreens = ({
     // --- kreator giełdy w samej karcie, z paskiem kroków ---
     const renderKreator = (s) => {
       const kandydaci = swapTyp
-        ? kandydaciNaZmiane({ users, planShifts, absences, planShift: s, author: employee, typ: swapTyp })
+        ? kandydaciNaZmiane({ users, planShifts, absences, planShift: s, author: employee, typ: swapTyp, dysp })
         : [];
       const zmianyKandydata =
         swapTyp === "zamiana" && swapTarget
-          ? zmianyDoZamiany({ planShifts, absences, kandydat: swapTarget, author: employee, mojaZmiana: s })
+          ? zmianyDoZamiany({ planShifts, absences, kandydat: swapTarget, author: employee, mojaZmiana: s, dysp })
           : [];
       const kroki =
         swapTyp === "zamiana"
@@ -4426,13 +4406,13 @@ export const EmployeeSessionScreens = ({
                 </p>
               )}
               <button
-                onClick={openWniosekOWolne}
+                onClick={openDyspozycja}
                 className="w-full mt-4 grid grid-cols-[24px_1fr_20px] gap-2.5 items-center text-left px-3.5 py-3 border-2 border-[#171714] rounded-xl bg-white"
               >
-                <Flag size={20} />
+                <CalendarDays size={20} />
                 <span>
-                  <b className="text-[16px] text-[#171714]">Wniosek o wolne</b>
-                  <small className="block text-[13px] text-[#6E6E66]">urlop lub niedostępność · trafia do kierownika</small>
+                  <b className="text-[16px] text-[#171714]">Moja dyspozycja</b>
+                  <small className="block text-[13px] text-[#6E6E66]">kiedy możesz pracować, urlop · widzi kierownik</small>
                 </span>
                 <ChevronRight size={20} className="text-[#6E6E66]" />
               </button>
@@ -5162,6 +5142,14 @@ export const EmployeeSessionScreens = ({
             onClick: () => setScreen("PULS"),
             dane: { "data-wiecej": "puls" },
           })}
+        {bloki.includes("WOLNE") &&
+          wiersz({
+            Ikona: CalendarDays,
+            tytul: "Dyspozycja",
+            podpis: "kiedy możesz pracować, urlop",
+            onClick: openDyspozycja,
+            dane: { "data-wiecej": "dyspozycja" },
+          })}
         {/* Poziom na stanowiskach (0.78.0) — tylko podgląd, ustawia kierownik. */}
         {allowedStanowiskaArr(employee).length > 0 &&
           wiersz({
@@ -5304,6 +5292,43 @@ export const EmployeeSessionScreens = ({
             </div>
           </div>
         )}
+      </Shell>
+    );
+  }
+
+  // ==========================================
+  // EKRAN: DYSPOZYCJA (0.79.0) — kiedy mogę pracować, urlop. Treść w
+  // DyspozycjaEkran.tsx (komponent modułu — patrz komentarz tam), reguły w
+  // utils/dyspozycja.ts.
+  // ==========================================
+  if (screen === "DYSPOZYCJA") {
+    return (
+      <Shell
+        screen={screen}
+        setScreen={setScreen}
+        onBack={onBack}
+        unreadCount={unreadCount}
+        taskBadgeCount={taskBadgeCount}
+        grafikBadgeCount={grafikBadgeCount}
+        bloki={bloki}
+        personName={onBack ? employee.name : null}
+        title="Dyspozycja"
+        nowyWyglad
+      >
+        <DyspozycjaEkran
+          employee={employee}
+          dzis={todayStr}
+          dyspozycja={dyspozycja}
+          setDyspozycja={setDyspozycja}
+          miesiace={dyspozycjaMiesiace}
+          setMiesiace={setDyspozycjaMiesiace}
+          absences={absences}
+          planShifts={planShifts}
+          moznaUrlop={moznaUrlop}
+          onUrlop={wyslijWniosekUrlop}
+          showMsg={showMsg}
+          ktoWysyla={onBack ? `${employee.name} (tablet)` : employee.name}
+        />
       </Shell>
     );
   }
@@ -5676,14 +5701,10 @@ export const EmployeeSessionScreens = ({
   // EKRAN: ZGLOS — układ z makiety właściciela (0.64.0, EmployeeRequestsMobile /
   // EmployeeRequestsTablet). Zmienił się wygląd i sposób wyboru (lista zmian,
   // kalendarz, chipy); zapis idzie tymi samymi funkcjami co wcześniej
-  // (handleSendKorekta / handleSendAbsence / handleSendZgloszenie).
+  // (handleSendKorekta / handleSendZgloszenie; wolne od 0.79.0 w „Dyspozycji”).
   // ==========================================
   if (screen === "ZGLOS") {
     const MIES_Z = ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"];
-    const MIES_D = ["stycznia", "lutego", "marca", "kwietnia", "maja", "czerwca", "lipca",
-      "sierpnia", "września", "października", "listopada", "grudnia"];
-    const MIES_M = ["Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec", "Lipiec",
-      "Sierpień", "Wrzesień", "Październik", "Listopad", "Grudzień"];
     const DNI_K = ["Nd", "Pn", "Wt", "Śr", "Cz", "Pt", "Sb"];
     const DNI_P = ["niedziela", "poniedziałek", "wtorek", "środa", "czwartek", "piątek", "sobota"];
     const h1 = (n) => (Math.round((n || 0) * 10) / 10).toFixed(1).replace(".", ",");
@@ -6059,187 +6080,6 @@ export const EmployeeSessionScreens = ({
       );
     };
 
-    // ---------- Wniosek o wolne ----------
-    const typWolnego = moznaUrlop ? zgAbsType : "niedostepnosc";
-    const renderWolne = () => {
-      const dzisY = toLocalYMD(new Date());
-      const pierwszy = new Date();
-      pierwszy.setDate(1);
-      pierwszy.setMonth(pierwszy.getMonth() + zgAbsMies);
-      const rok = pierwszy.getFullYear();
-      const mies = pierwszy.getMonth();
-      const dniMies = new Date(rok, mies + 1, 0).getDate();
-      const przesuniecie = (pierwszy.getDay() + 6) % 7;
-      const [lo, hi] = [zgAbsStart, zgAbsEnd || zgAbsStart].sort();
-      // Kropka „masz zmianę” tylko tam, gdzie pracownik widzi grafik.
-      const zaplanowane = new Set(
-        bloki.includes("GRAFIK") ? publishedShiftsFor(planShifts, employee).map((p) => p.date) : []
-      );
-      const klikDzien = (ymd) => {
-        if (!zgAbsStart || zgAbsEnd) {
-          setZgAbsStart(ymd);
-          setZgAbsEnd("");
-        } else setZgAbsEnd(ymd);
-      };
-      const opisZakresu = () => {
-        const a = zYMD(lo);
-        const b = zYMD(hi);
-        const n = Math.round((b - a) / 86400000) + 1;
-        if (n === 1) return `${a.getDate()} ${MIES_D[a.getMonth()]} · ${DNI_P[a.getDay()]}`;
-        const od = a.getMonth() === b.getMonth() ? `${a.getDate()}` : `${a.getDate()} ${MIES_D[a.getMonth()]} `;
-        return `${od}–${b.getDate()} ${MIES_D[b.getMonth()]} · ${n} dni`;
-      };
-      const kolizje = lo ? [...zaplanowane].filter((d) => d >= lo && d <= hi).sort() : [];
-      const ileRoboczych = lo ? countWorkdays(lo, hi) : 0;
-      return (
-        <>
-          {lblZg("1. Rodzaj")}
-          {moznaUrlop ? (
-            <div className="grid grid-cols-1 min-[360px]:grid-cols-2 gap-2.5">
-              {kafelDuzy(zgAbsType === "urlop", () => setZgAbsType("urlop"), null, "Urlop", "8 h za każdy dzień roboczy (bez sob. i niedz.)")}
-              {kafelDuzy(
-                zgAbsType === "niedostepnosc",
-                () => setZgAbsType("niedostepnosc"),
-                null,
-                "Niedostępność",
-                "nie mogę pracować · bez godzin"
-              )}
-            </div>
-          ) : (
-            <div className="px-3.5 py-3 rounded-lg border-2 border-[#171714] bg-white" data-tylko-niedostepnosc>
-              <b className="block text-[19px] font-extrabold text-[#171714]">Niedostępność</b>
-              <span className="text-[14px] leading-[19px] text-[#6E6E66]">
-                {typUmowyLabel(typUmowy(employee))} — urlop nie przysługuje. Zaznacz dni, w które nie możesz pracować.
-              </span>
-            </div>
-          )}
-
-          {lblZg("2. Które dni?", "Dotknij pierwszy dzień, potem ostatni. Jeden dzień — dotknij go raz.")}
-          <div className="bg-white border-2 border-[#DEDCD4] rounded-lg p-2.5" data-kalendarz-wolnego>
-            <div className="grid grid-cols-[48px_1fr_48px] items-center text-center mb-1.5">
-              <button
-                type="button"
-                disabled={zgAbsMies <= 0}
-                onClick={() => setZgAbsMies(zgAbsMies - 1)}
-                aria-label="Poprzedni miesiąc"
-                className="h-11 rounded-lg border-2 border-[#B7B6AE] bg-white flex items-center justify-center text-[#171714] disabled:opacity-30"
-              >
-                <ChevronLeft size={20} />
-              </button>
-              <b className="text-[19px] font-extrabold text-[#171714]">
-                {MIES_M[mies]} {rok}
-              </b>
-              <button
-                type="button"
-                disabled={zgAbsMies >= 12}
-                onClick={() => setZgAbsMies(zgAbsMies + 1)}
-                aria-label="Następny miesiąc"
-                className="h-11 rounded-lg border-2 border-[#B7B6AE] bg-white flex items-center justify-center text-[#171714] disabled:opacity-30"
-              >
-                <ChevronRight size={20} />
-              </button>
-            </div>
-            <div className="grid grid-cols-7 gap-y-[3px]">
-              {["Pn", "Wt", "Śr", "Cz", "Pt", "Sb", "Nd"].map((d, i) => (
-                <span key={d} className={`text-center text-[13px] font-extrabold py-1 ${i > 4 ? "text-[#DE3A22]" : "text-[#6E6E66]"}`}>
-                  {d}
-                </span>
-              ))}
-              {Array.from({ length: przesuniecie }, (_, i) => (
-                <span key={`p${i}`} />
-              ))}
-              {Array.from({ length: dniMies }, (_, i) => i + 1).map((d) => {
-                const ymd = `${rok}-${pad(mies + 1)}-${pad(d)}`;
-                const dow = new Date(rok, mies, d).getDay();
-                const zaznaczony = !!lo && ymd >= lo && ymd <= hi;
-                const przeszly = ymd < dzisY;
-                const ma = zaplanowane.has(ymd);
-                return (
-                  <button
-                    key={ymd}
-                    type="button"
-                    disabled={przeszly}
-                    onClick={() => klikDzien(ymd)}
-                    data-dzien-wolnego={ymd}
-                    className={`relative h-11 text-[17px] font-bold tabular-nums ${
-                      zaznaczony
-                        ? "bg-[#171714] text-white"
-                        : przeszly
-                        ? "text-[#C9C6BD]"
-                        : dow === 0 || dow === 6
-                        ? "text-[#DE3A22]"
-                        : "text-[#171714]"
-                    } ${zaznaczony && ymd === lo ? "rounded-l-full" : ""} ${zaznaczony && ymd === hi ? "rounded-r-full" : ""}`}
-                  >
-                    {d}
-                    {ma && (
-                      <i
-                        className={`absolute left-1/2 bottom-1 w-1.5 h-1.5 -ml-[3px] rounded-full ${
-                          zaznaczony ? "bg-[#FDF0D8]" : "bg-[#171714]"
-                        }`}
-                      />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="flex gap-4 text-[13px] text-[#6E6E66] px-1 pt-2 pb-0.5">
-              {zaplanowane.size > 0 && (
-                <span className="flex items-center gap-1.5">
-                  <i className="w-1.5 h-1.5 rounded-full bg-[#171714]" /> masz zmianę
-                </span>
-              )}
-              <span className="flex items-center gap-1.5">
-                <i className="w-2.5 h-2.5 rounded-full bg-[#171714]" /> wybrane
-              </span>
-            </div>
-          </div>
-          {lo && (
-            <>
-              <div className="grid gap-1.5 px-3.5 py-3 rounded-lg border-2 border-[#171714] bg-white mt-3 mb-1.5" data-wolne-podsumowanie>
-                <div className="flex justify-between gap-2.5 items-baseline">
-                  <span className="text-[15px] text-[#6E6E66]">Wybrane</span>
-                  <b className="text-[17px] font-extrabold text-right text-[#171714]">{opisZakresu()}</b>
-                </div>
-                {typWolnego === "urlop" && (
-                  <div className="flex justify-between gap-2.5 items-baseline">
-                    <span className="text-[15px] text-[#6E6E66]">Urlop</span>
-                    <b className="text-[17px] font-extrabold text-right text-[#171714]">
-                      {ileRoboczych} {robocze(ileRoboczych)} = {ileRoboczych * URLOP_HOURS_PER_DAY} h
-                    </b>
-                  </div>
-                )}
-              </div>
-              {kolizje.length > 0 &&
-                ramka(
-                  AlertTriangle,
-                  `W tych dniach masz ${kolizje.length === 1 ? "zmianę" : `${kolizje.length} ${odmianaZmian(kolizje.length)}`} (${kolizje
-                    .map(dzienMies)
-                    .join(", ")}). Po zatwierdzeniu kierownik znajdzie zastępstwo.`,
-                  "warn"
-                )}
-            </>
-          )}
-          <label className="block mt-3 mb-2.5">
-            <span className={podpisCls}>Komentarz (opcjonalnie)</span>
-            <textarea
-              rows={2}
-              value={zgAbsNote}
-              onChange={(e) => setZgAbsNote(e.target.value)}
-              className={tekstCls}
-              placeholder="Np. wyjazd rodzinny"
-            />
-          </label>
-          {ramka(
-            Palmtree,
-            typWolnego === "urlop"
-              ? "Kierownik zatwierdzi albo odrzuci wniosek. Po zatwierdzeniu urlop wpisze się jako godziny (8 h za dzień roboczy)."
-              : "Kierownik zatwierdzi albo odrzuci wniosek. Niedostępność nie daje godzin — to informacja, że wtedy nie możesz pracować."
-          )}
-        </>
-      );
-    };
-
     // ---------- Zgłoś problem ----------
     const KATEGORIE = ["Sprzęt / awaria", "Braki towaru", "Czystość / BHP", "Zespół / atmosfera", "Inne"];
     const renderProblem = () => (
@@ -6389,7 +6229,7 @@ export const EmployeeSessionScreens = ({
       <button
         type="button"
         onClick={
-          zgType === "correction" ? handleSendKorekta : zgType === "absence" ? handleSendAbsence : handleSendZgloszenie
+          zgType === "correction" ? handleSendKorekta : handleSendZgloszenie
         }
         disabled={zgSaving}
         data-wyslij-zgloszenie
@@ -6399,8 +6239,6 @@ export const EmployeeSessionScreens = ({
           ? "Wysyłanie…"
           : zgType === "correction"
           ? "Wyślij poprawkę"
-          : zgType === "absence"
-          ? "Wyślij wniosek"
           : "Wyślij zgłoszenie"}
       </button>
     );
@@ -6414,7 +6252,7 @@ export const EmployeeSessionScreens = ({
         grafikBadgeCount={grafikBadgeCount}
         bloki={bloki}
         personName={onBack ? employee.name : null}
-        title={zgType === "correction" ? "Popraw zmianę" : zgType === "absence" ? "Wniosek o wolne" : "Zgłoś problem"}
+        title={zgType === "correction" ? "Popraw zmianę" : "Zgłoś problem"}
         imieNadTytulem
         nowyWyglad
         footer={
@@ -6429,7 +6267,7 @@ export const EmployeeSessionScreens = ({
           glowna: (
             <>
               {kafleTypow}
-              {zgType === "correction" ? renderKorekta() : zgType === "absence" ? renderWolne() : renderProblem()}
+              {zgType === "correction" ? renderKorekta() : renderProblem()}
               {/* Na telefonie „Moje zgłoszenia” tylko pod listą zmian (makieta)
                   — w formularzu zasłaniałyby przycisk. */}
               {zgType === "correction" && !wybrana && <div className="md:hidden mt-[22px]">{renderMoje()}</div>}

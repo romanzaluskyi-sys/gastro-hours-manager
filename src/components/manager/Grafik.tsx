@@ -56,6 +56,8 @@ export default function Grafik({
   shiftSwaps,
   onResolveSwap,
   absences,
+  dyspozycja = [],
+  dyspozycjaMiesiace = [],
   setAbsences,
   setShifts,
   staffingRules,
@@ -514,6 +516,8 @@ export default function Grafik({
           usuniete={usuniete}
           setPlanShifts={setPlanShifts}
           absences={absences}
+          dyspozycja={dyspozycja}
+          dyspozycjaMiesiace={dyspozycjaMiesiace}
           staffingRules={staffingRules}
           staffingRuleSets={staffingRuleSets}
           grafikWyjatki={grafikWyjatki}

@@ -64,6 +64,7 @@ import { addUrlopDirectly, addNiedostepnoscDirectly } from "../../utils/absences
 import { stanowiskoShort, findStanowisko } from "../../utils/stanowiska";
 import { normaMiesiaca } from "../../utils/umowy";
 import { bazaZnaPoziomy, sygnalyPoziomu, zPoziomemStartowym } from "../../utils/poziomy";
+import { dyspozycjaNa, krotkoDyspozycji, przeszkodaDyspozycji, wiazeDyspozycja } from "../../utils/dyspozycja";
 import { ostrzezeniaKodeksu } from "../../utils/kodeks";
 import { countWorkdays, URLOP_HOURS_PER_DAY } from "../../utils/absences";
 import { fetchDailyForecast, describeWeatherCode } from "../../utils/weather";
@@ -276,6 +277,8 @@ function LokalSection({
   planShifts,
   usuniete,
   absences,
+  dyspozycja = [],
+  dyspozycjaMiesiace = [],
   staffingRules,
   staffingRuleSets,
   grafikWyjatki,
@@ -554,6 +557,10 @@ function LokalSection({
       .map((sw) => (planShifts || []).find((p) => String(p.id) === String(sw.grafik_shift_id)))
       .filter((p) => p && p.lokal === lokal && p.date === dateStr);
     const abs = own.length === 0 ? absenceOn(absences, user, dateStr) : null;
+    // Dyspozycja (0.79.0) — tylko wiążąca i tylko w pustej kratce: przy zmianie
+    // w kratce grafik ma pierwszeństwo, a podpis nad nią byłby szumem.
+    const dyspWpis = own.length === 0 && !abs ? dyspozycjaNa(dyspozycja, user, dateStr) : null;
+    const dysp = dyspWpis && dyspWpis.stan !== "moge" && wiazeDyspozycja(dyspWpis, dyspozycjaMiesiace) ? dyspWpis : null;
     // Płatne wydarzenia tej osoby (0.75.0, makieta ScheduleEvents): kreskowany
     // blok w jej kratce — czas pracy, ale NIE zmiana (nie liczy się do obsady).
     const wydOsoby = wydarzeniaNaDzien(wydarzenia, null, dateStr).filter(
@@ -571,6 +578,16 @@ function LokalSection({
             data-nieobecnosc
           >
             {abs.type === "urlop" ? "urlop" : "niedostępność"}
+          </div>
+        ) : null}
+        {dysp && !cokolwiek ? (
+          <div
+            className="rounded-md px-1.5 py-1 text-[12px] font-bold text-center text-[#6E6E66] border-[1.5px] border-dashed border-[#B7B6AE]"
+            style={dysp.stan === "nie" ? { background: "repeating-linear-gradient(135deg,rgba(23,23,20,.06) 0 5px,transparent 5px 10px)" } : undefined}
+            title={`Dyspozycja: ${dysp.stan === "nie" ? "nie może" : `może tylko ${krotkoDyspozycji(dysp).replace(/^tylko /, "")}`}${dysp.notatka ? ` · ${dysp.notatka}` : ""}`}
+            data-dyspozycja-w-kratce={dysp.stan}
+          >
+            {krotkoDyspozycji(dysp)}
           </div>
         ) : null}
         {own.map((s) => chipZmiany(s, user, dateStr))}
@@ -1263,6 +1280,8 @@ export default function GrafikTydzien({
   usuniete = [],
   setPlanShifts,
   absences,
+  dyspozycja = [],
+  dyspozycjaMiesiace = [],
   staffingRules,
   staffingRuleSets,
   grafikWyjatki,
@@ -1372,6 +1391,32 @@ export default function GrafikTydzien({
         podpowiedz: "Dostępność zgłasza pracownik w swojej aplikacji. Aby to obejść, poproś o wycofanie zgłoszenia.",
       };
     }
+    // Dyspozycja (0.79.0): wiążące „Nie mogę” albo godziny poza „Mogę w
+    // godzinach”. Poprawka ISTNIEJĄCEJ zmiany tej samej osoby w ten sam dzień
+    // jej nie podlega — konflikt z późniejszą dyspozycją rozstrzyga się
+    // osobno, a blokada uniemożliwiłaby nawet przesunięcie godziny.
+    const poprzednia = data.id ? (planShifts || []).find((s) => String(s.id) === String(data.id)) : null;
+    const taSama = poprzednia && String(poprzednia.user_id) === String(data.user_id) && poprzednia.date === dateStr;
+    const dysp =
+      user && !taSama
+        ? przeszkodaDyspozycji({
+            dyspozycja,
+            miesiace: dyspozycjaMiesiace,
+            user,
+            date: dateStr,
+            start_time: data.start_time,
+            end_time: data.end_time,
+          })
+        : null;
+    if (dysp) {
+      return {
+        krotko: dysp.krotko,
+        tekst: dysp.tekst + (dysp.wpis?.notatka ? ` Notatka: „${dysp.wpis.notatka}”.` : ""),
+        podpowiedz:
+          "Dyspozycję wpisuje pracownik. Wybierz kogoś innego — pytanie o jeden dzień („Zapytaj”) dojdzie w kolejnej wersji.",
+        dyspozycja: true,
+      };
+    }
     const kolizja = findOverlappingPlanShift(widocznePlan, {
       user_id: data.user_id,
       user_name: data.user_name,
@@ -1476,7 +1521,17 @@ export default function GrafikTydzien({
   };
 
   const handleCopyPrevWeek = async (lokal) => {
-    const { drafts, skipped } = buildCopyFromPreviousWeek({ planShifts: widocznePlan, absences, users, lokal, weekStart });
+    const { drafts, skipped } = buildCopyFromPreviousWeek({
+      planShifts: widocznePlan,
+      absences,
+      users,
+      lokal,
+      weekStart,
+      przeszkodaDodatkowa: (u, z) =>
+        przeszkodaDyspozycji({ dyspozycja, miesiace: dyspozycjaMiesiace, user: u, date: z.date, start_time: z.start_time, end_time: z.end_time })
+          ? "dyspozycja"
+          : null,
+    });
     if (drafts.length === 0) {
       showMsg("Poprzedni tydzień jest pusty — nie ma czego skopiować.", "error");
       return;
@@ -1713,6 +1768,8 @@ export default function GrafikTydzien({
           planShifts={widocznePlan}
           usuniete={usuniete}
           absences={absences}
+          dyspozycja={dyspozycja}
+          dyspozycjaMiesiace={dyspozycjaMiesiace}
           staffingRules={staffingRules}
           staffingRuleSets={staffingRuleSets}
           grafikWyjatki={grafikWyjatki}

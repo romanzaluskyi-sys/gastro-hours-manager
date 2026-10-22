@@ -271,6 +271,7 @@ const generuj = ({ dzis = C.ymd(), teraz = new Date() } = {}) => {
     issues: [], shift_swaps: [], shift_edits: [], task_blocks: [], tasks: [],
     day_log_templates: [], day_logs: [], day_log_entries: [], task_completions: [],
     notifications: [], zadania_moje: [], wydarzenia: [], wydarzenia_uczestnicy: [],
+    dyspozycja: [], dyspozycja_miesiace: [],
   };
 
   // --- Lokale, stanowiska, godziny otwarcia ---
@@ -824,6 +825,47 @@ const generuj = ({ dzis = C.ymd(), teraz = new Date() } = {}) => {
     { id: noweId("moje"), wlasciciel_id: wlascicielkaId, wlasciciel_name: WLASCICIELKA, lokal: null, tytul: "Grafik na święta — zebrać dyspozycyjność", termin: C.dodajDni(dzis, 9), zrodlo: "wlasne", archived: false }
   );
 
+  // --- Dyspozycja (0.79.0) na przyszły miesiąc ---
+  // Konto z telefonu (studentka): dyspozycja zaczęta, NIEWYSŁANA — odwiedzający
+  // demo może ją dokończyć i wysłać. Dmytro: wysłana, z kilkoma „Nie mogę” —
+  // Grafik nie pozwoli go wpisać w te dni. Pomijamy dni z opublikowaną zmianą
+  // tej osoby (tych pracownik nie zmienia, grafik obowiązuje).
+  const [rokD, miesD] = dzis.split("-").map(Number);
+  const nastepny = `${miesD === 12 ? rokD + 1 : rokD}-${String(miesD === 12 ? 1 : miesD + 1).padStart(2, "0")}-01`;
+  const dniNastepnego = [];
+  for (let d = nastepny; d.slice(0, 7) === nastepny.slice(0, 7); d = C.dodajDni(d, 1)) dniNastepnego.push(d);
+  const maZmiane = (osoba, d) => T.grafik_shifts.some((g) => g.user_id === osoba.id && g.date === d && g.published_at && !g.deleted_at);
+  const dyspozycjaDnia = (osoba, d, stan, od1 = null, do1 = null, notatka = null) =>
+    T.dyspozycja.push({
+      id: noweId("dyspozycja"), user_id: osoba.id, user_name: osoba.name, date: d, stan,
+      od1, do1, od2: null, do2: null, notatka, autor: "pracownik", autor_name: osoba.name,
+      zmieniono_at: terazIso, created_at: terazIso,
+    });
+  const studentka = osoby[K.KONTA[2].imie];
+  if (studentka) {
+    dniNastepnego.slice(0, 14).forEach((d) => {
+      if (maZmiane(studentka, d)) return;
+      const t = C.dzienTygodnia(d);
+      if (t === 2) dyspozycjaDnia(studentka, d, "nie", null, null, "zajęcia na uczelni");
+      else if (t === 0) dyspozycjaDnia(studentka, d, "nie");
+      else if (t === 6) dyspozycjaDnia(studentka, d, "moge");
+      else dyspozycjaDnia(studentka, d, "godziny", "16:00", "22:00");
+    });
+  }
+  const dmytro = osoby["Dmytro Bondarenko"];
+  if (dmytro) {
+    dniNastepnego.forEach((d) => {
+      if (maZmiane(dmytro, d)) return;
+      const t = C.dzienTygodnia(d);
+      if (t === 2 || t === 3) dyspozycjaDnia(dmytro, d, "nie");
+    });
+    T.dyspozycja_miesiace.push({
+      id: noweId("dyspozycja_miesiac"), user_id: dmytro.id, miesiac: nastepny,
+      wyslano_at: C.chwila(C.dodajDni(dzis, -2), "20:15").toISOString(), wyslal_name: dmytro.name,
+      pozostale: "bez", created_at: terazIso,
+    });
+  }
+
   return T;
 };
 
@@ -834,6 +876,7 @@ const KOLEJNOSC = [
   "grafik_budzet_cele", "grafik_shifts", "shifts", "absences", "issues", "shift_swaps",
   "shift_edits", "task_blocks", "tasks", "day_log_templates", "day_logs", "day_log_entries",
   "task_completions", "notifications", "zadania_moje", "wydarzenia", "wydarzenia_uczestnicy",
+  "dyspozycja", "dyspozycja_miesiace",
 ];
 
 module.exports = { generuj, KOLEJNOSC, uuidZ, BISTRO, PIZZERIA, LUDZIE, MIN_PENSJA, MIN_STAWKA };

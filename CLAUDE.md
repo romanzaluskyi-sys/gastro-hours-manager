@@ -213,6 +213,32 @@ trzy miejsca.
 ⚠️ **Nowa tabela, której potrzebuje ekran → dane w `demoDane.js`** (tu:
 `wydarzenia`, `wydarzenia_uczestnicy` w `KOLEJNOSC`).
 
+## Dyspozycja — od 0.79.0 (migracja `0048`)
+
+Pełna specyfikacja, etapy D1–D5 i decyzje właściciela: [`docs/DYSPOZYCJA.md`](docs/DYSPOZYCJA.md).
+Logika: [`utils/dyspozycja.ts`](src/utils/dyspozycja.ts); ekran pracownika:
+[`DyspozycjaEkran.tsx`](src/components/DyspozycjaEkran.tsx) (Więcej →
+Dyspozycja, blok `WOLNE`); sprawdzian `harness-dyspozycja.html`.
+- ⚠️ **Wolne (urlop, niedostępność) NIE jest już w Zgłoś.** Urlop wnioskuje się
+  z kalendarza Dyspozycji (dalej `absences`, pending → kierownik), a
+  niedostępność to dyspozycja „Nie mogę” — nowych `absences.type =
+  'niedostepnosc'` od pracownika nie ma. Stare zostają i blokują jak dawniej.
+- ⚠️ **Wiąże tylko wysłany miesiąc albo wpis kierownika** (`wiazeDyspozycja`).
+  Szkic leży w bazie (zapis od razu), ale Grafik go nie widzi.
+- ⚠️ **Blokada idzie przez TE SAME miejsca co urlop**: `przeszkodaDnia`
+  (GrafikTydzien), `buildCopyFromPreviousWeek` i `przepiszZmiany` (parametr
+  `przeszkodaDodatkowa` — `grafik.ts` nie może importować `dyspozycja.ts`, bo
+  ten importuje z niego) i giełda (opcja `dysp` w `mozeWziac` i spółce).
+  Dokładając nowe miejsce, które wpisuje komuś zmianę, zadaj to samo pytanie.
+- ⚠️ **Poprawka istniejącej zmiany tej samej osoby w ten sam dzień nie jest
+  blokowana** — konflikt z późniejszą dyspozycją to etap D4.
+- ⚠️ **`autor` ustawia trigger `dyspozycja_autor`**, a wpisu pracownika
+  kierownik nie zmieni nawet z pominięciem aplikacji. Polityki: po jednej na
+  polecenie (`ludzie_mojej_dyspozycji()`), x4 na obu tabelach w inwentarzu
+  `pg_policies` to norma.
+- ⚠️ **Nowa tabela → `demoDane.js`**: `dyspozycja`, `dyspozycja_miesiace` w
+  `KOLEJNOSC` (studentka z telefonu — szkic; Dmytro — wysłana).
+
 ## Poziom na stanowisku — od 0.78.0 (migracja `0047`)
 
 `users.poziomy_stanowisk` (jsonb) = `{ "Bar": 3, "Kasa": 2 }`: 1 — wdrażany,
@@ -609,8 +635,9 @@ Skutek: od `0026` do `0032` każde ZALOGOWANE konto czytało cudze powiadomienia
 wykonania zadań i historię korekt, a `0031` nie zawęziło zadań ani bloków.
 Znalazł to dopiero inwentarz `pg_policies` — polecenie stoi na końcu `0032`
 i **warto je puścić po każdej migracji ruszającej polityki**: tabela z liczbą
-polityk > 1 (poza `app_errors` x3, `users` x2 oraz `wydarzenia` i
-`wydarzenia_uczestnicy` po x4 — po jednej na polecenie) to polityka
+polityk > 1 (poza `app_errors` x3, `users` x2 oraz `wydarzenia`,
+`wydarzenia_uczestnicy`, `dyspozycja` i `dyspozycja_miesiace` po x4 — po
+jednej na polecenie) to polityka
 unieważniająca sąsiadkę.
 
 ⚠️ **Polityka RLS zwraca MNIEJ WIERSZY, nie błąd.** To zaleta (ekran, który
@@ -882,6 +909,8 @@ src/
                                   ekran „Nowy PIN” (0.77.0)
     poziomy.ts                  poziom doświadczenia na stanowisku i sygnał
                                   „tylko poziom 1” (0.78.0)
+    dyspozycja.ts               dyspozycja pracownika: kiedy wiąże, co blokuje,
+                                  zapis dni i wysłanie miesiąca (0.79.0)
     bezczynnosc.ts              automatyczne wylogowanie po 60 min (poza
                                   tabletem) — patrz Roadmap p.6
     uuid.ts                     nowyUuid() — id nadawane w przeglądarce dla
@@ -900,6 +929,8 @@ src/
                                   "Coś się zepsuło" zamiast białej strony;
                                   komponent KLASOWY, bo componentDidCatch nie
                                   ma odpowiednika w hookach
+    DyspozycjaEkran.tsx         treść ekranu „Dyspozycja” pracownika (rama w
+                                  employeeSessionShared.tsx) — 0.79.0
     KonfiguracjaBrak.tsx        ekran "wdrożenie nieskonfigurowane" z listą
                                   brakujących zmiennych — to on pozwala nie
                                   mieć fallbacku na bazę pierwszego klienta
@@ -2121,6 +2152,9 @@ odpadają. Zamiast tego dwa pliki w katalogu głównym, uruchamiane przez
   (wszyscy z lokalu / tylko z grafiku / stanowiska / cała sieć), godziny
   płatnych bez czasu w zmianie (także przez północ), odcinki do rozliczenia,
   koszt, listy i teksty wiadomości;
+- `harness-dyspozycja.html` — dyspozycja: kiedy wiąże (szkic / wysłany /
+  kierownik), godziny i noc, pozostałe dni, zapis na atrapie api, giełda,
+  kopiowanie tygodnia i przepisanie zmian;
 - `harness-poziomy.html` — poziom na stanowisku: odczyt (brak = nieustawiony),
   zapis tylko stanowisk z karty, sygnał „tylko poziom 1” (przez północ, osoba
   bez poziomu, usunięte i wyłączone konta);

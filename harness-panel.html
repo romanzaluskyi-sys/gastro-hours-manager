@@ -657,6 +657,12 @@ const poprzedniMiesiac = (h) => {
             start_date: dniTygodnia[3], end_date: dniTygodnia[3], type: "urlop",
             status: "approved" },
         ],
+        // Dyspozycja (0.79.0): Gosia „Nie mogę” przez cały oglądany tydzień,
+        // wpisane przez kierownika (wiąże bez wysyłania miesiąca). W panelu
+        // przypisania ma stać wyłączona z powodem, a w pustej kratce — podpis.
+        dyspozycja: dniTygodnia.map((d, i) => ({ id: "dy" + i, user_id: "u8", user_name: "Gosia", date: d,
+          stan: "nie", autor: "kierownik" })),
+        dyspozycjaMiesiace: [],
         // Dwie oczekujące decyzje z giełdy: zwykłe przejęcie i ZAMIANA.
         // Przy zamianie kierownik zatwierdza dwa przepisania naraz, więc karta
         // musi pokazać obie zmiany i policzyć godziny po obu stronach.
@@ -1651,6 +1657,9 @@ const poprzedniMiesiac = (h) => {
             !panel().querySelector("[data-bez-stanowiska]") && !!panel().querySelector("[data-rozwin-bez-stanowiska]"));
           panel().querySelector("[data-rozwin-bez-stanowiska]").dispatchEvent(new MouseEvent("click", { bubbles: true }));
           await czekaj(150);
+          const gosia = panel().querySelector('[data-kandydat="Gosia"]');
+          sprawdz("dyspozycja: kandydat z „Nie mogę” jest wyłączony z powodem",
+            !!gosia && gosia.disabled && /dyspozycja: nie może/.test(gosia.textContent), gosia ? gosia.textContent : "brak Gosi");
           const szary = panel().querySelector("[data-bez-stanowiska]:not([disabled])");
           sprawdz("osoby bez tego stanowiska są na liście, na szaro, na końcu", !!szary &&
             [...panel().querySelectorAll("[data-kandydat]")].indexOf(szary) >

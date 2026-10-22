@@ -233,6 +233,25 @@ const poprzedniMiesiac = (h) => {
     ];
 
     function Harness() {
+      // Urlop i niedostępność Bo w BIEŻĄCYM miesiącu (0.62.1) — kalendarz
+      // miesiąca ma je pokazać w komórce, bez klikania. Stan (od 0.79.0): wniosek
+      // urlopowy z Dyspozycji ma od razu trafić do listy, jak w App.
+      const [absences, setAbsences] = useState((() => {
+          const d = new Date();
+          const dzien = (o) => {
+            const x = new Date(d.getFullYear(), d.getMonth(), d.getDate() > 3 ? d.getDate() - o : d.getDate() + o);
+            return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+          };
+          return [
+            { id: "ab1", user_id: "u2", user_name: "Bo", status: "approved", type: "urlop",
+              start_date: dzien(2), end_date: dzien(2) },
+            { id: "ab2", user_id: "u2", user_name: "Bo", status: "approved", type: "niedostepnosc",
+              start_date: dzien(3), end_date: dzien(3) },
+          ];
+        })());
+      // Dyspozycja (0.79.0) — stan jak w App, żeby zapis z ekranu był widać od razu.
+      const [dyspozycja, setDyspozycja] = useState([]);
+      const [dyspozycjaMiesiace, setDyspozycjaMiesiace] = useState([]);
       // ?nocna=1 — Bo odbił start wczoraj wieczorem i nie odbił końca. Zmiana
       // jeszcze trwa (17 h limitu nie minęło), więc ma się pokazać ostrzeżenie
       // "trwa od wczoraj". Po przekroczeniu progu zniknęłaby z listy trwających
@@ -370,22 +389,7 @@ const poprzedniMiesiac = (h) => {
         notifications, setNotifications,
         tasks, taskBlocks, taskCompletions, setTaskCompletions,
         dayLogs: [], dayLogEntries, setDayLogEntries, dayLogTemplates: [],
-        // Urlop i niedostępność Bo w BIEŻĄCYM miesiącu (0.62.1) — kalendarz
-        // miesiąca ma je pokazać w komórce, bez klikania.
-        absences: (() => {
-          const d = new Date();
-          const dzien = (o) => {
-            const x = new Date(d.getFullYear(), d.getMonth(), d.getDate() > 3 ? d.getDate() - o : d.getDate() + o);
-            return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
-          };
-          return [
-            { id: "ab1", user_id: "u2", user_name: "Bo", status: "approved", type: "urlop",
-              start_date: dzien(2), end_date: dzien(2) },
-            { id: "ab2", user_id: "u2", user_name: "Bo", status: "approved", type: "niedostepnosc",
-              start_date: dzien(3), end_date: dzien(3) },
-          ];
-        })(),
-        setAbsences: () => {},
+        absences, setAbsences,
         // Grafik na przyszły tydzień — bez niego nie da się obejrzeć giełdy,
         // bo zmianę można wystawić tylko z wyprzedzeniem 12 h. Dorota ma
         // zmianę TEGO SAMEGO dnia co Bo: nie może wziąć jego zmiany na wprost,
@@ -400,7 +404,8 @@ const poprzedniMiesiac = (h) => {
             godz_od: "15:00:00", godz_do: "16:00:00", platne: true, stanowiska: null, zakres: "wszyscy", opis: "Jesienne menu." },
         ],
         wydarzeniaUczestnicy: [{ id: "wu1", wydarzenie_id: "wd2", user_id: "u8", user_name: "Gosia" }],
-        showMsg: (m, t) => console.log("showMsg:", t, m),
+        dyspozycja, setDyspozycja, dyspozycjaMiesiace, setDyspozycjaMiesiace,
+        showMsg: (m, t) => { window.__ostatniKomunikat = m; console.log("showMsg:", t, m); },
       };
       return h(KD, props);
     }
@@ -712,9 +717,9 @@ const poprzedniMiesiac = (h) => {
             /następna zmiana/i.test(document.getElementById("app").innerText));
         sprawdz("Pulpit: poza grafikiem przycisk jest drugorzędny i tylko prowadzi do Zmiany",
           widac("poza grafikiem") && !widac("Zakończ zmianę"));
-        klik("Wniosek o wolne"); await czekaj(300);
-        sprawdz("„Wniosek o wolne” otwiera formularz wolnego, nie problemu",
-          widac("Wyślij wniosek"), (document.getElementById("app").innerText || "").slice(0, 160));
+        klik("Moja dyspozycja"); await czekaj(300);
+        sprawdz("„Moja dyspozycja” na Pulpicie otwiera ekran Dyspozycji (0.79.0)",
+          !!document.querySelector("#app [data-dyspozycja]"), (document.getElementById("app").innerText || "").slice(0, 160));
         klik("Pulpit"); await czekaj(200);
         klik("Zmień"); await czekaj(300);
         klik("Cezary"); await czekaj(300);
@@ -918,36 +923,91 @@ const poprzedniMiesiac = (h) => {
           !!document.querySelector(`#app [data-zmiana-korekty="${idZmiany}"]`) &&
             /czeka/.test(document.querySelector(`#app [data-zmiana-korekty="${idZmiany}"]`).textContent));
 
-        // Wolne: kalendarz, klik ostatniego dnia PRZED pierwszym — zakres i
-        // tak ma wyjść od–do.
-        document.querySelector('#app [data-typ-zgloszenia="absence"]').dispatchEvent(new MouseEvent("click", { bubbles: true }));
-        await czekaj(250);
-        document.querySelector('#app [aria-label="Następny miesiąc"]').dispatchEvent(new MouseEvent("click", { bubbles: true }));
-        await czekaj(250);
+        // --- Dyspozycja (0.79.0) — wolne przeszło ze Zgłoś do osobnej strony ---
+        sprawdz("Zgłoś nie ma już typu „Wolne”", !document.querySelector('#app [data-typ-zgloszenia="absence"]'));
+        await otworzZakladke("Więcej");
+        const wiecejD = (k) => document.querySelector(`#app [data-wiecej="${k}"]`);
+        sprawdz("Więcej: wiersz „Dyspozycja”", !!wiecejD("dyspozycja"));
+        wiecejD("dyspozycja").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(300);
         const nm = new Date(); nm.setDate(1); nm.setMonth(nm.getMonth() + 1);
         const dzienNm = (d) => `${nm.getFullYear()}-${String(nm.getMonth() + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-        document.querySelector(`#app [data-dzien-wolnego="${dzienNm(12)}"]`).dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        const dzienD = (d) => document.querySelector(`#app [data-dzien-dyspozycji="${dzienNm(d)}"]`);
+        const kliknijD = async (el) => { el.dispatchEvent(new MouseEvent("click", { bubbles: true })); await czekaj(250); };
+        sprawdz("Dyspozycja startuje na następnym miesiącu, „Jeszcze nie wysłano”",
+          !!dzienD(10) && /Jeszcze nie wysłano/.test((document.querySelector("#app [data-stan-wysylki]") || {}).textContent || ""));
+        // Jeden dzień: „Mogę w godzinach” 16–22.
+        await kliknijD(dzienD(10));
+        sprawdz("dotknięcie dnia otwiera arkusz z czterema stanami (umowa o pracę: z urlopem)",
+          !!document.querySelector("#app [data-arkusz-dyspozycji]") &&
+            ["moge", "godziny", "nie", "urlop"].every((k) => document.querySelector(`#app [data-opcja-dyspozycji="${k}"]`)));
+        await kliknijD(document.querySelector('#app [data-opcja-dyspozycji="godziny"] button'));
+        wpiszPole(document.querySelector('#app [data-pole-dyspozycji="od1"]'), "16:00");
+        wpiszPole(document.querySelector('#app [data-pole-dyspozycji="do1"]'), "22:00");
         await czekaj(150);
-        document.querySelector(`#app [data-dzien-wolnego="${dzienNm(10)}"]`).dispatchEvent(new MouseEvent("click", { bubbles: true }));
-        await czekaj(250);
-        sprawdz("wolne: podsumowanie zakresu z liczbą dni",
-          /3 dni/.test((document.querySelector("#app [data-wolne-podsumowanie]") || {}).textContent || ""));
-        document.querySelector("#app [data-wyslij-zgloszenie]").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await kliknijD(document.querySelector("#app [data-zapisz-dyspozycje]"));
+        const wpis10 = (window.__tabele.dyspozycja || []).find((w) => w.date === dzienNm(10));
+        sprawdz("zapis: dyspozycja „godziny” 16:00–22:00 na wybrany dzień, od razu (przed wysłaniem)",
+          !!wpis10 && wpis10.stan === "godziny" && wpis10.od1 === "16:00" && wpis10.do1 === "22:00" && wpis10.user_id === "u3",
+          JSON.stringify(wpis10));
+        sprawdz("dzień w kalendarzu pokazuje godziny", /16–22/.test(dzienD(10).textContent) && dzienD(10).dataset.stan === "godziny");
+        // Kilka dni naraz: „Nie mogę”.
+        await kliknijD(document.querySelector("#app [data-zaznacz-kilka]"));
+        await kliknijD(dzienD(12));
+        await kliknijD(dzienD(13));
+        sprawdz("tryb wyboru: pasek mówi, ile dni wybrano", /Wybrano 2 dni/.test((document.querySelector("#app [data-pasek-wyboru]") || {}).textContent || ""));
+        await kliknijD(document.querySelector("#app [data-gotowe-wybor]"));
+        await kliknijD(document.querySelector('#app [data-opcja-dyspozycji="nie"] button'));
+        await kliknijD(document.querySelector("#app [data-zapisz-dyspozycje]"));
+        sprawdz("„Nie mogę” zapisane na oba wybrane dni",
+          ["12", "13"].every((d) => ((window.__tabele.dyspozycja || []).find((w) => w.date === dzienNm(Number(d))) || {}).stan === "nie"));
+        // Urlop z kalendarza = wniosek do absences (pending), nie dyspozycja.
+        await kliknijD(dzienD(20));
+        await kliknijD(document.querySelector('#app [data-opcja-dyspozycji="urlop"] button'));
+        await kliknijD(document.querySelector("#app [data-zapisz-dyspozycje]"));
+        const urlop = (ostatniZapis("absences") || [])[1] || {};
+        sprawdz("urlop z Dyspozycji: wniosek urlop, pending, na wybrany dzień",
+          urlop.type === "urlop" && urlop.status === "pending" && urlop.start_date === dzienNm(20) && urlop.end_date === dzienNm(20),
+          JSON.stringify(urlop).slice(0, 160));
+        // Wysłanie z „Pozostałe dni: Nie mogę”.
+        const przedWyslaniem = (window.__tabele.dyspozycja || []).length;
+        await kliknijD(document.querySelector("#app [data-wyslij-dyspozycje]"));
+        sprawdz("„Wyślij dyspozycję” pyta o pozostałe dni", !!document.querySelector('#app [data-pozostale="nie"]'));
+        await kliknijD(document.querySelector('#app [data-pozostale="nie"]'));
+        await kliknijD(document.querySelector("#app [data-wyslij-dyspozycje-tak]"));
         await czekaj(300);
-        const wolne = (ostatniZapis("absences") || [])[1] || {};
-        sprawdz("wniosek o wolne: daty od–do w dobrej kolejności",
-          wolne.start_date === dzienNm(10) && wolne.end_date === dzienNm(12), JSON.stringify(wolne).slice(0, 160));
+        const mies = (window.__tabele.dyspozycja_miesiace || []).find((m) => m.user_id === "u3");
+        sprawdz("wysłanie zapisuje miesiąc (wyslano_at, pozostale = nie)",
+          !!mies && !!mies.wyslano_at && mies.pozostale === "nie" && mies.miesiac === dzienNm(1), JSON.stringify(mies));
+        const dniMies = new Date(nm.getFullYear(), nm.getMonth() + 1, 0).getDate();
+        const wpisyCezarego = (window.__tabele.dyspozycja || []).filter((w) => w.user_id === "u3" && w.date.startsWith(dzienNm(1).slice(0, 7)));
+        // Dni z opublikowaną zmianą Cezarego zostają bez zmian (grafik obowiązuje).
+        const dniZeZmiana = new Set(planGieldy
+          .filter((p) => p.user_id === "u3" && p.published_at && !p.deleted_at && p.date.startsWith(dzienNm(1).slice(0, 7)))
+          .map((p) => p.date));
+        sprawdz("„Pozostałe dni: Nie mogę” uzupełnia puste dni (bez dnia z urlopem i dni ze zmianą)",
+          wpisyCezarego.length === dniMies - 1 - dniZeZmiana.size && wpisyCezarego.length > przedWyslaniem &&
+            !wpisyCezarego.some((w) => w.date === dzienNm(20)),
+          `${wpisyCezarego.length} z ${dniMies}`);
+        sprawdz("po wysłaniu: „Wysłano” i brak przycisku wysyłki",
+          /Wysłano/.test((document.querySelector("#app [data-stan-wysylki]") || {}).textContent || "") &&
+            !document.querySelector("#app [data-wyslij-dyspozycje]"));
+        // Wyczyszczenie dnia usuwa wiersz.
+        await kliknijD(dzienD(10));
+        await kliknijD(document.querySelector("#app [data-wyczysc-dyspozycje]"));
+        sprawdz("„Wyczyść zaznaczenie” zdejmuje dzień", !(window.__tabele.dyspozycja || []).some((w) => w.date === dzienNm(10) && w.user_id === "u3") ||
+          !(document.querySelector(`#app [data-dzien-dyspozycji="${dzienNm(10)}"]`) || {}).textContent.includes("16–22"));
 
-        // Zlecenie: urlop nie przysługuje, zostaje sama niedostępność.
+        // Zlecenie: bez urlopu w arkuszu.
         klik("Zmień"); await czekaj(300);
         klik("Gosia"); await czekaj(300);
         await otworzZakladke("Więcej");
-        await klikPrzycisk("Zgłoś");
-        document.querySelector('#app [data-typ-zgloszenia="absence"]').dispatchEvent(new MouseEvent("click", { bubbles: true }));
-        await czekaj(250);
-        sprawdz("zlecenie: w „Wolne” tylko niedostępność, bez urlopu",
-          !!document.querySelector("#app [data-tylko-niedostepnosc]") &&
-            ![...document.querySelectorAll("#app main button")].some((b) => /^Urlop/.test(b.textContent.replace(/▪/g, "").trim())));
+        document.querySelector('#app [data-wiecej="dyspozycja"]').dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await czekaj(300);
+        await kliknijD(document.querySelector(`#app [data-dzien-dyspozycji="${dzienNm(15)}"]`));
+        sprawdz("zlecenie: arkusz bez „Urlop”, z wyjaśnieniem",
+          !document.querySelector('#app [data-opcja-dyspozycji="urlop"]') && !!document.querySelector("#app [data-bez-urlopu]"));
+        await klikPrzycisk("Anuluj");
         klik("Zmień"); await czekaj(300);
         klik("Bo"); await czekaj(300);
         await otworzZakladke("Zadania");
@@ -994,7 +1054,8 @@ const poprzedniMiesiac = (h) => {
         const wiecej = (k) => document.querySelector(`#app [data-wiecej="${k}"]`);
         sprawdz("Więcej: Zgłoś, Wiadomości i przerywane „Wróć do listy osób”",
           !!wiecej("zglos") && !!wiecej("wiadomosci") && /border-dashed/.test((wiecej("lista") || {}).className || ""));
-        sprawdz("Zgłoś w Więcej mówi, ile spraw czeka", /2 czeka/.test((wiecej("zglos") || {}).textContent || ""),
+        // Trzy: dwie korekty + wniosek urlopowy wysłany wyżej z Dyspozycji.
+        sprawdz("Zgłoś w Więcej mówi, ile spraw czeka", /3 czeka/.test((wiecej("zglos") || {}).textContent || ""),
           (wiecej("zglos") || {}).textContent);
         sprawdz("urządzenie: „Tablet Służbowy” i ostrzeżenie o danych kiosku",
           widac("Tablet Służbowy") && widac("danymi kiosku") && widac("Wyloguj urządzenie"));
