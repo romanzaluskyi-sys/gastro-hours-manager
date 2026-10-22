@@ -25,6 +25,7 @@ const CTA = {
   wiadomosci: ["Zobacz w Wiadomościach", "wiadomosci"],
   korekta: ["Popraw zmianę", "korekta"],
   wolne: ["Złóż nowy wniosek", "wolne"],
+  dyspozycja: ["Odpowiedz w Dyspozycji", "dyspozycja"],
   prosba: ["Odpowiedz na prośbę", "grafik"],
   aplikacja: ["Otwórz Shiftro", "wiadomosci"],
 };
@@ -288,6 +289,30 @@ const opisz = (n, user, grafik, dzis) => {
         cta,
       };
     }
+    // 0.80.0 — „Zapytaj” kierownika (src/utils/prosby.ts: tekstProsby,
+    // tekstWycofania). Te same zdania rozpoznaje `opisWiadomosci`.
+    case "dyspozycja":
+      if (/^Kierownik wycofał pytanie/.test(t))
+        return { ton: "neutral", etykieta: "Grafik", tytul: "Pytanie o zmianę wycofane", lead: S.esc(t), cta: CTA.grafik };
+      // 0.81.0 — „Nie może” wpisane przez kierownika (tekstNieMogeOdKierownika).
+      if (/^Kierownik wpisał Ci w dyspozycji „Nie mogę”/.test(t))
+        return { ton: "info", ikona: "✳", etykieta: "Dyspozycja", tytul: "Kierownik wpisał Ci „Nie mogę”", lead: S.esc(t), cta: CTA.dyspozycja };
+      // 0.82.0 — dzień ustawiony w karcie pracownika (tekstDyspozycjiOdKierownika).
+      if (/^Kierownik (wpisał Ci w dyspozycji|usunął wpis z Twojej dyspozycji)/.test(t))
+        return { ton: "info", ikona: "✳", etykieta: "Dyspozycja", tytul: "Kierownik zmienił Twoją dyspozycję", lead: S.esc(t), cta: CTA.dyspozycja };
+      // 0.82.0 — odpowiedź na prośbę o zwolnienie ze zmiany (tekstZwolnienia).
+      if (/^Kierownik zdjął Twoją zmianę/.test(t))
+        return { ton: "ok", ikona: "✓", etykieta: "Grafik", tytul: "Zmiana zdjęta z grafiku", lead: S.esc(t), cta: CTA.grafik };
+      if (/^Kierownik zostawił Twoją zmianę/.test(t))
+        return { ton: "warn", ikona: "!", etykieta: "Grafik", tytul: "Zmiana zostaje w grafiku", lead: S.esc(t), cta: CTA.grafik };
+      return {
+        ton: "warn",
+        ikona: "?",
+        etykieta: "Prośba kierownika",
+        tytul: "Kierownik pyta, czy możesz przyjść",
+        lead: S.esc(t.replace(/ Odpowiedz w Dyspozycji\.$/, "")),
+        cta: CTA.dyspozycja,
+      };
     case "sanepid":
       return { ton: "warn", ikona: "!", etykieta: "Termin", tytul: "Termin książeczki sanepid", lead: S.esc(t), cta: CTA.aplikacja };
     case "umowa":

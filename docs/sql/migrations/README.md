@@ -83,6 +83,11 @@ wykonalne.
 | `0042`–`0044` | unikalny start zmiany, Wydarzenia, okna wpisu w bazie (patrz CLAUDE.md) | nowe |
 | `0045` | dwie nowe tabele bez wpływu na aplikację: `limity_pin` (próby PIN-u, prośby o reset) i `cron_przebiegi` (dziennik cronów, monitoring w `/api/zdrowie`) — kolejność dowolna, może iść PRZED deployem 0.77.0 | nowe |
 | `0046` | PIN-y bez jawnego tekstu: `users.pin` zawsze NULL, `kiosk_pin` jako hash bcrypt (trigger `chron_piny`, zapis z aplikacji pomijany), limit prób w `sprawdz_kiosk_pin` (tabela z 0045), dziennik zmian PIN-u `piny_zmiany`, `users_widok` bez PIN-ów — PO deployu 0.77.0 i odświeżeniu tabletów | nowe |
+| `0047` | poziom doświadczenia na stanowisku: `users.poziomy_stanowisk` (jsonb, klucz = nazwa stanowiska, brak = nieustawiony), jawny w `users_widok` — kolejność dowolna | nowe |
+| `0048` | Dyspozycja: `dyspozycja` (osoba × dzień: mogę / w godzinach / nie mogę) i `dyspozycja_miesiace` (wysłano, „pozostałe dni”), RLS po jednej polityce na polecenie (`ludzie_mojej_dyspozycji()`), trigger `dyspozycja_autor` — kolejność dowolna | nowe |
+| `0049` | „Zapytaj”: `prosby_o_zmiane` (prośba kierownika o jedną zmianę wbrew dyspozycji) i RPC `odpowiedz_na_prosbe` (zgoda wstawia opublikowaną zmianę, odmowa — powód; wiadomość dla kierownika) — kolejność dowolna, wymaga 0048 | nowe |
+| `0050` | stara niedostępność → dyspozycja: przyszłe dni zatwierdzonych `absences.type = 'niedostepnosc'` jako „Nie mogę” kierownika w `dyspozycja` (wiersze `absences` zostają); powtarzalna, po 0048 | nowe |
+| `0051` | prośba o zwolnienie ze zmiany: `dyspozycja.zwolnienie_z` + `rozstrzygnieto_at/rozstrzygnal/rozstrzygniecie` i trigger `dyspozycja_autor` pozwalający kierownikowi zmienić WYŁĄCZNIE pola rozstrzygnięcia — PRZED deployem 0.82.0 | nowe |
 
 ⚠️ Numer `0036` należał wcześniej do migracji "InitPlan" (ponowne zawężenie
 `notifications` i 15 innych tabel). Nigdy nie weszła na żadną bazę — padła

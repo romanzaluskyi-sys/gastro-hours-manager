@@ -5,6 +5,87 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.82.0 — 2026-10-22
+
+- **Prośba o zwolnienie ze zmiany.** Pracownik, który ma już zmianę w grafiku,
+  może w Dyspozycji dotknąć ten dzień i poprosić o zwolnienie (z powodem).
+  Zmiana zostaje, dopóki kierownik jej nie zdejmie. Kierownik decyduje w „Do
+  decyzji” („Zostaw w grafiku” / „Zdejmij zmianę”), a pracownik dostaje
+  wiadomość. Prośbę widać też na Pulpicie i w kratce Grafiku.
+- **„Zapytaj” także po zmianie godzin.** Gdy kierownik wybierze osobę, a
+  potem ustawi godziny poza jej „Mogę w godzinach”, główny przycisk zmienia
+  się na „Zapytaj”. Wcześniej zapis kończył się blokadą i wiadomością
+  „Kierownik próbował wpisać Ci zmianę…”, na którą nie dało się odpowiedzieć.
+- **Konflikt z wersją roboczą grafiku.** Gdy pracownik zaznaczy „nie mogę” na
+  dzień, na który ma niewysłaną jeszcze zmianę, w kratce Grafiku pojawia się
+  „nie może (zgłoszone …)” z „Zdejmij” i „Zapytaj”, a kierownik dostaje
+  wiadomość.
+- **Dyspozycja w karcie pracownika.** Kierownik widzi kalendarz dyspozycji
+  osoby i może ustawić dni puste albo wpisane wcześniej przez siebie. Dni
+  wpisanych przez pracownika nie zmienia — od tego jest „Zapytaj”.
+
+## 0.81.0 — 2026-10-22
+
+- **„Nie może” to teraz jedno pojęcie.** Dawna „niedostępność” i „Nie mogę” z
+  Dyspozycji działają tak samo: blokują wpisanie zmiany, pozwalają kierownikowi
+  zapytać o jeden dzień („Zapytaj”), a w kratce Grafiku stoi „nie może”.
+- **Kierownik wpisuje „Nie może” do dyspozycji pracownika** (panel zmiany →
+  „Wolne / urlop” → „Nie może”). Pracownik widzi to w swoim kalendarzu z
+  dopiskiem „wpisał kierownik” i dostaje wiadomość. Dni, które pracownik sam
+  zaznaczył, zostają bez zmian.
+- **Stara niedostępność widać w Dyspozycji pracownika** jako „Nie mogę”
+  (tylko do odczytu). Przyszłe dni ze starych wpisów przechodzą do dyspozycji.
+
+## 0.80.0 — 2026-10-22
+
+- **„Zapytaj” w Grafiku.** Osoba, która w dyspozycji tego dnia nie może (albo
+  może tylko w innych godzinach), stoi w panelu przypisania w osobnej grupie
+  „Niedostępni wg dyspozycji” z przyciskiem **„Zapytaj”**. Pytanie dotyczy
+  zawsze jednego dnia i jednej zmiany; o tę samą zmianę można pytać jedną
+  osobę naraz.
+- **Do czasu odpowiedzi zmiany nie ma w grafiku** — w kratce stoi „czeka na
+  zgodę”, nad dniem „zapytano: …”, a brak w obsadzie zostaje. Pytanie można
+  wycofać (6 s na „Cofnij”). Bez odpowiedzi wygasa 24 h przed zmianą.
+- **Pracownik odpowiada w Dyspozycji** („Mogę” / „Nie mogę” z opcjonalnym
+  powodem) — dostaje wiadomość i e-mail, a na Pulpicie kartę „Kierownik pyta,
+  czy możesz”. Po „Mogę” zmiana od razu jest w grafiku (bez osobnej
+  publikacji), a kierownik dostaje wiadomość — tak samo po „Nie mogę”.
+
+## 0.79.0 — 2026-10-22
+
+- **Nowa strona „Dyspozycja”** (Więcej → Dyspozycja, a także przycisk „Moja
+  dyspozycja” na Pulpicie i w Grafiku). W kalendarzu miesiąca albo tygodnia
+  zaznaczasz dni: „Mogę cały dzień”, „Mogę w godzinach” (do dwóch przedziałów,
+  np. 8–10 i 16–22) albo „Nie mogę”. Można zaznaczyć kilka dni naraz i
+  powtórzyć jeden tydzień na cały miesiąc.
+- **Urlop wnioskuje się teraz z tego samego kalendarza** — dalej trafia do
+  kierownika do zatwierdzenia. „Wolne” zniknęło ze „Zgłoś”.
+- **„Wyślij dyspozycję”** — dopóki nie wyślesz miesiąca, kierownik go nie bierze
+  pod uwagę (wszystko i tak zapisuje się na bieżąco). Przy wysyłce wybierasz,
+  co z dniami bez zaznaczenia: „Bez ograniczeń” albo „Nie mogę”. Po wysłaniu
+  każda zmiana zapisuje się od razu.
+- **Grafik respektuje dyspozycję**: osoby, która w wysłanej dyspozycji nie może
+  danego dnia (albo może tylko w innych godzinach), nie da się wpisać na zmianę
+  — w panelu przypisania stoi wyłączona z powodem, a w pustej kratce widać
+  „nie może” albo „tylko 16–22”. Tak samo przy kopiowaniu tygodnia, przepisaniu
+  zmian na następcę i na giełdzie. Dni z już opublikowaną zmianą zostają bez
+  zmian — grafik obowiązuje.
+
+## 0.78.0 — 2026-10-22
+
+- **Poziom doświadczenia na stanowisku.** W karcie pracownika, przy każdym
+  stanowisku, na którym ktoś może pracować, kierownik ustawia poziom:
+  1 — wdrażany (pracuje z kimś obok), 2 — samodzielny, 3 — może szkolić.
+  Nowe stanowisko dopisane do karty dostaje od razu poziom 1. Kto nie ma
+  jeszcze ustawionego poziomu, ma „nieustawiony” — nic się przez to nie zmienia.
+- **Grafik pokazuje poziom przy kandydatach** (kropki ●○○ / ●●○ / ●●●), a przy
+  równej liczbie godzin wyżej stoi bardziej doświadczona osoba.
+- **„Tylko poziom 1”.** Gdy na stanowisku w jakiejś godzinie stoją same osoby z
+  poziomem 1, Grafik pokazuje to nad dniem i w panelu przypisania. To
+  sygnał, nie blokada — zmianę można zapisać jak zawsze.
+- **„Więcej → Moje stanowiska”** u pracownika (tablet i telefon): gdzie może
+  pracować i na jakim poziomie.
+
 ## 0.77.0 — 2026-10-20
 
 - **„Nie pamiętam PIN-u”.** Na ekranie logowania jest teraz taki link: wpisujesz

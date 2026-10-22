@@ -504,6 +504,13 @@ const USERS = [
       ["Zmiana do wzięcia", { type: "swap",
         message: "Możesz wziąć dodatkową zmianę: sob 17 paź · 10:00–18:00, Ceglana (Kelner) — oddaje ją Bo. Zajrzyj na giełdę w Grafiku.",
         dane: { autor: "Bo", wiersze: [{ e: "Zmiana", w: "sob 17 paź · 10:00–18:00" }, { e: "Lokal · stanowisko", w: "Ceglana · Kelner" }] } }],
+      ["Kierownik pyta (Zapytaj)", { type: "dyspozycja",
+        message: "Kierownik pyta, czy możesz: sob 17.10, 16:00–22:00, Kelner · Ceglana. Odpowiedz w Dyspozycji." }],
+      ["Pytanie wycofane", { type: "dyspozycja", message: "Kierownik wycofał pytanie o zmianę: sob 17.10, 16:00–22:00, Kelner · Ceglana." }],
+      ["Nie może od kierownika", { type: "dyspozycja", message: "Kierownik wpisał Ci w dyspozycji „Nie mogę”: 12.11–14.11. Wpisał(a): Roman." }],
+      ["Zwolnienie: zdjęta", { type: "dyspozycja", message: "Kierownik zdjął Twoją zmianę z grafiku: pt 13.11, 16:00–22:00, Kelner · Ceglana. Decyzja: Roman." }],
+      ["Zwolnienie: zostaje", { type: "dyspozycja", message: "Kierownik zostawił Twoją zmianę w grafiku: pt 13.11, 16:00–22:00, Kelner · Ceglana. Decyzja: Roman." }],
+      ["Dyspozycja z karty", { type: "dyspozycja", message: "Kierownik wpisał Ci w dyspozycji „Mogę 8–14”: 12.11. Wpisał(a): Roman." }],
       ["Nieznany typ", { type: "cos_nowego", message: "Zwykła wiadomość." }],
     ];
     const GRAFIK_ALI = [
@@ -533,6 +540,27 @@ const USERS = [
       if (nazwa === "Godziny z wydarzenia") {
         sprawdz("rozliczenie wydarzenia (0.75.0): „Godziny dopisane: …”, CTA do Raportu",
           m.temat === "Godziny dopisane: Inwentaryzacja" && m.html.includes("?otworz=raport"), m.temat);
+      }
+      if (nazwa === "Kierownik pyta (Zapytaj)") {
+        sprawdz("„Zapytaj” (0.80.0): temat, szczegóły zmiany, przycisk do Dyspozycji",
+          m.temat === "Kierownik pyta, czy możesz przyjść" && m.html.includes("sob 17.10, 16:00–22:00") &&
+            m.html.includes(">Odpowiedz w Dyspozycji&nbsp;") && m.html.includes("?otworz=dyspozycja"), m.temat);
+      }
+      if (nazwa === "Nie może od kierownika") {
+        sprawdz("„Nie może” od kierownika (0.81.0): osobny temat, przycisk do Dyspozycji",
+          m.temat === "Kierownik wpisał Ci „Nie mogę”" && m.html.includes("?otworz=dyspozycja"), m.temat);
+      }
+      if (nazwa === "Zwolnienie: zdjęta" || nazwa === "Zwolnienie: zostaje") {
+        const tytul = nazwa === "Zwolnienie: zdjęta" ? "Zmiana zdjęta z grafiku" : "Zmiana zostaje w grafiku";
+        sprawdz(`prośba o zwolnienie (0.82.0): „${tytul}”, CTA do grafiku`,
+          m.temat === tytul && m.html.includes("pt 13.11, 16:00–22:00") && m.html.includes("?otworz=grafik"), m.temat);
+      }
+      if (nazwa === "Dyspozycja z karty") {
+        sprawdz("dyspozycja z karty pracownika (0.82.0): „Kierownik zmienił Twoją dyspozycję”, CTA do Dyspozycji",
+          m.temat === "Kierownik zmienił Twoją dyspozycję" && m.html.includes("?otworz=dyspozycja"), m.temat);
+      }
+      if (nazwa === "Pytanie wycofane") {
+        sprawdz("„Zapytaj” wycofane: osobny temat, CTA do grafiku", m.temat === "Pytanie o zmianę wycofane" && m.html.includes("?otworz=grafik"), m.temat);
       }
       if (nazwa === "Zmiana do wzięcia") {
         sprawdz("giełda do wszystkich (0.76.0): temat, autor w treści, szczegóły zmiany, CTA do grafiku",

@@ -4,6 +4,8 @@ import { api } from "../api/supabase";
 import { nowyUuid } from "../utils/uuid";
 import { ustawHasloPracownika } from "../api/auth";
 import { poprawnyPin } from "../utils/piny";
+import { bazaZnaPoziomy, poziomyDoZapisu } from "../utils/poziomy";
+import { przeszkodaDyspozycji, prosbyOZwolnienie } from "../utils/dyspozycja";
 import { sendToGoogleSheets } from "../api/googleSheets";
 import { createEmployeeNotification } from "../api/notifications";
 import { formatNotificationText } from "../utils/format";
@@ -105,6 +107,11 @@ const ManagerDashboard = ({
   weatherForecasts,
   absences,
   setAbsences,
+  dyspozycja = [],
+  setDyspozycja,
+  dyspozycjaMiesiace = [],
+  prosby = [],
+  setProsby,
   planShifts,
   setPlanShifts,
   shiftSwaps,
@@ -553,10 +560,16 @@ const ManagerDashboard = ({
   // Płatne wydarzenia po czasie (0.75.0) — ta sama funkcja liczy kartę w „Do
   // decyzji” i sprawę na Pulpicie.
   const wydarzeniaDoRozliczenia = wydarzeniaDoDecyzji({ wydarzenia, lokalOk: hasAccessToLokal, calaSiec: jestWlascicielem });
+  // Prośby o zwolnienie ze zmiany (0.82.0) — ta sama funkcja co karta w „Do
+  // decyzji” i sprawa na Pulpicie.
+  const zwolnieniaDoDecyzji = prosbyOZwolnienie({ planShifts, dyspozycja, dzis: toLocalYMD(new Date()) }).filter((p) =>
+    hasAccessToLokal(p.zmiana.lokal)
+  );
 
   const shellBadges = {
     zatwierdzanie:
       wydarzeniaDoRozliczenia.length +
+      zwolnieniaDoDecyzji.length +
       pendingCorrections.length +
       pendingAbsences.length +
       pendingSwaps.length +
@@ -658,6 +671,13 @@ const ManagerDashboard = ({
           dataToSave.allowed_stanowiska.length > 0
             ? dataToSave.allowed_stanowiska.join(",")
             : null;
+      }
+      // Poziomy na stanowiskach (0.78.0, migracja 0047): tylko stanowiska, które
+      // osoba ma w karcie. Na bazie bez kolumny pole nie może pójść w zapisie —
+      // PostgREST odrzuciłby cały wiersz.
+      if ("poziomy_stanowisk" in dataToSave) {
+        if (bazaZnaPoziomy(users)) dataToSave.poziomy_stanowisk = poziomyDoZapisu(dataToSave);
+        else delete dataToSave.poziomy_stanowisk;
       }
 
       // Odpowiedź z tabeli `users` niesie hash blokady (0046) — w stanie
@@ -804,6 +824,10 @@ const ManagerDashboard = ({
           planShifts,
           absences,
           api,
+          przeszkodaDodatkowa: (u, z) =>
+            przeszkodaDyspozycji({ dyspozycja, miesiace: dyspozycjaMiesiace, user: u, date: z.date, start_time: z.start_time, end_time: z.end_time })
+              ? "nie może wg dyspozycji"
+              : null,
         });
         const mapa = new Map(przepisane.map((z) => [String(z.id), z]));
         setPlanShifts(
@@ -1273,6 +1297,7 @@ const ManagerDashboard = ({
             wydarzenia={wydarzenia}
             wydarzeniaUczestnicy={wydarzeniaUczestnicy}
             calaSiec={jestWlascicielem}
+            dyspozycja={dyspozycja}
             showMsg={showMsg}
             tasks={tasks}
             taskBlocks={taskBlocks}
@@ -1408,6 +1433,11 @@ const ManagerDashboard = ({
             onResolveSwap={handleResolveSwap}
             absences={absences}
             setAbsences={setAbsences}
+            dyspozycja={dyspozycja}
+            setDyspozycja={setDyspozycja}
+            dyspozycjaMiesiace={dyspozycjaMiesiace}
+            prosby={prosby}
+            setProsby={setProsby}
             setShifts={setShifts}
             staffingRules={staffingRules}
             setStaffingRules={setStaffingRules}
@@ -1544,6 +1574,9 @@ const ManagerDashboard = ({
             wydarzeniaUczestnicy={wydarzeniaUczestnicy}
             setWydarzeniaUczestnicy={setWydarzeniaUczestnicy}
             calaSiec={jestWlascicielem}
+            dyspozycja={dyspozycja}
+            setDyspozycja={setDyspozycja}
+            shiftSwaps={shiftSwaps}
           />
         )}
 
@@ -1584,6 +1617,11 @@ const ManagerDashboard = ({
             onAddUrlop={handleAddUrlop}
             onDeleteAbsence={handleDeleteAbsence}
             showMsg={showMsg}
+            dyspozycja={dyspozycja}
+            setDyspozycja={setDyspozycja}
+            dyspozycjaMiesiace={dyspozycjaMiesiace}
+            planShifts={planShifts}
+            kierownik={currentUser?.name}
           />
         )}
 

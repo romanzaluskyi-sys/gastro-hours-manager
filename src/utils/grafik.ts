@@ -572,12 +572,15 @@ export const findBlockingAbsence = (absences, user, dateStr) =>
 // Pomijamy dni, w których nowa osoba nie może pracować — cudza zmiana wpisana
 // komuś na urlop albo na kolidującą godzinę byłaby gorsza niż brak obsady, bo
 // wyglądałaby na pokrytą.
+// `przeszkodaDodatkowa(osoba, zmiana)` — np. dyspozycja (utils/dyspozycja.ts);
+// podawana z zewnątrz, bo tamten moduł importuje z tego i powstałby cykl.
 export const przepiszZmiany = async ({
   zmiany,
   doUzytkownika,
   planShifts,
   absences,
   api,
+  przeszkodaDodatkowa = null,
 }) => {
   const przepisane = [];
   const pominiete = [];
@@ -597,7 +600,7 @@ export const przepiszZmiany = async ({
           excludeId: zm.id,
         })
       ? "ma już zmianę w tych godzinach"
-      : null;
+      : (przeszkodaDodatkowa && przeszkodaDodatkowa(doUzytkownika, zm)) || null;
     if (powod) {
       pominiete.push({ zmiana: zm, powod });
       continue;
@@ -663,6 +666,7 @@ export const buildCopyFromPreviousWeek = ({
   users,
   lokal,
   weekStart,
+  przeszkodaDodatkowa = null,
 }) => {
   const prevFrom = addDaysYMD(weekStart, -7);
   const prevTo = addDaysYMD(weekStart, -1);
@@ -688,6 +692,11 @@ export const buildCopyFromPreviousWeek = ({
       ) || { id: s.user_id, name: s.user_name };
     if (findBlockingAbsence(absences, user, date)) {
       skipped.push({ ...candidate, powod: "wolne" });
+      return;
+    }
+    const dodatkowa = przeszkodaDodatkowa && przeszkodaDodatkowa(user, candidate);
+    if (dodatkowa) {
+      skipped.push({ ...candidate, powod: dodatkowa });
       return;
     }
     if (findOverlappingPlanShift([...(planShifts || []), ...drafts], candidate)) {

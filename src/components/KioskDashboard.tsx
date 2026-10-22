@@ -86,6 +86,13 @@ const KioskDashboard = ({
   showMsg,
   wydarzenia = [],
   wydarzeniaUczestnicy = [],
+  dyspozycja = [],
+  setDyspozycja,
+  dyspozycjaMiesiace = [],
+  setDyspozycjaMiesiace,
+  prosby = [],
+  setProsby,
+  setPlanShifts,
 }) => {
   const [screen, setScreen] = useState("LIST");
   const [selectedEmployee, setSelectedEmployee] = useState(null);
@@ -450,6 +457,7 @@ const KioskDashboard = ({
         planShifts,
         absences,
         user: u,
+        dysp: { dyspozycja, miesiace: dyspozycjaMiesiace },
       });
       // Wiadomości są adresowane imiennie, a na wspólnym tablecie
       // nikt nie zagląda na cudzą stronę — bez sygnału na liście
@@ -935,6 +943,13 @@ const KioskDashboard = ({
         setAbsences={setAbsences}
         wydarzenia={wydarzenia}
         wydarzeniaUczestnicy={wydarzeniaUczestnicy}
+        dyspozycja={dyspozycja}
+        setDyspozycja={setDyspozycja}
+        dyspozycjaMiesiace={dyspozycjaMiesiace}
+        setDyspozycjaMiesiace={setDyspozycjaMiesiace}
+        prosby={prosby}
+        setProsby={setProsby}
+        setPlanShifts={setPlanShifts}
         onBack={goList}
         onLogout={() => setCurrentView("login")}
       />

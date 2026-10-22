@@ -27,6 +27,51 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.82.0",
+    date: "2026-10-22",
+    items: [
+      "Prośba o zwolnienie ze zmiany: pracownik prosi w Dyspozycji, kierownik decyduje w „Do decyzji” (zostaw / zdejmij).",
+      "„Zapytaj” także wtedy, gdy godziny zmiany wyszły poza dyspozycję już po wyborze osoby.",
+      "Konflikt z wersją roboczą: znacznik w kratce Grafiku z „Zdejmij” i „Zapytaj”.",
+      "Dyspozycja w karcie pracownika: kalendarz i wpis kierownika na dni puste.",
+    ],
+  },
+  {
+    version: "0.81.0",
+    date: "2026-10-22",
+    items: [
+      "„Nie może” to jedno pojęcie: dawna niedostępność działa jak dyspozycja „Nie mogę” (blokuje, daje „Zapytaj”).",
+      "Kierownik wpisuje „Nie może” do dyspozycji pracownika z panelu zmiany; pracownik widzi to w kalendarzu i dostaje wiadomość.",
+    ],
+  },
+  {
+    version: "0.80.0",
+    date: "2026-10-22",
+    items: [
+      "„Zapytaj” w Grafiku: osobę niedostępną wg dyspozycji można zapytać o jedną zmianę.",
+      "Do odpowiedzi w kratce „czeka na zgodę”, brak w obsadzie zostaje; pytanie wygasa 24 h przed zmianą.",
+      "Pracownik odpowiada w Dyspozycji (Mogę / Nie mogę); po „Mogę” zmiana od razu jest w grafiku.",
+    ],
+  },
+  {
+    version: "0.79.0",
+    date: "2026-10-22",
+    items: [
+      "Nowa strona „Dyspozycja” u pracownika: kalendarz „mogę / w godzinach / nie mogę”, kilka dni naraz, powtórzenie tygodnia.",
+      "Urlop wnioskuje się z kalendarza Dyspozycji; „Wolne” zniknęło ze „Zgłoś”.",
+      "Grafik, kopiowanie tygodnia, przepisanie zmian i giełda nie wpiszą osoby wbrew jej wysłanej dyspozycji.",
+    ],
+  },
+  {
+    version: "0.78.0",
+    date: "2026-10-22",
+    items: [
+      "Poziom doświadczenia na każdym stanowisku w karcie pracownika: 1 — wdrażany, 2 — samodzielny, 3 — może szkolić.",
+      "Grafik: kropki poziomu przy kandydatach i sygnał, gdy na stanowisku stoją same osoby z poziomem 1 (bez blokady).",
+      "Pracownik widzi swoje poziomy w „Więcej → Moje stanowiska”.",
+    ],
+  },
+  {
     version: "0.77.0",
     date: "2026-10-20",
     items: [

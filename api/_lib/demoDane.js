@@ -271,6 +271,7 @@ const generuj = ({ dzis = C.ymd(), teraz = new Date() } = {}) => {
     issues: [], shift_swaps: [], shift_edits: [], task_blocks: [], tasks: [],
     day_log_templates: [], day_logs: [], day_log_entries: [], task_completions: [],
     notifications: [], zadania_moje: [], wydarzenia: [], wydarzenia_uczestnicy: [],
+    dyspozycja: [], dyspozycja_miesiace: [], prosby_o_zmiane: [],
   };
 
   // --- Lokale, stanowiska, godziny otwarcia ---
@@ -294,13 +295,29 @@ const generuj = ({ dzis = C.ymd(), teraz = new Date() } = {}) => {
     "Dmytro Bondarenko": C.dodajDni(dzis, -3), // po terminie
     "Olena Kovalenko": null,                   // brak → „Braki w danych”
   };
+  // Poziom na stanowisku (0.78.0, migracja 0047). Dmytro jest na Zmywaku sam
+  // i ma poziom 1 — Grafik pokaże przy nim sygnał „tylko poziom 1”. Osoby
+  // spoza listy mają poziomy nieustawione (tak wygląda baza tuż po wdrożeniu).
+  const POZIOMY_DEMO = {
+    "Agnieszka Kowalczyk": { Kuchnia: 3 },
+    "Tomasz Zieliński": { Kuchnia: 2 },
+    "Rafał Grabowski": { Kuchnia: 2, "Pomoc kuchenna": 3 },
+    "Olena Kovalenko": { "Pomoc kuchenna": 2, Zmywak: 2 },
+    "Dmytro Bondarenko": { Zmywak: 1 },
+    [K.KONTA[2].imie]: { Sala: 2, Bar: 1 },
+    "Julia Mazur": { Sala: 3, Bar: 2 },
+    "Kacper Wójcik": { Bar: 3, Sala: 2 },
+    "Michał Kamiński": { Pizzaiolo: 3 },
+    "Oksana Shevchenko": { Pizzaiolo: 1 },
+    "Wiktoria Jankowska": { Bar: 2, Sala: 1 },
+  };
   const user = (u) => ({
     email: null, kiosk_pin: null, active: true, archived: false,
     default_lokal: null, default_stanowisko: null, allowed_lokale: "", allowed_stanowiska: null,
     stawka: null, typ_umowy: null, wymiar_etatu: null, wynagrodzenie_mies: null,
     umowa_bezterminowa: false, umowa_expiry: null, sanepid_expiry: null,
     telefon: null, data_zatrudnienia: null, notatki: null, email_powiadomienia: false,
-    probny_status: null, probny_od: null, probny_przez: null,
+    probny_status: null, probny_od: null, probny_przez: null, poziomy_stanowisk: null,
     ...u,
   });
   const konto = (klucz) => K.KONTA.find((k) => k.klucz === klucz);
@@ -328,6 +345,7 @@ const generuj = ({ dzis = C.ymd(), teraz = new Date() } = {}) => {
       umowa_bezterminowa: etat, umowa_expiry: etat ? null : `${dzis.slice(0, 4)}-12-31`,
       sanepid_expiry: p.name in sanepid ? sanepid[p.name] : C.dodajDni(dzis, 120 + i * 17),
       data_zatrudnienia: C.dodajDni(dzis, -(200 + i * 41)),
+      poziomy_stanowisk: POZIOMY_DEMO[p.name] || null,
     });
     if (p.konto === "telefon") {
       // Prywatny telefon: e-mail + kiosk_pin. Ten sam PIN blokuje jego profil na tablecie.
@@ -807,6 +825,96 @@ const generuj = ({ dzis = C.ymd(), teraz = new Date() } = {}) => {
     { id: noweId("moje"), wlasciciel_id: wlascicielkaId, wlasciciel_name: WLASCICIELKA, lokal: null, tytul: "Grafik na święta — zebrać dyspozycyjność", termin: C.dodajDni(dzis, 9), zrodlo: "wlasne", archived: false }
   );
 
+  // --- Dyspozycja (0.79.0) na przyszły miesiąc ---
+  // Konto z telefonu (studentka): dyspozycja zaczęta, NIEWYSŁANA — odwiedzający
+  // demo może ją dokończyć i wysłać. Dmytro: wysłana, z kilkoma „Nie mogę” —
+  // Grafik nie pozwoli go wpisać w te dni. Pomijamy dni z opublikowaną zmianą
+  // tej osoby (tych pracownik nie zmienia, grafik obowiązuje).
+  const [rokD, miesD] = dzis.split("-").map(Number);
+  const nastepny = `${miesD === 12 ? rokD + 1 : rokD}-${String(miesD === 12 ? 1 : miesD + 1).padStart(2, "0")}-01`;
+  const dniNastepnego = [];
+  for (let d = nastepny; d.slice(0, 7) === nastepny.slice(0, 7); d = C.dodajDni(d, 1)) dniNastepnego.push(d);
+  const maZmiane = (osoba, d) => T.grafik_shifts.some((g) => g.user_id === osoba.id && g.date === d && g.published_at && !g.deleted_at);
+  const dyspozycjaDnia = (osoba, d, stan, od1 = null, do1 = null, notatka = null) =>
+    T.dyspozycja.push({
+      id: noweId("dyspozycja"), user_id: osoba.id, user_name: osoba.name, date: d, stan,
+      od1, do1, od2: null, do2: null, notatka, autor: "pracownik", autor_name: osoba.name,
+      zmieniono_at: terazIso, created_at: terazIso,
+    });
+  const studentka = osoby[K.KONTA[2].imie];
+  if (studentka) {
+    dniNastepnego.slice(0, 14).forEach((d) => {
+      if (maZmiane(studentka, d)) return;
+      const t = C.dzienTygodnia(d);
+      if (t === 2) dyspozycjaDnia(studentka, d, "nie", null, null, "zajęcia na uczelni");
+      else if (t === 0) dyspozycjaDnia(studentka, d, "nie");
+      else if (t === 6) dyspozycjaDnia(studentka, d, "moge");
+      else dyspozycjaDnia(studentka, d, "godziny", "16:00", "22:00");
+    });
+  }
+  // „Zapytaj” (0.80.0): kierownik pyta studentkę o wtorek, w który w
+  // dyspozycji „nie może”. Na telefonie demo widać kartę „Mogę / Nie mogę”.
+  // ⚠️ Zdanie wiadomości to kopia `tekstProsby` z src/utils/prosby.ts.
+  const wtorek = studentka && T.dyspozycja.find((w) => w.user_id === studentka.id && w.stan === "nie" && w.notatka);
+  if (wtorek) {
+    const DNI_KR = ["ndz", "pon", "wt", "śr", "czw", "pt", "sob"];
+    const [, mm, dd] = wtorek.date.split("-");
+    const opis = `${DNI_KR[C.dzienTygodnia(wtorek.date)]} ${dd}.${mm}, 16:00–22:00, Sala · ${BISTRO}`;
+    const start = C.chwila(wtorek.date, "16:00");
+    T.prosby_o_zmiane.push({
+      id: noweId("prosba"), user_id: studentka.id, user_name: studentka.name, lokal: BISTRO, stanowisko: "Sala",
+      date: wtorek.date, start_time: "16:00", end_time: "22:00", status: "czeka",
+      wygasa_at: new Date(start.getTime() - 24 * 3600 * 1000).toISOString(),
+      kto_pyta: "Paweł Lewandowski", created_at: C.chwila(wczoraj, "19:30").toISOString(),
+    });
+    const kiedy = C.chwila(wczoraj, "19:30").toISOString();
+    T.notifications.push({
+      id: noweId("notif"), audience: "employee", user_name: studentka.name, type: "dyspozycja", is_read: false,
+      message: `Kierownik pyta, czy możesz: ${opis}. Odpowiedz w Dyspozycji.`,
+      created_at: kiedy, email_at: kiedy, email_info: "pominięto: demo",
+    });
+  }
+  const dmytro = osoby["Dmytro Bondarenko"];
+  if (dmytro) {
+    dniNastepnego.forEach((d) => {
+      if (maZmiane(dmytro, d)) return;
+      const t = C.dzienTygodnia(d);
+      if (t === 2 || t === 3) dyspozycjaDnia(dmytro, d, "nie");
+    });
+    T.dyspozycja_miesiace.push({
+      id: noweId("dyspozycja_miesiac"), user_id: dmytro.id, miesiac: nastepny,
+      wyslano_at: C.chwila(C.dodajDni(dzis, -2), "20:15").toISOString(), wyslal_name: dmytro.name,
+      pozostale: "bez", created_at: terazIso,
+    });
+  }
+
+  // Prośba o zwolnienie ze zmiany (0.82.0): ktoś z kuchni prosi o zwolnienie
+  // z opublikowanej zmiany za kilka dni — jedna sprawa w „Do decyzji”.
+  // ⚠️ Zdanie wiadomości to kopia `tekstProsbyOZwolnienie` z src/utils/dyspozycja.ts.
+  const doZwolnienia = T.grafik_shifts.find(
+    (g) =>
+      g.published_at && !g.deleted_at && g.date >= C.dodajDni(dzis, 2) && g.date <= C.dodajDni(dzis, 6) &&
+      g.user_id !== (marek && marek.id) && g.user_id !== (studentka && studentka.id) &&
+      !T.dyspozycja.some((w) => w.user_id === g.user_id && w.date === g.date)
+  );
+  if (doZwolnienia) {
+    const DNI_KR = ["ndz", "pon", "wt", "śr", "czw", "pt", "sob"];
+    const [, mm, dd] = doZwolnienia.date.split("-");
+    const kiedy = C.chwila(wczoraj, "21:10").toISOString();
+    T.dyspozycja.push({
+      id: noweId("dyspozycja"), user_id: doZwolnienia.user_id, user_name: doZwolnienia.user_name, date: doZwolnienia.date,
+      stan: "nie", od1: null, do1: null, od2: null, do2: null, notatka: "wizyta u lekarza", autor: "pracownik",
+      autor_name: doZwolnienia.user_name, zmieniono_at: kiedy, created_at: kiedy, zwolnienie_z: doZwolnienia.id,
+      rozstrzygnieto_at: null, rozstrzygnal: null, rozstrzygniecie: null,
+    });
+    const opis = `${DNI_KR[C.dzienTygodnia(doZwolnienia.date)]} ${dd}.${mm}, ${doZwolnienia.start_time}–${doZwolnienia.end_time}, ${doZwolnienia.stanowisko} · ${doZwolnienia.lokal}`;
+    T.notifications.push({
+      id: noweId("notif"), audience: "manager", lokal: doZwolnienia.lokal, type: "dyspozycja", is_read: false,
+      message: `${doZwolnienia.user_name} prosi o zwolnienie ze zmiany: ${opis}. Powód: wizyta u lekarza`,
+      created_at: kiedy, email_at: kiedy, email_info: "pominięto: demo",
+    });
+  }
+
   return T;
 };
 
@@ -817,6 +925,7 @@ const KOLEJNOSC = [
   "grafik_budzet_cele", "grafik_shifts", "shifts", "absences", "issues", "shift_swaps",
   "shift_edits", "task_blocks", "tasks", "day_log_templates", "day_logs", "day_log_entries",
   "task_completions", "notifications", "zadania_moje", "wydarzenia", "wydarzenia_uczestnicy",
+  "dyspozycja", "dyspozycja_miesiace", "prosby_o_zmiane",
 ];
 
 module.exports = { generuj, KOLEJNOSC, uuidZ, BISTRO, PIZZERIA, LUDZIE, MIN_PENSJA, MIN_STAWKA };

@@ -32,6 +32,8 @@ import {
   krotkaGodzina,
 } from "../../utils/grafik";
 import { uwagiPrzypisania } from "../../utils/kodeks";
+import { kropkiPoziomu, opisPoziomu, poziomNa, sygnalyPoziomu } from "../../utils/poziomy";
+import { czekajacaNaZmiane, stanProsby, wygasaDla } from "../../utils/prosby";
 import { naEtacie, normaMiesiaca } from "../../utils/umowy";
 import { kosztGodziny, zl } from "../../utils/budzet";
 import PoleCzasu from "./PoleCzasu";
@@ -75,9 +77,13 @@ export function GrafikBlokadaModal({ powod, onClose, onNotify }) {
           <p className="text-[15px]">{powod.tekst}</p>
           {powod.podpowiedz && <p className="text-[13px] text-[#6E6E66]">{powod.podpowiedz}</p>}
           <div className="flex gap-2 pt-1 flex-wrap">
-            <button onClick={() => onNotify(powod)} className={btnObrysCls}>
-              Napisz do pracownika
-            </button>
+            {/* Przy dyspozycji wiadomość „próbował wpisać” nic nie daje — nie
+                da się na nią odpowiedzieć. Od tego jest „Zapytaj”. */}
+            {!powod.dyspozycja && (
+              <button onClick={() => onNotify(powod)} className={btnObrysCls}>
+                Napisz do pracownika
+              </button>
+            )}
             <button onClick={onClose} className={btnObrysCls}>
               Anuluj
             </button>
@@ -107,6 +113,9 @@ export default function GrafikZmianaModal({
   onAddStanowisko,
   onAddAbsence,
   onClose,
+  // „Zapytaj” (0.80.0) — prośby i wysłanie prośby; bez nich panel działa jak dawniej.
+  prosby = [],
+  onZapytaj = null,
 }) {
   const edycja = !!ctx.shift;
   const [lokal, setLokal] = useState(ctx.shift?.lokal || ctx.lokal);
@@ -126,6 +135,9 @@ export default function GrafikZmianaModal({
   // Osoby bez wybranego stanowiska są zwinięte pod strzałką — rzadko ich
   // szukamy, a zajmowały pół panelu.
   const [pokazBezStanowiska, setPokazBezStanowiska] = useState(false);
+  // Osoba, którą kierownik chce zapytać (krok potwierdzenia „Zapytać …?”).
+  const [zapytajKogo, setZapytajKogo] = useState(null);
+  const [pytanie, setPytanie] = useState(false);
 
   const user = (users || []).find((u) => String(u.id) === String(userId)) || (userId ? ctx.user : null);
   const rulesForDay = getRulesForDate(
@@ -209,6 +221,8 @@ export default function GrafikZmianaModal({
     };
   };
 
+  // { tekst, dyspozycja } albo null. `dyspozycja` = jedyną przeszkodą jest
+  // dyspozycja pracownika — taką osobę da się ZAPYTAĆ (0.80.0).
   const przeszkodaDla = (u) => {
     if (!przeszkodaDnia || !start || !end) return null;
     for (const d of dni) {
@@ -216,7 +230,7 @@ export default function GrafikZmianaModal({
         { id: ctx.shift?.id || null, user_id: u.id, user_name: u.name, start_time: start, end_time: end },
         d
       );
-      if (b) return `${b.krotko} · ${dzienKrotko(d)}`;
+      if (b) return { tekst: `${b.krotko} · ${dzienKrotko(d)}`, dyspozycja: !!b.dyspozycja };
     }
     return null;
   };
@@ -247,15 +261,25 @@ export default function GrafikZmianaModal({
     // wyborze osoby albo dni.
     godziny: godzinyTeraz(u),
   }));
-  const sortuj = (a, b) => (a.przeszkoda ? 1 : 0) - (b.przeszkoda ? 1 : 0) || a.godziny - b.godziny;
-  const lokalni = lista.filter((k) => zTegoLokalu(k.u) && (umie(k.u) || zawsze(k.u))).sort(sortuj);
-  const obcy = lista.filter((k) => !zTegoLokalu(k.u) && umie(k.u) && !zawsze(k.u)).sort(sortuj);
+  // Przy równych godzinach wyżej stoi wyższy poziom na tym stanowisku.
+  const sortuj = (a, b) =>
+    (a.przeszkoda ? 1 : 0) - (b.przeszkoda ? 1 : 0) ||
+    a.godziny - b.godziny ||
+    (poziomNa(b.u, stanowisko) || 0) - (poziomNa(a.u, stanowisko) || 0);
+  // Niedostępni wg dyspozycji — osobna grupa z „Zapytaj” (makieta
+  // ScheduleAssignDisposition). Tylko ci, którzy znają stanowisko.
+  const doZapytania = lista
+    .filter((k) => k.przeszkoda?.dyspozycja && (umie(k.u) || zawsze(k.u) || wybrany(k.u)))
+    .sort((a, b) => a.godziny - b.godziny);
+  const listaBez = lista.filter((k) => !doZapytania.includes(k));
+  const lokalni = listaBez.filter((k) => zTegoLokalu(k.u) && (umie(k.u) || zawsze(k.u))).sort(sortuj);
+  const obcy = listaBez.filter((k) => !zTegoLokalu(k.u) && umie(k.u) && !zawsze(k.u)).sort(sortuj);
   // Osoby BEZ tego stanowiska też są na liście — na końcu i na szaro, a po
   // wyborze panel proponuje dopisać stanowisko do karty. Na samym końcu ci,
   // którzy nie mają w karcie ani lokalu, ani stanowiska (konto założone,
   // karta nieuzupełniona).
   const nieuzupelniona = (u) => (!u.default_lokal && !u.allowed_lokale ? 1 : 0) + (!u.default_stanowisko ? 1 : 0);
-  const reszta = lista
+  const reszta = listaBez
     .filter((k) => !lokalni.includes(k) && !obcy.includes(k))
     .sort(
       (a, b) =>
@@ -293,10 +317,33 @@ export default function GrafikZmianaModal({
   const minutyBraku = (luki) => luki.reduce((a, g) => a + (g.minutes || 0) * (g.missing || 0), 0);
   const brakPrzed = minutyBraku(lukiPrzed);
   const brakPo = minutyBraku(lukiPo);
+  // Same osoby z poziomem 1 na tym stanowisku (0.78.0) — z wybraną osobą,
+  // jeśli jest. Sygnał, nie blokada.
+  const sygnalyPo = stanowisko
+    ? dni.flatMap((d) =>
+        sygnalyPoziomu({ planShifts: user && start && end ? [...planBez, ...probne(user)] : planBez, users, lokal, date: d })
+          .filter((sg) => sg.stanowisko === stanowisko)
+          .map((sg) => ({ ...sg, d }))
+      )
+    : [];
   const lokalRow = (lokale || []).find((l) => l.name === lokal) || null;
   const stawkaH = user ? kosztGodziny(user, lokalRow, rok, mies) : null;
   const uwagi = user ? uwagiDla(user) : [];
   const maBad = uwagi.some((x) => x.ton === "bad");
+  // Wybrana osoba, której jedyną przeszkodą jest dyspozycja (np. godziny
+  // zmiany wyszły poza „Mogę w godzinach” już PO wyborze osoby): wpisać jej
+  // się nie da, ale da się ZAPYTAĆ. Główny przycisk prowadzi wtedy do
+  // „Zapytaj” — do 0.81.0 zapis kończył się oknem blokady i wiadomością
+  // „Kierownik próbował wpisać Ci zmianę…”, bez możliwości odpowiedzi.
+  const przeszkodaWybranej = user && !edycja ? przeszkodaDla(user) : null;
+  const tylkoZapytaj = !!przeszkodaWybranej?.dyspozycja;
+  const zapytajWybrana = () => {
+    setZapytajKogo(user);
+    setTimeout(() => {
+      const el = document.querySelector("[data-potwierdz-zapytaj]");
+      if (el && el.scrollIntoView) el.scrollIntoView({ block: "center", behavior: "smooth" });
+    }, 0);
+  };
 
   const zapisz = async (dodajNastepna) => {
     if (!user || !stanowisko || !start || !end) return;
@@ -353,10 +400,22 @@ export default function GrafikZmianaModal({
           {inicjaly(u.name)}
         </span>
         <span className="min-w-0">
-          <span className="block font-extrabold truncate">{u.name}</span>
+          <span className="flex items-center gap-1.5 min-w-0">
+            <span className="font-extrabold truncate">{u.name}</span>
+            {poziomNa(u, stanowisko) && (
+              <span
+                className={`flex-shrink-0 text-[11px] tracking-[1px] ${on ? "text-white" : "text-[#171714]"}`}
+                title={`Poziom ${poziomNa(u, stanowisko)} — ${opisPoziomu(poziomNa(u, stanowisko)).nazwa}`}
+                aria-label={`poziom ${poziomNa(u, stanowisko)}`}
+                data-poziom={poziomNa(u, stanowisko)}
+              >
+                {kropkiPoziomu(poziomNa(u, stanowisko))}
+              </span>
+            )}
+          </span>
           <span className={`block text-[12px] leading-4 truncate ${on ? "text-white/80" : "text-[#6E6E66]"}`}>
             {przeszkoda
-              ? przeszkoda
+              ? przeszkoda.tekst
               : bezStanowiska
               ? `nie ma „${stanowisko}” w karcie${!u.default_lokal && !u.allowed_lokale ? " · bez lokalu" : ""}`
               : `${!zTegoLokalu(u) ? `${u.default_lokal || "bez lokalu"} · ` : ""}${u.default_stanowisko || "bez stanowiska"}`}
@@ -399,6 +458,76 @@ export default function GrafikZmianaModal({
         </div>
       )}
       </React.Fragment>
+    );
+  };
+
+  // --- „Zapytaj” (0.80.0) ---
+  // Pytanie zawsze o JEDEN dzień i JEDNĄ zmianę (decyzja właściciela), więc
+  // tylko przy nowej zmianie na jeden dzień. Jedno pytanie naraz o tę samą
+  // zmianę — drugie dopiero po odmowie, wygaśnięciu albo wycofaniu.
+  const slot = { lokal, date, stanowisko, start_time: start, end_time: end };
+  const czekaNaTo = start && end ? czekajacaNaZmiane(prosby, slot) : null;
+  const wygasa = start && end && date ? wygasaDla(date, start) : null;
+  const zapytajMozna = !!onZapytaj && !edycja && dni.length === 1 && !!stanowisko && !!start && !!end && !!wygasa && !czekaNaTo;
+  const powodBezZapytaj = !onZapytaj
+    ? ""
+    : edycja
+    ? "Pytać można przy nowej zmianie."
+    : dni.length !== 1
+    ? "Pytanie dotyczy jednego dnia — odznacz pozostałe dni."
+    : !wygasa
+    ? "Na pytanie jest za późno — zmiana zaczyna się za mniej niż godzinę."
+    : czekaNaTo
+    ? `Pytanie o tę zmianę już czeka: ${czekaNaTo.user_name}.`
+    : "";
+  const dataGodzina = (iso) => {
+    const d = new Date(iso);
+    const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    return `${dzienKrotko(ymd)}, ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  };
+  const wyslijPytanie = async () => {
+    if (!zapytajKogo || !onZapytaj) return;
+    setPytanie(true);
+    const ok = await onZapytaj({ user: zapytajKogo, lokal, stanowisko, date, start_time: start, end_time: end });
+    setPytanie(false);
+    if (ok) {
+      setZapytajKogo(null);
+      onClose();
+    }
+  };
+  const czekaOsoby = (u) =>
+    (prosby || []).find((p) => String(p.user_id) === String(u.id) && p.date === date && stanProsby(p) === "czeka");
+  const zapytajRzad = (k) => {
+    const { u, przeszkoda } = k;
+    const juzCzeka = czekaOsoby(u);
+    return (
+      <div
+        key={u.id}
+        className="grid grid-cols-[36px_1fr_auto] gap-2.5 items-center px-2.5 py-2 rounded-lg border-[2px] border-dashed border-[#DEDCD4] bg-[#F6F5F1]"
+        data-kandydat-zapytaj={u.name}
+      >
+        <span className="w-9 h-9 rounded-full grid place-items-center text-[13px] font-extrabold bg-[#ECEBE6] text-[#6E6E66]">
+          {inicjaly(u.name)}
+        </span>
+        <span className="min-w-0">
+          <span className="block font-extrabold truncate text-[#6E6E66]">{u.name}</span>
+          <span className="block text-[12px] leading-4 truncate text-[#6E6E66]">{przeszkoda.tekst}</span>
+        </span>
+        {juzCzeka ? (
+          <span className="text-[12px] font-extrabold text-[#8A5300]">czeka na odpowiedź</span>
+        ) : (
+          <button
+            type="button"
+            disabled={!zapytajMozna}
+            title={powodBezZapytaj}
+            onClick={() => setZapytajKogo(u)}
+            className="h-9 px-3 rounded-lg border-[2px] border-[#171714] bg-white text-[13px] font-extrabold disabled:opacity-40"
+            data-zapytaj={u.name}
+          >
+            Zapytaj
+          </button>
+        )}
+      </div>
     );
   };
 
@@ -601,6 +730,44 @@ export default function GrafikZmianaModal({
               </div>
             )
           )}
+          {doZapytania.length > 0 && (
+            <div className="flex flex-col gap-1.5" data-kandydaci-zapytaj>
+              <span className={etykietaCls}>Niedostępni wg dyspozycji · tylko „Zapytaj”</span>
+              {powodBezZapytaj && <span className="text-[12px] text-[#6E6E66]">{powodBezZapytaj}</span>}
+              {doZapytania.map((k) => zapytajRzad(k))}
+              {zapytajKogo && (
+                <div className="rounded-lg border-[2px] border-[#171714] bg-white px-3 py-3 flex flex-col gap-2" data-potwierdz-zapytaj>
+                  <span className="text-[13px] text-[#6E6E66]">
+                    {zapytajKogo.name} — {przeszkodaDla(zapytajKogo)?.tekst || "dyspozycja"}. Zmiana trafi do grafiku
+                    dopiero po odpowiedzi „Mogę” — do tego czasu brak w obsadzie zostaje.
+                  </span>
+                  <b className="font-['Archivo'] text-[17px]">Zapytać: {zapytajKogo.name}?</b>
+                  <span className="text-[14px]">
+                    Wyślemy pytanie o{" "}
+                    <b>
+                      {dzienKrotko(date)}, {start}–{end}
+                    </b>
+                    {stanowisko ? ` (${stanowisko})` : ""}. Prośba wygaśnie {wygasa ? dataGodzina(wygasa) : ""}.
+                  </span>
+                  <span className="text-[12px] text-[#6E6E66]">Pytanie dotyczy tylko tego jednego dnia i tej zmiany.</span>
+                  <div className="flex gap-2 justify-end">
+                    <button type="button" onClick={() => setZapytajKogo(null)} className="h-10 px-3 rounded-lg border-[2px] border-[#171714] font-bold">
+                      Wróć
+                    </button>
+                    <button
+                      type="button"
+                      disabled={pytanie || !zapytajMozna}
+                      onClick={wyslijPytanie}
+                      className="h-10 px-3 rounded-lg bg-[#DE3A22] text-white font-extrabold disabled:opacity-50"
+                      data-wyslij-pytanie
+                    >
+                      Wyślij pytanie
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           {reszta.length > 0 && (
             <div className="flex flex-col gap-1.5" data-kandydaci-bez-stanowiska>
               {(() => {
@@ -625,6 +792,21 @@ export default function GrafikZmianaModal({
                   </>
                 );
               })()}
+            </div>
+          )}
+
+          {sygnalyPo.length > 0 && (
+            <div className="rounded-lg px-3 py-2.5 border-[2px] border-[#8A5300] bg-[#FDF0D8] text-sm text-[#8A5300]" data-sygnal-poziomu>
+              {sygnalyPo.map((sg, i) => (
+                <b key={i} className="flex items-start gap-1.5">
+                  <AlertTriangle size={15} className="flex-shrink-0 mt-0.5" />
+                  <span>
+                    {dni.length > 1 ? `${dzienKrotko(sg.d)} · ` : ""}
+                    {sg.stanowisko} {trimTime(sg.from)}–{trimTime(sg.to)}: tylko osoby z poziomem 1 ({sg.osoby.join(", ")})
+                  </span>
+                </b>
+              ))}
+              <span className="text-[13px]">Sygnał, nie blokada.</span>
             </div>
           )}
 
@@ -706,7 +888,7 @@ export default function GrafikZmianaModal({
               <div className="flex gap-1.5">
                 {[
                   { key: "urlop", label: "Urlop" },
-                  { key: "niedostepnosc", label: "Niedostępność" },
+                  { key: "niedostepnosc", label: "Nie może" },
                 ].map((o) => (
                   <button
                     key={o.key}
@@ -748,7 +930,7 @@ export default function GrafikZmianaModal({
               <span className="text-[13px] text-[#6E6E66]">
                 {wolneForm.typ === "urlop"
                   ? "Urlop od razu zapisze się jako godziny (8 h za dzień roboczy), a pracownik dostanie powiadomienie."
-                  : "Niedostępność nie generuje godzin — blokuje tylko wpisywanie zmian w te dni."}
+                  : "Wpisze się do dyspozycji pracownika jako „Nie mogę” (bez godzin): Grafik nie pozwoli wpisać zmiany w te dni, o jeden dzień można zapytać. Dni, które pracownik sam zaznaczył, zostają bez zmian."}
               </span>
               <div className="flex gap-2">
                 <button type="button" className={btnObrysCls} onClick={() => setWolneForm(null)}>
@@ -801,22 +983,36 @@ export default function GrafikZmianaModal({
             <button
               type="button"
               onClick={() => zapisz(true)}
-              disabled={saving || !user || !stanowisko || !start || !end}
+              disabled={saving || !user || !stanowisko || !start || !end || tylkoZapytaj}
               className={`${btnObrysCls} flex-1 md:flex-none`}
             >
               + Następna
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => zapisz(false)}
-            disabled={saving || !user || !stanowisko || !start || !end}
-            className={`${btnGlownyCls} basis-full md:basis-auto order-last md:order-none`}
-            data-zapisz-zmiane
-          >
-            <Check size={18} />
-            {maBad ? (edycja ? "Zapisz mimo uwag" : "Przypisz mimo uwag") : edycja ? "Zapisz" : dni.length > 1 ? `Przypisz ×${dni.length}` : "Przypisz"}
-          </button>
+          {tylkoZapytaj ? (
+            <button
+              type="button"
+              onClick={zapytajWybrana}
+              disabled={!zapytajMozna}
+              title={powodBezZapytaj || przeszkodaWybranej.tekst}
+              className={`${btnGlownyCls} basis-full md:basis-auto order-last md:order-none`}
+              data-zapisz-zmiane
+              data-zapytaj-wybrana
+            >
+              Zapytaj: {user.name}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => zapisz(false)}
+              disabled={saving || !user || !stanowisko || !start || !end}
+              className={`${btnGlownyCls} basis-full md:basis-auto order-last md:order-none`}
+              data-zapisz-zmiane
+            >
+              <Check size={18} />
+              {maBad ? (edycja ? "Zapisz mimo uwag" : "Przypisz mimo uwag") : edycja ? "Zapisz" : dni.length > 1 ? `Przypisz ×${dni.length}` : "Przypisz"}
+            </button>
+          )}
         </div>
       </aside>
     </>

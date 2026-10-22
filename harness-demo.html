@@ -253,6 +253,12 @@ async function arytmetyka() {
     sprawdz(T.issues.every((i) => !i.shift_id || idyZmian.has(i.shift_id)), `${tag} issues.shift_id wskazuje istniejącą zmianę (FK)`);
     sprawdz(T.absences.filter((a) => a.status === "pending").length === 1, `${tag} jeden wniosek o wolne czeka`);
     sprawdz(T.users.filter((u) => u.probny_status === "oczekuje").length === 1, `${tag} jedna osoba na próbę`);
+    // 0.82.0: prośba o zwolnienie z opublikowanej zmiany — „Do decyzji”.
+    const zwol = T.dyspozycja.filter((w) => w.zwolnienie_z && !w.rozstrzygniecie);
+    const zmZwol = zwol[0] && T.grafik_shifts.find((g) => g.id === zwol[0].zwolnienie_z);
+    sprawdz(zwol.length === 1 && !!zmZwol && !!zmZwol.published_at && zmZwol.user_id === zwol[0].user_id &&
+      zmZwol.date === zwol[0].date && zwol[0].stan === "nie" && zmZwol.date > dzis,
+      `${tag} jedna prośba o zwolnienie ze zmiany (opublikowanej, przyszłej)`);
     // 0.75.0: płatne wydarzenie po czasie, nierozliczone — „Wydarzenia do rozliczenia”.
     const doRozl = T.wydarzenia.filter((w) => w.platne && !w.rozliczone_at && !w.odwolane_at && w.data < dzis);
     sprawdz(doRozl.length === 1 && doRozl[0].data === wczoraj &&

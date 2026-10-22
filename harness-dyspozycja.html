@@ -1,0 +1,407 @@
+<meta charset="utf-8">
+<title>Sprawdzian dyspozycji</title>
+<style>
+  body { font: 14px/1.6 ui-monospace, Menlo, monospace; padding: 24px; background: #FBFAF9; color: #17120F; }
+  h1 { font: 700 18px/1.2 system-ui, sans-serif; }
+  .ok { color: #2C6A4F; } .zle { color: #DE3A22; font-weight: 700; }
+  pre { background: #F1EEEB; padding: 10px; overflow-x: auto; }
+</style>
+<h1>Sprawdzian utils/dyspozycja.ts (0.79.0) i jej użycia w giełdzie i Grafiku</h1>
+<div id="out">ładowanie…</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js"></script>
+<script>
+const out = document.getElementById("out");
+const log = (txt, cls = "") => {
+  const d = document.createElement("div");
+  d.className = cls; d.textContent = txt; out.appendChild(d);
+};
+
+// Ten sam loader co w harness-dziennik.html, z jedną różnicą: api/supabase
+// jest podmienione na atrapę w pamięci (zapis dyspozycji idzie przez api).
+window.__tabele = {};
+window.__zapisy = [];
+const ATRAPA_API = URL.createObjectURL(new Blob([`
+  export const api = {
+    get: async (t) => (window.__tabele[t] || []).slice(),
+    post: async (t, d) => { window.__zapisy.push(["post", t, d]); const w = { id: "id-" + window.__zapisy.length, ...d };
+      (window.__tabele[t] = window.__tabele[t] || []).push(w); return w; },
+    patch: async (t, id, d) => { window.__zapisy.push(["patch", t, id, d]); const l = window.__tabele[t] || [];
+      const i = l.findIndex((w) => w.id === id); const w = { ...(l[i] || {}), id, ...d }; if (i >= 0) l[i] = w; return w; },
+    delete: async (t, id) => { window.__zapisy.push(["delete", t, id]); window.__tabele[t] = (window.__tabele[t] || []).filter((w) => w.id !== id); return true; },
+    patchByFilter: async () => true, rpc: async () => null,
+    dodajBezOdczytu: async (t, d) => { window.__zapisy.push(["dodaj", t, d]); (window.__tabele[t] = window.__tabele[t] || []).push(d); return true; },
+  };
+`], { type: "text/javascript" }));
+
+const cache = new Map();
+async function zaladuj(sciezka) {
+  if (sciezka.endsWith("/api/supabase")) return ATRAPA_API;
+  if (cache.has(sciezka)) return cache.get(sciezka);
+  const p = new Promise(async (resolve, reject) => {
+    try {
+      let kod = null;
+      for (const ext of [".ts", ".tsx", ""]) {
+        const r = await fetch(sciezka + ext + "?cb=" + Date.now());
+        if (r.ok) { kod = await r.text(); break; }
+      }
+      if (kod === null) throw new Error("nie znaleziono " + sciezka);
+      const specyfikatory = [...kod.matchAll(/from\s+"(\.[^"]+)"/g)].map((m) => m[1]);
+      const baza = sciezka.slice(0, sciezka.lastIndexOf("/"));
+      const mapa = {};
+      for (const s of specyfikatory) {
+        const url = new URL(baza + "/" + s, location.origin).pathname;
+        mapa[s] = await zaladuj(url);
+      }
+      kod = kod.replace(/from\s+"(\.[^"]+)"/g, (m, s) => `from "${mapa[s]}"`);
+      const js = Babel.transform(kod, { presets: [["typescript", { allExtensions: true, isTSX: true }]] }).code;
+      resolve(URL.createObjectURL(new Blob([js], { type: "text/javascript" })));
+    } catch (e) { reject(e); }
+  });
+  cache.set(sciezka, p);
+  return p;
+}
+
+let zdanych = 0, oblanych = 0;
+const sprawdz = (nazwa, warunek, szczegol = "") => {
+  if (warunek) { zdanych++; log("  OK   " + nazwa, "ok"); }
+  else { oblanych++; log("  ŹLE  " + nazwa + (szczegol ? " — " + szczegol : ""), "zle"); }
+};
+const J = (x) => JSON.stringify(x);
+
+(async () => {
+  try {
+    out.textContent = "";
+    const D = await import(await zaladuj("/src/utils/dyspozycja"));
+    const S = await import(await zaladuj("/src/utils/swaps"));
+    const G = await import(await zaladuj("/src/utils/grafik"));
+    log("moduły załadowane (dyspozycja, swaps, grafik; api = atrapa)", "ok");
+
+    const ala = { id: "a", name: "Ala", default_stanowisko: "Bar", active: true, archived: false, role: "open" };
+    const bo = { id: "b", name: "Bo", default_stanowisko: "Bar", active: true, archived: false, role: "open" };
+    const MIES = "2026-11-01";
+    const wyslany = [{ id: "m1", user_id: "a", miesiac: MIES, wyslano_at: "2026-10-14T10:00:00Z", pozostale: "bez" }];
+    const wpis = (date, stan, extra = {}) => ({ id: "w-" + date, user_id: "a", user_name: "Ala", date, stan, autor: "pracownik", ...extra });
+
+    log("");
+    log("— kiedy dyspozycja wiąże —");
+    const nie14 = wpis("2026-11-14", "nie");
+    sprawdz("miesiąc niewysłany = szkic, nie wiąże", !D.wiazeDyspozycja(nie14, []));
+    sprawdz("miesiąc wysłany = wiąże", D.wiazeDyspozycja(nie14, wyslany));
+    sprawdz("wpis kierownika wiąże zawsze (także bez wysłania)", D.wiazeDyspozycja({ ...nie14, autor: "kierownik" }, []));
+    sprawdz("wysłany INNY miesiąc nie wiąże tego", !D.wiazeDyspozycja(wpis("2026-12-03", "nie"), wyslany));
+    sprawdz("miesiąc z wpisem, ale bez wyslano_at = szkic",
+      !D.wiazeDyspozycja(nie14, [{ ...wyslany[0], wyslano_at: null }]));
+
+    log("");
+    log("— przeszkoda dla zmiany —");
+    const dysp = [
+      nie14,
+      wpis("2026-11-15", "godziny", { od1: "16:00:00", do1: "22:00:00" }),
+      wpis("2026-11-16", "moge"),
+      wpis("2026-11-17", "godziny", { od1: "08:00", do1: "10:00", od2: "16:00", do2: "00:00" }),
+    ];
+    const P = (date, s, e, miesiace = wyslany, user = ala) =>
+      D.przeszkodaDyspozycji({ dyspozycja: dysp, miesiace, user, date, start_time: s, end_time: e });
+    sprawdz("„Nie mogę” blokuje", P("2026-11-14", "10:00", "18:00")?.krotko === "dyspozycja: nie może");
+    sprawdz("szkic „Nie mogę” nie blokuje", P("2026-11-14", "10:00", "18:00", []) === null);
+    sprawdz("dzień bez zaznaczenia nie blokuje", P("2026-11-20", "10:00", "18:00") === null);
+    sprawdz("„Mogę cały dzień” nie blokuje", P("2026-11-16", "06:00", "23:00") === null);
+    sprawdz("zmiana w godzinach dyspozycji (16–22) przechodzi", P("2026-11-15", "16:00", "22:00") === null);
+    sprawdz("częściowo poza godzinami (14–22 przy 16–22) blokuje", P("2026-11-15", "14:00", "22:00")?.krotko === "dyspozycja: tylko 16–22",
+      J(P("2026-11-15", "14:00", "22:00")));
+    sprawdz("koniec po godzinach (16–23 przy 16–22) blokuje", !!P("2026-11-15", "16:00", "23:00"));
+    sprawdz("dwa przedziały: zmiana w drugim (17–23) przechodzi", P("2026-11-17", "17:00", "23:00") === null);
+    sprawdz("dwa przedziały: zmiana na przełomie (09–17) blokuje", !!P("2026-11-17", "09:00", "17:00"));
+    sprawdz("koniec 00:00 w dyspozycji = północ (16–00 przechodzi)", P("2026-11-17", "16:00", "00:00") === null);
+    sprawdz("zmiana przez północ: rano następnego dnia „Nie mogę” blokuje",
+      P("2026-11-13", "20:00", "02:00")?.dzien === "2026-11-14", J(P("2026-11-13", "20:00", "02:00")));
+    sprawdz("zmiana przez północ w dzień z godzinami: część nocna poza nimi blokuje",
+      !!P("2026-11-15", "20:00", "02:00"));
+    sprawdz("inna osoba nie dziedziczy cudzej dyspozycji", P("2026-11-14", "10:00", "18:00", wyslany, bo) === null);
+    sprawdz("brak godzin zmiany = nic nie sprawdzamy", P("2026-11-14", "", "") === null);
+
+    log("");
+    log("— opisy —");
+    sprawdz("opis godzin z dwoma przedziałami", D.opisDyspozycji(dysp[3]) === "Mogę 8–10, 16–24", D.opisDyspozycji(dysp[3]));
+    sprawdz("krótko do siatki", D.krotkoDyspozycji(dysp[1]) === "tylko 16–22" && D.krotkoDyspozycji(nie14) === "nie może");
+    sprawdz("bez wpisu = „Bez zaznaczenia”", D.opisDyspozycji(null) === "Bez zaznaczenia");
+
+    log("");
+    log("— godziny w formularzu —");
+    sprawdz("poprawne 16–22", D.bladGodzin({ od1: "16:00", do1: "22:00" }) === null);
+    sprawdz("koniec przed początkiem", !!D.bladGodzin({ od1: "22:00", do1: "16:00" }));
+    sprawdz("koniec o północy dozwolony", D.bladGodzin({ od1: "18:00", do1: "00:00" }) === null);
+    sprawdz("puste pola", !!D.bladGodzin({ od1: "", do1: "" }));
+    sprawdz("nachodzące przedziały", !!D.bladGodzin({ od1: "08:00", do1: "12:00", od2: "11:00", do2: "15:00" }));
+    sprawdz("rozłączne przedziały", D.bladGodzin({ od1: "08:00", do1: "12:00", od2: "16:00", do2: "22:00" }) === null);
+    const w = D.wierszDnia({ user: ala, dateStr: "2026-11-02", stan: "nie", od1: "10:00", do1: "12:00", notatka: "  " });
+    sprawdz("„Nie mogę” nie zapisuje godzin ani pustej notatki", w.od1 === null && w.do1 === null && w.notatka === null);
+    sprawdz("drugi przedział bez końca nie zapisuje się",
+      D.wierszDnia({ user: ala, dateStr: "2026-11-02", stan: "godziny", od1: "8:00", do1: "10:00", od2: "16:00", do2: "" }).od2 === null);
+
+    log("");
+    log("— kalendarz, urlop, pozostałe dni —");
+    sprawdz("dni miesiąca: listopad ma 30", D.dniMiesiaca(MIES).length === 30 && D.dniMiesiaca("2028-02-01").length === 29);
+    sprawdz("przesunięcie miesiąca przez rok", D.przesunMiesiac("2026-12-01", 1) === "2027-01-01" && D.przesunMiesiac("2026-01-01", -1) === "2025-12-01");
+    sprawdz("ciągłe zakresy urlopu", J(D.zakresyCiagle(["2026-11-20", "2026-11-18", "2026-11-19", "2026-11-25"])) ===
+      J([{ od: "2026-11-18", do: "2026-11-20" }, { od: "2026-11-25", do: "2026-11-25" }]));
+    sprawdz("zakres przez koniec miesiąca", J(D.zakresyCiagle(["2026-11-30", "2026-12-01"])) === J([{ od: "2026-11-30", do: "2026-12-01" }]));
+    const urlopy = [
+      { id: "u1", user_id: "a", type: "urlop", status: "pending", start_date: "2026-11-23", end_date: "2026-11-24" },
+      { id: "u2", user_id: "a", type: "urlop", status: "rejected", start_date: "2026-11-26", end_date: "2026-11-26" },
+      { id: "u3", user_id: "a", type: "niedostepnosc", status: "approved", start_date: "2026-11-27", end_date: "2026-11-27" },
+    ];
+    sprawdz("urlop czekający się liczy", !!D.urlopNa(urlopy, ala, "2026-11-24"));
+    sprawdz("urlop odrzucony się nie liczy", !D.urlopNa(urlopy, ala, "2026-11-26"));
+    sprawdz("stara niedostępność to nie urlop", !D.urlopNa(urlopy, ala, "2026-11-27"));
+    const plan = [
+      { id: "g1", user_id: "a", user_name: "Ala", date: "2026-11-05", start_time: "10:00", end_time: "18:00", published_at: "2026-10-20T10:00:00Z", lokal: "L", stanowisko: "Bar" },
+      { id: "g2", user_id: "a", user_name: "Ala", date: "2026-11-06", start_time: "10:00", end_time: "18:00", published_at: null, lokal: "L", stanowisko: "Bar" },
+      { id: "g3", user_id: "a", user_name: "Ala", date: "2026-11-07", start_time: "10:00", end_time: "18:00", published_at: "2026-10-20T10:00:00Z", deleted_at: "2026-10-21T10:00:00Z", lokal: "L", stanowisko: "Bar" },
+    ];
+    sprawdz("opublikowana zmiana blokuje dzień", D.dzienZablokowany({ dateStr: "2026-11-05", dzis: "2026-10-22", planShifts: plan, user: ala }) === "w grafiku");
+    sprawdz("wersja robocza nie blokuje", D.dzienZablokowany({ dateStr: "2026-11-06", dzis: "2026-10-22", planShifts: plan, user: ala }) === null);
+    sprawdz("usunięta po wysłaniu nie blokuje", D.dzienZablokowany({ dateStr: "2026-11-07", dzis: "2026-10-22", planShifts: plan, user: ala }) === null);
+    sprawdz("dzień miniony jest zablokowany", D.dzienZablokowany({ dateStr: "2026-10-21", dzis: "2026-10-22", planShifts: [], user: ala }) === "minął");
+    const poz = D.dniPozostale({ miesiac: MIES, dzis: "2026-11-03", user: ala, dyspozycja: dysp, absences: urlopy, planShifts: plan });
+    // Od 0.81.0 zatwierdzona stara niedostępność (27.11) to „Nie mogę” — też odpada.
+    sprawdz("pozostałe dni: od dziś, bez zaznaczonych, urlopu, starej niedostępności i opublikowanej zmiany",
+      poz.length === 30 - 2 - 4 - 2 - 1 - 1 && !poz.includes("2026-11-27") && !poz.includes("2026-11-05") && poz.includes("2026-11-06") && !poz.includes("2026-11-24") && !poz.includes("2026-11-02"),
+      `${poz.length}: ${poz.slice(0, 5).join(",")}…`);
+    const pod = D.podsumowanieMiesiaca({ miesiac: MIES, user: ala, dyspozycja: dysp, absences: urlopy });
+    sprawdz("podsumowanie miesiąca (stara niedostępność liczy się jako „nie mogę”)",
+      pod.moge === 3 && pod.cale === 1 && pod.wGodzinach === 2 && pod.nie === 2 && pod.urlop === 2, J(pod));
+
+    log("");
+    log("— zapis (atrapa api) —");
+    window.__tabele = { dyspozycja: [] };
+    let lista = await D.zapiszDni({ user: ala, dni: ["2026-11-02", "2026-11-03"], stan: "godziny", godziny: { od1: "16:00", do1: "22:00" }, dyspozycja: [] });
+    sprawdz("dwa dni = dwa nowe wiersze", lista.length === 2 && lista.every((x) => x.stan === "godziny" && x.od1 === "16:00"));
+    lista = await D.zapiszDni({ user: ala, dni: ["2026-11-02"], stan: "nie", dyspozycja: lista });
+    sprawdz("istniejący dzień = patch, nie drugi wiersz", lista.length === 2 && D.dyspozycjaNa(lista, ala, "2026-11-02").stan === "nie" &&
+      window.__zapisy.some((z) => z[0] === "patch"));
+    lista = await D.zapiszDni({ user: ala, dni: ["2026-11-03"], stan: null, dyspozycja: lista });
+    sprawdz("stan null czyści dzień (delete)", lista.length === 1 && window.__zapisy.some((z) => z[0] === "delete"));
+    const wynik = await D.wyslijMiesiac({ user: ala, miesiac: MIES, pozostale: "nie", dzis: "2026-11-25", dyspozycja: lista, miesiace: [],
+      absences: [], planShifts: [], ktoWysyla: "Ala" });
+    sprawdz("wysłanie z „Nie mogę”: dni od 25 do 30 dostają „nie”", D.dniMiesiaca(MIES).filter((d) => d >= "2026-11-25")
+      .every((d) => D.dyspozycjaNa(wynik.dyspozycja, ala, d)?.stan === "nie"));
+    sprawdz("wysłanie zapisuje miesiąc z wyslano_at", wynik.miesiace.length === 1 && !!wynik.miesiace[0].wyslano_at && wynik.miesiace[0].pozostale === "nie");
+    sprawdz("po wysłaniu dyspozycja wiąże", D.wiazeDyspozycja(D.dyspozycjaNa(wynik.dyspozycja, ala, "2026-11-02"), wynik.miesiace));
+    const drugie = await D.wyslijMiesiac({ user: ala, miesiac: MIES, pozostale: "bez", dzis: "2026-11-25", dyspozycja: wynik.dyspozycja,
+      miesiace: wynik.miesiace, absences: [], planShifts: [] });
+    sprawdz("ponowne wysłanie = patch miesiąca, nie drugi wiersz", drugie.miesiace.length === 1 && drugie.miesiace[0].pozostale === "bez");
+
+    log("");
+    log("— giełda —");
+    const zmianaGieldy = { id: "z1", user_id: "b", user_name: "Bo", date: "2026-11-14", start_time: "10:00", end_time: "18:00",
+      stanowisko: "Bar", lokal: "L", published_at: "x" };
+    const d2 = { dyspozycja: [nie14], miesiace: wyslany };
+    sprawdz("bez dyspozycji Ala może wziąć", S.mozeWziac(ala, zmianaGieldy, { planShifts: [zmianaGieldy], absences: [] }));
+    sprawdz("z wiążącym „Nie mogę” nie może", !S.mozeWziac(ala, zmianaGieldy, { planShifts: [zmianaGieldy], absences: [], dysp: d2 }));
+    sprawdz("szkic „Nie mogę” nie wyklucza", S.mozeWziac(ala, zmianaGieldy, { planShifts: [zmianaGieldy], absences: [], dysp: { dyspozycja: [nie14], miesiace: [] } }));
+    const kandydaci = S.kandydaciNaZmiane({ users: [ala, bo], planShifts: [zmianaGieldy], absences: [], planShift: zmianaGieldy, author: bo, dysp: d2 });
+    sprawdz("kandydaci przy oddaniu pomijają osobę z „Nie mogę”", kandydaci.length === 0, kandydaci.map((u) => u.name).join(","));
+    let odmowa = "";
+    try {
+      await S.acceptSwap({ swap: { id: "s1", status: "na_gieldzie", author_user_id: "b", author_user_name: "Bo", grafik_shift_id: "z1" },
+        planShift: zmianaGieldy, taker: ala, planShifts: [zmianaGieldy], absences: [], dysp: d2 });
+    } catch (e) { odmowa = e.message; }
+    sprawdz("przyjęcie oferty wbrew własnej dyspozycji odmawia", /dyspozycji/.test(odmowa), odmowa);
+
+    log("");
+    log("— Grafik: kopiowanie tygodnia i przepisanie zmian —");
+    const pn = "2026-11-16";
+    const kopia = G.buildCopyFromPreviousWeek({
+      planShifts: [{ id: "k1", user_id: "a", user_name: "Ala", lokal: "L", stanowisko: "Bar", date: "2026-11-09", start_time: "10:00", end_time: "18:00" },
+                   { id: "k2", user_id: "a", user_name: "Ala", lokal: "L", stanowisko: "Bar", date: "2026-11-10", start_time: "10:00", end_time: "18:00" }],
+      absences: [], users: [ala], lokal: "L", weekStart: pn,
+      przeszkodaDodatkowa: (u, z) => D.przeszkodaDyspozycji({ dyspozycja: [wpis("2026-11-16", "nie")], miesiace: wyslany, user: u, date: z.date, start_time: z.start_time, end_time: z.end_time }) ? "dyspozycja" : null,
+    });
+    sprawdz("kopiowanie pomija dzień z „Nie mogę”, resztę kopiuje",
+      kopia.drafts.length === 1 && kopia.drafts[0].date === "2026-11-17" && kopia.skipped[0]?.powod === "dyspozycja", J(kopia));
+    window.__tabele = { grafik_shifts: [{ id: "p1" }, { id: "p2" }] };
+    const atrapa = (await import(ATRAPA_API)).api;
+    const przep = await G.przepiszZmiany({
+      zmiany: [{ id: "p1", date: "2026-11-14", start_time: "10:00", end_time: "18:00" }, { id: "p2", date: "2026-11-20", start_time: "10:00", end_time: "18:00" }],
+      doUzytkownika: ala, planShifts: [], absences: [], api: atrapa,
+      przeszkodaDodatkowa: (u, z) => D.przeszkodaDyspozycji({ dyspozycja: [nie14], miesiace: wyslany, user: u, date: z.date, start_time: z.start_time, end_time: z.end_time }) ? "nie może wg dyspozycji" : null,
+    });
+    sprawdz("przepisanie na następcę pomija jego „Nie mogę”",
+      przep.przepisane.length === 1 && przep.pominiete[0]?.powod === "nie może wg dyspozycji", J(przep.pominiete));
+
+    log("");
+    log("— „Zapytaj” (utils/prosby.ts, 0.80.0) —");
+    const PR = await import(await zaladuj("/src/utils/prosby"));
+    const teraz = new Date("2026-11-10T12:00:00");
+    const w1 = PR.wygasaDla("2026-11-15", "16:00", teraz);
+    sprawdz("wygasa 24 h przed zmianą", new Date(w1).getTime() === new Date("2026-11-14T16:00:00").getTime(), w1);
+    const w2 = PR.wygasaDla("2026-11-11", "08:00", teraz);
+    sprawdz("zmiana jutro rano (< 24 h): wygasa godzinę przed startem",
+      new Date(w2).getTime() === new Date("2026-11-11T07:00:00").getTime(), w2);
+    sprawdz("za mniej niż godzinę: za późno (null)", PR.wygasaDla("2026-11-10", "12:30", teraz) === null);
+    sprawdz("zmiana, która już trwa: null", PR.wygasaDla("2026-11-10", "10:00", teraz) === null);
+    const pr = (id, extra = {}) => ({ id, user_id: "a", user_name: "Ala", lokal: "L", stanowisko: "Bar", date: "2026-11-15",
+      start_time: "14:00:00", end_time: "22:00:00", status: "czeka", wygasa_at: "2026-11-14T13:00:00Z", ...extra });
+    const listaPr = [
+      pr("p1"),
+      pr("p2", { wygasa_at: "2026-11-09T10:00:00Z" }),
+      pr("p3", { status: "odmowa", powod: "egzamin" }),
+      pr("p4", { status: "zgoda", odpowiedz_at: "2026-11-09T18:00:00Z" }),
+      pr("p5", { status: "wycofana" }),
+      pr("p6", { user_id: "b", user_name: "Bo", stanowisko: "Kasa" }),
+    ];
+    sprawdz("czeka po terminie = „wygasła”", PR.stanProsby(listaPr[1], teraz) === "wygasla" && PR.stanProsby(listaPr[0], teraz) === "czeka");
+    sprawdz("w siatce: czeka, wygasła i odmowa; bez zgody i wycofanej",
+      J(PR.prosbyDnia(listaPr, "L", "2026-11-15", teraz).map((p) => p.id)) === J(["p1", "p2", "p3", "p6"]));
+    sprawdz("inny lokal / dzień nie trafia do siatki", PR.prosbyDnia(listaPr, "X", "2026-11-15", teraz).length === 0);
+    sprawdz("jedno pytanie naraz: ta sama zmiana (nachodzące godziny) już czeka",
+      PR.czekajacaNaZmiane(listaPr, { lokal: "L", date: "2026-11-15", stanowisko: "Bar", start_time: "16:00", end_time: "23:00" }, teraz)?.id === "p1");
+    sprawdz("inne stanowisko = inna zmiana", PR.czekajacaNaZmiane(listaPr, { lokal: "L", date: "2026-11-15", stanowisko: "Sala", start_time: "16:00", end_time: "23:00" }, teraz) === null);
+    sprawdz("godziny obok siebie się nie nachodzą", PR.czekajacaNaZmiane([listaPr[0]], { lokal: "L", date: "2026-11-15", stanowisko: "Bar", start_time: "08:00", end_time: "14:00" }, teraz) === null);
+    sprawdz("do odpowiedzi tylko czekające tej osoby (bez wygasłych)",
+      J(PR.prosbyDoOdpowiedzi(listaPr, ala, teraz).map((p) => p.id)) === J(["p1"]));
+    sprawdz("ostatnie odpowiedzi: zgoda z ostatnich 3 dni", J(PR.ostatnieOdpowiedzi(listaPr, ala, teraz).map((p) => p.id)) === J(["p4"]));
+    sprawdz("zdanie wiadomości zaczyna się jak w opisWiadomosci", /^Kierownik pyta, czy możesz: /.test(PR.tekstProsby(listaPr[0])) &&
+      /^Kierownik wycofał pytanie o zmianę: /.test(PR.tekstWycofania(listaPr[0])));
+    window.__tabele = {}; window.__zapisy = [];
+    const zap = await PR.zapytaj({ user: ala, lokal: "L", stanowisko: "Bar", date: "2099-01-10", start_time: "16:00", end_time: "22:00", kierownik: { id: "k", name: "Roman" } });
+    sprawdz("zapytaj: prośba czeka, z wygasa_at i tym, kto pyta", zap.status === "czeka" && !!zap.wygasa_at && zap.kto_pyta === "Roman" && zap.start_time === "16:00");
+    sprawdz("zapytaj: wiadomość „Kierownik pyta, czy możesz” dla pracownika",
+      (window.__tabele.notifications || []).length === 1 && /^Kierownik pyta, czy możesz/.test(window.__tabele.notifications[0].message) &&
+        window.__tabele.notifications[0].type === "dyspozycja", J(window.__zapisy.map((z) => z[0] + ":" + z[1])));
+    let zaPozno = "";
+    try { await PR.zapytaj({ user: ala, lokal: "L", date: "2000-01-01", start_time: "10:00", end_time: "12:00" }); } catch (e) { zaPozno = e.message; }
+    sprawdz("zapytaj o przeszłość odmawia", /za późno/.test(zaPozno), zaPozno);
+    const wyc = await PR.wycofaj(zap);
+    sprawdz("wycofaj: status „wycofana”", wyc.status === "wycofana");
+
+    log("");
+    log("— stara niedostępność = „Nie mogę” (0.81.0) —");
+    const stare = [
+      { id: "n1", user_id: "a", type: "niedostepnosc", status: "approved", start_date: "2026-11-20", end_date: "2026-11-21" },
+      { id: "n2", user_id: "a", type: "niedostepnosc", status: "pending", start_date: "2026-11-25", end_date: "2026-11-25" },
+    ];
+    sprawdz("zatwierdzona stara niedostępność się liczy", !!D.niedostepnoscNa(stare, ala, "2026-11-21"));
+    sprawdz("czekająca stara niedostępność się nie liczy", !D.niedostepnoscNa(stare, ala, "2026-11-25"));
+    sprawdz("urlop to nie niedostępność", !D.niedostepnoscNa([{ ...stare[0], type: "urlop" }], ala, "2026-11-20"));
+    const pozS = D.dniPozostale({ miesiac: MIES, dzis: "2026-11-18", user: ala, dyspozycja: [], absences: stare, planShifts: [] });
+    sprawdz("„Pozostałe dni” pomija starą niedostępność", !pozS.includes("2026-11-20") && !pozS.includes("2026-11-21") && pozS.includes("2026-11-25"));
+    sprawdz("podsumowanie liczy starą niedostępność jako „nie mogę”",
+      D.podsumowanieMiesiaca({ miesiac: MIES, user: ala, dyspozycja: [], absences: stare }).nie === 2);
+
+    log("");
+    log("— „Nie może” od kierownika (wpiszNieMogeZaPracownika) —");
+    window.__tabele = { dyspozycja: [] }; window.__zapisy = [];
+    const wlasne = [
+      { id: "w1", user_id: "a", user_name: "Ala", date: "2026-11-12", stan: "moge", autor: "pracownik" },
+      { id: "w2", user_id: "a", user_name: "Ala", date: "2026-11-13", stan: "nie", autor: "pracownik" },
+      { id: "w3", user_id: "a", user_name: "Ala", date: "2026-11-14", stan: "godziny", od1: "16:00", do1: "22:00", autor: "kierownik" },
+    ];
+    window.__tabele.dyspozycja = wlasne.map((x) => ({ ...x }));
+    const nm = await D.wpiszNieMogeZaPracownika({ user: ala, od: "2026-11-09", doDnia: "2026-11-14", notatka: "chorobowe",
+      dzis: "2026-11-11", dyspozycja: wlasne, kierownik: "Roman" });
+    sprawdz("dni miniony pominięte, zakres od dziś", !nm.zapisane.includes("2026-11-10") && nm.zapisane[0] === "2026-11-11", J(nm.zapisane));
+    sprawdz("dzień, w którym pracownik sam „może”, zostaje (pominiete)", J(nm.pominiete) === J(["2026-11-12"]));
+    sprawdz("dzień, w którym pracownik sam „nie może”, nie jest nadpisywany", !nm.zapisane.includes("2026-11-13"));
+    sprawdz("wpis kierownika („tylko 16–22”) zmienia się na „nie”",
+      nm.zapisane.includes("2026-11-14") && D.dyspozycjaNa(nm.dyspozycja, ala, "2026-11-14").stan === "nie");
+    sprawdz("zapisane: 11 i 14", J(nm.zapisane) === J(["2026-11-11", "2026-11-14"]));
+    const wiad = (window.__tabele.notifications || [])[0] || {};
+    sprawdz("wiadomość „Kierownik wpisał Ci w dyspozycji „Nie mogę”” z zakresem i kto",
+      wiad.type === "dyspozycja" && /^Kierownik wpisał Ci w dyspozycji „Nie mogę”: 11\.11–14\.11\. Wpisał\(a\): Roman\.$/.test(wiad.message), wiad.message);
+    const pusto = await D.wpiszNieMogeZaPracownika({ user: ala, od: "2026-11-12", doDnia: "2026-11-12", dzis: "2026-11-11", dyspozycja: wlasne, kierownik: "Roman" });
+    sprawdz("nic do zapisania = bez wiadomości", pusto.zapisane.length === 0 && (window.__tabele.notifications || []).length === 1);
+
+    log("");
+    log("— D4 (0.82.0): prośba o zwolnienie ze zmiany —");
+    window.__tabele = { dyspozycja: [], grafik_shifts: [] }; window.__zapisy = [];
+    const zm = { id: "g1", user_id: "a", user_name: "Ala", lokal: "Ceglana", stanowisko: "Bar", date: "2026-11-20",
+      start_time: "16:00", end_time: "22:00", published_at: "2026-11-01T10:00:00Z" };
+    window.__tabele.grafik_shifts = [{ ...zm }];
+    const przedZw = [{ id: "z0", user_id: "a", user_name: "Ala", date: "2026-11-20", stan: "moge", autor: "pracownik" }];
+    window.__tabele.dyspozycja = przedZw.map((x) => ({ ...x }));
+    const poZw = await D.poprosOZwolnienie({ user: ala, zmiana: zm, powod: "egzamin", dyspozycja: przedZw });
+    const wZw = D.dyspozycjaNa(poZw, ala, "2026-11-20");
+    sprawdz("prośba = „nie” z powodem i zwolnienie_z, PATCH istniejącego wpisu",
+      wZw.stan === "nie" && wZw.notatka === "egzamin" && wZw.zwolnienie_z === "g1" && poZw.length === 1 &&
+        window.__zapisy.some((z) => z[0] === "patch" && z[1] === "dyspozycja"), J(wZw));
+    const wiadZw = (window.__tabele.notifications || []).find((n) => n.audience === "manager") || {};
+    sprawdz("kierownik lokalu zmiany dostaje „… prosi o zwolnienie ze zmiany”",
+      wiadZw.lokal === "Ceglana" && /^Ala prosi o zwolnienie ze zmiany: .*16:00–22:00, Bar · Ceglana\. Powód: egzamin$/.test(wiadZw.message), wiadZw.message);
+    const kol = D.prosbyOZwolnienie({ planShifts: [zm], dyspozycja: poZw, dzis: "2026-11-15" });
+    sprawdz("kolejka: jedna sprawa z tą zmianą", kol.length === 1 && kol[0].zmiana.id === "g1");
+    sprawdz("kolejka: minięta zmiana wypada", D.prosbyOZwolnienie({ planShifts: [zm], dyspozycja: poZw, dzis: "2026-11-21" }).length === 0);
+    sprawdz("kolejka: zmiana usunięta (deleted_at) wypada",
+      D.prosbyOZwolnienie({ planShifts: [{ ...zm, deleted_at: "x" }], dyspozycja: poZw, dzis: "2026-11-15" }).length === 0);
+    sprawdz("kolejka: zwykłe „nie” bez zwolnienie_z to nie prośba",
+      D.prosbyOZwolnienie({ planShifts: [zm], dyspozycja: [{ ...wZw, zwolnienie_z: null }], dzis: "2026-11-15" }).length === 0);
+    sprawdz("„Moje wnioski”: czeka", J(D.zwolnieniaOsoby({ dyspozycja: poZw, planShifts: [zm], user: ala, dzis: "2026-11-15" }).map((x) => x.stan)) === J(["czeka"]));
+
+    window.__zapisy = [];
+    const zost = await D.rozstrzygnijZwolnienie({ wpis: wZw, zmiana: zm, decyzja: "zostaje", kierownik: "Roman" });
+    sprawdz("„Zostaw”: ślad decyzji, zmiana nietknięta",
+      zost.rozstrzygniecie === "zostaje" && zost.rozstrzygnal === "Roman" && !!zost.rozstrzygnieto_at &&
+        !window.__zapisy.some((z) => z[1] === "grafik_shifts"), J(window.__zapisy.map((z) => z[0] + ":" + z[1])));
+    sprawdz("po „Zostaw” sprawa znika z kolejki",
+      D.prosbyOZwolnienie({ planShifts: [zm], dyspozycja: [zost], dzis: "2026-11-15" }).length === 0);
+    const wiadZost = (window.__tabele.notifications || []).filter((n) => n.audience === "employee").pop() || {};
+    sprawdz("pracownik: „Kierownik zostawił Twoją zmianę w grafiku: …”", /^Kierownik zostawił Twoją zmianę w grafiku: .*Decyzja: Roman\.$/.test(wiadZost.message || ""), wiadZost.message);
+
+    window.__zapisy = [];
+    const zdj = await D.rozstrzygnijZwolnienie({ wpis: wZw, zmiana: zm, decyzja: "zdjeta", kierownik: "Roman" });
+    const kolejnosc = window.__zapisy.map((z) => z[0] + ":" + z[1]);
+    sprawdz("„Zdejmij”: najpierw kasuje zmianę, potem ślad decyzji",
+      kolejnosc.indexOf("delete:grafik_shifts") === 0 && kolejnosc.indexOf("patch:dyspozycja") > 0 && zdj.rozstrzygniecie === "zdjeta", J(kolejnosc));
+    sprawdz("„Moje wnioski”: zdjęta (świeża decyzja)",
+      J(D.zwolnieniaOsoby({ dyspozycja: [zdj], planShifts: [], user: ala, dzis: "2026-11-15" }).map((x) => x.stan)) === J(["zdjeta"]));
+
+    log("");
+    log("— D4 (0.82.0): konflikt z wersją roboczą —");
+    const szkic = { id: "s1", user_id: "a", user_name: "Ala", lokal: "Ceglana", stanowisko: "Bar", date: "2026-11-15",
+      start_time: "10:00", end_time: "14:00", published_at: null };
+    const opubl = { ...szkic, id: "s2", date: "2026-11-14", published_at: "2026-11-01T10:00:00Z" };
+    const kon = D.konfliktySzkicu({ planShifts: [szkic, opubl], dyspozycja: dysp, miesiace: wyslany, dzis: "2026-11-10" });
+    sprawdz("szkic poza „tylko 16–22” = konflikt", !!kon.s1 && /tylko 16–22/.test(kon.s1.krotko), J(kon));
+    sprawdz("opublikowana zmiana to nie konflikt szkicu (to prośba o zwolnienie)", !kon.s2);
+    sprawdz("szkic przy niewysłanym miesiącu = bez konfliktu",
+      !D.konfliktySzkicu({ planShifts: [szkic], dyspozycja: dysp, miesiace: [], dzis: "2026-11-10" }).s1);
+    const nowe = D.noweKonfliktySzkicu({ planShifts: [szkic], przed: { dyspozycja: [], miesiace: wyslany },
+      po: { dyspozycja: dysp, miesiace: wyslany }, user: ala, dzis: "2026-11-10" });
+    sprawdz("nowy konflikt po zapisie → jedna sprawa", nowe.length === 1 && nowe[0].zmiana.id === "s1");
+    sprawdz("ten sam konflikt drugi raz → bez wiadomości",
+      D.noweKonfliktySzkicu({ planShifts: [szkic], przed: { dyspozycja: dysp, miesiace: wyslany }, po: { dyspozycja: dysp, miesiace: wyslany },
+        user: ala, dzis: "2026-11-10" }).length === 0);
+    sprawdz("wysłanie miesiąca też rodzi konflikt",
+      D.noweKonfliktySzkicu({ planShifts: [szkic], przed: { dyspozycja: dysp, miesiace: [] }, po: { dyspozycja: dysp, miesiace: wyslany },
+        user: ala, dzis: "2026-11-10" }).length === 1);
+    sprawdz("tekst dla kierownika", /^Konflikt z wersją roboczą grafiku: Ala — tylko 16–22, a w wersji roboczej ma zmianę/.test(
+      D.tekstKonfliktuSzkicu("Ala", szkic, kon.s1)), D.tekstKonfliktuSzkicu("Ala", szkic, kon.s1));
+
+    log("");
+    log("— D4 (0.82.0): dyspozycja w karcie pracownika —");
+    window.__tabele = { dyspozycja: [] }; window.__zapisy = [];
+    const karta = [{ id: "k1", user_id: "a", user_name: "Ala", date: "2026-11-12", stan: "moge", autor: "pracownik" }];
+    let bladKarty = "";
+    try {
+      await D.ustawDzienZaPracownika({ user: ala, dateStr: "2026-11-12", stan: "nie", dyspozycja: karta, kierownik: "Roman" });
+    } catch (e) { bladKarty = e.message; }
+    sprawdz("dzień pracownika: odmowa z „Zapytaj”", /Zapytaj/.test(bladKarty) && window.__zapisy.length === 0, bladKarty);
+    const pk = await D.ustawDzienZaPracownika({ user: ala, dateStr: "2026-11-13", stan: "godziny", godziny: { od1: "08:00", do1: "14:00" },
+      dyspozycja: karta, kierownik: "Roman" });
+    const wiadK = (window.__tabele.notifications || [])[0] || {};
+    sprawdz("pusty dzień: zapis „godziny” i wiadomość „Kierownik wpisał Ci w dyspozycji „Mogę 8–14”: 13.11”",
+      D.dyspozycjaNa(pk, ala, "2026-11-13").stan === "godziny" && /^Kierownik wpisał Ci w dyspozycji „Mogę 8–14”: 13\.11\. Wpisał\(a\): Roman\.$/.test(wiadK.message || ""), wiadK.message);
+    sprawdz("tekst przy wyczyszczeniu", D.tekstDyspozycjiOdKierownika("Roman", "2026-11-13", null) === "Kierownik usunął wpis z Twojej dyspozycji: 13.11. Wpisał(a): Roman.");
+
+    log("");
+    log(`ZDANYCH ${zdanych}, OBLANYCH ${oblanych}`, oblanych ? "zle" : "ok");
+  } catch (e) {
+    log("BŁĄD: " + (e && e.message), "zle");
+    const pre = document.createElement("pre");
+    pre.textContent = (e && e.stack) || String(e);
+    out.appendChild(pre);
+  }
+})();
+</script>

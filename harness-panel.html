@@ -294,6 +294,15 @@ const planTygodnia = [
     id: `g9${i}`, user_id: "u5", user_name: "Ewa", lokal: "Ceglana",
     stanowisko: "Kelner", date: dniTygodnia[i], start_time: "09:00", end_time: "17:00", ...opub,
   })),
+  // 0.82.0 — prośba o zwolnienie: Ewa ma OPUBLIKOWANĄ zmianę za osiem dni
+  // (poza oglądanym tygodniem, żeby nie ruszać jej serii) i prosi o zwolnienie.
+  { id: "gZw", user_id: "u5", user_name: "Ewa", lokal: "Ceglana", stanowisko: "Kelner",
+    date: ymd(new Date(Date.now() + 8 * 86400000)), start_time: "18:00", end_time: "22:00", ...opub },
+  // 0.82.0 — konflikt z wersją roboczą: NIEWYSŁANA zmiana Gosi w niedzielę,
+  // a Gosia „nie może” cały tydzień (wpis kierownika, wiąże). Stanowisko bez
+  // wymagań, żeby nie ruszać kontroli obsady.
+  { id: "gKon", user_id: "u8", user_name: "Gosia", lokal: "Ceglana", stanowisko: "Zmywak",
+    date: dniTygodnia[6], start_time: "07:00", end_time: "08:00", published_at: null, deleted_at: null },
 ];
 
 
@@ -446,6 +455,24 @@ const poprzedniMiesiac = (h) => {
       // a nie czy lista po nim pokazuje nową wartość — a to jest właśnie ten
       // rodzaj błędu, dla którego ten harness powstał.
       const [planShifts, setPlanShifts] = useState(planTygodnia);
+      // Prośby „Zapytaj” (0.80.0) — stan, żeby wysłana prośba stanęła w siatce.
+      const [prosby, setProsby] = useState([]);
+      window.__ustawProsby = setProsby;
+      // Dyspozycja jako stan (0.82.0) — test dokłada wpisy w trakcie przebiegu.
+      // Gosia „Nie mogę” przez cały oglądany tydzień, wpisane przez kierownika
+      // (wiąże bez wysyłania miesiąca). W panelu przypisania ma stać wyłączona
+      // z powodem, a w pustej kratce — podpis. Cezary (Kucharz, Ceglana) też
+      // „nie może” cały tydzień — on zna stanowisko luki, więc trafia do grupy
+      // „tylko Zapytaj” (0.80.0).
+      const [dyspozycja, setDyspozycja] = useState(() => [
+        ...dniTygodnia.map((d, i) => ({ id: "dy" + i, user_id: "u8", user_name: "Gosia", date: d, stan: "nie", autor: "kierownik" })),
+        ...dniTygodnia.map((d, i) => ({ id: "dc" + i, user_id: "u3", user_name: "Cezary", date: d, stan: "nie", autor: "kierownik" })),
+        // Prośba Ewy o zwolnienie z „gZw” (0.82.0).
+        { id: "dzw", user_id: "u5", user_name: "Ewa", date: ymd(new Date(Date.now() + 8 * 86400000)), stan: "nie",
+          notatka: "egzamin", autor: "pracownik", zmieniono_at: new Date().toISOString(), zwolnienie_z: "gZw" },
+      ]);
+      window.__ustawDyspozycje = setDyspozycja;
+      window.__dyspozycja = dyspozycja;
       // Jedno nieprzeczytane powiadomienie kierownika — Skrzynka → Informacje
       // ma je sama oznaczyć jako przeczytane po 3 s (0.58.0).
       const [notifications, setNotifications] = useState(() => [
@@ -517,12 +544,14 @@ const poprzedniMiesiac = (h) => {
           // — patrz sprawdzian na końcu pliku.
           { id: "u1", name: "Ala", stawka: 32, typ_umowy: "zlecenie", active: true,
             archived: false, role: "open", default_lokal: "Bułka i Jacek",
-            default_stanowisko: "Kucharz", ma_kiosk_pin: true },
+            default_stanowisko: "Kucharz", ma_kiosk_pin: true,
+            // Poziom na stanowisku (0.78.0) — klucz w wierszu = baza z 0047.
+            poziomy_stanowisk: { Kucharz: 1 } },
           // Umowa o pracę — norma z kalendarza, koszt = kwota z umowy.
           { id: "u2", name: "Bo", typ_umowy: "umowa_o_prace", wymiar_etatu: 1,
             wynagrodzenie_mies: 5200, active: true, archived: false, role: "closed",
             email: "bo@x.pl", auth_id: "auth-x", default_lokal: "Ceglana",
-            default_stanowisko: "Kucharz" },
+            default_stanowisko: "Kucharz", poziomy_stanowisk: { Kucharz: 3 } },
           // Pół etatu i pusta kwota — karta ma pokazać normę, ale nie koszt.
           { id: "u3", name: "Cezary", typ_umowy: "umowa_o_prace", wymiar_etatu: 0.5,
             active: true, archived: false, role: "closed", email: "c@x.pl", auth_id: "auth-x",
@@ -655,6 +684,9 @@ const poprzedniMiesiac = (h) => {
             start_date: dniTygodnia[3], end_date: dniTygodnia[3], type: "urlop",
             status: "approved" },
         ],
+        dyspozycja, setDyspozycja,
+        dyspozycjaMiesiace: [],
+        prosby, setProsby,
         // Dwie oczekujące decyzje z giełdy: zwykłe przejęcie i ZAMIANA.
         // Przy zamianie kierownik zatwierdza dwa przepisania naraz, więc karta
         // musi pokazać obie zmiany i policzyć godziny po obu stronach.
@@ -1093,6 +1125,31 @@ const poprzedniMiesiac = (h) => {
               !/PIN jest ustawiony/.test((document.querySelector("#app [data-stan-pinu]") || {}).textContent || ""));
             // Z powrotem z PIN-em — dalsze sprawdziany karty Ali go zakładają.
             wpiszPin("385920"); await czekaj(200);
+            await wyslijKarte();
+          }
+
+          // Poziom na stanowisku (0.78.0): przełącznik w karcie, zapis w
+          // payloadzie, pasek „Zapisz zmiany” widzi zmianę obiektu jsonb.
+          const wierszPoziomu = () => document.querySelector('#app [data-poziom-stanowiska="Kucharz"]');
+          sprawdz("karta ma sekcję „Poziom na stanowiskach”", !!document.querySelector("#app [data-poziomy-stanowisk]"));
+          sprawdz("poziom z bazy stoi w karcie (Kucharz: 1 — wdrażany)",
+            !!wierszPoziomu() && /1 — wdrażany/.test(wierszPoziomu().textContent),
+            wierszPoziomu() ? wierszPoziomu().textContent : "brak wiersza");
+          if (wierszPoziomu()) {
+            const trzy = [...wierszPoziomu().querySelectorAll("button")].find((b) => b.textContent.trim() === "3");
+            trzy.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            await czekaj(200);
+            sprawdz("zmiana poziomu pokazuje pasek „Zapisz zmiany”", /Zapisz/.test(document.querySelector("#app").textContent) &&
+              /3 — może szkolić/.test(wierszPoziomu().textContent));
+            await wyslijKarte();
+            const zu = window.__zapisy.filter((z) => z[0] === "users");
+            const pl = (zu[zu.length - 1] || [])[2] || {};
+            sprawdz("zapis karty niesie poziomy_stanowisk { Kucharz: 3 }",
+              JSON.stringify(pl.poziomy_stanowisk) === JSON.stringify({ Kucharz: 3 }), JSON.stringify(pl.poziomy_stanowisk));
+            // Z powrotem na 1 — dalsze sprawdziany Grafiku liczą na atrapę.
+            const jeden = [...wierszPoziomu().querySelectorAll("button")].find((b) => b.textContent.trim() === "1");
+            jeden.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            await czekaj(150);
             await wyslijKarte();
           }
         } finally {
@@ -1605,6 +1662,16 @@ const poprzedniMiesiac = (h) => {
             panel() ? panel().textContent.slice(0, 160) : "brak panelu");
           const kandydat = [...panel().querySelectorAll("[data-kandydat]")].find((b) => !b.disabled && !b.hasAttribute("data-bez-stanowiska"));
           sprawdz("panel pokazuje kandydatów z godzinami w miesiącu", !!kandydat && /h/.test(kandydat.textContent));
+          // Kropki poziomu przy osobach, które mają poziom na stanowisku luki.
+          const zPoziomem = ({ Kucharz: ["Ala", "Bo"] })[stLuki] || [];
+          const widoczniZPoziomem = zPoziomem.filter((n) => panel().querySelector(`[data-kandydat="${n}"]`));
+          sprawdz("kandydaci z poziomem na tym stanowisku mają kropki",
+            widoczniZPoziomem.every((n) => panel().querySelector(`[data-kandydat="${n}"] [data-poziom]`)),
+            `stanowisko ${stLuki}, z poziomem na liście: ${widoczniZPoziomem.join(",") || "nikt"}`);
+          sprawdz("kandydat bez poziomu na tym stanowisku nie ma kropek",
+            [...panel().querySelectorAll("[data-kandydat]")]
+              .filter((b) => !zPoziomem.includes(b.getAttribute("data-kandydat")))
+              .every((b) => !b.querySelector("[data-poziom]")));
           const szybkie = (k) => [...panel().querySelectorAll(`[data-godzina-szybka^="${k}|"]`)];
           sprawdz("szybkie godziny osobno dla początku i końca (z luką)",
             szybkie("poczatek").some((b) => b.textContent === odLuki.slice(0, 5)) &&
@@ -1614,6 +1681,9 @@ const poprzedniMiesiac = (h) => {
             !panel().querySelector("[data-bez-stanowiska]") && !!panel().querySelector("[data-rozwin-bez-stanowiska]"));
           panel().querySelector("[data-rozwin-bez-stanowiska]").dispatchEvent(new MouseEvent("click", { bubbles: true }));
           await czekaj(150);
+          const gosia = panel().querySelector('[data-kandydat="Gosia"]');
+          sprawdz("dyspozycja: kandydat z „Nie mogę” jest wyłączony z powodem",
+            !!gosia && gosia.disabled && /dyspozycja: nie może/.test(gosia.textContent), gosia ? gosia.textContent : "brak Gosi");
           const szary = panel().querySelector("[data-bez-stanowiska]:not([disabled])");
           sprawdz("osoby bez tego stanowiska są na liście, na szaro, na końcu", !!szary &&
             [...panel().querySelectorAll("[data-kandydat]")].indexOf(szary) >
@@ -1685,6 +1755,127 @@ const poprzedniMiesiac = (h) => {
           [...G().querySelectorAll("[data-pasek-cofnij] button")][0].dispatchEvent(new MouseEvent("click", { bubbles: true }));
           await czekaj(200);
           sprawdz("„Cofnij” przywraca zmianę", !!sekcja().querySelector('[data-zmiana-grafiku="g4"]'));
+          // 0.82.0: niewysłana zmiana Gosi wbrew jej „Nie może” — znacznik z
+          // „Zdejmij” i „Zapytaj” (w Edycji).
+          const konf = G().querySelector('[data-konflikt-szkicu="gKon"]');
+          sprawdz("konflikt z wersją roboczą: znacznik „Gosia: nie może” z „Zdejmij” i „Zapytaj”",
+            !!konf && /Gosia: nie może/.test(konf.textContent) && !!konf.querySelector("[data-zdejmij-konflikt]") &&
+              !!konf.querySelector("[data-zapytaj-konflikt]"), konf ? konf.textContent : "brak znacznika");
+
+          // „Zapytaj” (0.80.0): luka na Kucharza w przyszły dzień, Cezary
+          // „nie może” — stoi w osobnej grupie, a pytanie idzie do bazy jako
+          // prośba (nie zmiana w grafiku) i staje w kratce i nad dniem.
+          const lukaZap = [...sekcja().querySelectorAll("[data-obsada-dnia] [data-luka]")]
+            .find((l) => l.getAttribute("data-luka").startsWith("Kucharz|") && dzienLuki(l) > dzis);
+          if (!lukaZap) {
+            sprawdz("„Zapytaj”: jest luka na Kucharza po dziś (inaczej nie ma czego sprawdzić)", false,
+              [...sekcja().querySelectorAll("[data-luka]")].map((l) => dzienLuki(l) + ":" + l.getAttribute("data-luka")).join(", "));
+          } else {
+            lukaZap.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            await czekaj(300);
+            const zapRzad = panel() && panel().querySelector('[data-kandydat-zapytaj="Cezary"]');
+            sprawdz("„Zapytaj”: osoba z dyspozycją „nie może” w osobnej grupie, nie w zwykłych kandydatach",
+              !!zapRzad && !panel().querySelector('[data-kandydat="Cezary"]') && /dyspozycja: nie może/.test(zapRzad.textContent),
+              zapRzad ? zapRzad.textContent : "brak rzędu");
+            panel().querySelector('[data-zapytaj="Cezary"]').dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            await czekaj(200);
+            const potw = panel().querySelector("[data-potwierdz-zapytaj]");
+            sprawdz("„Zapytaj”: krok potwierdzenia mówi o jednym dniu i wygaśnięciu",
+              !!potw && /Zapytać: Cezary/.test(potw.textContent) && /wygaśnie/.test(potw.textContent) && /jednego dnia/.test(potw.textContent));
+            const przedPytaniem = window.__zapisy.length;
+            potw.querySelector("[data-wyslij-pytanie]").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            await czekaj(400);
+            const nowe = window.__zapisy.slice(przedPytaniem);
+            const pr = (nowe.find((z) => z[0] === "prosby_o_zmiane") || [])[1] || {};
+            const [, odZ, doZ] = lukaZap.getAttribute("data-luka").split("|");
+            sprawdz("„Zapytaj”: zapis prośby (czeka, godziny luki, wygasa_at), bez zmiany w grafiku",
+              pr.user_id === "u3" && pr.status === "czeka" && pr.start_time === odZ.slice(0, 5) && pr.end_time === doZ.slice(0, 5) &&
+                !!pr.wygasa_at && !nowe.some((z) => z[0] === "grafik_shifts"),
+              JSON.stringify(pr));
+            sprawdz("„Zapytaj”: wiadomość dla pracownika „Kierownik pyta, czy możesz”",
+              nowe.some((z) => z[0] === "notifications" && /^Kierownik pyta, czy możesz/.test((z[1] || {}).message || "")),
+              JSON.stringify(nowe.map((z) => z[0])));
+            sprawdz("„Zapytaj”: panel zamknięty, nad dniem „zapytano”, w kratce „czeka na zgodę”",
+              !panel() && !!sekcja().querySelector('[data-zapytano="Cezary"]') && !!sekcja().querySelector('[data-prosba-w-kratce="czeka"]'));
+
+            // „Nie może” z panelu (0.81.0): zapisuje DYSPOZYCJĘ, nie `absences`.
+            lukaZap.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            await czekaj(300);
+            const kto = [...panel().querySelectorAll("[data-kandydat]")].find((b) => !b.disabled);
+            const imie = kto && kto.getAttribute("data-kandydat");
+            kto.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            await czekaj(200);
+            [...panel().querySelectorAll("button")].find((b) => b.textContent.trim() === "Wolne / urlop")
+              .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            await czekaj(200);
+            const wolnePanel = panel().querySelector("[data-wolne-panelu]");
+            [...wolnePanel.querySelectorAll("button")].find((b) => b.textContent.trim() === "Nie może")
+              .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            await czekaj(150);
+            sprawdz("„Nie może” mówi, że wpisze się do dyspozycji", /do dyspozycji pracownika jako „Nie mogę”/.test(panel().querySelector("[data-wolne-panelu]").textContent));
+            const przedNieMoze = window.__zapisy.length;
+            [...panel().querySelector("[data-wolne-panelu]").querySelectorAll("button")].find((b) => b.textContent.trim() === "Zapisz wolne")
+              .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            await czekaj(400);
+            const noweNM = window.__zapisy.slice(przedNieMoze);
+            const dysp = noweNM.filter((z) => z[0] === "dyspozycja").map((z) => z[1]);
+            sprawdz("„Nie może” = wiersz dyspozycji „nie” dla tej osoby, bez `absences`",
+              dysp.length === 1 && dysp[0].stan === "nie" && dysp[0].user_name === imie && !noweNM.some((z) => z[0] === "absences"),
+              JSON.stringify(noweNM.map((z) => [z[0], z[1] && z[1].stan])));
+            sprawdz("„Nie może”: wiadomość „Kierownik wpisał Ci w dyspozycji”",
+              noweNM.some((z) => z[0] === "notifications" && /^Kierownik wpisał Ci w dyspozycji/.test((z[1] || {}).message || "")));
+            sprawdz("„Nie może”: panel zamknięty", !panel());
+
+            // 0.82.0: osoba WYBRANA, a potem godziny wyszły poza jej „Mogę w
+            // godzinach” — główny przycisk to „Zapytaj”, nie zapis kończący
+            // się blokadą i wiadomością „Kierownik próbował wpisać Ci zmianę”.
+            // Pytanie Cezarego o tę zmianę jest odrzucone (jedno naraz).
+            window.__ustawProsby((prev) => prev.map((p) => ({ ...p, status: "odmowa" })));
+            const dzienZap = dzienLuki(lukaZap);
+            const [, odZ2, doZ2] = lukaZap.getAttribute("data-luka").split("|");
+            window.__ustawDyspozycje((prev) => [...prev, { id: "dg1", user_id: "u1", user_name: "Ala", date: dzienZap,
+              stan: "godziny", od1: odZ2.slice(0, 5), do1: doZ2.slice(0, 5), autor: "kierownik" }]);
+            await czekaj(200);
+            lukaZap.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            await czekaj(300);
+            const rozwin = panel().querySelector("[data-rozwin-bez-stanowiska]");
+            if (rozwin && !panel().querySelector('[data-kandydat="Ala"]')) {
+              rozwin.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+              await czekaj(150);
+            }
+            const ala = panel().querySelector('[data-kandydat="Ala"]');
+            sprawdz("godziny w dyspozycji: Ala w godzinach luki jest zwykłym kandydatem", !!ala && !ala.disabled,
+              ala ? ala.textContent : "brak Ali");
+            if (ala && !ala.disabled) {
+              ala.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+              await czekaj(200);
+              const plusy = [...panel().querySelectorAll('button[aria-label="+15 min"]')];
+              plusy[plusy.length - 1].dispatchEvent(new MouseEvent("click", { bubbles: true }));
+              await czekaj(200);
+              const btnZap = panel().querySelector("[data-zapytaj-wybrana]");
+              sprawdz("wybrana osoba + godziny poza dyspozycją → główny przycisk „Zapytaj”, nie „Przypisz”",
+                !!btnZap && /Zapytaj: Ala/.test(btnZap.textContent) && !btnZap.disabled,
+                panel().querySelector("[data-zapisz-zmiane]").textContent + " " + (btnZap ? btnZap.title : ""));
+              if (btnZap) {
+                btnZap.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                await czekaj(200);
+                const potw2 = panel().querySelector("[data-potwierdz-zapytaj]");
+                sprawdz("„Zapytaj” po zmianie godzin: potwierdzenie mówi, w jakich godzinach może",
+                  !!potw2 && /Zapytać: Ala/.test(potw2.textContent) && /tylko/.test(potw2.textContent),
+                  potw2 ? potw2.textContent : "brak");
+                const przedP2 = window.__zapisy.length;
+                if (potw2) potw2.querySelector("[data-wyslij-pytanie]").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                await czekaj(400);
+                const nowe2 = window.__zapisy.slice(przedP2);
+                const pr2 = (nowe2.find((z) => z[0] === "prosby_o_zmiane") || [])[1] || {};
+                sprawdz("„Zapytaj” po zmianie godzin: prośba do Ali, bez zmiany w grafiku i bez „próbował wpisać”",
+                  pr2.user_id === "u1" && pr2.status === "czeka" && !nowe2.some((z) => z[0] === "grafik_shifts") &&
+                    !nowe2.some((z) => /próbował wpisać/.test(((z[1] || {}).message) || "")),
+                  JSON.stringify(nowe2.map((z) => [z[0], (z[1] || {}).message || (z[1] || {}).user_id])));
+                sprawdz("blokada z „Napisz do pracownika” się nie pokazała", !document.querySelector("#app [data-blokada-zmiany]"));
+              }
+            }
+          }
 
           G().querySelector("[data-zobacz-szkic]").dispatchEvent(new MouseEvent("click", { bubbles: true }));
           await czekaj(200);
@@ -2348,6 +2539,53 @@ const poprzedniMiesiac = (h) => {
               noweR.some((z) => z[0] === "wydarzenia" && z[1] === "wp1" && z[2].rozliczone_at && z[2].rozliczone_przez === "Roman"));
           const znaczekPo = Number((/(\d+)$/.exec(menuZ.textContent) || [0, 0])[1]);
           sprawdz("znaczek „Zatwierdzanie zmian” spada o jeden", znaczekPo === znaczekPrzed - 1, `${znaczekPrzed} → ${znaczekPo}`);
+
+          // Prośba o zwolnienie ze zmiany (0.82.0): karta Ewy, „Zdejmij zmianę”
+          // po 6 s kasuje zmianę i zapisuje ślad decyzji.
+          const kartaZw = () => document.querySelector('#app [data-zdejmij-zmiane="dzw"]');
+          sprawdz("„Do decyzji”: prośba o zwolnienie Ewy z powodem i bez zaznaczania hurtem",
+            !!kartaZw() && /Prośby o zwolnienie ze zmiany/.test(document.querySelector("#app").textContent) &&
+              /egzamin/.test(kartaZw().closest("article").textContent) && /18:00–22:00/.test(kartaZw().closest("article").textContent),
+            kartaZw() ? kartaZw().closest("article").textContent : "brak karty");
+          const znaczekZw = Number((/(\d+)$/.exec(menuZ.textContent) || [0, 0])[1]);
+          const przedZw = window.__zapisy.length;
+          await kl(kartaZw(), 300);
+          sprawdz("„Zdejmij zmianę”: karta znika, zapis czeka 6 s", !kartaZw() && window.__zapisy.length === przedZw);
+          await czekaj(6800);
+          const noweZw = window.__zapisy.slice(przedZw);
+          const kol = noweZw.map((z) => z[0] + ":" + (typeof z[1] === "string" ? z[1] : "") + ":" + (z[2] === "DELETE" ? "DELETE" : ""));
+          sprawdz("„Zdejmij zmianę”: najpierw kasuje gZw, potem rozstrzygnięcie w dyspozycji",
+            kol.indexOf("grafik_shifts:gZw:DELETE") >= 0 &&
+              noweZw.some((z) => z[0] === "dyspozycja" && z[1] === "dzw" && z[2].rozstrzygniecie === "zdjeta" && z[2].rozstrzygnal === "Roman") &&
+              kol.indexOf("grafik_shifts:gZw:DELETE") < noweZw.findIndex((z) => z[0] === "dyspozycja"),
+            JSON.stringify(kol));
+          sprawdz("…wiadomość dla Ewy „Kierownik zdjął Twoją zmianę z grafiku”",
+            noweZw.some((z) => z[0] === "notifications" && z[1].user_name === "Ewa" && /^Kierownik zdjął Twoją zmianę z grafiku/.test(z[1].message)));
+          const znaczekZwPo = Number((/(\d+)$/.exec(menuZ.textContent) || [0, 0])[1]);
+          sprawdz("…znaczek spada o jeden", znaczekZwPo === znaczekZw - 1, `${znaczekZw} → ${znaczekZwPo}`);
+
+          // Dyspozycja w karcie pracownika (0.82.0): pusty dzień → „Nie może”.
+          const menuPr = [...document.querySelectorAll("#app aside button")]
+            .find((x) => x.textContent.replace(/▪/g, "").replace(/\d+$/, "").trim() === "Pracownicy");
+          await kl(menuPr, 400);
+          const ewaL = document.querySelector('#app [data-osoba-listy="Ewa"]');
+          if (ewaL) await kl(ewaL, 400);
+          const sekD = document.querySelector('#app [data-sekcja="sekcja-dyspozycja"]');
+          sprawdz("karta pracownika: sekcja „Dyspozycja” z kalendarzem", !!sekD && !!sekD.querySelector("[data-dzien-karty]"),
+            ewaL ? "" : "brak Ewy na liście");
+          const pustyDzien = sekD && [...sekD.querySelectorAll('[data-dzien-karty][data-stan="pusty"]')].find((b) => !b.disabled);
+          if (pustyDzien) {
+            await kl(pustyDzien, 200);
+            const przedK = window.__zapisy.length;
+            await kl(sekD.querySelector('[data-karta-stan="nie"]'), 400);
+            const noweK = window.__zapisy.slice(przedK);
+            sprawdz("karta: „Nie może” zapisuje wiersz dyspozycji Ewy i wysyła wiadomość",
+              noweK.some((z) => z[0] === "dyspozycja" && z[1].user_id === "u5" && z[1].stan === "nie") &&
+                noweK.some((z) => z[0] === "notifications" && z[1].user_name === "Ewa" && /^Kierownik wpisał Ci w dyspozycji „Nie mogę”/.test(z[1].message)),
+              JSON.stringify(noweK.map((z) => z[0])));
+          } else {
+            sprawdz("karta: jest pusty dzień do ustawienia", false);
+          }
         }
       } catch (e) {
         sprawdz("Wydarzenia: przebieg bez wyjątku", false, e.message);

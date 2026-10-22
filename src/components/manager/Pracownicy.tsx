@@ -39,6 +39,9 @@ import {
 import { czekaNaDecyzje } from "../../utils/probni";
 import { getMonthName } from "../../utils/format";
 import { slabyPin } from "../../utils/piny";
+import { POZIOMY, opisPoziomu, poziomNa, zPoziomem, zPoziomemStartowym, bazaZnaPoziomy } from "../../utils/poziomy";
+import { allowedStanowiskaArr, toLocalYMD } from "../../utils/grafik";
+import DyspozycjaKarta from "./DyspozycjaKarta";
 import { api } from "../../api/supabase";
 import { countWorkdays, URLOP_HOURS_PER_DAY } from "../../utils/absences";
 import { odmiana } from "../../utils/czas";
@@ -158,6 +161,14 @@ const opisZmianyPinu = (z) => {
 const norm = (v) => {
   if (v == null || v === false) return "";
   if (Array.isArray(v)) return v.filter(Boolean).map(String).sort().join(",");
+  // jsonb (poziomy_stanowisk) — String() dałby "[object Object]" dla każdej
+  // wartości i pasek „Zapisz zmiany” nie zobaczyłby zmiany poziomu.
+  if (typeof v === "object")
+    return Object.entries(v)
+      .filter(([, x]) => x != null)
+      .map(([k, x]) => `${k}=${x}`)
+      .sort()
+      .join(";");
   const s = String(v);
   return s.includes(",") ? s.split(",").map((x) => x.trim()).filter(Boolean).sort().join(",") : s;
 };
@@ -249,6 +260,12 @@ export default function Pracownicy({
   onAddUrlop,
   onDeleteAbsence,
   showMsg,
+  // Dyspozycja w karcie (0.82.0).
+  dyspozycja = [],
+  setDyspozycja,
+  dyspozycjaMiesiace = [],
+  planShifts = [],
+  kierownik,
 }) {
   const [view, setView] = useState("aktywni"); // "aktywni" | "archiwum"
   const [szukaj, setSzukaj] = useState("");
@@ -318,6 +335,14 @@ export default function Pracownicy({
   const showTermWarnings = editingUser && !!editingUser.id;
   const tablet = editingUser?.role === "kiosk";
   const ustaw = (zmiany) => setEditingUser({ ...editingUser, ...zmiany });
+  // Poziomy pokazujemy tylko na bazie z migracją 0047 — inaczej zapis karty
+  // wysłałby kolumnę, której baza nie zna.
+  const znaPoziomy = bazaZnaPoziomy([...(visibleUsers || []), ...(archivedUsers || [])]);
+  // Dopisane stanowisko dostaje od razu poziom 1 (decyzja właściciela).
+  const zPoziomemNowego = (zmiany, stanowiskoNowe) =>
+    znaPoziomy && stanowiskoNowe
+      ? { ...zmiany, poziomy_stanowisk: zPoziomemStartowym(editingUser, stanowiskoNowe) }
+      : zmiany;
 
   // Co było zapisane — bez tego nie wiadomo, czy pokazać pasek "Zapisz".
   const oryginal = editingUser?.id
@@ -968,7 +993,7 @@ export default function Pracownicy({
                       <Pole etykieta="Stanowisko główne">
                         <select
                           value={editingUser.default_stanowisko || ""}
-                          onChange={(e) => ustaw({ default_stanowisko: e.target.value })}
+                          onChange={(e) => ustaw(zPoziomemNowego({ default_stanowisko: e.target.value }, e.target.value))}
                           className={poleCls}
                           required
                         >
@@ -998,11 +1023,16 @@ export default function Pracownicy({
                                 type="button"
                                 disabled={glowne}
                                 onClick={() =>
-                                  ustaw({
-                                    allowed_stanowiska: on
-                                      ? allowedStanArr(editingUser).filter((x) => x !== name)
-                                      : [...allowedStanArr(editingUser), name],
-                                  })
+                                  ustaw(
+                                    zPoziomemNowego(
+                                      {
+                                        allowed_stanowiska: on
+                                          ? allowedStanArr(editingUser).filter((x) => x !== name)
+                                          : [...allowedStanArr(editingUser), name],
+                                      },
+                                      on ? null : name
+                                    )
+                                  )
                                 }
                                 className={`inline-flex items-center gap-1.5 h-10 px-3 rounded-lg border-[2px] text-sm font-bold ${
                                   glowne
@@ -1021,6 +1051,51 @@ export default function Pracownicy({
                         </div>
                         <p className={`${podpisCls} flex items-center gap-1`}>
                           <Star size={12} /> = stanowisko główne · zaznaczone: {allowedStanArr(editingUser).filter((x) => x !== editingUser.default_stanowisko).length}
+                        </p>
+                      </div>
+                    )}
+                    {znaPoziomy && allowedStanowiskaArr(editingUser).length > 0 && (
+                      /* Poziom na każdym stanowisku z karty (0.78.0). Pracownik
+                         widzi go w „Więcej → Moje stanowiska”, Grafik — przy
+                         kandydatach. Brak = nieustawiony, nie „1”. */
+                      <div className="mt-4" data-poziomy-stanowisk>
+                        <label className={etykietaCls}>Poziom na stanowiskach</label>
+                        <div className="flex flex-col divide-y-[1.5px] divide-[#ECEBE6] rounded-lg border-[2px] border-[#DEDCD4]">
+                          {allowedStanowiskaArr(editingUser).map((name) => {
+                            const p = poziomNa(editingUser, name);
+                            const glowne = name === editingUser.default_stanowisko;
+                            return (
+                              <div key={name} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2" data-poziom-stanowiska={name}>
+                                <span className="font-bold min-w-[120px] flex-1">
+                                  {name}
+                                  {glowne && <span className="ml-1.5 text-[12px] font-bold text-[#6E6E66]">główne</span>}
+                                </span>
+                                <div className="inline-flex rounded-lg border-[2px] border-[#171714] overflow-hidden" role="group" aria-label={`Poziom: ${name}`}>
+                                  {POZIOMY.map((x) => (
+                                    <button
+                                      key={x.poziom}
+                                      type="button"
+                                      aria-pressed={p === x.poziom}
+                                      onClick={() => ustaw({ poziomy_stanowisk: zPoziomem(editingUser, name, x.poziom) })}
+                                      className={`w-10 h-9 text-sm font-extrabold border-l-[2px] first:border-l-0 border-[#171714] ${
+                                        p === x.poziom ? "bg-[#171714] text-white" : "bg-white text-[#171714] hover:bg-[#F6F5F1]"
+                                      }`}
+                                      title={`${x.poziom} — ${x.nazwa}`}
+                                    >
+                                      {x.poziom}
+                                    </button>
+                                  ))}
+                                </div>
+                                <span className={`text-[13px] w-[150px] ${p ? "text-[#171714] font-semibold" : "text-[#6E6E66]"}`}>
+                                  {p ? `${p} — ${opisPoziomu(p).nazwa}` : "nieustawiony"}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <p className={podpisCls}>
+                          {POZIOMY.map((x) => `${x.poziom} — ${x.nazwa} (${x.opis})`).join(" · ")}. Pracownik widzi swój
+                          poziom w „Więcej → Moje stanowiska”.
                         </p>
                       </div>
                     )}
@@ -1379,6 +1454,23 @@ export default function Pracownicy({
                       })}
                     </div>
                   )}
+                </Sekcja>
+              )}
+
+              {!tablet && !isNew && (
+                <Sekcja id="sekcja-dyspozycja" tytul="Dyspozycja">
+                  <DyspozycjaKarta
+                    key={editingUser.id}
+                    user={editingUser}
+                    dzis={toLocalYMD(new Date())}
+                    dyspozycja={dyspozycja}
+                    setDyspozycja={setDyspozycja}
+                    miesiace={dyspozycjaMiesiace}
+                    absences={absences}
+                    planShifts={planShifts}
+                    kierownik={kierownik}
+                    showMsg={showMsg}
+                  />
                 </Sekcja>
               )}
 

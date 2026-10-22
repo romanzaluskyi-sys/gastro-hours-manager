@@ -37,6 +37,7 @@ import {
   UserPlus,
   User,
   Coins,
+  CalendarDays,
 } from "lucide-react";
 import {
   resolveCorrection,
@@ -48,7 +49,8 @@ import {
 } from "../../utils/corrections";
 import { countWorkdays, URLOP_HOURS_PER_DAY } from "../../utils/absences";
 import { trimTime, shiftHours, toLocalYMD, publishedShiftsFor } from "../../utils/grafik";
-import { monthPlanHours, typWymiany, wzajemnaZmiana } from "../../utils/swaps";
+import { monthPlanHours, typWymiany, wzajemnaZmiana, wycofajOfertyDlaZmian } from "../../utils/swaps";
+import { prosbyOZwolnienie, rozstrzygnijZwolnienie } from "../../utils/dyspozycja";
 import { zmianyBezOdbicia, rozliczBrakOdbicia } from "../../utils/odbicia";
 import { zmianyPorzucone, rozliczPorzucona } from "../../utils/porzucone";
 import { czekaNaKoniecOdKierownika } from "../../utils/wpisy";
@@ -305,6 +307,13 @@ const GRUPY = [
     opis: "Pracownicy sami uzgodnili przejęcie albo zamianę zmiany. Ostatnie słowo należy do Ciebie.",
   },
   {
+    typ: "zwolnienie",
+    Icon: CalendarDays,
+    tytul: "Prośby o zwolnienie ze zmiany",
+    tab: "Zwolnienie",
+    opis: "Pracownik zaznaczył w dyspozycji „Nie mogę” na dzień, na który ma już zmianę. Grafik obowiązuje — zmiana stoi, dopóki jej nie zdejmiesz. Po zdjęciu uzupełnij obsadę w Grafiku.",
+  },
+  {
     typ: "wolne",
     Icon: Palmtree,
     tytul: "Wnioski o wolne",
@@ -357,6 +366,9 @@ export default function ZatwierdzanieZmian({
   wydarzeniaUczestnicy = [],
   setWydarzeniaUczestnicy,
   calaSiec = false,
+  dyspozycja = [],
+  setDyspozycja,
+  shiftSwaps = [],
 }) {
   // ⚠️ Zamek na REF, nie na stanie. Wszystkie decyzje na tej stronie pilnował
   // dotąd zwykły `useState` ("busy id"), a stan Reacta aktualizuje się
@@ -413,6 +425,12 @@ export default function ZatwierdzanieZmian({
   const probni = probniDoDecyzji({ users, lokalOk: hasAccessToLokal });
 
   const wydarzeniaRozliczenie = wydarzeniaDoDecyzji({ wydarzenia, lokalOk: hasAccessToLokal, calaSiec });
+
+  // Prośby o zwolnienie z opublikowanej zmiany (0.82.0) — liczone z
+  // dyspozycji i grafiku, ta sama funkcja daje znaczek i sprawę na Pulpicie.
+  const zwolnienia = prosbyOZwolnienie({ planShifts, dyspozycja, dzis: toLocalYMD(new Date()) }).filter((p) =>
+    hasAccessToLokal(p.zmiana.lokal)
+  );
 
   const rows = issues
     .filter((iss) => iss.type === "correction" && iss.status === "nowe")
@@ -563,6 +581,25 @@ export default function ZatwierdzanieZmian({
     await onResolveSwap(swap, decision);
   };
 
+  // „Zostaw w grafiku” / „Zdejmij zmianę”. Zdjęcie wycofuje też oferty z
+  // giełdy dla tej zmiany — tak jak każde inne zdjęcie zmiany z grafiku.
+  const rozliczZwolnienie = async (poz, decyzja) => {
+    const k = `zwolnienie:${poz.wpis.id}`;
+    if (!zajmij(k)) return;
+    try {
+      const wpis = await rozstrzygnijZwolnienie({ wpis: poz.wpis, zmiana: poz.zmiana, decyzja, kierownik: currentUser.name });
+      if (setDyspozycja) setDyspozycja((prev) => (prev || []).map((w) => (w.id === wpis.id ? wpis : w)));
+      if (decyzja === "zdjeta") {
+        if (setPlanShifts) setPlanShifts((prev) => (prev || []).filter((s) => s.id !== poz.zmiana.id));
+        const { bledy } = await wycofajOfertyDlaZmian({ swaps: shiftSwaps, shiftIds: [poz.zmiana.id] });
+        if (bledy.length) showMsg(`Zmiana zdjęta, ale ${bledy.length} ofert z giełdy nie udało się wycofać.`, "error");
+      }
+    } catch (e) {
+      showMsg(`${poz.wpis.user_name}: ${e.message || "błąd zapisu"}`, "error");
+    }
+    zwolnij(k);
+  };
+
   // -------------------------------------------------------------------------
   // Decyzje odłożone o 6 s ("Cofnij") — mechanizm i jego pułapki opisuje
   // odlozoneDecyzje.tsx; ten sam działa na Pulpicie.
@@ -576,6 +613,7 @@ export default function ZatwierdzanieZmian({
     decyzjaOWolnym,
     decyzjaOGieldzie,
     rozliczWyd,
+    rozliczZwolnienie,
   });
   // Decyzja zdejmuje też zaznaczenie — inaczej pasek "Zatwierdź N" liczyłby
   // karty, których już nie widać.
@@ -1031,6 +1069,71 @@ export default function ZatwierdzanieZmian({
                 onClick={() => decyduj([tak], `Zatwierdzono giełdę: ${sw.taker_user_name}`)}
               >
                 <Check size={18} /> Zatwierdź
+              </button>
+            </>
+          }
+        />
+      ),
+    });
+  }
+
+  // --- Prośby o zwolnienie ze zmiany (0.82.0) ---
+  // Bez „tak”: zdjęcie zmiany robi dziurę w obsadzie, więc nie idzie hurtem
+  // z paska „Zatwierdź N” — tylko karta po karcie.
+  for (const poz of zwolnienia) {
+    const { wpis, zmiana } = poz;
+    const klucz = `zwolnienie:${wpis.id}`;
+    const godz = `${trimTime(zmiana.start_time)}–${trimTime(zmiana.end_time)}`;
+    sprawy.push({
+      klucz,
+      typ: "zwolnienie",
+      kto: wpis.user_name,
+      wiek: dniOd(wpis.zmieniono_at || wpis.created_at),
+      tak: null,
+      opisTak: "",
+      karta: (z, onZ) => (
+        <Karta
+          key={klucz}
+          kto={wpis.user_name}
+          meta={`${zmiana.lokal}${zmiana.stanowisko ? ` · ${zmiana.stanowisko}` : ""}`}
+          ostrzezenia={<Czeka dni={dniOd(wpis.zmieniono_at || wpis.created_at)} />}
+          zaznaczone={z}
+          onZaznacz={onZ}
+          moznaZaznaczyc={false}
+          szczegoly={
+            <>
+              <Kv etykieta="Dzień">{dzienKrotki(zmiana.date)}</Kv>
+              <Kv etykieta="Zmiana w grafiku">{godz}</Kv>
+            </>
+          }
+          notatka={wpis.notatka}
+          akcje={
+            <>
+              <button
+                type="button"
+                className={btnObrysCls}
+                data-zostaw-zmiane={wpis.id}
+                onClick={() =>
+                  decyduj(
+                    [{ klucz, zadanie: ["rozliczZwolnienie", [poz, "zostaje"]] }],
+                    `Zmiana zostaje: ${wpis.user_name} · ${dzienKrotki(zmiana.date)}`
+                  )
+                }
+              >
+                <X size={18} className="hidden md:block" /> Zostaw w grafiku
+              </button>
+              <button
+                type="button"
+                className={btnGlownyCls}
+                data-zdejmij-zmiane={wpis.id}
+                onClick={() =>
+                  decyduj(
+                    [{ klucz, zadanie: ["rozliczZwolnienie", [poz, "zdjeta"]] }],
+                    `Zdjęto zmianę: ${wpis.user_name} · ${dzienKrotki(zmiana.date)} ${godz}`
+                  )
+                }
+              >
+                <Check size={18} /> Zdejmij zmianę
               </button>
             </>
           }
