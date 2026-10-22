@@ -1046,6 +1046,35 @@ const poprzedniMiesiac = (h) => {
         sprawdz("„Wyczyść zaznaczenie” zdejmuje dzień", !(window.__tabele.dyspozycja || []).some((w) => w.date === dzienNm(10) && w.user_id === "u3") ||
           !(document.querySelector(`#app [data-dzien-dyspozycji="${dzienNm(10)}"]`) || {}).textContent.includes("16–22"));
 
+        // Prośba o zwolnienie ze zmiany (0.82.0): dzień 5 ma już zmianę (po
+        // „Mogę”). Dotknięcie otwiera arkusz prośby; zmiana zostaje w grafiku.
+        await kliknijD(dzienD(5));
+        const arkZw = document.querySelector("#app [data-arkusz-zwolnienia]");
+        sprawdz("dzień ze zmianą w grafiku: arkusz „prośba o zwolnienie” zamiast komunikatu",
+          !!arkZw && /zmiana zostaje, dopóki jej nie zdejmie/.test(arkZw.textContent), arkZw ? "" : "brak arkusza");
+        if (arkZw) {
+          wpiszPole(arkZw.querySelector("[data-powod-zwolnienia]"), "egzamin");
+          await czekaj(150);
+          const przedZw = window.__zapisy.length;
+          await kliknijD(document.querySelector("#app [data-wyslij-zwolnienie]"));
+          await czekaj(200);
+          const noweZw = window.__zapisy.slice(przedZw);
+          const wierszZw = (noweZw.find((z) => z[0] === "dyspozycja") || [])[1] || {};
+          sprawdz("prośba: „nie” z powodem i zwolnienie_z = id zmiany; grafik nietknięty",
+            wierszZw.stan === "nie" && wierszZw.notatka === "egzamin" && wierszZw.zwolnienie_z === "gp-pr5" &&
+              !noweZw.some((z) => z[0] === "grafik_shifts") && window.__planKiosk.some((z) => z.id === "gp-pr5"), JSON.stringify(wierszZw));
+          sprawdz("prośba: wiadomość dla kierownika lokalu „Cezary prosi o zwolnienie ze zmiany”",
+            noweZw.some((z) => z[0] === "notifications" && z[1].audience === "manager" && z[1].lokal === "Ceglana" &&
+              /^Cezary prosi o zwolnienie ze zmiany: .* Powód: egzamin$/.test(z[1].message)));
+          sprawdz("„Moje wnioski”: „Zwolnienie ze zmiany · czeka”",
+            !!document.querySelector('#app [data-wniosek-zwolnienie="czeka"]'));
+          await kliknijD(dzienD(5));
+          sprawdz("drugie dotknięcie: bez drugiego arkusza (prośba już czeka)", !document.querySelector("#app [data-arkusz-zwolnienia]"));
+          await kliknijD(document.querySelector("#app [data-wycofaj-zwolnienie]"));
+          await czekaj(150);
+          sprawdz("„Wycofaj prośbę” zdejmuje wniosek", !document.querySelector('#app [data-wniosek-zwolnienie="czeka"]'));
+        }
+
         // Zlecenie: bez urlopu w arkuszu.
         klik("Zmień"); await czekaj(300);
         klik("Gosia"); await czekaj(300);

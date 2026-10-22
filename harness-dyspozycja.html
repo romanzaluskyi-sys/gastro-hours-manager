@@ -315,6 +315,87 @@ const J = (x) => JSON.stringify(x);
     sprawdz("nic do zapisania = bez wiadomości", pusto.zapisane.length === 0 && (window.__tabele.notifications || []).length === 1);
 
     log("");
+    log("— D4 (0.82.0): prośba o zwolnienie ze zmiany —");
+    window.__tabele = { dyspozycja: [], grafik_shifts: [] }; window.__zapisy = [];
+    const zm = { id: "g1", user_id: "a", user_name: "Ala", lokal: "Ceglana", stanowisko: "Bar", date: "2026-11-20",
+      start_time: "16:00", end_time: "22:00", published_at: "2026-11-01T10:00:00Z" };
+    window.__tabele.grafik_shifts = [{ ...zm }];
+    const przedZw = [{ id: "z0", user_id: "a", user_name: "Ala", date: "2026-11-20", stan: "moge", autor: "pracownik" }];
+    window.__tabele.dyspozycja = przedZw.map((x) => ({ ...x }));
+    const poZw = await D.poprosOZwolnienie({ user: ala, zmiana: zm, powod: "egzamin", dyspozycja: przedZw });
+    const wZw = D.dyspozycjaNa(poZw, ala, "2026-11-20");
+    sprawdz("prośba = „nie” z powodem i zwolnienie_z, PATCH istniejącego wpisu",
+      wZw.stan === "nie" && wZw.notatka === "egzamin" && wZw.zwolnienie_z === "g1" && poZw.length === 1 &&
+        window.__zapisy.some((z) => z[0] === "patch" && z[1] === "dyspozycja"), J(wZw));
+    const wiadZw = (window.__tabele.notifications || []).find((n) => n.audience === "manager") || {};
+    sprawdz("kierownik lokalu zmiany dostaje „… prosi o zwolnienie ze zmiany”",
+      wiadZw.lokal === "Ceglana" && /^Ala prosi o zwolnienie ze zmiany: .*16:00–22:00, Bar · Ceglana\. Powód: egzamin$/.test(wiadZw.message), wiadZw.message);
+    const kol = D.prosbyOZwolnienie({ planShifts: [zm], dyspozycja: poZw, dzis: "2026-11-15" });
+    sprawdz("kolejka: jedna sprawa z tą zmianą", kol.length === 1 && kol[0].zmiana.id === "g1");
+    sprawdz("kolejka: minięta zmiana wypada", D.prosbyOZwolnienie({ planShifts: [zm], dyspozycja: poZw, dzis: "2026-11-21" }).length === 0);
+    sprawdz("kolejka: zmiana usunięta (deleted_at) wypada",
+      D.prosbyOZwolnienie({ planShifts: [{ ...zm, deleted_at: "x" }], dyspozycja: poZw, dzis: "2026-11-15" }).length === 0);
+    sprawdz("kolejka: zwykłe „nie” bez zwolnienie_z to nie prośba",
+      D.prosbyOZwolnienie({ planShifts: [zm], dyspozycja: [{ ...wZw, zwolnienie_z: null }], dzis: "2026-11-15" }).length === 0);
+    sprawdz("„Moje wnioski”: czeka", J(D.zwolnieniaOsoby({ dyspozycja: poZw, planShifts: [zm], user: ala, dzis: "2026-11-15" }).map((x) => x.stan)) === J(["czeka"]));
+
+    window.__zapisy = [];
+    const zost = await D.rozstrzygnijZwolnienie({ wpis: wZw, zmiana: zm, decyzja: "zostaje", kierownik: "Roman" });
+    sprawdz("„Zostaw”: ślad decyzji, zmiana nietknięta",
+      zost.rozstrzygniecie === "zostaje" && zost.rozstrzygnal === "Roman" && !!zost.rozstrzygnieto_at &&
+        !window.__zapisy.some((z) => z[1] === "grafik_shifts"), J(window.__zapisy.map((z) => z[0] + ":" + z[1])));
+    sprawdz("po „Zostaw” sprawa znika z kolejki",
+      D.prosbyOZwolnienie({ planShifts: [zm], dyspozycja: [zost], dzis: "2026-11-15" }).length === 0);
+    const wiadZost = (window.__tabele.notifications || []).filter((n) => n.audience === "employee").pop() || {};
+    sprawdz("pracownik: „Kierownik zostawił Twoją zmianę w grafiku: …”", /^Kierownik zostawił Twoją zmianę w grafiku: .*Decyzja: Roman\.$/.test(wiadZost.message || ""), wiadZost.message);
+
+    window.__zapisy = [];
+    const zdj = await D.rozstrzygnijZwolnienie({ wpis: wZw, zmiana: zm, decyzja: "zdjeta", kierownik: "Roman" });
+    const kolejnosc = window.__zapisy.map((z) => z[0] + ":" + z[1]);
+    sprawdz("„Zdejmij”: najpierw kasuje zmianę, potem ślad decyzji",
+      kolejnosc.indexOf("delete:grafik_shifts") === 0 && kolejnosc.indexOf("patch:dyspozycja") > 0 && zdj.rozstrzygniecie === "zdjeta", J(kolejnosc));
+    sprawdz("„Moje wnioski”: zdjęta (świeża decyzja)",
+      J(D.zwolnieniaOsoby({ dyspozycja: [zdj], planShifts: [], user: ala, dzis: "2026-11-15" }).map((x) => x.stan)) === J(["zdjeta"]));
+
+    log("");
+    log("— D4 (0.82.0): konflikt z wersją roboczą —");
+    const szkic = { id: "s1", user_id: "a", user_name: "Ala", lokal: "Ceglana", stanowisko: "Bar", date: "2026-11-15",
+      start_time: "10:00", end_time: "14:00", published_at: null };
+    const opubl = { ...szkic, id: "s2", date: "2026-11-14", published_at: "2026-11-01T10:00:00Z" };
+    const kon = D.konfliktySzkicu({ planShifts: [szkic, opubl], dyspozycja: dysp, miesiace: wyslany, dzis: "2026-11-10" });
+    sprawdz("szkic poza „tylko 16–22” = konflikt", !!kon.s1 && /tylko 16–22/.test(kon.s1.krotko), J(kon));
+    sprawdz("opublikowana zmiana to nie konflikt szkicu (to prośba o zwolnienie)", !kon.s2);
+    sprawdz("szkic przy niewysłanym miesiącu = bez konfliktu",
+      !D.konfliktySzkicu({ planShifts: [szkic], dyspozycja: dysp, miesiace: [], dzis: "2026-11-10" }).s1);
+    const nowe = D.noweKonfliktySzkicu({ planShifts: [szkic], przed: { dyspozycja: [], miesiace: wyslany },
+      po: { dyspozycja: dysp, miesiace: wyslany }, user: ala, dzis: "2026-11-10" });
+    sprawdz("nowy konflikt po zapisie → jedna sprawa", nowe.length === 1 && nowe[0].zmiana.id === "s1");
+    sprawdz("ten sam konflikt drugi raz → bez wiadomości",
+      D.noweKonfliktySzkicu({ planShifts: [szkic], przed: { dyspozycja: dysp, miesiace: wyslany }, po: { dyspozycja: dysp, miesiace: wyslany },
+        user: ala, dzis: "2026-11-10" }).length === 0);
+    sprawdz("wysłanie miesiąca też rodzi konflikt",
+      D.noweKonfliktySzkicu({ planShifts: [szkic], przed: { dyspozycja: dysp, miesiace: [] }, po: { dyspozycja: dysp, miesiace: wyslany },
+        user: ala, dzis: "2026-11-10" }).length === 1);
+    sprawdz("tekst dla kierownika", /^Konflikt z wersją roboczą grafiku: Ala — tylko 16–22, a w wersji roboczej ma zmianę/.test(
+      D.tekstKonfliktuSzkicu("Ala", szkic, kon.s1)), D.tekstKonfliktuSzkicu("Ala", szkic, kon.s1));
+
+    log("");
+    log("— D4 (0.82.0): dyspozycja w karcie pracownika —");
+    window.__tabele = { dyspozycja: [] }; window.__zapisy = [];
+    const karta = [{ id: "k1", user_id: "a", user_name: "Ala", date: "2026-11-12", stan: "moge", autor: "pracownik" }];
+    let bladKarty = "";
+    try {
+      await D.ustawDzienZaPracownika({ user: ala, dateStr: "2026-11-12", stan: "nie", dyspozycja: karta, kierownik: "Roman" });
+    } catch (e) { bladKarty = e.message; }
+    sprawdz("dzień pracownika: odmowa z „Zapytaj”", /Zapytaj/.test(bladKarty) && window.__zapisy.length === 0, bladKarty);
+    const pk = await D.ustawDzienZaPracownika({ user: ala, dateStr: "2026-11-13", stan: "godziny", godziny: { od1: "08:00", do1: "14:00" },
+      dyspozycja: karta, kierownik: "Roman" });
+    const wiadK = (window.__tabele.notifications || [])[0] || {};
+    sprawdz("pusty dzień: zapis „godziny” i wiadomość „Kierownik wpisał Ci w dyspozycji „Mogę 8–14”: 13.11”",
+      D.dyspozycjaNa(pk, ala, "2026-11-13").stan === "godziny" && /^Kierownik wpisał Ci w dyspozycji „Mogę 8–14”: 13\.11\. Wpisał\(a\): Roman\.$/.test(wiadK.message || ""), wiadK.message);
+    sprawdz("tekst przy wyczyszczeniu", D.tekstDyspozycjiOdKierownika("Roman", "2026-11-13", null) === "Kierownik usunął wpis z Twojej dyspozycji: 13.11. Wpisał(a): Roman.");
+
+    log("");
     log(`ZDANYCH ${zdanych}, OBLANYCH ${oblanych}`, oblanych ? "zle" : "ok");
   } catch (e) {
     log("BŁĄD: " + (e && e.message), "zle");

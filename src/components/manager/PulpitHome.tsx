@@ -27,6 +27,7 @@ import {
   ChevronRight,
   Clock,
   Coins,
+  CalendarDays,
   Hourglass,
   Lock,
   Palmtree,
@@ -54,6 +55,7 @@ import {
 import { zmianyBezOdbicia } from "../../utils/odbicia";
 import { zmianyPorzucone, zmianaTrwa } from "../../utils/porzucone";
 import { probniDoDecyzji } from "../../utils/probni";
+import { prosbyOZwolnienie } from "../../utils/dyspozycja";
 import { czekaNaKoniecOdKierownika } from "../../utils/wpisy";
 import {
   resolveCorrection,
@@ -283,6 +285,7 @@ export default function PulpitHome({
   showMsg = () => {},
   wydarzenia = [],
   wydarzeniaUczestnicy = [],
+  dyspozycja = [],
   calaSiec = false,
 }) {
   const teraz = useTeraz();
@@ -483,6 +486,19 @@ export default function PulpitHome({
       wiek: dniOd(w.data),
     });
   }
+  // Prośby o zwolnienie ze zmiany (0.82.0) — decyzja w „Do decyzji”.
+  for (const { wpis, zmiana } of prosbyOZwolnienie({ planShifts, dyspozycja, dzis: dzisStr }).filter((p) =>
+    matchesFilter(p.zmiana.lokal)
+  )) {
+    sprawy.push({
+      klucz: `zwolnienie:${wpis.id}`,
+      typ: "zwolnienie",
+      kto: wpis.user_name,
+      tag: { ton: "warn", Icon: CalendarDays, tekst: "Zwolnienie" },
+      meta: `${zmiana.lokal} · ${dzienKrotki(zmiana.date)} ${trimTime(zmiana.start_time)}–${trimTime(zmiana.end_time)}`,
+      wiek: dniOd(wpis.zmieniono_at || wpis.created_at),
+    });
+  }
   for (const a of absences.filter((x) => x.status === "pending" && matchesFilter(x.lokal))) {
     const dni = countWorkdays(a.start_date, a.end_date);
     sprawy.push({
@@ -559,6 +575,7 @@ export default function PulpitHome({
     probny: ["osoba na próbę", "osoby na próbę", "osób na próbę"],
     gielda: ["zamiana z giełdy", "zamiany z giełdy", "zamian z giełdy"],
     wydarzenie: ["wydarzenie do rozliczenia", "wydarzenia do rozliczenia", "wydarzeń do rozliczenia"],
+    zwolnienie: ["prośba o zwolnienie", "prośby o zwolnienie", "próśb o zwolnienie"],
     wolne: ["wniosek o wolne", "wnioski o wolne", "wniosków o wolne"],
     korekta: ["korekta", "korekty", "korekt"],
     duplikat: ["możliwy duplikat", "możliwe duplikaty", "możliwych duplikatów"],

@@ -34,6 +34,12 @@ import {
   zakresyCiagle,
   zapiszDni,
   zmianaOpublikowanaNa,
+  poprosOZwolnienie,
+  prosbaZwolnieniaOtwarta,
+  wycofajZwolnienie,
+  zwolnieniaOsoby,
+  noweKonfliktySzkicu,
+  powiadomOKonfliktachSzkicu,
 } from "../utils/dyspozycja";
 import { ostatnieOdpowiedzi, prosbyDoOdpowiedzi } from "../utils/prosby";
 
@@ -98,6 +104,8 @@ export default function DyspozycjaEkran({
   const [powtorz, setPowtorz] = useState(false);
   const [zajety, setZajety] = useState(false);
   const [odmowa, setOdmowa] = useState(null); // { id, powod }
+  // Prośba o zwolnienie z opublikowanej zmiany (0.82.0): { zmiana, powod }.
+  const [zwolnienie, setZwolnienie] = useState(null);
 
   const minMiesiac = miesiacDnia(dzis);
   const maxMiesiac = przesunMiesiac(minMiesiac, 3);
@@ -136,6 +144,13 @@ export default function DyspozycjaEkran({
 
   const ustaw = (z) => setForm((f) => ({ ...f, ...z }));
 
+  // Zapis, który wiąże (wysłany miesiąc) i trafia w zmianę z WERSJI ROBOCZEJ
+  // grafiku: kierownik dostaje wiadomość, ale tylko o NOWYM konflikcie
+  // (0.82.0). Best-effort — dyspozycja jest już zapisana, a siatka i tak
+  // pokazuje konflikt.
+  const dajZnacKierownikowi = (przed, po) =>
+    powiadomOKonfliktachSzkicu(noweKonfliktySzkicu({ planShifts, przed, po, user: employee, dzis }), employee);
+
   const otworzArkusz = (dni) => {
     const pierwszy = dni.length === 1 ? dyspozycjaNa(dyspozycja, employee, dni[0]) : null;
     setForm(
@@ -158,12 +173,11 @@ export default function DyspozycjaEkran({
     const s = stanDnia(d);
     if (s.blokada === "minął") return;
     if (s.blokada === "w grafiku") {
-      showMsg(
-        `Na ${dzienKrotki(d)} masz już zmianę w grafiku (${trimTime(s.zmiana.start_time)}–${trimTime(
-          s.zmiana.end_time
-        )}). Grafik obowiązuje — jeśli nie możesz przyjść, daj znać kierownikowi.`,
-        "error"
-      );
+      if (prosbaZwolnieniaOtwarta(s.wpis) && String(s.wpis.zwolnienie_z) === String(s.zmiana.id)) {
+        showMsg(`${dzienKrotki(d)}: prośba o zwolnienie czeka na kierownika. Zmiana zostaje, dopóki jej nie zdejmie.`, "error");
+        return;
+      }
+      setZwolnienie({ zmiana: s.zmiana, powod: "" });
       return;
     }
     if (s.stara) {
@@ -218,6 +232,7 @@ export default function DyspozycjaEkran({
           dyspozycja,
         });
         setDyspozycja(lista);
+        dajZnacKierownikowi({ dyspozycja, miesiace }, { dyspozycja: lista, miesiace });
         showMsg(wyczysc ? "Zaznaczenie usunięte." : `Zapisano ${dni.length === 1 ? "dzień" : `${dni.length} dni`}.`);
       }
       zamknijArkusz();
@@ -267,6 +282,7 @@ export default function DyspozycjaEkran({
         });
       }
       setDyspozycja(lista);
+      dajZnacKierownikowi({ dyspozycja, miesiace }, { dyspozycja: lista, miesiace });
       showMsg(`Uzupełniono ${cele.length} dni.`);
     } catch (err) {
       showMsg(`Nie udało się zapisać: ${err.message || "nieznany błąd"}`, "error");
@@ -292,6 +308,7 @@ export default function DyspozycjaEkran({
       });
       setDyspozycja(wynik.dyspozycja);
       setMiesiace(wynik.miesiace);
+      dajZnacKierownikowi({ dyspozycja, miesiace }, wynik);
       setWysylka(null);
       showMsg(`Dyspozycja na ${nazwaMiesiaca(miesiacWidoku)} wysłana.`);
     } catch (err) {
@@ -541,6 +558,78 @@ export default function DyspozycjaEkran({
     );
   };
 
+  const wyslijZwolnienie = async () => {
+    setZajety(true);
+    try {
+      const lista = await poprosOZwolnienie({ user: employee, zmiana: zwolnienie.zmiana, powod: zwolnienie.powod, dyspozycja });
+      setDyspozycja(lista);
+      setZwolnienie(null);
+      showMsg("Prośba wysłana · zmiana zostaje w grafiku, dopóki kierownik jej nie zdejmie.");
+    } catch (err) {
+      showMsg(`Nie udało się wysłać: ${err.message || "nieznany błąd"}`, "error");
+    }
+    setZajety(false);
+  };
+  const wycofajZwolnienieTeraz = async (wpis) => {
+    setZajety(true);
+    try {
+      setDyspozycja(await wycofajZwolnienie({ wpis, dyspozycja }));
+      showMsg("Prośba wycofana.");
+    } catch (err) {
+      showMsg(`Nie udało się wycofać: ${err.message || "nieznany błąd"}`, "error");
+    }
+    setZajety(false);
+  };
+
+  const zwolnienieTresc = () => {
+    if (!zwolnienie) return null;
+    const z = zwolnienie.zmiana;
+    return (
+      <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-4">
+        <div className="absolute inset-0 bg-black/45" onClick={() => setZwolnienie(null)} />
+        <div
+          role="dialog"
+          aria-label="Prośba o zwolnienie ze zmiany"
+          data-arkusz-zwolnienia
+          className="relative bg-white w-full md:max-w-[480px] max-h-[88vh] overflow-y-auto rounded-t-[22px] md:rounded-[22px] px-4 pt-4 pb-6 flex flex-col gap-3"
+        >
+          <h3 className="font-['Archivo'] text-[21px] font-extrabold text-[#171714]">
+            {dzienKrotki(z.date)}, {trimTime(z.start_time)}–{trimTime(z.end_time)}
+          </h3>
+          <p className="text-[15px] text-[#171714] leading-[21px]">
+            Na ten dzień masz już zmianę w grafiku ({[z.stanowisko, z.lokal].filter(Boolean).join(" · ")}). Jeśli nie możesz,
+            wyślemy kierownikowi prośbę o zwolnienie — a zmiana zostaje, dopóki jej nie zdejmie.
+          </p>
+          <label className="flex flex-col gap-1">
+            <span className="text-[12px] font-bold uppercase text-[#6E6E66]">Powód · opcjonalnie</span>
+            <input
+              type="text"
+              value={zwolnienie.powod}
+              onChange={(e) => setZwolnienie({ ...zwolnienie, powod: e.target.value })}
+              placeholder="np. egzamin na uczelni"
+              className="h-11 px-3 rounded-lg border-2 border-[#DEDCD4] focus:border-[#171714] outline-none text-[16px]"
+              data-powod-zwolnienia
+            />
+          </label>
+          <div className="grid grid-cols-[1fr_1.6fr] gap-2 mt-1">
+            <button type="button" onClick={() => setZwolnienie(null)} className="min-h-[52px] rounded-lg border-2 border-[#171714] font-extrabold">
+              Wróć
+            </button>
+            <button
+              type="button"
+              disabled={zajety}
+              onClick={wyslijZwolnienie}
+              className="min-h-[52px] rounded-lg bg-[#DE3A22] text-white font-extrabold disabled:opacity-50"
+              data-wyslij-zwolnienie
+            >
+              Wyślij prośbę
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const wysylkaTresc = () => {
     if (!wysylka) return null;
     const p = podsumowanieMiesiaca({ miesiac: miesiacWidoku, user: employee, dyspozycja, absences });
@@ -626,6 +715,12 @@ export default function DyspozycjaEkran({
         a.end_date >= addDaysYMD(dzis, -30)
     )
     .sort((a, b) => (a.start_date < b.start_date ? 1 : -1));
+  const zwolnienia = zwolnieniaOsoby({ dyspozycja, planShifts, user: employee, dzis });
+  const TAG_ZW = {
+    czeka: ["czeka", "bg-[#E3EEFB] text-[#1D5FA8]"],
+    zostaje: ["zostaje w grafiku", "bg-[#ECEBE6] text-[#171714]"],
+    zdjeta: ["zdjęta", "bg-[#E2F3E9] text-[#1F7A4A]"],
+  };
   const TAG = {
     pending: ["czeka", "bg-[#E3EEFB] text-[#1D5FA8]"],
     approved: ["zatwierdzony", "bg-[#E2F3E9] text-[#1F7A4A]"],
@@ -881,6 +976,26 @@ export default function DyspozycjaEkran({
       {/* wnioski urlopowe */}
       <section className="flex flex-col gap-2">
         <span className="text-[13px] font-bold uppercase text-[#6E6E66]">Moje wnioski</span>
+        {zwolnienia.map(({ wpis, zmiana, stan }) => (
+          <div key={wpis.id} className="flex items-center gap-3 px-3.5 py-2.5 rounded-lg border-2 border-[#DEDCD4] bg-white" data-wniosek-zwolnienie={stan}>
+            <Lock size={18} className="flex-none" />
+            <span className="flex-1">
+              <b className="text-[15px]">Zwolnienie ze zmiany · {dzienKrotki(wpis.date)}</b>
+              {zmiana && (
+                <small className="block text-[13px] text-[#6E6E66]">
+                  {trimTime(zmiana.start_time)}–{trimTime(zmiana.end_time)} · {zmiana.lokal}
+                  {wpis.rozstrzygnal ? ` · decyzja: ${wpis.rozstrzygnal}` : ""}
+                </small>
+              )}
+              {stan === "czeka" && (
+                <button type="button" disabled={zajety} onClick={() => wycofajZwolnienieTeraz(wpis)} className="text-[13px] font-bold underline" data-wycofaj-zwolnienie>
+                  Wycofaj prośbę
+                </button>
+              )}
+            </span>
+            <span className={`text-[12px] font-extrabold px-2 py-1 rounded ${TAG_ZW[stan][1]}`}>{TAG_ZW[stan][0]}</span>
+          </div>
+        ))}
         {moje.length === 0 ? (
           <span className="text-[14px] text-[#6E6E66]">
             Brak wniosków.{moznaUrlop ? " Urlop zaznaczysz w kalendarzu — trafi do kierownika do zatwierdzenia." : ""}
@@ -929,6 +1044,7 @@ export default function DyspozycjaEkran({
 
       {arkuszTresc()}
       {wysylkaTresc()}
+      {zwolnienieTresc()}
     </div>
   );
 }

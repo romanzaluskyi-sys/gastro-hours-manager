@@ -77,9 +77,13 @@ export function GrafikBlokadaModal({ powod, onClose, onNotify }) {
           <p className="text-[15px]">{powod.tekst}</p>
           {powod.podpowiedz && <p className="text-[13px] text-[#6E6E66]">{powod.podpowiedz}</p>}
           <div className="flex gap-2 pt-1 flex-wrap">
-            <button onClick={() => onNotify(powod)} className={btnObrysCls}>
-              Napisz do pracownika
-            </button>
+            {/* Przy dyspozycji wiadomość „próbował wpisać” nic nie daje — nie
+                da się na nią odpowiedzieć. Od tego jest „Zapytaj”. */}
+            {!powod.dyspozycja && (
+              <button onClick={() => onNotify(powod)} className={btnObrysCls}>
+                Napisz do pracownika
+              </button>
+            )}
             <button onClick={onClose} className={btnObrysCls}>
               Anuluj
             </button>
@@ -265,7 +269,7 @@ export default function GrafikZmianaModal({
   // Niedostępni wg dyspozycji — osobna grupa z „Zapytaj” (makieta
   // ScheduleAssignDisposition). Tylko ci, którzy znają stanowisko.
   const doZapytania = lista
-    .filter((k) => k.przeszkoda?.dyspozycja && (umie(k.u) || zawsze(k.u)))
+    .filter((k) => k.przeszkoda?.dyspozycja && (umie(k.u) || zawsze(k.u) || wybrany(k.u)))
     .sort((a, b) => a.godziny - b.godziny);
   const listaBez = lista.filter((k) => !doZapytania.includes(k));
   const lokalni = listaBez.filter((k) => zTegoLokalu(k.u) && (umie(k.u) || zawsze(k.u))).sort(sortuj);
@@ -326,6 +330,20 @@ export default function GrafikZmianaModal({
   const stawkaH = user ? kosztGodziny(user, lokalRow, rok, mies) : null;
   const uwagi = user ? uwagiDla(user) : [];
   const maBad = uwagi.some((x) => x.ton === "bad");
+  // Wybrana osoba, której jedyną przeszkodą jest dyspozycja (np. godziny
+  // zmiany wyszły poza „Mogę w godzinach” już PO wyborze osoby): wpisać jej
+  // się nie da, ale da się ZAPYTAĆ. Główny przycisk prowadzi wtedy do
+  // „Zapytaj” — do 0.81.0 zapis kończył się oknem blokady i wiadomością
+  // „Kierownik próbował wpisać Ci zmianę…”, bez możliwości odpowiedzi.
+  const przeszkodaWybranej = user && !edycja ? przeszkodaDla(user) : null;
+  const tylkoZapytaj = !!przeszkodaWybranej?.dyspozycja;
+  const zapytajWybrana = () => {
+    setZapytajKogo(user);
+    setTimeout(() => {
+      const el = document.querySelector("[data-potwierdz-zapytaj]");
+      if (el && el.scrollIntoView) el.scrollIntoView({ block: "center", behavior: "smooth" });
+    }, 0);
+  };
 
   const zapisz = async (dodajNastepna) => {
     if (!user || !stanowisko || !start || !end) return;
@@ -720,8 +738,8 @@ export default function GrafikZmianaModal({
               {zapytajKogo && (
                 <div className="rounded-lg border-[2px] border-[#171714] bg-white px-3 py-3 flex flex-col gap-2" data-potwierdz-zapytaj>
                   <span className="text-[13px] text-[#6E6E66]">
-                    {zapytajKogo.name} zaznaczył(a) w dyspozycji, że wtedy nie może. Zmiana trafi do grafiku dopiero po
-                    odpowiedzi „Mogę” — do tego czasu brak w obsadzie zostaje.
+                    {zapytajKogo.name} — {przeszkodaDla(zapytajKogo)?.tekst || "dyspozycja"}. Zmiana trafi do grafiku
+                    dopiero po odpowiedzi „Mogę” — do tego czasu brak w obsadzie zostaje.
                   </span>
                   <b className="font-['Archivo'] text-[17px]">Zapytać: {zapytajKogo.name}?</b>
                   <span className="text-[14px]">
@@ -965,22 +983,36 @@ export default function GrafikZmianaModal({
             <button
               type="button"
               onClick={() => zapisz(true)}
-              disabled={saving || !user || !stanowisko || !start || !end}
+              disabled={saving || !user || !stanowisko || !start || !end || tylkoZapytaj}
               className={`${btnObrysCls} flex-1 md:flex-none`}
             >
               + Następna
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => zapisz(false)}
-            disabled={saving || !user || !stanowisko || !start || !end}
-            className={`${btnGlownyCls} basis-full md:basis-auto order-last md:order-none`}
-            data-zapisz-zmiane
-          >
-            <Check size={18} />
-            {maBad ? (edycja ? "Zapisz mimo uwag" : "Przypisz mimo uwag") : edycja ? "Zapisz" : dni.length > 1 ? `Przypisz ×${dni.length}` : "Przypisz"}
-          </button>
+          {tylkoZapytaj ? (
+            <button
+              type="button"
+              onClick={zapytajWybrana}
+              disabled={!zapytajMozna}
+              title={powodBezZapytaj || przeszkodaWybranej.tekst}
+              className={`${btnGlownyCls} basis-full md:basis-auto order-last md:order-none`}
+              data-zapisz-zmiane
+              data-zapytaj-wybrana
+            >
+              Zapytaj: {user.name}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => zapisz(false)}
+              disabled={saving || !user || !stanowisko || !start || !end}
+              className={`${btnGlownyCls} basis-full md:basis-auto order-last md:order-none`}
+              data-zapisz-zmiane
+            >
+              <Check size={18} />
+              {maBad ? (edycja ? "Zapisz mimo uwag" : "Przypisz mimo uwag") : edycja ? "Zapisz" : dni.length > 1 ? `Przypisz ×${dni.length}` : "Przypisz"}
+            </button>
+          )}
         </div>
       </aside>
     </>

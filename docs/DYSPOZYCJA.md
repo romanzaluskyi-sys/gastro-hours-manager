@@ -11,7 +11,8 @@ Wdrażane etapami. Każdy etap jest osobnym PR-em z Preview:
 | D1 | poziom 1·2·3 na stanowisku | 0.78.0 | `0047` | zrobione |
 | D2 | strona „Dyspozycja” + blokada w Grafiku, giełdzie, kopiowaniu i przepisaniu | 0.79.0 | `0048` | zrobione |
 | D3 | „Zapytaj” o jeden dzień (prośba kierownika, „Mogę / Nie mogę”) | 0.80.0 | `0049` | zrobione |
-| D4 | jedno „Nie może” (stara niedostępność = dyspozycja), konflikt z wersją roboczą, „Prośba o zwolnienie ze zmiany” w „Do decyzji”, dyspozycja w karcie pracownika | 0.81.0 | `0050` | w toku: zrobione „jedno Nie może” |
+| D4 | jedno „Nie może” (stara niedostępność = dyspozycja) | 0.81.0 | `0050` | zrobione |
+| D4 | „Prośba o zwolnienie ze zmiany” w „Do decyzji”, konflikt z wersją roboczą, dyspozycja w karcie pracownika, „Zapytaj” po zmianie godzin | 0.82.0 | `0051` | zrobione |
 | D5 | termin w ustawieniach lokalu, przypomnienia (Pulpit, wiadomość, e-mail) | — | — | do zrobienia |
 
 ## Decyzje właściciela (22.10.2026)
@@ -158,3 +159,63 @@ Decyzja właściciela (22.10.2026): stara „niedostępność” (`absences.type
   `absences.niedostepnosc` dla URP bez godzin — działa to tak samo jak „Nie
   mogę”, ale przy następnej zmianie tego skryptu warto przepiąć go na
   `dyspozycja`.
+
+## D4 — konflikty z grafikiem (0.82.0, migracja `0051`)
+
+**Prośba o zwolnienie ze zmiany.** Pracownik dotyka w Dyspozycji dnia, na
+który ma OPUBLIKOWANĄ zmianę → arkusz z powodem → `poprosOZwolnienie`: wpis
+„nie” z `zwolnienie_z` = id zmiany + wiadomość dla kierownika lokalu zmiany.
+Zmiana zostaje w grafiku.
+
+- **Jawna kolumna, nie „wpis nowszy niż `published_at`”** — ponowna
+  publikacja poprawionej zmiany przestawia `published_at` i prośba znikałaby,
+  zanim ktoś ją zobaczył.
+- **Kolejka jest LICZONA** (`prosbyOZwolnienie`): otwarta prośba, zmiana
+  istnieje (bez `deleted_at`) i jest od dziś w przód. Liczy ją ta sama funkcja
+  w trzech miejscach: karta w `ZatwierdzanieZmian` (grupa „zwolnienie”),
+  `shellBadges.zatwierdzanie` i `sprawy` w `PulpitHome`. W kratce Grafiku
+  „prosi o zwolnienie”.
+- **Bez zatwierdzania hurtem** (`tak: null`) — zdjęcie robi dziurę w obsadzie.
+- **`rozstrzygnijZwolnienie`**: przy „Zdejmij” NAJPIERW kasuje zmianę (od razu,
+  bez `deleted_at` — pracownik dostaje wiadomość teraz, publikacja
+  powiedziałaby mu to drugi raz), potem ślad decyzji
+  (`rozstrzygnieto_at/rozstrzygnal/rozstrzygniecie`). Oferty z giełdy wycofuje
+  komponent (`wycofajOfertyDlaZmian`, cykl importów). Wiadomości: „Kierownik
+  zdjął / zostawił Twoją zmianę…”.
+- Trigger `dyspozycja_autor` pozwala kierownikowi zmienić w cudzym wpisie
+  WYŁĄCZNIE pola rozstrzygnięcia; zmiana treści przez pracownika czyści ślad.
+- Pracownik widzi prośbę w „Moich wnioskach” (czeka / zostaje / zdjęta) i
+  może ją wycofać (kasuje wpis dnia).
+
+**Konflikt z wersją roboczą** (`konfliktySzkicu`): zmiana NIGDY niewysłana
+(bez `published_at`) wbrew wiążącej dyspozycji. W kratce: „X: nie może
+(zgłoszone dd.mm)” z „Zdejmij” (6 s „Cofnij”) i „Zapytaj” (prośba o tę samą
+zmianę, szkic znika od razu). Po zapisie / wysłaniu dyspozycji przez
+pracownika kierownik dostaje wiadomość „Konflikt z wersją roboczą grafiku:
+…” — tylko o NOWYM konflikcie (`noweKonfliktySzkicu`).
+
+**„Zapytaj” po zmianie godzin.** Gdy wybrana w panelu osoba ma jedyną
+przeszkodę w dyspozycji (np. godziny wyszły poza „Mogę w godzinach” PO
+wyborze), główny przycisk to „Zapytaj: X”. Do 0.81.0 zapis kończył się oknem
+blokady z „Napisz do pracownika” i wiadomością „Kierownik próbował wpisać Ci
+zmianę…”, na którą nie dało się odpowiedzieć. Przy przeszkodzie z dyspozycji
+okno blokady (edycja zmiany) nie ma już „Napisz do pracownika”.
+
+**Dyspozycja w karcie pracownika** (`manager/DyspozycjaKarta.tsx`, sekcja
+„Dyspozycja” w Pracownicy): kalendarz miesiąca (bieżący do +3), „wysłał(a)
+dd.mm” i „ostatnio zmienił(a)”. Kierownik ustawia dzień pusty albo wpisany
+przez siebie (`ustawDzienZaPracownika`); dzień pracownika — tylko odczyt.
+Wiadomość: „Kierownik wpisał Ci w dyspozycji „…”: dd.mm.” / „Kierownik usunął
+wpis z Twojej dyspozycji: dd.mm.”.
+
+⚠️ **Kolejność:** `0051` PRZED deployem 0.82.0 (nowe kolumny + podmiana
+funkcji triggera; stary front ich nie dotyka).
+
+⚠️ Raport kierownika mailem (`api/_lib/raport.js`) nie liczy próśb o
+zwolnienie w „Wymaga decyzji” — tak jak nie liczy wydarzeń do rozliczenia.
+
+**Sprawdziany:** `harness-dyspozycja.html` (kolejka, rozstrzygnięcie,
+konflikty, karta), `harness-panel.html` (karta w „Do decyzji”, znacznik w
+kratce, „Zapytaj” po zmianie godzin, sekcja w karcie), `harness-kiosk.html`
+(arkusz prośby, „Moje wnioski”, wycofanie), `harness-email.html` (maile),
+`harness-demo.html` (jedna prośba w demo).

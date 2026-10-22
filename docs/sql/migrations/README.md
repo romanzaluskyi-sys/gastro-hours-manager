@@ -87,6 +87,7 @@ wykonalne.
 | `0048` | Dyspozycja: `dyspozycja` (osoba × dzień: mogę / w godzinach / nie mogę) i `dyspozycja_miesiace` (wysłano, „pozostałe dni”), RLS po jednej polityce na polecenie (`ludzie_mojej_dyspozycji()`), trigger `dyspozycja_autor` — kolejność dowolna | nowe |
 | `0049` | „Zapytaj”: `prosby_o_zmiane` (prośba kierownika o jedną zmianę wbrew dyspozycji) i RPC `odpowiedz_na_prosbe` (zgoda wstawia opublikowaną zmianę, odmowa — powód; wiadomość dla kierownika) — kolejność dowolna, wymaga 0048 | nowe |
 | `0050` | stara niedostępność → dyspozycja: przyszłe dni zatwierdzonych `absences.type = 'niedostepnosc'` jako „Nie mogę” kierownika w `dyspozycja` (wiersze `absences` zostają); powtarzalna, po 0048 | nowe |
+| `0051` | prośba o zwolnienie ze zmiany: `dyspozycja.zwolnienie_z` + `rozstrzygnieto_at/rozstrzygnal/rozstrzygniecie` i trigger `dyspozycja_autor` pozwalający kierownikowi zmienić WYŁĄCZNIE pola rozstrzygnięcia — PRZED deployem 0.82.0 | nowe |
 
 ⚠️ Numer `0036` należał wcześniej do migracji "InitPlan" (ponowne zawężenie
 `notifications` i 15 innych tabel). Nigdy nie weszła na żadną bazę — padła

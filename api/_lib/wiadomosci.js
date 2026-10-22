@@ -295,8 +295,16 @@ const opisz = (n, user, grafik, dzis) => {
       if (/^Kierownik wycofał pytanie/.test(t))
         return { ton: "neutral", etykieta: "Grafik", tytul: "Pytanie o zmianę wycofane", lead: S.esc(t), cta: CTA.grafik };
       // 0.81.0 — „Nie może” wpisane przez kierownika (tekstNieMogeOdKierownika).
-      if (/^Kierownik wpisał Ci w dyspozycji/.test(t))
+      if (/^Kierownik wpisał Ci w dyspozycji „Nie mogę”/.test(t))
         return { ton: "info", ikona: "✳", etykieta: "Dyspozycja", tytul: "Kierownik wpisał Ci „Nie mogę”", lead: S.esc(t), cta: CTA.dyspozycja };
+      // 0.82.0 — dzień ustawiony w karcie pracownika (tekstDyspozycjiOdKierownika).
+      if (/^Kierownik (wpisał Ci w dyspozycji|usunął wpis z Twojej dyspozycji)/.test(t))
+        return { ton: "info", ikona: "✳", etykieta: "Dyspozycja", tytul: "Kierownik zmienił Twoją dyspozycję", lead: S.esc(t), cta: CTA.dyspozycja };
+      // 0.82.0 — odpowiedź na prośbę o zwolnienie ze zmiany (tekstZwolnienia).
+      if (/^Kierownik zdjął Twoją zmianę/.test(t))
+        return { ton: "ok", ikona: "✓", etykieta: "Grafik", tytul: "Zmiana zdjęta z grafiku", lead: S.esc(t), cta: CTA.grafik };
+      if (/^Kierownik zostawił Twoją zmianę/.test(t))
+        return { ton: "warn", ikona: "!", etykieta: "Grafik", tytul: "Zmiana zostaje w grafiku", lead: S.esc(t), cta: CTA.grafik };
       return {
         ton: "warn",
         ikona: "?",

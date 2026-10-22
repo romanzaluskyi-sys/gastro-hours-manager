@@ -40,7 +40,8 @@ import { czekaNaDecyzje } from "../../utils/probni";
 import { getMonthName } from "../../utils/format";
 import { slabyPin } from "../../utils/piny";
 import { POZIOMY, opisPoziomu, poziomNa, zPoziomem, zPoziomemStartowym, bazaZnaPoziomy } from "../../utils/poziomy";
-import { allowedStanowiskaArr } from "../../utils/grafik";
+import { allowedStanowiskaArr, toLocalYMD } from "../../utils/grafik";
+import DyspozycjaKarta from "./DyspozycjaKarta";
 import { api } from "../../api/supabase";
 import { countWorkdays, URLOP_HOURS_PER_DAY } from "../../utils/absences";
 import { odmiana } from "../../utils/czas";
@@ -259,6 +260,12 @@ export default function Pracownicy({
   onAddUrlop,
   onDeleteAbsence,
   showMsg,
+  // Dyspozycja w karcie (0.82.0).
+  dyspozycja = [],
+  setDyspozycja,
+  dyspozycjaMiesiace = [],
+  planShifts = [],
+  kierownik,
 }) {
   const [view, setView] = useState("aktywni"); // "aktywni" | "archiwum"
   const [szukaj, setSzukaj] = useState("");
@@ -1447,6 +1454,23 @@ export default function Pracownicy({
                       })}
                     </div>
                   )}
+                </Sekcja>
+              )}
+
+              {!tablet && !isNew && (
+                <Sekcja id="sekcja-dyspozycja" tytul="Dyspozycja">
+                  <DyspozycjaKarta
+                    key={editingUser.id}
+                    user={editingUser}
+                    dzis={toLocalYMD(new Date())}
+                    dyspozycja={dyspozycja}
+                    setDyspozycja={setDyspozycja}
+                    miesiace={dyspozycjaMiesiace}
+                    absences={absences}
+                    planShifts={planShifts}
+                    kierownik={kierownik}
+                    showMsg={showMsg}
+                  />
                 </Sekcja>
               )}
 

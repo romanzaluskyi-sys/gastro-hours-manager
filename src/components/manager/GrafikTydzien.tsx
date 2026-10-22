@@ -64,8 +64,16 @@ import { addUrlopDirectly } from "../../utils/absences";
 import { stanowiskoShort, findStanowisko } from "../../utils/stanowiska";
 import { normaMiesiaca } from "../../utils/umowy";
 import { bazaZnaPoziomy, sygnalyPoziomu, zPoziomemStartowym } from "../../utils/poziomy";
-import { dyspozycjaNa, krotkoDyspozycji, przeszkodaDyspozycji, wiazeDyspozycja, wpiszNieMogeZaPracownika } from "../../utils/dyspozycja";
-import { podmienProsbe, prosbyDnia, stanProsby, wycofaj as wycofajProsbe, zapytaj } from "../../utils/prosby";
+import {
+  dyspozycjaNa,
+  konfliktySzkicu,
+  krotkoDyspozycji,
+  prosbyOZwolnienie,
+  przeszkodaDyspozycji,
+  wiazeDyspozycja,
+  wpiszNieMogeZaPracownika,
+} from "../../utils/dyspozycja";
+import { podmienProsbe, prosbyDnia, stanProsby, wycofaj as wycofajProsbe, wygasaDla, zapytaj } from "../../utils/prosby";
 import { ostrzezeniaKodeksu } from "../../utils/kodeks";
 import { countWorkdays, URLOP_HOURS_PER_DAY } from "../../utils/absences";
 import { fetchDailyForecast, describeWeatherCode } from "../../utils/weather";
@@ -268,6 +276,12 @@ const opisProsby = (sw, planShifts, weekHoursOf) => {
   };
 };
 
+// "2026-11-12T09:30:00Z" → "12.11" (czas lokalny).
+const dataDDMM = (iso) => {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "" : `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}`;
+};
+
 function LokalSection({
   lokal,
   miasto,
@@ -311,6 +325,10 @@ function LokalSection({
   wydarzeniaUczestnicy,
   onOtworzWydarzenie,
   onNoweWydarzenie,
+  konflikty = {},
+  zwolnieniaZmian = {},
+  onZdejmijKonflikt = null,
+  onZapytajKonflikt = null,
 }) {
   const [forecast, setForecast] = useState({});
   useEffect(() => {
@@ -545,6 +563,50 @@ function LokalSection({
               {oferta.target_user_name ? `czeka na: ${oferta.target_user_name}` : "na giełdzie"}
             </span>
           ))}
+        {/* Konflikt z wersją roboczą (0.82.0): zmiana jeszcze niewysłana, a
+            dyspozycja wpisana później mówi „nie może”. Pracownik o zmianie
+            nie wie — kierownik zdejmuje ją albo pyta o ten jeden dzień. */}
+        {konflikty[s.id] && (
+          <div className="rounded-md bg-[#FBEAE6] text-[#8A3A2B] px-1.5 py-1 text-[12px] leading-4 font-bold flex flex-col gap-1" data-konflikt-szkicu={s.id}>
+            <span>
+              {s.user_name}: {konflikty[s.id].krotko.replace(/^dyspozycja: /, "")}
+              {konflikty[s.id].wpis?.zmieniono_at ? ` (zgłoszone ${dataDDMM(konflikty[s.id].wpis.zmieniono_at)})` : ""}
+            </span>
+            {edycja && (onZdejmijKonflikt || onZapytajKonflikt) && (
+              <span className="flex gap-1">
+                {onZdejmijKonflikt && (
+                  <button
+                    type="button"
+                    onClick={() => onZdejmijKonflikt(s)}
+                    className="flex-1 h-7 rounded-[5px] border-[1.5px] border-[#8A3A2B] bg-white text-[12px] font-extrabold"
+                    data-zdejmij-konflikt
+                  >
+                    Zdejmij
+                  </button>
+                )}
+                {onZapytajKonflikt && (
+                  <button
+                    type="button"
+                    onClick={() => onZapytajKonflikt(s)}
+                    className="flex-1 h-7 rounded-[5px] border-[1.5px] border-[#8A3A2B] bg-[#8A3A2B] text-white text-[12px] font-extrabold"
+                    data-zapytaj-konflikt
+                  >
+                    Zapytaj
+                  </button>
+                )}
+              </span>
+            )}
+          </div>
+        )}
+        {zwolnieniaZmian[s.id] && (
+          <span
+            className="rounded-md bg-[#FDF0D8] text-[#8A5300] px-1.5 py-0.5 text-[11px] font-bold"
+            title={zwolnieniaZmian[s.id].notatka ? `Powód: ${zwolnieniaZmian[s.id].notatka}` : "Decyzja w „Do decyzji”"}
+            data-prosi-o-zwolnienie={s.id}
+          >
+            prosi o zwolnienie
+          </span>
+        )}
       </div>
     );
   };
@@ -1493,7 +1555,7 @@ export default function GrafikTydzien({
         krotko: dysp.krotko,
         tekst: dysp.tekst + (dysp.wpis?.notatka ? ` Notatka: „${dysp.wpis.notatka}”.` : ""),
         podpowiedz:
-          "Dyspozycję wpisuje pracownik. Wybierz kogoś innego — pytanie o jeden dzień („Zapytaj”) dojdzie w kolejnej wersji.",
+          "Dyspozycję wpisuje pracownik. Wybierz kogoś innego albo — przy nowej zmianie na jeden dzień — zapytaj tę osobę („Zapytaj” w panelu).",
         dyspozycja: true,
       };
     }
@@ -1527,7 +1589,7 @@ export default function GrafikTydzien({
     if (dni.length === 1) {
       const b = przeszkodaDnia(data, dni[0]);
       if (b) {
-        setBlokada({ userName: data.user_name, tekst: b.tekst, podpowiedz: b.podpowiedz });
+        setBlokada({ userName: data.user_name, tekst: b.tekst, podpowiedz: b.podpowiedz, dyspozycja: !!b.dyspozycja });
         return false;
       }
     }
@@ -1571,6 +1633,31 @@ export default function GrafikTydzien({
       showMsg(`Błąd zapisu zmiany: ${err.message || "nieznany błąd"}`, "error");
       return false;
     }
+  };
+
+  // Konflikty z wersją roboczą i prośby o zwolnienie (0.82.0) — liczone raz
+  // dla całej siatki.
+  const konflikty = konfliktySzkicu({ planShifts: widocznePlan, dyspozycja, miesiace: dyspozycjaMiesiace, dzis: dzisYMD });
+  const zwolnieniaZmian = Object.fromEntries(
+    prosbyOZwolnienie({ planShifts, dyspozycja, dzis: dzisYMD }).map((p) => [p.zmiana.id, p.wpis])
+  );
+  // „Zapytaj” przy konflikcie: pytanie o tę samą zmianę, a zmiana z wersji
+  // roboczej znika od razu — po „Mogę” wstawi ją baza, opublikowaną.
+  const handleZapytajZaSzkic = async (s) => {
+    if (!wygasaDla(s.date, s.start_time)) {
+      showMsg("Na pytanie jest za późno — zmiana zaczyna się za mniej niż godzinę.", "error");
+      return;
+    }
+    const user = (users || []).find((u) => String(u.id) === String(s.user_id)) || { id: s.user_id, name: s.user_name };
+    const ok = await handleZapytaj({
+      user,
+      lokal: s.lokal,
+      stanowisko: s.stanowisko,
+      date: s.date,
+      start_time: trimTime(s.start_time),
+      end_time: trimTime(s.end_time),
+    });
+    if (ok) await usunTeraz(s);
   };
 
   const handleDelete = (shift) => {
@@ -1906,6 +1993,10 @@ export default function GrafikTydzien({
           wydarzeniaUczestnicy={wydarzeniaUczestnicy}
           onOtworzWydarzenie={onOtworzWydarzenie}
           onNoweWydarzenie={onNoweWydarzenie}
+          konflikty={konflikty}
+          zwolnieniaZmian={zwolnieniaZmian}
+          onZdejmijKonflikt={handleDelete}
+          onZapytajKonflikt={handleZapytajZaSzkic}
         />
       ))}
 

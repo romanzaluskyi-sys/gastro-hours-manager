@@ -27,6 +27,16 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.82.0",
+    date: "2026-10-22",
+    items: [
+      "Prośba o zwolnienie ze zmiany: pracownik prosi w Dyspozycji, kierownik decyduje w „Do decyzji” (zostaw / zdejmij).",
+      "„Zapytaj” także wtedy, gdy godziny zmiany wyszły poza dyspozycję już po wyborze osoby.",
+      "Konflikt z wersją roboczą: znacznik w kratce Grafiku z „Zdejmij” i „Zapytaj”.",
+      "Dyspozycja w karcie pracownika: kalendarz i wpis kierownika na dni puste.",
+    ],
+  },
+  {
     version: "0.81.0",
     date: "2026-10-22",
     items: [

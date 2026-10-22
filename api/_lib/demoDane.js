@@ -888,6 +888,33 @@ const generuj = ({ dzis = C.ymd(), teraz = new Date() } = {}) => {
     });
   }
 
+  // Prośba o zwolnienie ze zmiany (0.82.0): ktoś z kuchni prosi o zwolnienie
+  // z opublikowanej zmiany za kilka dni — jedna sprawa w „Do decyzji”.
+  // ⚠️ Zdanie wiadomości to kopia `tekstProsbyOZwolnienie` z src/utils/dyspozycja.ts.
+  const doZwolnienia = T.grafik_shifts.find(
+    (g) =>
+      g.published_at && !g.deleted_at && g.date >= C.dodajDni(dzis, 2) && g.date <= C.dodajDni(dzis, 6) &&
+      g.user_id !== (marek && marek.id) && g.user_id !== (studentka && studentka.id) &&
+      !T.dyspozycja.some((w) => w.user_id === g.user_id && w.date === g.date)
+  );
+  if (doZwolnienia) {
+    const DNI_KR = ["ndz", "pon", "wt", "śr", "czw", "pt", "sob"];
+    const [, mm, dd] = doZwolnienia.date.split("-");
+    const kiedy = C.chwila(wczoraj, "21:10").toISOString();
+    T.dyspozycja.push({
+      id: noweId("dyspozycja"), user_id: doZwolnienia.user_id, user_name: doZwolnienia.user_name, date: doZwolnienia.date,
+      stan: "nie", od1: null, do1: null, od2: null, do2: null, notatka: "wizyta u lekarza", autor: "pracownik",
+      autor_name: doZwolnienia.user_name, zmieniono_at: kiedy, created_at: kiedy, zwolnienie_z: doZwolnienia.id,
+      rozstrzygnieto_at: null, rozstrzygnal: null, rozstrzygniecie: null,
+    });
+    const opis = `${DNI_KR[C.dzienTygodnia(doZwolnienia.date)]} ${dd}.${mm}, ${doZwolnienia.start_time}–${doZwolnienia.end_time}, ${doZwolnienia.stanowisko} · ${doZwolnienia.lokal}`;
+    T.notifications.push({
+      id: noweId("notif"), audience: "manager", lokal: doZwolnienia.lokal, type: "dyspozycja", is_read: false,
+      message: `${doZwolnienia.user_name} prosi o zwolnienie ze zmiany: ${opis}. Powód: wizyta u lekarza`,
+      created_at: kiedy, email_at: kiedy, email_info: "pominięto: demo",
+    });
+  }
+
   return T;
 };
 

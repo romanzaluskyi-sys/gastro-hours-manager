@@ -228,6 +228,14 @@ Dyspozycja, blok `WOLNE`); sprawdzian `harness-dyspozycja.html`.
   Stare zatwierdzone blokują dalej, ale dają „Zapytaj” (`dyspozycja: true` w
   `przeszkodaDnia`) i stoją w kalendarzu pracownika jako „Nie mogę”
   (`niedostepnoscNa`); przyszłe dni przenosi migracja `0050`.
+- ⚠️ **Prośba o zwolnienie ze zmiany (0.82.0, `0051`)** = wpis „nie” z
+  `dyspozycja.zwolnienie_z` (id opublikowanej zmiany). Kolejka LICZONA
+  (`prosbyOZwolnienie`) w trzech miejscach: `ZatwierdzanieZmian` (grupa
+  „zwolnienie”), `shellBadges`, `sprawy` w PulpitHome. „Zdejmij” kasuje zmianę
+  OD RAZU, potem ślad decyzji. Kierownik zmienia w cudzym wpisie tylko pola
+  rozstrzygnięcia (trigger). Konflikt z wersją roboczą: `konfliktySzkicu`
+  (znacznik w kratce). Dyspozycja w karcie: `manager/DyspozycjaKarta.tsx`.
+  Szczegóły: docs/DYSPOZYCJA.md, „D4 — konflikty z grafikiem”.
 - ⚠️ **Wiąże tylko wysłany miesiąc albo wpis kierownika** (`wiazeDyspozycja`).
   Szkic leży w bazie (zapis od razu), ale Grafik go nie widzi.
 - ⚠️ **Blokada idzie przez TE SAME miejsca co urlop**: `przeszkodaDnia`

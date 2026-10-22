@@ -404,7 +404,13 @@ export const opisWiadomosci = (n) => {
     case "dyspozycja":
       if (/^Kierownik wycofał pytanie/.test(t)) return w("grafik", "info", "grafik", "Pytanie o zmianę wycofane");
       // 0.81.0 — „Nie może” wpisane przez kierownika (utils/dyspozycja.ts, tekstNieMogeOdKierownika).
-      if (/^Kierownik wpisał Ci w dyspozycji/.test(t)) return w("kor", "info", "wolne", "Kierownik wpisał Ci „Nie mogę”", "dyspozycja");
+      if (/^Kierownik wpisał Ci w dyspozycji „Nie mogę”/.test(t)) return w("kor", "info", "wolne", "Kierownik wpisał Ci „Nie mogę”", "dyspozycja");
+      // 0.82.0 — dzień ustawiony w karcie pracownika (tekstDyspozycjiOdKierownika).
+      if (/^Kierownik (wpisał Ci w dyspozycji|usunął wpis z Twojej dyspozycji)/.test(t))
+        return w("kor", "info", "wolne", "Kierownik zmienił Twoją dyspozycję", "dyspozycja");
+      // 0.82.0 — odpowiedź na prośbę o zwolnienie ze zmiany (tekstZwolnienia).
+      if (/^Kierownik zdjął Twoją zmianę/.test(t)) return w("grafik", "ok", "grafik", "Zmiana zdjęta z grafiku", "grafik");
+      if (/^Kierownik zostawił Twoją zmianę/.test(t)) return w("grafik", "warn", "grafik", "Zmiana zostaje w grafiku", "grafik");
       return w("grafik", "warn", "grafik", "Kierownik pyta, czy możesz", "dyspozycja");
     case "sanepid":
       return w("inne", "warn", "dokument", "Termin książeczki sanepid");

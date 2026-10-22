@@ -5,6 +5,25 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.82.0 — 2026-10-22
+
+- **Prośba o zwolnienie ze zmiany.** Pracownik, który ma już zmianę w grafiku,
+  może w Dyspozycji dotknąć ten dzień i poprosić o zwolnienie (z powodem).
+  Zmiana zostaje, dopóki kierownik jej nie zdejmie. Kierownik decyduje w „Do
+  decyzji” („Zostaw w grafiku” / „Zdejmij zmianę”), a pracownik dostaje
+  wiadomość. Prośbę widać też na Pulpicie i w kratce Grafiku.
+- **„Zapytaj” także po zmianie godzin.** Gdy kierownik wybierze osobę, a
+  potem ustawi godziny poza jej „Mogę w godzinach”, główny przycisk zmienia
+  się na „Zapytaj”. Wcześniej zapis kończył się blokadą i wiadomością
+  „Kierownik próbował wpisać Ci zmianę…”, na którą nie dało się odpowiedzieć.
+- **Konflikt z wersją roboczą grafiku.** Gdy pracownik zaznaczy „nie mogę” na
+  dzień, na który ma niewysłaną jeszcze zmianę, w kratce Grafiku pojawia się
+  „nie może (zgłoszone …)” z „Zdejmij” i „Zapytaj”, a kierownik dostaje
+  wiadomość.
+- **Dyspozycja w karcie pracownika.** Kierownik widzi kalendarz dyspozycji
+  osoby i może ustawić dni puste albo wpisane wcześniej przez siebie. Dni
+  wpisanych przez pracownika nie zmienia — od tego jest „Zapytaj”.
+
 ## 0.81.0 — 2026-10-22
 
 - **„Nie może” to teraz jedno pojęcie.** Dawna „niedostępność” i „Nie mogę” z

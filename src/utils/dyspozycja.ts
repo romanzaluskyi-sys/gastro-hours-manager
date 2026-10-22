@@ -18,11 +18,13 @@
 // zmiany (Grafik, giełda, przepisanie na następcę) — tak samo jak urlop.
 //
 // ⚠️ Dzień z OPUBLIKOWANĄ zmianą tej osoby jest dla niej zablokowany do
-// zmiany (`dzienZablokowany`): grafik obowiązuje. Prośba o zwolnienie ze
-// zmiany dojdzie w kolejnym etapie (D4).
+// zmiany (`dzienZablokowany`): grafik obowiązuje. Zostaje jedna droga —
+// prośba o zwolnienie ze zmiany (`poprosOZwolnienie`, 0.82.0), o której
+// decyduje kierownik w „Do decyzji”.
 
 import { api } from "../api/supabase";
-import { createEmployeeNotification } from "../api/notifications";
+import { createEmployeeNotification, createManagerNotification } from "../api/notifications";
+import { dzienKrotki } from "./czas";
 import { addDaysYMD, isSameUser, shiftSegmentsOnDate, timeToMin, trimTime } from "./grafik";
 
 export const STANY = {
@@ -325,3 +327,170 @@ export const podsumowanieMiesiaca = ({ miesiac, user, dyspozycja, absences }) =>
   };
 };
 
+
+// ── D4 (0.82.0, migracja 0051): konflikty z grafikiem ────────────────────────
+
+export const opisZmiany = (s) =>
+  `${dzienKrotki(s.date)}, ${trimTime(s.start_time)}–${trimTime(s.end_time)}${s.stanowisko ? `, ${s.stanowisko}` : ""} · ${s.lokal}`;
+
+const osobaZmiany = (s) => ({ id: s.user_id, name: s.user_name });
+
+// Prośba o zwolnienie ze zmiany = wiersz dyspozycji „Nie mogę” z
+// `zwolnienie_z` (id opublikowanej zmiany). Kolejka kierownika jest LICZONA:
+// otwarta prośba, zmiana dalej w grafiku i jeszcze przed nami. Zmiana zdjęta
+// albo minięta wypada z kolejki sama.
+export const prosbaZwolnieniaOtwarta = (wpis) => !!wpis && !!wpis.zwolnienie_z && !wpis.rozstrzygniecie;
+
+const zmianaProsby = (planShifts, wpis) =>
+  (planShifts || []).find((s) => String(s.id) === String(wpis.zwolnienie_z) && !s.deleted_at) || null;
+
+export const prosbyOZwolnienie = ({ planShifts, dyspozycja, dzis }) =>
+  (dyspozycja || [])
+    .filter(prosbaZwolnieniaOtwarta)
+    .map((wpis) => {
+      const zmiana = zmianaProsby(planShifts, wpis);
+      return zmiana && zmiana.date >= dzis ? { wpis, zmiana } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => (a.zmiana.date + a.zmiana.start_time < b.zmiana.date + b.zmiana.start_time ? -1 : 1));
+
+// Prośby tej osoby do „Moich wniosków”: czekające i rozstrzygnięte w ostatnim
+// tygodniu. `stan` = czeka / zostaje / zdjeta.
+export const zwolnieniaOsoby = ({ dyspozycja, planShifts, user, dzis, teraz = new Date() }) =>
+  (dyspozycja || [])
+    .filter((w) => zOsoba(w, user) && w.zwolnienie_z)
+    .map((wpis) => {
+      const zmiana = zmianaProsby(planShifts, wpis);
+      if (!wpis.rozstrzygniecie) return zmiana && zmiana.date >= dzis ? { wpis, zmiana, stan: "czeka" } : null;
+      const swieza = wpis.rozstrzygnieto_at && teraz.getTime() - new Date(wpis.rozstrzygnieto_at).getTime() < 7 * 24 * 3600 * 1000;
+      return swieza ? { wpis, zmiana, stan: wpis.rozstrzygniecie } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => (a.wpis.date < b.wpis.date ? -1 : 1));
+
+export const tekstProsbyOZwolnienie = (kto, zmiana, powod) =>
+  `${kto} prosi o zwolnienie ze zmiany: ${opisZmiany(zmiana)}.${powod ? ` Powód: ${String(powod).trim()}` : ""}`;
+
+export const tekstZwolnienia = (decyzja, zmiana, kto) =>
+  `${decyzja === "zdjeta" ? "Kierownik zdjął Twoją zmianę z grafiku" : "Kierownik zostawił Twoją zmianę w grafiku"}: ${opisZmiany(zmiana)}.${kto ? ` Decyzja: ${kto}.` : ""}`;
+
+// Pracownik prosi o zwolnienie z opublikowanej zmiany. Zapisuje „Nie mogę” na
+// ten dzień (z powodem w notatce) i budzi kierownika lokalu zmiany. Zmiana
+// ZOSTAJE w grafiku, dopóki kierownik jej nie zdejmie. Zwraca nową listę.
+export const poprosOZwolnienie = async ({ user, zmiana, powod, dyspozycja }) => {
+  const istniejacy = dyspozycjaNa(dyspozycja, user, zmiana.date);
+  const wiersz = {
+    ...wierszDnia({ user, dateStr: zmiana.date, stan: "nie", notatka: powod }),
+    zwolnienie_z: String(zmiana.id),
+    rozstrzygnieto_at: null,
+    rozstrzygnal: null,
+    rozstrzygniecie: null,
+  };
+  const zapisany = istniejacy
+    ? await api.patch("dyspozycja", istniejacy.id, wiersz)
+    : await api.post("dyspozycja", wiersz);
+  const lista = [
+    ...(dyspozycja || []).filter((w) => !(zOsoba(w, user) && w.date === zmiana.date)),
+    { ...(istniejacy || {}), ...wiersz, ...(zapisany || {}) },
+  ];
+  try {
+    await createManagerNotification(zmiana.lokal, tekstProsbyOZwolnienie(user.name, zmiana, powod), "dyspozycja");
+  } catch (e) {
+    // prośba jest zapisana i stoi w „Do decyzji” — wiadomość best-effort
+  }
+  return lista;
+};
+
+// Pracownik wycofuje czekającą prośbę: znika cały wpis na ten dzień (dzień z
+// opublikowaną zmianą i tak należy do grafiku).
+export const wycofajZwolnienie = async ({ wpis, dyspozycja }) => {
+  await api.delete("dyspozycja", wpis.id);
+  return (dyspozycja || []).filter((w) => w.id !== wpis.id);
+};
+
+// Kierownik rozstrzyga. ⚠️ Najpierw zdjęcie zmiany, potem ślad decyzji —
+// odwrotnie przy awarii zostałaby „zdjęta” zmiana, która dalej stoi w
+// grafiku. Zdjęcie KASUJE wiersz od razu (bez `deleted_at` i czekania na
+// publikację): pracownik dostaje wiadomość tu i teraz, a publikacja
+// powiedziałaby mu to drugi raz. Oferty z giełdy dla tej zmiany wycofuje
+// komponent (`wycofajOfertyDlaZmian` — swaps.ts importuje z grafik.ts, cykl).
+// Zwraca zaktualizowany wpis.
+export const rozstrzygnijZwolnienie = async ({ wpis, zmiana, decyzja, kierownik }) => {
+  if (decyzja === "zdjeta" && zmiana) await api.delete("grafik_shifts", zmiana.id);
+  const slad = { rozstrzygnieto_at: new Date().toISOString(), rozstrzygnal: kierownik || null, rozstrzygniecie: decyzja };
+  const zapisany = await api.patch("dyspozycja", wpis.id, slad);
+  try {
+    if (zmiana) await createEmployeeNotification(wpis.user_name, tekstZwolnienia(decyzja, zmiana, kierownik), "dyspozycja");
+  } catch (e) {
+    // decyzja zapisana — wiadomość best-effort
+  }
+  return { ...wpis, ...slad, ...(zapisany || {}) };
+};
+
+// Konflikt z WERSJĄ ROBOCZĄ: zmiana jeszcze nigdy niewysłana (bez
+// `published_at`) wbrew wiążącej dyspozycji — wpisanej albo wysłanej już PO
+// tym, jak zmiana trafiła do siatki (przy wpisywaniu blokuje `przeszkodaDnia`).
+// Pracownik o tej zmianie nie wie, więc to sprawa kierownika: zdjąć albo
+// zapytać. Zwraca { [id zmiany]: przeszkoda } (kształt `przeszkodaDyspozycji`).
+export const konfliktySzkicu = ({ planShifts, dyspozycja, miesiace, dzis }) => {
+  const wynik = {};
+  (planShifts || []).forEach((s) => {
+    if (s.published_at || s.deleted_at || !s.user_id || s.date < dzis) return;
+    const p = przeszkodaDyspozycji({ dyspozycja, miesiace, user: osobaZmiany(s), date: s.date, start_time: s.start_time, end_time: s.end_time });
+    if (p) wynik[s.id] = p;
+  });
+  return wynik;
+};
+
+export const tekstKonfliktuSzkicu = (kto, zmiana, przeszkoda) =>
+  `Konflikt z wersją roboczą grafiku: ${kto} — ${przeszkoda.krotko.replace(/^dyspozycja: /, "")}, a w wersji roboczej ma zmianę ${opisZmiany(zmiana)}.`;
+
+// Po zapisie dyspozycji przez pracownika: zmiany robocze tej osoby, które
+// wpadły w konflikt TERAZ (nie było go przed zapisem). Kierownik dostaje
+// wiadomość tylko o nowych — kolejny zapis tego samego dnia go nie budzi.
+export const noweKonfliktySzkicu = ({ planShifts, przed, po, user, dzis }) => {
+  const mojeZmiany = (planShifts || []).filter((s) => isSameUser(s, user));
+  const a = konfliktySzkicu({ planShifts: mojeZmiany, dzis, ...przed });
+  const b = konfliktySzkicu({ planShifts: mojeZmiany, dzis, ...po });
+  return mojeZmiany.filter((s) => b[s.id] && !a[s.id]).map((zmiana) => ({ zmiana, przeszkoda: b[zmiana.id] }));
+};
+
+export const powiadomOKonfliktachSzkicu = async (lista, user) => {
+  for (const { zmiana, przeszkoda } of lista || []) {
+    try {
+      await createManagerNotification(zmiana.lokal, tekstKonfliktuSzkicu(user.name, zmiana, przeszkoda), "dyspozycja");
+    } catch (e) {
+      // dyspozycja zapisana, a siatka i tak pokazuje konflikt — best-effort
+    }
+  }
+};
+
+// Dyspozycja w karcie pracownika (0.82.0): kierownik ustawia jeden dzień —
+// pusty albo wpisany wcześniej przez kierownika. Dnia wpisanego przez
+// pracownika nie zmienia (trigger i tak by nie przepuścił) — tam zostaje
+// „Zapytaj” w Grafiku. Zdania zaczynają się jak `tekstNieMogeOdKierownika`,
+// więc rozpoznają je te same miejsca (opisWiadomosci, api/_lib/wiadomosci.js).
+export const tekstDyspozycjiOdKierownika = (kto, dateStr, wpis) => {
+  const f = `${dateStr.slice(8, 10)}.${dateStr.slice(5, 7)}`;
+  const podpis = kto ? ` Wpisał(a): ${kto}.` : "";
+  return wpis
+    ? `Kierownik wpisał Ci w dyspozycji „${opisDyspozycji(wpis)}”: ${f}.${podpis}`
+    : `Kierownik usunął wpis z Twojej dyspozycji: ${f}.${podpis}`;
+};
+
+export const moznaZmienicZaPracownika = (wpis) => !wpis || wpis.autor === "kierownik";
+
+export const ustawDzienZaPracownika = async ({ user, dateStr, stan, godziny = {}, notatka, dyspozycja, kierownik }) => {
+  const istniejacy = dyspozycjaNa(dyspozycja, user, dateStr);
+  if (!moznaZmienicZaPracownika(istniejacy)) {
+    throw new Error("Ten dzień wpisał pracownik — zmienia go tylko on. W Grafiku możesz zapytać o jedną zmianę („Zapytaj”).");
+  }
+  const lista = await zapiszDni({ user, dni: [dateStr], stan, godziny, notatka, dyspozycja });
+  const nowy = dyspozycjaNa(lista, user, dateStr);
+  try {
+    await createEmployeeNotification(user.name, tekstDyspozycjiOdKierownika(kierownik, dateStr, nowy), "dyspozycja");
+  } catch (e) {
+    // wpis zapisany i widoczny w Dyspozycji — wiadomość best-effort
+  }
+  return lista;
+};
