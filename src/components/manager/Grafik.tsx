@@ -58,6 +58,8 @@ export default function Grafik({
   absences,
   dyspozycja = [],
   dyspozycjaMiesiace = [],
+  prosby = [],
+  setProsby,
   setAbsences,
   setShifts,
   staffingRules,
@@ -518,6 +520,8 @@ export default function Grafik({
           absences={absences}
           dyspozycja={dyspozycja}
           dyspozycjaMiesiace={dyspozycjaMiesiace}
+          prosbyZapytaj={prosby}
+          setProsby={setProsby}
           staffingRules={staffingRules}
           staffingRuleSets={staffingRuleSets}
           grafikWyjatki={grafikWyjatki}

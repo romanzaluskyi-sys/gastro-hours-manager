@@ -46,7 +46,9 @@ export const CELE_PRACOWNIKA = {
   raport: { screen: "RAPORT", blok: "RAPORT" },
   wiadomosci: { screen: "WIADOMOSCI" },
   korekta: { screen: "ZGLOS", zgTyp: "correction", blok: "RAPORT" },
-  wolne: { screen: "ZGLOS", zgTyp: "absence" },
+  // Od 0.79.0 wolne (urlop, niedostępność) żyje w „Dyspozycji”, nie w Zgłoś.
+  wolne: { screen: "DYSPOZYCJA", blok: "WOLNE" },
+  dyspozycja: { screen: "DYSPOZYCJA", blok: "WOLNE" },
 };
 
 // Zwraca cel z podanego słownika i usuwa go — link działa RAZ. Cel spoza

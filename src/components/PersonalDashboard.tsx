@@ -56,6 +56,9 @@ const PersonalDashboard = ({
   setDyspozycja,
   dyspozycjaMiesiace = [],
   setDyspozycjaMiesiace,
+  prosby = [],
+  setProsby,
+  setPlanShifts,
 }) => {
   const myNotifications = notifications.filter(
     (n) => n.user_name === currentUser.name
@@ -105,6 +108,9 @@ const PersonalDashboard = ({
       setDyspozycja={setDyspozycja}
       dyspozycjaMiesiace={dyspozycjaMiesiace}
       setDyspozycjaMiesiace={setDyspozycjaMiesiace}
+      prosby={prosby}
+      setProsby={setProsby}
+      setPlanShifts={setPlanShifts}
       onLogout={() => setCurrentView("login")}
     />
   );

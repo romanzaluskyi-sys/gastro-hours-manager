@@ -27,6 +27,15 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.80.0",
+    date: "2026-10-22",
+    items: [
+      "„Zapytaj” w Grafiku: osobę niedostępną wg dyspozycji można zapytać o jedną zmianę.",
+      "Do odpowiedzi w kratce „czeka na zgodę”, brak w obsadzie zostaje; pytanie wygasa 24 h przed zmianą.",
+      "Pracownik odpowiada w Dyspozycji (Mogę / Nie mogę); po „Mogę” zmiana od razu jest w grafiku.",
+    ],
+  },
+  {
     version: "0.79.0",
     date: "2026-10-22",
     items: [

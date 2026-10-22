@@ -271,7 +271,7 @@ const generuj = ({ dzis = C.ymd(), teraz = new Date() } = {}) => {
     issues: [], shift_swaps: [], shift_edits: [], task_blocks: [], tasks: [],
     day_log_templates: [], day_logs: [], day_log_entries: [], task_completions: [],
     notifications: [], zadania_moje: [], wydarzenia: [], wydarzenia_uczestnicy: [],
-    dyspozycja: [], dyspozycja_miesiace: [],
+    dyspozycja: [], dyspozycja_miesiace: [], prosby_o_zmiane: [],
   };
 
   // --- Lokale, stanowiska, godziny otwarcia ---
@@ -852,6 +852,28 @@ const generuj = ({ dzis = C.ymd(), teraz = new Date() } = {}) => {
       else dyspozycjaDnia(studentka, d, "godziny", "16:00", "22:00");
     });
   }
+  // „Zapytaj” (0.80.0): kierownik pyta studentkę o wtorek, w który w
+  // dyspozycji „nie może”. Na telefonie demo widać kartę „Mogę / Nie mogę”.
+  // ⚠️ Zdanie wiadomości to kopia `tekstProsby` z src/utils/prosby.ts.
+  const wtorek = studentka && T.dyspozycja.find((w) => w.user_id === studentka.id && w.stan === "nie" && w.notatka);
+  if (wtorek) {
+    const DNI_KR = ["ndz", "pon", "wt", "śr", "czw", "pt", "sob"];
+    const [, mm, dd] = wtorek.date.split("-");
+    const opis = `${DNI_KR[C.dzienTygodnia(wtorek.date)]} ${dd}.${mm}, 16:00–22:00, Sala · ${BISTRO}`;
+    const start = C.chwila(wtorek.date, "16:00");
+    T.prosby_o_zmiane.push({
+      id: noweId("prosba"), user_id: studentka.id, user_name: studentka.name, lokal: BISTRO, stanowisko: "Sala",
+      date: wtorek.date, start_time: "16:00", end_time: "22:00", status: "czeka",
+      wygasa_at: new Date(start.getTime() - 24 * 3600 * 1000).toISOString(),
+      kto_pyta: "Paweł Lewandowski", created_at: C.chwila(wczoraj, "19:30").toISOString(),
+    });
+    const kiedy = C.chwila(wczoraj, "19:30").toISOString();
+    T.notifications.push({
+      id: noweId("notif"), audience: "employee", user_name: studentka.name, type: "dyspozycja", is_read: false,
+      message: `Kierownik pyta, czy możesz: ${opis}. Odpowiedz w Dyspozycji.`,
+      created_at: kiedy, email_at: kiedy, email_info: "pominięto: demo",
+    });
+  }
   const dmytro = osoby["Dmytro Bondarenko"];
   if (dmytro) {
     dniNastepnego.forEach((d) => {
@@ -876,7 +898,7 @@ const KOLEJNOSC = [
   "grafik_budzet_cele", "grafik_shifts", "shifts", "absences", "issues", "shift_swaps",
   "shift_edits", "task_blocks", "tasks", "day_log_templates", "day_logs", "day_log_entries",
   "task_completions", "notifications", "zadania_moje", "wydarzenia", "wydarzenia_uczestnicy",
-  "dyspozycja", "dyspozycja_miesiace",
+  "dyspozycja", "dyspozycja_miesiace", "prosby_o_zmiane",
 ];
 
 module.exports = { generuj, KOLEJNOSC, uuidZ, BISTRO, PIZZERIA, LUDZIE, MIN_PENSJA, MIN_STAWKA };

@@ -10,7 +10,7 @@ Wdrażane etapami. Każdy etap jest osobnym PR-em z Preview:
 |---|---|---|---|---|
 | D1 | poziom 1·2·3 na stanowisku | 0.78.0 | `0047` | zrobione |
 | D2 | strona „Dyspozycja” + blokada w Grafiku, giełdzie, kopiowaniu i przepisaniu | 0.79.0 | `0048` | zrobione |
-| D3 | „Zapytaj” o jeden dzień (prośba kierownika, „Mogę / Nie mogę”) | — | — | do zrobienia |
+| D3 | „Zapytaj” o jeden dzień (prośba kierownika, „Mogę / Nie mogę”) | 0.80.0 | `0049` | zrobione |
 | D4 | konflikt z wersją roboczą, „Prośba o zwolnienie ze zmiany” w „Do decyzji”, dyspozycja w karcie pracownika | — | — | do zrobienia |
 | D5 | termin w ustawieniach lokalu, przypomnienia (Pulpit, wiadomość, e-mail) | — | — | do zrobienia |
 
@@ -95,3 +95,39 @@ wyjątek, także z pominięciem aplikacji.
 - `harness-kiosk.html` — pełny przebieg ekranu;
 - `harness-panel.html` — kandydat wyłączony w panelu przypisania;
 - `harness-demo.html` — kolumny generatora.
+
+## D3 — „Zapytaj”
+
+**Dane** (migracja `0049`): `prosby_o_zmiane` — osoba, lokal, stanowisko,
+dzień, godziny, `status` (`czeka` / `zgoda` / `odmowa` / `wycofana`),
+`wygasa_at`, kto pyta, powód odmowy, `grafik_shift_id` po zgodzie. Logika:
+`src/utils/prosby.ts` (jedyne miejsce, które pyta, wycofuje i odpowiada).
+
+- **Prośba to NIE wiersz `grafik_shifts`** (ta sama zasada co płatne
+  wydarzenia). Nie liczy się do obsady, publikacji ani giełdy.
+- **Odpowiedź tylko przez RPC `odpowiedz_na_prosbe`** (security definer):
+  sprawdza, kto odpowiada (sama osoba albo tablet jej lokalu), czy prośba
+  czeka i nie wygasła, czy godziny nie nachodzą na inną zmianę. Przy zgodzie
+  wstawia zmianę od razu OPUBLIKOWANĄ, a przy obu odpowiedziach — wiadomość
+  dla kierownika lokalu (`notifications`, audience `manager`, typ
+  `dyspozycja`; maili kierownik nie dostaje — raport dnia).
+- **Wygasa 24 h przed zmianą**; gdy do zmiany zostało mniej, godzinę przed
+  startem; za mniej niż godzinę pytać się nie da (`wygasaDla`). Wygasła
+  prośba w siatce: „brak odpowiedzi”. Bez osobnego powiadomienia (decyzja 4).
+- **Jedno pytanie naraz** o tę samą zmianę (`czekajacaNaZmiane`: lokal, dzień,
+  stanowisko, nachodzące godziny) — pilnuje panel, nie baza.
+- **„Zapytaj” tylko przy nowej zmianie na jeden dzień** (panel przypisania,
+  grupa „Niedostępni wg dyspozycji”); pozostałe przeszkody (urlop, kolizja,
+  koniec pracy) dalej po prostu blokują.
+- **Kierownik widzi skutek bez przeładowania**: App w pollu (45 s) pobiera
+  `prosby_o_zmiane` i dociąga z `grafik_shifts` zmiany powstałe po „Mogę”
+  (`grafik_shifts` nie jest w pollu).
+- Zdania wiadomości (`tekstProsby`, `tekstWycofania`) rozpoznają
+  `opisWiadomosci` i `api/_lib/wiadomosci.js`, kopię ma generator demo.
+  Link `?otworz=dyspozycja` (i `wolne`) prowadzi na ekran Dyspozycji.
+
+**Sprawdziany:** `harness-dyspozycja.html` (wygasanie, siatka, jedno
+pytanie naraz, zapis), `harness-kiosk.html` (karta na Pulpicie, „Mogę” przez
+RPC i zmiana w grafiku, „Nie mogę” z powodem), `harness-panel.html` (grupa
+„tylko Zapytaj”, potwierdzenie, zapis prośby, „zapytano” i „czeka na zgodę”),
+`harness-email.html` (dwa maile).

@@ -34,6 +34,7 @@ import {
   zapiszDni,
   zmianaOpublikowanaNa,
 } from "../utils/dyspozycja";
+import { ostatnieOdpowiedzi, prosbyDoOdpowiedzi } from "../utils/prosby";
 
 const DNI_NAGLOWEK = ["pn", "wt", "śr", "czw", "pt", "sob", "nd"];
 
@@ -79,6 +80,10 @@ export default function DyspozycjaEkran({
   onUrlop,
   showMsg,
   ktoWysyla,
+  // „Zapytaj” (0.80.0) — prośby kierownika i odpowiedź na nie.
+  prosby = [],
+  onOdpowiedz = null,
+  onZobaczGrafik = null,
 }) {
   // Domyślnie następny miesiąc — dyspozycję składa się z wyprzedzeniem.
   const [miesiac, setMiesiac] = useState(() => przesunMiesiac(miesiacDnia(dzis), 1));
@@ -91,6 +96,7 @@ export default function DyspozycjaEkran({
   const [wysylka, setWysylka] = useState(null); // { pozostale }
   const [powtorz, setPowtorz] = useState(false);
   const [zajety, setZajety] = useState(false);
+  const [odmowa, setOdmowa] = useState(null); // { id, powod }
 
   const minMiesiac = miesiacDnia(dzis);
   const maxMiesiac = przesunMiesiac(minMiesiac, 3);
@@ -107,6 +113,21 @@ export default function DyspozycjaEkran({
     const blokada = dzienZablokowany({ dateStr: d, dzis, planShifts, user: employee });
     const klucz = urlop ? (urlop.status === "approved" ? "urlopOk" : "urlop") : wpis ? wpis.stan : "pusty";
     return { wpis, urlop, zmiana, blokada, klucz };
+  };
+
+  const czekajace = prosbyDoOdpowiedzi(prosby, employee);
+  const odpowiedziane = ostatnieOdpowiedzi(prosby, employee);
+  const dataGodzina = (iso) => {
+    const d = new Date(iso);
+    const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    return `${dzienKrotki(ymd)}, ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  };
+  const odpowiedzTeraz = async (prosba, zgoda, powod) => {
+    if (!onOdpowiedz) return;
+    setZajety(true);
+    const ok = await onOdpowiedz({ prosba, zgoda, powod });
+    setZajety(false);
+    if (ok) setOdmowa(null);
   };
 
   const ustaw = (z) => setForm((f) => ({ ...f, ...z }));
@@ -303,6 +324,15 @@ export default function DyspozycjaEkran({
         {s.wpis?.autor === "kierownik" && (
           <span className="absolute top-1 right-1 text-[9px] font-extrabold" title="wpisał kierownik">
             K
+          </span>
+        )}
+        {czekajace.some((p) => p.date === d) && (
+          <span
+            className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-[#DE3A22] text-white text-[12px] font-extrabold grid place-items-center"
+            title="prośba kierownika"
+            data-prosba-dnia
+          >
+            ?
           </span>
         )}
       </button>
@@ -657,6 +687,96 @@ export default function DyspozycjaEkran({
           </span>
         </div>
       </div>
+
+      {/* prośby kierownika „Zapytaj” (0.80.0) */}
+      {(czekajace.length > 0 || odpowiedziane.length > 0) && (
+        <section className="flex flex-col gap-2" data-prosby-kierownika>
+          <span className="text-[13px] font-bold uppercase text-[#6E6E66]">Prośby kierownika{czekajace.length ? ` · ${czekajace.length}` : ""}</span>
+          {czekajace.map((p) => {
+            const wpis = dyspozycjaNa(dyspozycja, employee, p.date);
+            return (
+              <div key={p.id} className="rounded-lg border-[2.5px] border-[#171714] bg-white px-3.5 py-3 flex flex-col gap-2.5" data-prosba={p.id}>
+                <span className="text-[14px] font-bold text-[#6E6E66]">Kierownik pyta, czy możesz:</span>
+                <span>
+                  <b className="block text-[22px] leading-7 font-extrabold text-[#171714]">
+                    {dzienKrotki(p.date)}, {trimTime(p.start_time)}–{trimTime(p.end_time)}
+                  </b>
+                  <span className="text-[16px]">{[p.stanowisko, p.lokal].filter(Boolean).join(" · ")}</span>
+                </span>
+                <span className="flex flex-wrap gap-2 text-[13px]">
+                  {wpis && <span className="px-2 py-0.5 rounded bg-[#ECEBE6] font-bold">W dyspozycji: {opisDyspozycji(wpis)}</span>}
+                  <span className="text-[#6E6E66]">Odpowiedz do {dataGodzina(p.wygasa_at)}</span>
+                </span>
+                {odmowa?.id === p.id ? (
+                  <div className="flex flex-col gap-2">
+                    <input
+                      type="text"
+                      value={odmowa.powod}
+                      onChange={(e) => setOdmowa({ id: p.id, powod: e.target.value })}
+                      placeholder="Powód · opcjonalnie"
+                      className="h-11 px-3 rounded-lg border-2 border-[#DEDCD4] focus:border-[#171714] outline-none text-[16px]"
+                      data-powod-odmowy
+                    />
+                    <div className="grid grid-cols-[1fr_1.3fr] gap-2">
+                      <button type="button" onClick={() => setOdmowa(null)} className="min-h-[48px] rounded-lg border-2 border-[#171714] font-extrabold">
+                        Wróć
+                      </button>
+                      <button
+                        type="button"
+                        disabled={zajety}
+                        onClick={() => odpowiedzTeraz(p, false, odmowa.powod)}
+                        className="min-h-[48px] rounded-lg bg-[#171714] text-white font-extrabold disabled:opacity-50"
+                        data-wyslij-odmowe
+                      >
+                        Wyślij „Nie mogę”
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-[1fr_1.3fr] gap-2">
+                    <button
+                      type="button"
+                      disabled={zajety}
+                      onClick={() => setOdmowa({ id: p.id, powod: "" })}
+                      className="min-h-[52px] rounded-lg border-2 border-[#171714] font-extrabold disabled:opacity-50"
+                      data-nie-moge
+                    >
+                      Nie mogę
+                    </button>
+                    <button
+                      type="button"
+                      disabled={zajety}
+                      onClick={() => odpowiedzTeraz(p, true)}
+                      className="min-h-[52px] rounded-lg bg-[#DE3A22] text-white font-extrabold inline-flex items-center justify-center gap-1.5 disabled:opacity-50"
+                      data-moge
+                    >
+                      <Check size={18} /> Mogę
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {odpowiedziane.map((p) => (
+            <div key={p.id} className="rounded-lg border-2 border-[#DEDCD4] bg-white px-3.5 py-2.5 flex flex-col gap-1" data-odpowiedz={p.status}>
+              <span className="text-[13px] font-bold text-[#6E6E66]">Odpowiedziałeś(-aś): {p.status === "zgoda" ? "Mogę" : "Nie mogę"}</span>
+              <b className="text-[16px]">
+                {dzienKrotki(p.date)}, {trimTime(p.start_time)}–{trimTime(p.end_time)} · {[p.stanowisko, p.lokal].filter(Boolean).join(" · ")}
+              </b>
+              {p.status === "zgoda" && (
+                <span className="flex items-center justify-between gap-2 text-[14px] text-[#1F7A4A] font-bold">
+                  Zmiana dopisana do Twojego grafiku.
+                  {onZobaczGrafik && (
+                    <button type="button" onClick={onZobaczGrafik} className="underline text-[#171714]">
+                      Zobacz w grafiku
+                    </button>
+                  )}
+                </span>
+              )}
+            </div>
+          ))}
+        </section>
+      )}
 
       {/* kalendarz */}
       <section className="flex flex-col gap-2.5">

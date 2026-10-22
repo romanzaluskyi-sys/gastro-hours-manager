@@ -446,6 +446,8 @@ const poprzedniMiesiac = (h) => {
       // a nie czy lista po nim pokazuje nową wartość — a to jest właśnie ten
       // rodzaj błędu, dla którego ten harness powstał.
       const [planShifts, setPlanShifts] = useState(planTygodnia);
+      // Prośby „Zapytaj” (0.80.0) — stan, żeby wysłana prośba stanęła w siatce.
+      const [prosby, setProsby] = useState([]);
       // Jedno nieprzeczytane powiadomienie kierownika — Skrzynka → Informacje
       // ma je sama oznaczyć jako przeczytane po 3 s (0.58.0).
       const [notifications, setNotifications] = useState(() => [
@@ -660,9 +662,14 @@ const poprzedniMiesiac = (h) => {
         // Dyspozycja (0.79.0): Gosia „Nie mogę” przez cały oglądany tydzień,
         // wpisane przez kierownika (wiąże bez wysyłania miesiąca). W panelu
         // przypisania ma stać wyłączona z powodem, a w pustej kratce — podpis.
-        dyspozycja: dniTygodnia.map((d, i) => ({ id: "dy" + i, user_id: "u8", user_name: "Gosia", date: d,
-          stan: "nie", autor: "kierownik" })),
+        // Cezary (Kucharz, Ceglana) też „nie może” cały tydzień — on zna
+        // stanowisko luki, więc trafia do grupy „tylko Zapytaj” (0.80.0).
+        dyspozycja: [
+          ...dniTygodnia.map((d, i) => ({ id: "dy" + i, user_id: "u8", user_name: "Gosia", date: d, stan: "nie", autor: "kierownik" })),
+          ...dniTygodnia.map((d, i) => ({ id: "dc" + i, user_id: "u3", user_name: "Cezary", date: d, stan: "nie", autor: "kierownik" })),
+        ],
         dyspozycjaMiesiace: [],
+        prosby, setProsby,
         // Dwie oczekujące decyzje z giełdy: zwykłe przejęcie i ZAMIANA.
         // Przy zamianie kierownik zatwierdza dwa przepisania naraz, więc karta
         // musi pokazać obie zmiany i policzyć godziny po obu stronach.
@@ -1731,6 +1738,43 @@ const poprzedniMiesiac = (h) => {
           [...G().querySelectorAll("[data-pasek-cofnij] button")][0].dispatchEvent(new MouseEvent("click", { bubbles: true }));
           await czekaj(200);
           sprawdz("„Cofnij” przywraca zmianę", !!sekcja().querySelector('[data-zmiana-grafiku="g4"]'));
+
+          // „Zapytaj” (0.80.0): luka na Kucharza w przyszły dzień, Cezary
+          // „nie może” — stoi w osobnej grupie, a pytanie idzie do bazy jako
+          // prośba (nie zmiana w grafiku) i staje w kratce i nad dniem.
+          const lukaZap = [...sekcja().querySelectorAll("[data-obsada-dnia] [data-luka]")]
+            .find((l) => l.getAttribute("data-luka").startsWith("Kucharz|") && dzienLuki(l) > dzis);
+          if (!lukaZap) {
+            sprawdz("„Zapytaj”: jest luka na Kucharza po dziś (inaczej nie ma czego sprawdzić)", false,
+              [...sekcja().querySelectorAll("[data-luka]")].map((l) => dzienLuki(l) + ":" + l.getAttribute("data-luka")).join(", "));
+          } else {
+            lukaZap.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            await czekaj(300);
+            const zapRzad = panel() && panel().querySelector('[data-kandydat-zapytaj="Cezary"]');
+            sprawdz("„Zapytaj”: osoba z dyspozycją „nie może” w osobnej grupie, nie w zwykłych kandydatach",
+              !!zapRzad && !panel().querySelector('[data-kandydat="Cezary"]') && /dyspozycja: nie może/.test(zapRzad.textContent),
+              zapRzad ? zapRzad.textContent : "brak rzędu");
+            panel().querySelector('[data-zapytaj="Cezary"]').dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            await czekaj(200);
+            const potw = panel().querySelector("[data-potwierdz-zapytaj]");
+            sprawdz("„Zapytaj”: krok potwierdzenia mówi o jednym dniu i wygaśnięciu",
+              !!potw && /Zapytać: Cezary/.test(potw.textContent) && /wygaśnie/.test(potw.textContent) && /jednego dnia/.test(potw.textContent));
+            const przedPytaniem = window.__zapisy.length;
+            potw.querySelector("[data-wyslij-pytanie]").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            await czekaj(400);
+            const nowe = window.__zapisy.slice(przedPytaniem);
+            const pr = (nowe.find((z) => z[0] === "prosby_o_zmiane") || [])[1] || {};
+            const [, odZ, doZ] = lukaZap.getAttribute("data-luka").split("|");
+            sprawdz("„Zapytaj”: zapis prośby (czeka, godziny luki, wygasa_at), bez zmiany w grafiku",
+              pr.user_id === "u3" && pr.status === "czeka" && pr.start_time === odZ.slice(0, 5) && pr.end_time === doZ.slice(0, 5) &&
+                !!pr.wygasa_at && !nowe.some((z) => z[0] === "grafik_shifts"),
+              JSON.stringify(pr));
+            sprawdz("„Zapytaj”: wiadomość dla pracownika „Kierownik pyta, czy możesz”",
+              nowe.some((z) => z[0] === "notifications" && /^Kierownik pyta, czy możesz/.test((z[1] || {}).message || "")),
+              JSON.stringify(nowe.map((z) => z[0])));
+            sprawdz("„Zapytaj”: panel zamknięty, nad dniem „zapytano”, w kratce „czeka na zgodę”",
+              !panel() && !!sekcja().querySelector('[data-zapytano="Cezary"]') && !!sekcja().querySelector('[data-prosba-w-kratce="czeka"]'));
+          }
 
           G().querySelector("[data-zobacz-szkic]").dispatchEvent(new MouseEvent("click", { bubbles: true }));
           await czekaj(200);

@@ -87,6 +87,18 @@ const API_STUB = stub(`
   window.__rpcWywolania = [];
   window.__rpcOdpowiedzi = {
     sprawdz_kiosk_pin: (a) => a.p_user_id === "u4" && a.p_pin === "123456",
+    // „Zapytaj” (0.80.0) — jak funkcja w bazie: zgoda wstawia opublikowaną
+    // zmianę, odmowa zapisuje powód.
+    odpowiedz_na_prosbe: (a) => {
+      const p = (window.__prosbyKiosk || []).find((x) => x.id === a.p_id);
+      const teraz = new Date().toISOString();
+      const zmiana = a.p_zgoda
+        ? { id: "gp-" + a.p_id, lokal: p.lokal, user_id: p.user_id, user_name: p.user_name, stanowisko: p.stanowisko,
+            date: p.date, start_time: p.start_time, end_time: p.end_time, published_at: teraz, updated_at: teraz }
+        : null;
+      return { prosba: { ...p, status: a.p_zgoda ? "zgoda" : "odmowa", odpowiedz_at: teraz, powod: a.p_powod,
+        grafik_shift_id: zmiana ? zmiana.id : null }, zmiana };
+    },
     // Od migracji 0029 tablet nie ma prawa zapisu do \`users\` — osobę na
     // próbę zakłada funkcja w bazie, która sama pilnuje warunków.
     dodaj_probnego: (a) => ({
@@ -251,6 +263,18 @@ const poprzedniMiesiac = (h) => {
         })());
       // Dyspozycja (0.79.0) — stan jak w App, żeby zapis z ekranu był widać od razu.
       const [dyspozycja, setDyspozycja] = useState([]);
+      // Dwie prośby „Zapytaj” do Cezarego na 5. i 6. dzień przyszłego miesiąca.
+      const [prosby, setProsby] = useState(() => {
+        const nm = new Date(); nm.setDate(1); nm.setMonth(nm.getMonth() + 1);
+        const dz = (d) => `${nm.getFullYear()}-${String(nm.getMonth() + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+        const lista = [5, 6].map((d) => ({ id: "pr" + d, user_id: "u3", user_name: "Cezary", lokal: "Ceglana", stanowisko: "Kucharz",
+          date: dz(d), start_time: "16:00:00", end_time: "22:00:00", status: "czeka",
+          wygasa_at: new Date(Date.now() + 5 * 86400000).toISOString(), kto_pyta: "Roman" }));
+        window.__prosbyKiosk = lista;
+        return lista;
+      });
+      const [planKiosk, setPlanKiosk] = useState(planGieldy);
+      window.__planKiosk = planKiosk;
       const [dyspozycjaMiesiace, setDyspozycjaMiesiace] = useState([]);
       // ?nocna=1 — Bo odbił start wczoraj wieczorem i nie odbił końca. Zmiana
       // jeszcze trwa (17 h limitu nie minęło), więc ma się pokazać ostrzeżenie
@@ -394,7 +418,8 @@ const poprzedniMiesiac = (h) => {
         // bo zmianę można wystawić tylko z wyprzedzeniem 12 h. Dorota ma
         // zmianę TEGO SAMEGO dnia co Bo: nie może wziąć jego zmiany na wprost,
         // ale może się z nim zamienić.
-        planShifts: planGieldy, shiftSwaps, setShiftSwaps,
+        planShifts: planKiosk, setPlanShifts: setPlanKiosk, shiftSwaps, setShiftSwaps,
+        prosby, setProsby,
         // Wydarzenia (0.74.0): grupa DZIŚ w Ceglanej (cały dzień — pasek na
         // tablecie) i płatne zebranie JUTRO z Gosią jako uczestniczką.
         wydarzenia: [
@@ -925,6 +950,9 @@ const poprzedniMiesiac = (h) => {
 
         // --- Dyspozycja (0.79.0) — wolne przeszło ze Zgłoś do osobnej strony ---
         sprawdz("Zgłoś nie ma już typu „Wolne”", !document.querySelector('#app [data-typ-zgloszenia="absence"]'));
+        // „Zapytaj” (0.80.0): Cezary ma dwie prośby — karta na Pulpicie.
+        await otworzZakladke("Pulpit");
+        sprawdz("Pulpit: karta „Kierownik pyta, czy możesz”", !!document.querySelector("#app [data-pulpit-prosba]"));
         await otworzZakladke("Więcej");
         const wiecejD = (k) => document.querySelector(`#app [data-wiecej="${k}"]`);
         sprawdz("Więcej: wiersz „Dyspozycja”", !!wiecejD("dyspozycja"));
@@ -934,6 +962,26 @@ const poprzedniMiesiac = (h) => {
         const dzienNm = (d) => `${nm.getFullYear()}-${String(nm.getMonth() + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
         const dzienD = (d) => document.querySelector(`#app [data-dzien-dyspozycji="${dzienNm(d)}"]`);
         const kliknijD = async (el) => { el.dispatchEvent(new MouseEvent("click", { bubbles: true })); await czekaj(250); };
+        sprawdz("Dyspozycja: dwie karty próśb kierownika i „?” w kalendarzu",
+          document.querySelectorAll("#app [data-prosba]").length === 2 && !!document.querySelector("#app [data-prosba-dnia]"));
+        const kartaPr = (id) => document.querySelector(`#app [data-prosba="${id}"]`);
+        await kliknijD(kartaPr("pr5").querySelector("[data-moge]"));
+        await czekaj(200);
+        const wyw = window.__rpcWywolania.filter((w) => w[0] === "odpowiedz_na_prosbe");
+        sprawdz("„Mogę” idzie do bazy (RPC), nie wprost do grafiku",
+          wyw.length === 1 && wyw[0][1].p_id === "pr5" && wyw[0][1].p_zgoda === true &&
+            !window.__zapisy.some((z) => z[0] === "grafik_shifts"), JSON.stringify(wyw));
+        sprawdz("po „Mogę”: karta „Odpowiedziałeś(-aś): Mogę” i zmiana w grafiku (kłódka w kalendarzu)",
+          !kartaPr("pr5") && !!document.querySelector('#app [data-odpowiedz="zgoda"]') &&
+            window.__planKiosk.some((z) => z.id === "gp-pr5") && dzienD(5).dataset.stan !== undefined && /16/.test(dzienD(5).textContent));
+        await kliknijD(kartaPr("pr6").querySelector("[data-nie-moge]"));
+        wpiszPole(document.querySelector("#app [data-powod-odmowy]"), "kolokwium");
+        await czekaj(150);
+        await kliknijD(document.querySelector("#app [data-wyslij-odmowe]"));
+        await czekaj(200);
+        const odm = window.__rpcWywolania.filter((w) => w[0] === "odpowiedz_na_prosbe")[1];
+        sprawdz("„Nie mogę” z powodem: RPC z p_zgoda=false i powodem",
+          !!odm && odm[1].p_zgoda === false && odm[1].p_powod === "kolokwium" && !kartaPr("pr6"), JSON.stringify(odm));
         sprawdz("Dyspozycja startuje na następnym miesiącu, „Jeszcze nie wysłano”",
           !!dzienD(10) && /Jeszcze nie wysłano/.test((document.querySelector("#app [data-stan-wysylki]") || {}).textContent || ""));
         // Jeden dzień: „Mogę w godzinach” 16–22.
@@ -982,7 +1030,7 @@ const poprzedniMiesiac = (h) => {
         const dniMies = new Date(nm.getFullYear(), nm.getMonth() + 1, 0).getDate();
         const wpisyCezarego = (window.__tabele.dyspozycja || []).filter((w) => w.user_id === "u3" && w.date.startsWith(dzienNm(1).slice(0, 7)));
         // Dni z opublikowaną zmianą Cezarego zostają bez zmian (grafik obowiązuje).
-        const dniZeZmiana = new Set(planGieldy
+        const dniZeZmiana = new Set(window.__planKiosk
           .filter((p) => p.user_id === "u3" && p.published_at && !p.deleted_at && p.date.startsWith(dzienNm(1).slice(0, 7)))
           .map((p) => p.date));
         sprawdz("„Pozostałe dni: Nie mogę” uzupełnia puste dni (bez dnia z urlopem i dni ze zmianą)",

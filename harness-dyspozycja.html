@@ -29,7 +29,8 @@ const ATRAPA_API = URL.createObjectURL(new Blob([`
     patch: async (t, id, d) => { window.__zapisy.push(["patch", t, id, d]); const l = window.__tabele[t] || [];
       const i = l.findIndex((w) => w.id === id); const w = { ...(l[i] || {}), id, ...d }; if (i >= 0) l[i] = w; return w; },
     delete: async (t, id) => { window.__zapisy.push(["delete", t, id]); window.__tabele[t] = (window.__tabele[t] || []).filter((w) => w.id !== id); return true; },
-    patchByFilter: async () => true, dodajBezOdczytu: async () => true, rpc: async () => null,
+    patchByFilter: async () => true, rpc: async () => null,
+    dodajBezOdczytu: async (t, d) => { window.__zapisy.push(["dodaj", t, d]); (window.__tabele[t] = window.__tabele[t] || []).push(d); return true; },
   };
 `], { type: "text/javascript" }));
 
@@ -227,6 +228,52 @@ const J = (x) => JSON.stringify(x);
     });
     sprawdz("przepisanie na następcę pomija jego „Nie mogę”",
       przep.przepisane.length === 1 && przep.pominiete[0]?.powod === "nie może wg dyspozycji", J(przep.pominiete));
+
+    log("");
+    log("— „Zapytaj” (utils/prosby.ts, 0.80.0) —");
+    const PR = await import(await zaladuj("/src/utils/prosby"));
+    const teraz = new Date("2026-11-10T12:00:00");
+    const w1 = PR.wygasaDla("2026-11-15", "16:00", teraz);
+    sprawdz("wygasa 24 h przed zmianą", new Date(w1).getTime() === new Date("2026-11-14T16:00:00").getTime(), w1);
+    const w2 = PR.wygasaDla("2026-11-11", "08:00", teraz);
+    sprawdz("zmiana jutro rano (< 24 h): wygasa godzinę przed startem",
+      new Date(w2).getTime() === new Date("2026-11-11T07:00:00").getTime(), w2);
+    sprawdz("za mniej niż godzinę: za późno (null)", PR.wygasaDla("2026-11-10", "12:30", teraz) === null);
+    sprawdz("zmiana, która już trwa: null", PR.wygasaDla("2026-11-10", "10:00", teraz) === null);
+    const pr = (id, extra = {}) => ({ id, user_id: "a", user_name: "Ala", lokal: "L", stanowisko: "Bar", date: "2026-11-15",
+      start_time: "14:00:00", end_time: "22:00:00", status: "czeka", wygasa_at: "2026-11-14T13:00:00Z", ...extra });
+    const listaPr = [
+      pr("p1"),
+      pr("p2", { wygasa_at: "2026-11-09T10:00:00Z" }),
+      pr("p3", { status: "odmowa", powod: "egzamin" }),
+      pr("p4", { status: "zgoda", odpowiedz_at: "2026-11-09T18:00:00Z" }),
+      pr("p5", { status: "wycofana" }),
+      pr("p6", { user_id: "b", user_name: "Bo", stanowisko: "Kasa" }),
+    ];
+    sprawdz("czeka po terminie = „wygasła”", PR.stanProsby(listaPr[1], teraz) === "wygasla" && PR.stanProsby(listaPr[0], teraz) === "czeka");
+    sprawdz("w siatce: czeka, wygasła i odmowa; bez zgody i wycofanej",
+      J(PR.prosbyDnia(listaPr, "L", "2026-11-15", teraz).map((p) => p.id)) === J(["p1", "p2", "p3", "p6"]));
+    sprawdz("inny lokal / dzień nie trafia do siatki", PR.prosbyDnia(listaPr, "X", "2026-11-15", teraz).length === 0);
+    sprawdz("jedno pytanie naraz: ta sama zmiana (nachodzące godziny) już czeka",
+      PR.czekajacaNaZmiane(listaPr, { lokal: "L", date: "2026-11-15", stanowisko: "Bar", start_time: "16:00", end_time: "23:00" }, teraz)?.id === "p1");
+    sprawdz("inne stanowisko = inna zmiana", PR.czekajacaNaZmiane(listaPr, { lokal: "L", date: "2026-11-15", stanowisko: "Sala", start_time: "16:00", end_time: "23:00" }, teraz) === null);
+    sprawdz("godziny obok siebie się nie nachodzą", PR.czekajacaNaZmiane([listaPr[0]], { lokal: "L", date: "2026-11-15", stanowisko: "Bar", start_time: "08:00", end_time: "14:00" }, teraz) === null);
+    sprawdz("do odpowiedzi tylko czekające tej osoby (bez wygasłych)",
+      J(PR.prosbyDoOdpowiedzi(listaPr, ala, teraz).map((p) => p.id)) === J(["p1"]));
+    sprawdz("ostatnie odpowiedzi: zgoda z ostatnich 3 dni", J(PR.ostatnieOdpowiedzi(listaPr, ala, teraz).map((p) => p.id)) === J(["p4"]));
+    sprawdz("zdanie wiadomości zaczyna się jak w opisWiadomosci", /^Kierownik pyta, czy możesz: /.test(PR.tekstProsby(listaPr[0])) &&
+      /^Kierownik wycofał pytanie o zmianę: /.test(PR.tekstWycofania(listaPr[0])));
+    window.__tabele = {}; window.__zapisy = [];
+    const zap = await PR.zapytaj({ user: ala, lokal: "L", stanowisko: "Bar", date: "2099-01-10", start_time: "16:00", end_time: "22:00", kierownik: { id: "k", name: "Roman" } });
+    sprawdz("zapytaj: prośba czeka, z wygasa_at i tym, kto pyta", zap.status === "czeka" && !!zap.wygasa_at && zap.kto_pyta === "Roman" && zap.start_time === "16:00");
+    sprawdz("zapytaj: wiadomość „Kierownik pyta, czy możesz” dla pracownika",
+      (window.__tabele.notifications || []).length === 1 && /^Kierownik pyta, czy możesz/.test(window.__tabele.notifications[0].message) &&
+        window.__tabele.notifications[0].type === "dyspozycja", J(window.__zapisy.map((z) => z[0] + ":" + z[1])));
+    let zaPozno = "";
+    try { await PR.zapytaj({ user: ala, lokal: "L", date: "2000-01-01", start_time: "10:00", end_time: "12:00" }); } catch (e) { zaPozno = e.message; }
+    sprawdz("zapytaj o przeszłość odmawia", /za późno/.test(zaPozno), zaPozno);
+    const wyc = await PR.wycofaj(zap);
+    sprawdz("wycofaj: status „wycofana”", wyc.status === "wycofana");
 
     log("");
     log(`ZDANYCH ${zdanych}, OBLANYCH ${oblanych}`, oblanych ? "zle" : "ok");

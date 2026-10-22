@@ -504,6 +504,9 @@ const USERS = [
       ["Zmiana do wzięcia", { type: "swap",
         message: "Możesz wziąć dodatkową zmianę: sob 17 paź · 10:00–18:00, Ceglana (Kelner) — oddaje ją Bo. Zajrzyj na giełdę w Grafiku.",
         dane: { autor: "Bo", wiersze: [{ e: "Zmiana", w: "sob 17 paź · 10:00–18:00" }, { e: "Lokal · stanowisko", w: "Ceglana · Kelner" }] } }],
+      ["Kierownik pyta (Zapytaj)", { type: "dyspozycja",
+        message: "Kierownik pyta, czy możesz: sob 17.10, 16:00–22:00, Kelner · Ceglana. Odpowiedz w Dyspozycji." }],
+      ["Pytanie wycofane", { type: "dyspozycja", message: "Kierownik wycofał pytanie o zmianę: sob 17.10, 16:00–22:00, Kelner · Ceglana." }],
       ["Nieznany typ", { type: "cos_nowego", message: "Zwykła wiadomość." }],
     ];
     const GRAFIK_ALI = [
@@ -533,6 +536,14 @@ const USERS = [
       if (nazwa === "Godziny z wydarzenia") {
         sprawdz("rozliczenie wydarzenia (0.75.0): „Godziny dopisane: …”, CTA do Raportu",
           m.temat === "Godziny dopisane: Inwentaryzacja" && m.html.includes("?otworz=raport"), m.temat);
+      }
+      if (nazwa === "Kierownik pyta (Zapytaj)") {
+        sprawdz("„Zapytaj” (0.80.0): temat, szczegóły zmiany, przycisk do Dyspozycji",
+          m.temat === "Kierownik pyta, czy możesz przyjść" && m.html.includes("sob 17.10, 16:00–22:00") &&
+            m.html.includes(">Odpowiedz w Dyspozycji&nbsp;") && m.html.includes("?otworz=dyspozycja"), m.temat);
+      }
+      if (nazwa === "Pytanie wycofane") {
+        sprawdz("„Zapytaj” wycofane: osobny temat, CTA do grafiku", m.temat === "Pytanie o zmianę wycofane" && m.html.includes("?otworz=grafik"), m.temat);
       }
       if (nazwa === "Zmiana do wzięcia") {
         sprawdz("giełda do wszystkich (0.76.0): temat, autor w treści, szczegóły zmiany, CTA do grafiku",

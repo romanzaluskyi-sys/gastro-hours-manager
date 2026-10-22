@@ -79,6 +79,8 @@ export default function App() {
   // Dyspozycja (0.79.0) — kiedy pracownik może pracować; utils/dyspozycja.ts.
   const [dyspozycja, setDyspozycja] = useState([]);
   const [dyspozycjaMiesiace, setDyspozycjaMiesiace] = useState([]);
+  // Prośby kierownika „Zapytaj” (0.80.0) — utils/prosby.ts.
+  const [prosby, setProsby] = useState([]);
 
   const [currentView, setCurrentView] = useState("login");
   const [currentUser, setCurrentUser] = useState(null);
@@ -408,6 +410,27 @@ export default function App() {
         .get("dyspozycja_miesiace", `miesiac=gte.${od.slice(0, 7)}-01`)
         .then((rows) => setDyspozycjaMiesiace(Array.isArray(rows) ? rows : []))
         .catch((err) => console.error("Błąd pobierania miesięcy dyspozycji:", err.message || err));
+      // Prośby „Zapytaj”. Zmiana, na którą ktoś powiedział „Mogę”, powstaje w
+      // bazie (RPC) — a `grafik_shifts` nie jest w pollu. Dociągamy więc
+      // właśnie te wiersze, żeby kierownik zobaczył je w siatce bez
+      // przeładowania strony.
+      api
+        .get("prosby_o_zmiane", `date=gte.${od}`)
+        .then((rows) => {
+          const lista = Array.isArray(rows) ? rows : [];
+          setProsby(lista);
+          const ids = lista.filter((p) => p.status === "zgoda" && p.grafik_shift_id).map((p) => p.grafik_shift_id);
+          if (ids.length === 0) return;
+          return api.get("grafik_shifts", `id=in.(${ids.join(",")})`).then((zmiany) => {
+            if (!Array.isArray(zmiany) || zmiany.length === 0) return;
+            const mapa = new Map(zmiany.map((z) => [String(z.id), z]));
+            setPlanShifts((prev) => [
+              ...(prev || []).filter((z) => !mapa.has(String(z.id))),
+              ...zmiany,
+            ]);
+          });
+        })
+        .catch((err) => console.error("Błąd pobierania próśb o zmianę:", err.message || err));
     };
     loadDyspozycja();
 
@@ -551,6 +574,9 @@ export default function App() {
           setDyspozycja={setDyspozycja}
           dyspozycjaMiesiace={dyspozycjaMiesiace}
           setDyspozycjaMiesiace={setDyspozycjaMiesiace}
+          prosby={prosby}
+          setProsby={setProsby}
+          setPlanShifts={setPlanShifts}
           showMsg={showMsg}
         />
       )}
@@ -587,6 +613,9 @@ export default function App() {
           setDyspozycja={setDyspozycja}
           dyspozycjaMiesiace={dyspozycjaMiesiace}
           setDyspozycjaMiesiace={setDyspozycjaMiesiace}
+          prosby={prosby}
+          setProsby={setProsby}
+          setPlanShifts={setPlanShifts}
           showMsg={showMsg}
         />
       )}
@@ -647,6 +676,8 @@ export default function App() {
           setDyspozycja={setDyspozycja}
           dyspozycjaMiesiace={dyspozycjaMiesiace}
           setDyspozycjaMiesiace={setDyspozycjaMiesiace}
+          prosby={prosby}
+          setProsby={setProsby}
           showMsg={showMsg}
         />
       )}

@@ -25,6 +25,7 @@ const CTA = {
   wiadomosci: ["Zobacz w Wiadomościach", "wiadomosci"],
   korekta: ["Popraw zmianę", "korekta"],
   wolne: ["Złóż nowy wniosek", "wolne"],
+  dyspozycja: ["Odpowiedz w Dyspozycji", "dyspozycja"],
   prosba: ["Odpowiedz na prośbę", "grafik"],
   aplikacja: ["Otwórz Shiftro", "wiadomosci"],
 };
@@ -288,6 +289,19 @@ const opisz = (n, user, grafik, dzis) => {
         cta,
       };
     }
+    // 0.80.0 — „Zapytaj” kierownika (src/utils/prosby.ts: tekstProsby,
+    // tekstWycofania). Te same zdania rozpoznaje `opisWiadomosci`.
+    case "dyspozycja":
+      if (/^Kierownik wycofał pytanie/.test(t))
+        return { ton: "neutral", etykieta: "Grafik", tytul: "Pytanie o zmianę wycofane", lead: S.esc(t), cta: CTA.grafik };
+      return {
+        ton: "warn",
+        ikona: "?",
+        etykieta: "Prośba kierownika",
+        tytul: "Kierownik pyta, czy możesz przyjść",
+        lead: S.esc(t.replace(/ Odpowiedz w Dyspozycji\.$/, "")),
+        cta: CTA.dyspozycja,
+      };
     case "sanepid":
       return { ton: "warn", ikona: "!", etykieta: "Termin", tytul: "Termin książeczki sanepid", lead: S.esc(t), cta: CTA.aplikacja };
     case "umowa":

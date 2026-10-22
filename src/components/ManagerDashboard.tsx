@@ -109,6 +109,8 @@ const ManagerDashboard = ({
   setAbsences,
   dyspozycja = [],
   dyspozycjaMiesiace = [],
+  prosby = [],
+  setProsby,
   planShifts,
   setPlanShifts,
   shiftSwaps,
@@ -1425,6 +1427,8 @@ const ManagerDashboard = ({
             setAbsences={setAbsences}
             dyspozycja={dyspozycja}
             dyspozycjaMiesiace={dyspozycjaMiesiace}
+            prosby={prosby}
+            setProsby={setProsby}
             setShifts={setShifts}
             staffingRules={staffingRules}
             setStaffingRules={setStaffingRules}

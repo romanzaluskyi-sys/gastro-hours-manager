@@ -90,6 +90,9 @@ const KioskDashboard = ({
   setDyspozycja,
   dyspozycjaMiesiace = [],
   setDyspozycjaMiesiace,
+  prosby = [],
+  setProsby,
+  setPlanShifts,
 }) => {
   const [screen, setScreen] = useState("LIST");
   const [selectedEmployee, setSelectedEmployee] = useState(null);
@@ -944,6 +947,9 @@ const KioskDashboard = ({
         setDyspozycja={setDyspozycja}
         dyspozycjaMiesiace={dyspozycjaMiesiace}
         setDyspozycjaMiesiace={setDyspozycjaMiesiace}
+        prosby={prosby}
+        setProsby={setProsby}
+        setPlanShifts={setPlanShifts}
         onBack={goList}
         onLogout={() => setCurrentView("login")}
       />

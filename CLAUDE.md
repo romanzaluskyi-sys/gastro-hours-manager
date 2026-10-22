@@ -236,8 +236,16 @@ Dyspozycja, blok `WOLNE`); sprawdzian `harness-dyspozycja.html`.
   kierownik nie zmieni nawet z pominięciem aplikacji. Polityki: po jednej na
   polecenie (`ludzie_mojej_dyspozycji()`), x4 na obu tabelach w inwentarzu
   `pg_policies` to norma.
-- ⚠️ **Nowa tabela → `demoDane.js`**: `dyspozycja`, `dyspozycja_miesiace` w
-  `KOLEJNOSC` (studentka z telefonu — szkic; Dmytro — wysłana).
+- ⚠️ **Nowa tabela → `demoDane.js`**: `dyspozycja`, `dyspozycja_miesiace`,
+  `prosby_o_zmiane` w `KOLEJNOSC` (studentka z telefonu — szkic i czekająca
+  prośba; Dmytro — wysłana).
+- ⚠️ **„Zapytaj” (0.80.0, `0049`, [`utils/prosby.ts`](src/utils/prosby.ts)):
+  prośba NIE jest wierszem `grafik_shifts`, zmianę wstawia dopiero RPC
+  `odpowiedz_na_prosbe` przy „Mogę” — pracownik nie ma prawa zapisu do
+  grafiku i tak ma zostać. Zdania „Kierownik pyta, czy możesz:” / „Kierownik
+  wycofał pytanie o zmianę:” rozpoznają `opisWiadomosci` i
+  `api/_lib/wiadomosci.js`, kopię ma generator demo. W `GrafikTydzien` prop
+  nazywa się `prosbyZapytaj` — `prosby` to tam od dawna prośby z GIEŁDY.
 
 ## Poziom na stanowisku — od 0.78.0 (migracja `0047`)
 
@@ -911,6 +919,8 @@ src/
                                   „tylko poziom 1” (0.78.0)
     dyspozycja.ts               dyspozycja pracownika: kiedy wiąże, co blokuje,
                                   zapis dni i wysłanie miesiąca (0.79.0)
+    prosby.ts                   „Zapytaj”: prośba kierownika o jedną zmianę,
+                                  wygasanie, odpowiedź przez RPC (0.80.0)
     bezczynnosc.ts              automatyczne wylogowanie po 60 min (poza
                                   tabletem) — patrz Roadmap p.6
     uuid.ts                     nowyUuid() — id nadawane w przeglądarce dla

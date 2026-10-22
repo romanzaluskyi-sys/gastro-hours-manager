@@ -65,6 +65,7 @@ import { stanowiskoShort, findStanowisko } from "../../utils/stanowiska";
 import { normaMiesiaca } from "../../utils/umowy";
 import { bazaZnaPoziomy, sygnalyPoziomu, zPoziomemStartowym } from "../../utils/poziomy";
 import { dyspozycjaNa, krotkoDyspozycji, przeszkodaDyspozycji, wiazeDyspozycja } from "../../utils/dyspozycja";
+import { podmienProsbe, prosbyDnia, stanProsby, wycofaj as wycofajProsbe, zapytaj } from "../../utils/prosby";
 import { ostrzezeniaKodeksu } from "../../utils/kodeks";
 import { countWorkdays, URLOP_HOURS_PER_DAY } from "../../utils/absences";
 import { fetchDailyForecast, describeWeatherCode } from "../../utils/weather";
@@ -279,6 +280,8 @@ function LokalSection({
   absences,
   dyspozycja = [],
   dyspozycjaMiesiace = [],
+  prosbyZapytaj = [],
+  onWycofajProsbe = null,
   staffingRules,
   staffingRuleSets,
   grafikWyjatki,
@@ -560,6 +563,8 @@ function LokalSection({
     // Dyspozycja (0.79.0) — tylko wiążąca i tylko w pustej kratce: przy zmianie
     // w kratce grafik ma pierwszeństwo, a podpis nad nią byłby szumem.
     const dyspWpis = own.length === 0 && !abs ? dyspozycjaNa(dyspozycja, user, dateStr) : null;
+    // Prośby „Zapytaj” tej osoby w tym lokalu i dniu — nie liczą się do obsady.
+    const prosbyOsoby = prosbyDnia(prosbyZapytaj, lokal, dateStr).filter((p) => String(p.user_id) === String(user.id));
     const dysp = dyspWpis && dyspWpis.stan !== "moge" && wiazeDyspozycja(dyspWpis, dyspozycjaMiesiace) ? dyspWpis : null;
     // Płatne wydarzenia tej osoby (0.75.0, makieta ScheduleEvents): kreskowany
     // blok w jej kratce — czas pracy, ale NIE zmiana (nie liczy się do obsady).
@@ -580,6 +585,35 @@ function LokalSection({
             {abs.type === "urlop" ? "urlop" : "niedostępność"}
           </div>
         ) : null}
+        {prosbyOsoby.map((p) => {
+          const st = stanProsby(p);
+          const W = edycja && st === "czeka" && onWycofajProsbe ? "button" : "div";
+          return (
+            <W
+              key={`pr-${p.id}`}
+              type={W === "button" ? "button" : undefined}
+              onClick={W === "button" ? () => onWycofajProsbe(p) : undefined}
+              className={`text-left rounded-md border-[1.5px] border-dashed px-1.5 py-1 text-[12px] leading-4 tabular-nums ${
+                st === "odmowa" ? "border-[#B7B6AE] text-[#6E6E66]" : "border-[#8A5300] text-[#8A5300] bg-[#FDF0D8]"
+              }`}
+              title={
+                st === "czeka"
+                  ? `Pytanie do ${p.user_name} — nie liczy się do obsady. Wygasa ${new Date(p.wygasa_at).toLocaleString("pl-PL")}.${
+                      W === "button" ? " Kliknij, żeby wycofać." : ""
+                    }`
+                  : st === "odmowa"
+                  ? `${p.user_name} nie może${p.powod ? `: ${p.powod}` : ""}.`
+                  : `${p.user_name} nie odpowiedział(a) przed terminem.`
+              }
+              data-prosba-w-kratce={st}
+            >
+              <b className="block font-extrabold">
+                {st === "czeka" ? "czeka na zgodę" : st === "odmowa" ? "nie może" : "brak odpowiedzi"}
+              </b>
+              {trimTime(p.start_time)}–{trimTime(p.end_time)}
+            </W>
+          );
+        })}
         {dysp && !cokolwiek ? (
           <div
             className="rounded-md px-1.5 py-1 text-[12px] font-bold text-center text-[#6E6E66] border-[1.5px] border-dashed border-[#B7B6AE]"
@@ -794,6 +828,20 @@ function LokalSection({
             {sygnaly.map((sg, si) => (
               <EtykietaPoziomu key={`p1-${sg.stanowisko}-${sg.from}-${si}`} s={sg} activeStanowiska={activeStanowiska} lokal={lokal} />
             ))}
+            {prosbyDnia(prosbyZapytaj, lokal, d)
+              .filter((p) => stanProsby(p) === "czeka")
+              .map((p) => (
+                <span
+                  key={`zap-${p.id}`}
+                  className="flex items-center rounded-[5px] px-1.5 py-[2px] text-[12px] font-bold tabular-nums border-[1.5px] border-dashed border-[#8A5300] text-[#8A5300]"
+                  title={`Zapytano: ${p.user_name}, ${trimTime(p.start_time)}–${trimTime(p.end_time)} — czeka na odpowiedź`}
+                  data-zapytano={p.user_name}
+                >
+                  <span className="truncate">
+                    zapytano: {p.user_name.split(" ")[0]} {krotkaGodzina(p.start_time)}–{krotkaGodzina(p.end_time)}
+                  </span>
+                </span>
+              ))}
             {problemy.length === 0 && maWymagania[i] && (
               <span className="flex items-center gap-1 rounded-[5px] px-1.5 py-[3px] text-[12px] font-extrabold bg-[#E2F3E9] text-[#1F7A4A]">
                 <Check size={12} strokeWidth={3} /> obsada OK
@@ -1282,6 +1330,8 @@ export default function GrafikTydzien({
   absences,
   dyspozycja = [],
   dyspozycjaMiesiace = [],
+  prosbyZapytaj = [],
+  setProsby,
   staffingRules,
   staffingRuleSets,
   grafikWyjatki,
@@ -1343,8 +1393,32 @@ export default function GrafikTydzien({
       showMsg(`Błąd usuwania: ${err.message || "nieznany błąd"}`, "error");
     }
   };
-  const { odlozone, toast, decyduj, cofnij } = useOdlozoneDecyzje({ usunTeraz });
+  // Wycofanie prośby „Zapytaj” — też z 6 s „Cofnij”, jak usunięcie zmiany.
+  const wycofajProsbeTeraz = async (p) => {
+    try {
+      const zapisana = await wycofajProsbe(p);
+      if (setProsby) setProsby((prev) => podmienProsbe(prev, zapisana));
+    } catch (err) {
+      showMsg(`Nie udało się wycofać pytania: ${err.message || "nieznany błąd"}`, "error");
+    }
+  };
+  const { odlozone, toast, decyduj, cofnij } = useOdlozoneDecyzje({ usunTeraz, wycofajProsbeTeraz });
   const widocznePlan = (planShifts || []).filter((s) => !odlozone[`del:${s.id}`]);
+  const widoczneProsby = (prosbyZapytaj || []).filter((p) => !odlozone[`pr:${p.id}`]);
+  const handleWycofajProsbe = (p) =>
+    decyduj([{ klucz: `pr:${p.id}`, zadanie: ["wycofajProsbeTeraz", [p]] }], `Wycofano pytanie do: ${p.user_name}`);
+  // „Zapytaj” z panelu przypisania (0.80.0, utils/prosby.ts).
+  const handleZapytaj = async ({ user, lokal, stanowisko, date, start_time, end_time }) => {
+    try {
+      const p = await zapytaj({ user, lokal, stanowisko, date, start_time, end_time, kierownik: currentUser });
+      if (setProsby) setProsby((prev) => [...(prev || []), p]);
+      showMsg(`Wysłano pytanie do: ${user.name}. Zmiana wejdzie do grafiku po odpowiedzi „Mogę”.`);
+      return true;
+    } catch (err) {
+      showMsg(`Nie udało się wysłać pytania: ${err.message || "nieznany błąd"}`, "error");
+      return false;
+    }
+  };
 
   const openCell = (user, dateStr, shift, lokal, oferta) =>
     setModalCtx({ user, date: dateStr, shift, lokal, oferta: oferta || null });
@@ -1770,6 +1844,8 @@ export default function GrafikTydzien({
           absences={absences}
           dyspozycja={dyspozycja}
           dyspozycjaMiesiace={dyspozycjaMiesiace}
+          prosbyZapytaj={widoczneProsby}
+          onWycofajProsbe={handleWycofajProsbe}
           staffingRules={staffingRules}
           staffingRuleSets={staffingRuleSets}
           grafikWyjatki={grafikWyjatki}
@@ -1865,6 +1941,8 @@ export default function GrafikTydzien({
           onAddStanowisko={handleAddStanowisko}
           onAddAbsence={handleAddAbsence}
           onClose={() => setModalCtx(null)}
+          prosby={widoczneProsby}
+          onZapytaj={handleZapytaj}
         />
       )}
       <GrafikBlokadaModal powod={blokada} onClose={() => setBlokada(null)} onNotify={handleNotify} />

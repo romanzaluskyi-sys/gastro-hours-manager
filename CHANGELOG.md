@@ -5,6 +5,21 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.80.0 — 2026-10-22
+
+- **„Zapytaj” w Grafiku.** Osoba, która w dyspozycji tego dnia nie może (albo
+  może tylko w innych godzinach), stoi w panelu przypisania w osobnej grupie
+  „Niedostępni wg dyspozycji” z przyciskiem **„Zapytaj”**. Pytanie dotyczy
+  zawsze jednego dnia i jednej zmiany; o tę samą zmianę można pytać jedną
+  osobę naraz.
+- **Do czasu odpowiedzi zmiany nie ma w grafiku** — w kratce stoi „czeka na
+  zgodę”, nad dniem „zapytano: …”, a brak w obsadzie zostaje. Pytanie można
+  wycofać (6 s na „Cofnij”). Bez odpowiedzi wygasa 24 h przed zmianą.
+- **Pracownik odpowiada w Dyspozycji** („Mogę” / „Nie mogę” z opcjonalnym
+  powodem) — dostaje wiadomość i e-mail, a na Pulpicie kartę „Kierownik pyta,
+  czy możesz”. Po „Mogę” zmiana od razu jest w grafiku (bez osobnej
+  publikacji), a kierownik dostaje wiadomość — tak samo po „Nie mogę”.
+
 ## 0.79.0 — 2026-10-22
 
 - **Nowa strona „Dyspozycja”** (Więcej → Dyspozycja, a także przycisk „Moja

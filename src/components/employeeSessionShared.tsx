@@ -70,6 +70,7 @@ import {
 import PulsPrzypomnienie from "./manager/PulsPrzypomnienie";
 import { POZIOMY, kropkiPoziomu, opisPoziomu, poziomNa } from "../utils/poziomy";
 import DyspozycjaEkran from "./DyspozycjaEkran";
+import { odpowiedz as odpowiedzNaProsbe, opisProsby, podmienProsbe, prosbyDoOdpowiedzi } from "../utils/prosby";
 // Ten sam modal, co w karcie dnia i na ekranie kierownika zmiany — wpisanie
 // pomiaru to ta sama czynność i ma wyglądać tak samo wszędzie.
 import ModalWpisu from "./manager/ModalWpisu";
@@ -398,6 +399,12 @@ export const opisWiadomosci = (n) => {
       return /zdjął\(-ęła\) blokadę/.test(t)
         ? w("inne", "warn", "uwaga", "Blokada PIN-em zdjęta")
         : w("inne", "warn", "uwaga", "PIN został zmieniony");
+    // 0.80.0 — „Zapytaj” kierownika (utils/prosby.ts: tekstProsby,
+    // tekstWycofania). Te same zdania rozpoznaje api/_lib/wiadomosci.js.
+    case "dyspozycja":
+      return /^Kierownik wycofał pytanie/.test(t)
+        ? w("grafik", "info", "grafik", "Pytanie o zmianę wycofane")
+        : w("grafik", "warn", "grafik", "Kierownik pyta, czy możesz", "dyspozycja");
     case "sanepid":
       return w("inne", "warn", "dokument", "Termin książeczki sanepid");
     case "umowa":
@@ -638,6 +645,9 @@ export const EmployeeSessionScreens = ({
   setDyspozycja,
   dyspozycjaMiesiace = [],
   setDyspozycjaMiesiace,
+  prosby = [],
+  setProsby,
+  setPlanShifts,
 }) => {
   const [screen, setScreen] = useState("PULPIT");
   const [justClosed, setJustClosed] = useState(false);
@@ -1700,6 +1710,21 @@ export const EmployeeSessionScreens = ({
         `${employee.name} prosi o urlop (${od === doData ? od : `${od}–${doData}`}).`,
         "absence_request"
       );
+    }
+  };
+
+  // Odpowiedź na „Zapytaj” kierownika (0.80.0). Zgoda wstawia zmianę w bazie
+  // (RPC) — dokładamy ją do grafiku od razu, bez czekania na odświeżenie.
+  const odpowiedzProsbie = async ({ prosba, zgoda, powod }) => {
+    try {
+      const { prosba: zapisana, zmiana } = await odpowiedzNaProsbe({ prosba, zgoda, powod });
+      if (setProsby) setProsby((prev) => podmienProsbe(prev, zapisana));
+      if (zmiana && setPlanShifts) setPlanShifts((prev) => [...(prev || []).filter((z) => z.id !== zmiana.id), zmiana]);
+      showMsg(zgoda ? "Dziękujemy — zmiana jest w Twoim grafiku." : "Odpowiedź wysłana do kierownika.");
+      return true;
+    } catch (err) {
+      showMsg(err.message || "Nie udało się wysłać odpowiedzi.", "error");
+      return false;
     }
   };
 
@@ -3365,6 +3390,24 @@ export const EmployeeSessionScreens = ({
           )
         }
       >
+        {/* Prośba kierownika „Zapytaj” (0.80.0) — czeka na odpowiedź, więc
+            stoi nad wszystkim. Prowadzi do Dyspozycji, gdzie się odpowiada. */}
+        {prosbyDoOdpowiedzi(prosby, employee).slice(0, 1).map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            onClick={openDyspozycja}
+            className="w-full flex items-center gap-3 mb-3 px-3.5 py-3 rounded-lg border-2 border-[#DE3A22] bg-white text-left"
+            data-pulpit-prosba
+          >
+            <CalendarDays size={20} className="text-[#DE3A22] flex-none" />
+            <span className="flex-1 min-w-0">
+              <b className="block text-[16px] font-extrabold text-[#171714]">Kierownik pyta, czy możesz</b>
+              <small className="block text-[14px] text-[#6E6E66] truncate">{opisProsby(p)}</small>
+            </span>
+            <span className="text-[14px] font-extrabold text-[#DE3A22]">Odpowiedz</span>
+          </button>
+        ))}
         {/* Stoi nad wszystkim — zamknięcie dnia jest czynnością na koniec
             zmiany, więc musi być widoczne i wtedy, gdy zmiana jeszcze trwa. */}
         <PulsPrzypomnienie
@@ -5326,6 +5369,9 @@ export const EmployeeSessionScreens = ({
           planShifts={planShifts}
           moznaUrlop={moznaUrlop}
           onUrlop={wyslijWniosekUrlop}
+          prosby={prosby}
+          onOdpowiedz={odpowiedzProsbie}
+          onZobaczGrafik={() => setScreen("GRAFIK")}
           showMsg={showMsg}
           ktoWysyla={onBack ? `${employee.name} (tablet)` : employee.name}
         />
@@ -5508,6 +5554,7 @@ export const EmployeeSessionScreens = ({
     };
     const AKCJE = {
       grafik: bloki.includes("GRAFIK") && ["Zobacz grafik", () => setScreen("GRAFIK")],
+      dyspozycja: bloki.includes("WOLNE") && ["Odpowiedz", () => setScreen("DYSPOZYCJA")],
       korekta: bloki.includes("RAPORT") && [
         "Popraw zmianę",
         () => {
