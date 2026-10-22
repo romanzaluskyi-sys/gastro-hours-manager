@@ -213,7 +213,40 @@ trzy miejsca.
 ⚠️ **Nowa tabela, której potrzebuje ekran → dane w `demoDane.js`** (tu:
 `wydarzenia`, `wydarzenia_uczestnicy` w `KOLEJNOSC`).
 
-## Dyspozycja — od 0.79.0 (migracja `0048`)
+## Dyspozycja — od 0.79.0 (migracje `0047`–`0051`)
+
+### Wdrożenie D1–D4 (0.78.0–0.82.0) — przeczytaj PRZED mergem
+
+Pięć commitów na gałęziach STOSOWYCH: `claude/poziomy-stanowisk` (D1, 0.78.0,
+`0047`) ⊂ `claude/dyspozycja` (D2, 0.79.0, `0048`) ⊂ `claude/zapytaj` (D3,
+0.80.0, `0049`) ⊂ `claude/d4-konflikty` (D4, 0.81.0 `0050` + 0.82.0 `0051`).
+Każda gałąź zawiera poprzednie.
+- ⚠️ **Merge'ujemy JEDNĄ gałąź — `claude/d4-konflikty` → `main`.** Niesie
+  wszystkie pięć commitów; PR-y D1–D3 GitHub sam oznaczy jako zmerge'owane
+  (ich ostatni commit jest już w `main`). Merge pośrednich osobno też zadziała,
+  ale to cztery deploye produkcji zamiast jednego. PR z gałęzi stosowej do
+  `main` dostaje tytuł PIERWSZEGO commitu (D1) — popraw go ręcznie.
+- ⚠️ **Migracje `0047`–`0051` PRZED merge'em i przed testem Preview** (Preview
+  chodzi na bazie produkcyjnej). Wszystkie są addytywne (nowe kolumny, tabele,
+  funkcje; podmiana triggera `dyspozycja_autor` w `0051`), więc stary front na
+  nowej bazie działa. Kolejność wg numerów; `0050` jest powtarzalna
+  (`on conflict do nothing`). Stan bazy mówi `scripts/migrate.py` (suchy
+  przebieg = lista brakujących) — NIE ten plik.
+- ⚠️ **Wszystkie bazy, także demo** (`scripts/migrate.py --wszyscy`). Demo bez
+  `0048`–`0051` po nocnym resecie wywróci się na kolumnach z `demoDane.js`.
+- Po migracji inwentarz `pg_policies` (koniec `0032`): `dyspozycja`,
+  `dyspozycja_miesiace` po x4, `prosby_o_zmiane` x3 — to norma (po jednej
+  polityce na polecenie).
+- **Sprawdzenie na Preview** (najkrótsza ścieżka): karta pracownika → poziom
+  na stanowisku; telefon/tablet → Więcej → Dyspozycja (zaznacz, wyślij);
+  Grafik → panel przypisania → osoba „nie może” w grupie „Zapytaj”, pytanie →
+  pracownik odpowiada „Mogę” → zmiana w grafiku; pracownik dotyka dnia ze
+  zmianą → prośba o zwolnienie → „Do decyzji” → „Zdejmij zmianę”.
+- Następny etap: **D5** (termin w ustawieniach lokalu i przypomnienia) — opis
+  w docs/DYSPOZYCJA.md. Mail z przypomnieniami → do istniejącego dobowego
+  crona owiniętego `zPrzebiegiem` (limit 12 funkcji Vercela, patrz „PIN-y”).
+
+### Jak to działa
 
 Pełna specyfikacja, etapy D1–D5 i decyzje właściciela: [`docs/DYSPOZYCJA.md`](docs/DYSPOZYCJA.md).
 Logika: [`utils/dyspozycja.ts`](src/utils/dyspozycja.ts); ekran pracownika:
@@ -244,7 +277,26 @@ Dyspozycja, blok `WOLNE`); sprawdzian `harness-dyspozycja.html`.
   ten importuje z niego) i giełda (opcja `dysp` w `mozeWziac` i spółce).
   Dokładając nowe miejsce, które wpisuje komuś zmianę, zadaj to samo pytanie.
 - ⚠️ **Poprawka istniejącej zmiany tej samej osoby w ten sam dzień nie jest
-  blokowana** — konflikt z późniejszą dyspozycją to etap D4.
+  blokowana** (inaczej nie dałoby się nawet przesunąć godziny). Konflikt z
+  późniejszą dyspozycją pokazuje D4: przy zmianie NIEWYSŁANEJ znacznik w
+  kratce (`konfliktySzkicu`), przy OPUBLIKOWANEJ — prośba o zwolnienie.
+- ⚠️ **„Zapytaj” także po zmianie godzin (0.82.0).** Gdy osoba wybrana w
+  panelu ma jedyną przeszkodę w dyspozycji (np. godziny wyszły poza „Mogę w
+  godzinach” PO wyborze), główny przycisk to „Zapytaj: X” (`tylkoZapytaj` w
+  `GrafikZmianaModal`), a okno blokady przy przeszkodzie z dyspozycji NIE ma
+  „Napisz do pracownika”. Do 0.81.0 kończyło się to wiadomością „Kierownik
+  próbował wpisać Ci zmianę…”, na którą nie dało się odpowiedzieć.
+- ⚠️ **Zdania wiadomości dyspozycji** — każde rozpoznają `opisWiadomosci`
+  (employeeSessionShared.tsx) i `api/_lib/wiadomosci.js`; zmieniając jedno,
+  popraw oba (i kopię w `demoDane.js`, jeśli tam jest). Do pracownika:
+  „Kierownik pyta, czy możesz:”, „Kierownik wycofał pytanie o zmianę:”,
+  „Kierownik wpisał Ci w dyspozycji „…”:”, „Kierownik usunął wpis z Twojej
+  dyspozycji:”, „Kierownik zdjął / zostawił Twoją zmianę…”. Do kierownika
+  (Skrzynka → Informacje, raport dnia): „X prosi o zwolnienie ze zmiany:”,
+  „Konflikt z wersją roboczą grafiku:”, odpowiedzi na „Zapytaj” z RPC.
+- ⚠️ **Raport kierownika mailem NIE liczy próśb o zwolnienie** w „Wymaga
+  decyzji” (`api/_lib/raport.js`) — tak samo jak wydarzeń do rozliczenia.
+  Znaczek w aplikacji liczy.
 - ⚠️ **`autor` ustawia trigger `dyspozycja_autor`**, a wpisu pracownika
   kierownik nie zmieni nawet z pominięciem aplikacji. Polityki: po jednej na
   polecenie (`ludzie_mojej_dyspozycji()`), x4 na obu tabelach w inwentarzu
@@ -931,7 +983,10 @@ src/
     poziomy.ts                  poziom doświadczenia na stanowisku i sygnał
                                   „tylko poziom 1” (0.78.0)
     dyspozycja.ts               dyspozycja pracownika: kiedy wiąże, co blokuje,
-                                  zapis dni i wysłanie miesiąca (0.79.0)
+                                  zapis dni i wysłanie miesiąca (0.79.0);
+                                  „Nie może” od kierownika (0.81.0); prośba
+                                  o zwolnienie, konflikt z wersją roboczą,
+                                  wpis z karty pracownika (0.82.0)
     prosby.ts                   „Zapytaj”: prośba kierownika o jedną zmianę,
                                   wygasanie, odpowiedź przez RPC (0.80.0)
     bezczynnosc.ts              automatyczne wylogowanie po 60 min (poza
@@ -953,7 +1008,8 @@ src/
                                   komponent KLASOWY, bo componentDidCatch nie
                                   ma odpowiednika w hookach
     DyspozycjaEkran.tsx         treść ekranu „Dyspozycja” pracownika (rama w
-                                  employeeSessionShared.tsx) — 0.79.0
+                                  employeeSessionShared.tsx) — 0.79.0; od
+                                  0.82.0 też arkusz prośby o zwolnienie
     KonfiguracjaBrak.tsx        ekran "wdrożenie nieskonfigurowane" z listą
                                   brakujących zmiennych — to on pozwala nie
                                   mieć fallbacku na bazę pierwszego klienta
@@ -1031,6 +1087,8 @@ src/
                                     dla wszystkich trzech układów
       GrafikBudzetKonfiguracja.tsx  cel finansowy na dzień tygodnia i wyjątki
                                     na konkretne daty
+      DyspozycjaKarta.tsx           sekcja „Dyspozycja” w karcie pracownika
+                                    (0.82.0) — kalendarz, wpis kierownika
       WydarzeniePanel.tsx           panel wydarzenia (nowe / edycja / odwołanie)
       GrafikWydarzenia.tsx          lista „Wydarzenia” w Grafiku
       wydarzeniaWspolne.tsx         ikona typu, chip, plakietka, karta pracownika
@@ -2177,7 +2235,9 @@ odpadają. Zamiast tego dwa pliki w katalogu głównym, uruchamiane przez
   koszt, listy i teksty wiadomości;
 - `harness-dyspozycja.html` — dyspozycja: kiedy wiąże (szkic / wysłany /
   kierownik), godziny i noc, pozostałe dni, zapis na atrapie api, giełda,
-  kopiowanie tygodnia i przepisanie zmian;
+  kopiowanie tygodnia i przepisanie zmian, „Zapytaj”, stara niedostępność,
+  prośba o zwolnienie (kolejka, kolejność zapisów przy „Zdejmij”), konflikt
+  z wersją roboczą i wpis z karty pracownika;
 - `harness-poziomy.html` — poziom na stanowisku: odczyt (brak = nieustawiony),
   zapis tylko stanowisk z karty, sygnał „tylko poziom 1” (przez północ, osoba
   bez poziomu, usunięte i wyłączone konta);
@@ -2801,6 +2861,12 @@ zakresem — wymaga Grafiku, którego nie ma.
   formularz w Konfiguracji — bo to jedna rzecz, nie dwie. Migracja `0022`.
 
 ## Urlopy i niedostępność — zaimplementowane 2026-09-03
+
+⚠️ **Opis niżej jest historyczny w części o tym, SKĄD przychodzi wniosek.**
+Od 0.79.0 urlop wnioskuje się z kalendarza Dyspozycji (nie ze Zgłoś), a od
+0.81.0 nowej „niedostępności” w `absences` nie zakłada nikt — to dyspozycja
+„Nie mogę” (patrz „Dyspozycja”). Zatwierdzanie i materializacja urlopu
+(`resolveAbsenceRequest`, `addUrlopDirectly`) działają bez zmian.
 
 Pracownik może wysłać wniosek o wolne z zakładki **Zgłoś** (trzeci typ,
 obok "Popraw zmianę"/"Zgłoś problem" — świadomie tu, nie osobny ekran, bo
@@ -3772,6 +3838,9 @@ kierownika) — już gotowe.
 Patrz sekcja "Wydarzenia" wyżej i [`docs/WYDARZENIA.md`](docs/WYDARZENIA.md).
 
 ### 4. Wnioski o urlop/wolne — CZĘŚCIOWO ZROBIONE (2026-09-03)
+⚠️ Od 0.79.0 wolne żyje w Dyspozycji (urlop z kalendarza, niedostępność =
+„Nie mogę”), a twardą walidację wobec Grafiku daje `przeszkodaDnia` — patrz
+„Dyspozycja”. Opis niżej zostaje dla historii.
 ⚠️ Podstawowy flow wniosek → zatwierdzenie DZIAŁA — patrz "Urlopy i
 niedostępność" wyżej po pełny, aktualny opis. Zrobione: pracownik wysyła
 wniosek (urlop albo niedostępność) z zakładki Zgłoś, kierownik
