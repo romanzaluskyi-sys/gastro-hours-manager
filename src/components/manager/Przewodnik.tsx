@@ -27,6 +27,15 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.83.0",
+    date: "2026-11-04",
+    items: [
+      "„Wolne / urlop” w Grafiku: „Nie może” zapisuje się także w miejsce niewysłanego szkicu pracownika (wcześniej „Nic do zapisania”).",
+      "Nowa opcja „Może w godzinach” w tym samym oknie.",
+      "Przed zapisem widać, co już jest w dyspozycji; po zapisie — co zapisano, a co pominięto i dlaczego.",
+    ],
+  },
+  {
     version: "0.82.0",
     date: "2026-10-22",
     items: [

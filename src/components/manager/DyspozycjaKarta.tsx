@@ -25,6 +25,7 @@ import {
   przesunMiesiac,
   urlopNa,
   ustawDzienZaPracownika,
+  wiazeDyspozycja,
   wpisMiesiaca,
   zmianaOpublikowanaNa,
 } from "../../utils/dyspozycja";
@@ -81,13 +82,25 @@ export default function DyspozycjaKarta({
     return { wpis, urlop, stara, klucz, zmiana: zmianaOpublikowanaNa(planShifts, user, d) };
   };
 
+  // Kto wpisał dzień i czy to wiąże (0.83.0). Wpis z autorem „pracownik” na
+  // koncie, które jest kierownikiem i wpisało go samo, powstał na bazie bez
+  // migracji 0052 — nie wiąże i trzeba go wpisać jeszcze raz po migracji.
+  const opisAutora = (w) => {
+    if (!w) return "";
+    if (w.autor === "kierownik") return "wpisał kierownik";
+    if (w.zwolnienie_z) return "prośba pracownika o zwolnienie";
+    if (wiazeDyspozycja(w, miesiace)) return "wysłane przez pracownika";
+    if (kierownik && user.name === kierownik) return "Twój wpis — NIE wiąże (baza bez migracji 0052)";
+    return "szkic pracownika (nie wiąże, możesz zmienić)";
+  };
+
   const wybierz = (d) => {
     if (d < dzis) return;
     const s = stan(d);
     if (s.urlop) return showMsg?.(`${dzienKrotki(d)}: urlop — zmienia się go w sekcji „Urlop i dni wolne”.`, "error");
-    if (!moznaZmienicZaPracownika(s.wpis)) {
+    if (!moznaZmienicZaPracownika(s.wpis, miesiace)) {
       setDzien(null);
-      return showMsg?.(`${dzienKrotki(d)}: wpisał pracownik — zmiana tylko przez „Zapytaj” w Grafiku.`, "error");
+      return showMsg?.(`${dzienKrotki(d)}: pracownik wpisał i wysłał — zmiana tylko przez „Zapytaj” w Grafiku.`, "error");
     }
     setDzien(d);
     setGodziny({ od1: trimTime(s.wpis?.od1) || "", do1: trimTime(s.wpis?.do1) || "" });
@@ -107,10 +120,21 @@ export default function DyspozycjaKarta({
         stan: nowyStan,
         godziny,
         dyspozycja,
+        miesiace,
         kierownik,
       });
       setDyspozycja && setDyspozycja(lista);
-      showMsg?.(`${dzienKrotki(dzien)}: ${nowyStan ? "zapisano" : "wyczyszczono"} · ${user.name} dostał(a) wiadomość.`);
+      // Baza bez 0052 oznacza zapis kierownika o sobie jako wpis pracownika —
+      // wtedy Grafik go nie weźmie pod uwagę i trzeba to powiedzieć wprost.
+      const nowy = nowyStan ? dyspozycjaNa(lista, user, dzien) : null;
+      if (nowy && nowy.autor === "pracownik" && !wiazeDyspozycja(nowy, miesiace)) {
+        showMsg?.(
+          `${dzienKrotki(dzien)}: zapisano, ale baza oznaczyła to jako wpis pracownika i Grafik go nie uwzględni — potrzebna migracja 0052, potem wpisz ten dzień jeszcze raz.`,
+          "error"
+        );
+      } else {
+        showMsg?.(`${dzienKrotki(dzien)}: ${nowyStan ? "zapisano" : "wyczyszczono"} · ${user.name} dostał(a) wiadomość.`);
+      }
       setDzien(null);
     } catch (e) {
       showMsg?.(e.message || "Nie udało się zapisać.", "error");
@@ -169,7 +193,7 @@ export default function DyspozycjaKarta({
               disabled={d < dzis}
               data-dzien-karty={d}
               data-stan={s.klucz}
-              title={`${dzienKrotki(d)}: ${s.urlop ? "urlop" : s.stara ? "Nie mogę" : opisDyspozycji(s.wpis)}${pracownika ? " · wpisał pracownik" : ""}${s.zmiana ? " · zmiana w grafiku" : ""}`}
+              title={`${dzienKrotki(d)}: ${s.urlop ? "urlop" : s.stara ? "Nie mogę" : opisDyspozycji(s.wpis)}${pracownika ? ` · ${opisAutora(s.wpis)}` : ""}${s.zmiana ? " · zmiana w grafiku" : ""}`}
               className={`relative min-h-[44px] rounded-md border-[2px] px-1 pt-0.5 text-left flex flex-col ${WYGLAD[s.klucz]} ${
                 d < dzis ? "opacity-35" : ""
               } ${dzien === d ? "ring-[3px] ring-[#DE3A22] ring-offset-1" : ""}`}
@@ -185,12 +209,15 @@ export default function DyspozycjaKarta({
         })}
       </div>
       <p className="text-[12px] text-[#6E6E66]">
-        K — wpisał kierownik · kropka — zmiana w grafiku. Dni wpisane przez pracownika zmienia tylko on.
+        K — wpisał kierownik · kropka — zmiana w grafiku. Dyspozycję, którą pracownik wysłał, zmienia tylko on; jego niewysłany szkic możesz zastąpić.
       </p>
       {wybrany && (
         <div className="rounded-lg bg-[#F6F5F1] p-3 flex flex-col gap-2" data-edycja-dnia-karty={dzien}>
           <b className="text-[15px]">
             {dzienKrotki(dzien)} · teraz: {wybrany.stara ? "Nie mogę (stara niedostępność)" : opisDyspozycji(wybrany.wpis)}
+            {wybrany.wpis && wybrany.wpis.autor !== "kierownik" && (
+              <span className="font-normal text-[13px] text-[#6E6E66]"> · {opisAutora(wybrany.wpis)}</span>
+            )}
           </b>
           {wybrany.zmiana && (
             <span className="text-[13px] text-[#8A5300]">

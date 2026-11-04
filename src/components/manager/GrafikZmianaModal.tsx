@@ -37,6 +37,8 @@ import { czekajacaNaZmiane, stanProsby, wygasaDla } from "../../utils/prosby";
 import { naEtacie, normaMiesiaca } from "../../utils/umowy";
 import { kosztGodziny, zl } from "../../utils/budzet";
 import PoleCzasu from "./PoleCzasu";
+import { bladGodzin, dyspozycjaNa, opisDyspozycji, planWpisuZaPracownika } from "../../utils/dyspozycja";
+import { dzienKrotki } from "../../utils/czas";
 
 const DNI = ["nd", "pn", "wt", "śr", "czw", "pt", "sob"];
 const dzienKrotko = (d) => {
@@ -116,6 +118,10 @@ export default function GrafikZmianaModal({
   // „Zapytaj” (0.80.0) — prośby i wysłanie prośby; bez nich panel działa jak dawniej.
   prosby = [],
   onZapytaj = null,
+  // Dyspozycja (0.83.0) — podgląd panelu „Wolne / urlop”: co już jest w tych dniach.
+  dyspozycja = [],
+  dyspozycjaMiesiace = [],
+  dzis = null,
 }) {
   const edycja = !!ctx.shift;
   const [lokal, setLokal] = useState(ctx.shift?.lokal || ctx.lokal);
@@ -882,75 +888,171 @@ export default function GrafikZmianaModal({
             )
           )}
 
-          {wolneForm && user && (
-            <div className="p-3 rounded-lg border-[2px] border-[#171714] bg-[#F6F5F1] flex flex-col gap-3" data-wolne-panelu>
-              <b className="font-['Archivo']">Wolne / urlop · {user.name}</b>
-              <div className="flex gap-1.5">
-                {[
-                  { key: "urlop", label: "Urlop" },
-                  { key: "niedostepnosc", label: "Nie może" },
-                ].map((o) => (
-                  <button
-                    key={o.key}
-                    type="button"
-                    onClick={() => setWolneForm({ ...wolneForm, typ: o.key })}
-                    className={chipCls(wolneForm.typ === o.key)}
-                  >
-                    {o.label}
+          {wolneForm && user && (() => {
+            const godzinyForm = { od1: wolneForm.od1, do1: wolneForm.do1, od2: wolneForm.od2, do2: wolneForm.do2 };
+            const dysp = wolneForm.typ !== "urlop";
+            const stanForm = wolneForm.typ === "godziny" ? "godziny" : "nie";
+            const bladG = wolneForm.typ === "godziny" ? bladGodzin(godzinyForm) : null;
+            const zakresOk = !!wolneForm.od && !!wolneForm.doDnia && wolneForm.doDnia >= wolneForm.od;
+            const plan =
+              dysp && zakresOk
+                ? planWpisuZaPracownika({
+                    user,
+                    od: wolneForm.od,
+                    doDnia: wolneForm.doDnia,
+                    dzis,
+                    stan: stanForm,
+                    godziny: stanForm === "godziny" ? godzinyForm : {},
+                    notatka: wolneForm.note,
+                    dyspozycja,
+                    miesiace: dyspozycjaMiesiace,
+                  })
+                : null;
+            // Co już stoi w dyspozycji w tych dniach — kierownik ma to widzieć PRZED zapisem.
+            const obecne = plan ? plan.dni.map((d) => ({ d, w: dyspozycjaNa(dyspozycja, user, d) })).filter((x) => x.w) : [];
+            const nicDoZapisu = plan && plan.doZapisu.length + plan.nadpisze.length === 0;
+            const poleGodzinyCls = "h-11 border-[2px] border-[#171714] rounded-md px-2 bg-white w-full min-w-0";
+            return (
+              <div className="p-3 rounded-lg border-[2px] border-[#171714] bg-[#F6F5F1] flex flex-col gap-3" data-wolne-panelu>
+                <b className="font-['Archivo']">Wolne / urlop · {user.name}</b>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { key: "urlop", label: "Urlop" },
+                    { key: "niedostepnosc", label: "Nie może" },
+                    { key: "godziny", label: "Może w godzinach" },
+                  ].map((o) => (
+                    <button
+                      key={o.key}
+                      type="button"
+                      onClick={() => {
+                        // „Może w godzinach”: godziny z istniejącego wpisu na pierwszy dzień, jeśli są.
+                        const w = o.key === "godziny" && !wolneForm.od1 ? dyspozycjaNa(dyspozycja, user, wolneForm.od) : null;
+                        const z = w && w.stan === "godziny"
+                          ? { od1: trimTime(w.od1), do1: trimTime(w.do1), od2: trimTime(w.od2) || "", do2: trimTime(w.do2) || "", drugi: !!w.od2 }
+                          : {};
+                        setWolneForm({ ...wolneForm, ...z, typ: o.key });
+                      }}
+                      className={chipCls(wolneForm.typ === o.key)}
+                      data-wolne-typ={o.key}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="flex flex-col gap-1">
+                    <span className={etykietaCls}>Od dnia</span>
+                    <input
+                      type="date"
+                      value={wolneForm.od}
+                      onChange={(e) => setWolneForm({ ...wolneForm, od: e.target.value })}
+                      className="h-11 border-[2px] border-[#171714] rounded-md px-2 bg-white"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className={etykietaCls}>Do dnia</span>
+                    <input
+                      type="date"
+                      value={wolneForm.doDnia}
+                      onChange={(e) => setWolneForm({ ...wolneForm, doDnia: e.target.value })}
+                      className="h-11 border-[2px] border-[#171714] rounded-md px-2 bg-white"
+                    />
+                  </label>
+                </div>
+                {wolneForm.typ === "godziny" && (
+                  <div className="flex flex-col gap-2" data-wolne-godziny>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="flex flex-col gap-1">
+                        <span className={etykietaCls}>Może od</span>
+                        <input type="time" value={wolneForm.od1} onChange={(e) => setWolneForm({ ...wolneForm, od1: e.target.value })} className={poleGodzinyCls} data-od1 />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className={etykietaCls}>do</span>
+                        <input type="time" value={wolneForm.do1} onChange={(e) => setWolneForm({ ...wolneForm, do1: e.target.value })} className={poleGodzinyCls} data-do1 />
+                      </label>
+                    </div>
+                    {wolneForm.drugi ? (
+                      <div className="grid grid-cols-2 gap-2">
+                        <label className="flex flex-col gap-1">
+                          <span className={etykietaCls}>i od</span>
+                          <input type="time" value={wolneForm.od2} onChange={(e) => setWolneForm({ ...wolneForm, od2: e.target.value })} className={poleGodzinyCls} />
+                        </label>
+                        <label className="flex flex-col gap-1">
+                          <span className={etykietaCls}>do</span>
+                          <input type="time" value={wolneForm.do2} onChange={(e) => setWolneForm({ ...wolneForm, do2: e.target.value })} className={poleGodzinyCls} />
+                        </label>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setWolneForm({ ...wolneForm, drugi: true })}
+                        className="self-start text-[13px] font-bold underline underline-offset-[3px]"
+                      >
+                        + drugi przedział godzin
+                      </button>
+                    )}
+                    {bladG && (wolneForm.od1 || wolneForm.do1) && <span className="text-[13px] font-bold text-[#B8321A]">{bladG}</span>}
+                  </div>
+                )}
+                <input
+                  type="text"
+                  value={wolneForm.note}
+                  onChange={(e) => setWolneForm({ ...wolneForm, note: e.target.value })}
+                  placeholder="Notatka (opcjonalnie)"
+                  className="h-11 border-[2px] border-[#171714] rounded-md px-3 bg-white"
+                />
+                <span className="text-[13px] text-[#6E6E66]">
+                  {wolneForm.typ === "urlop"
+                    ? "Urlop od razu zapisze się jako godziny (8 h za dzień roboczy), a pracownik dostanie powiadomienie."
+                    : wolneForm.typ === "godziny"
+                    ? "Wpisze się do dyspozycji pracownika jako „Mogę w godzinach”: Grafik nie pozwoli wpisać zmiany poza tymi godzinami, o jedną zmianę można zapytać."
+                    : "Wpisze się do dyspozycji pracownika jako „Nie mogę” (bez godzin): Grafik nie pozwoli wpisać zmiany w te dni, o jeden dzień można zapytać."}
+                </span>
+                {plan && (
+                  <div className="text-[13px] flex flex-col gap-1 p-2 rounded-md bg-white border-[1.5px] border-[#DEDCD4]" data-wolne-podglad>
+                    {obecne.length > 0 && (
+                      <span>
+                        <b>Teraz w dyspozycji:</b>{" "}
+                        {obecne
+                          .map(({ d, w }) => `${dzienKrotki(d)} — ${opisDyspozycji(w)}${w.autor === "pracownik" ? (plan.nadpisze.includes(d) ? " (szkic pracownika)" : " (wysłane przez pracownika)") : " (kierownik)"}`)
+                          .join(" · ")}
+                      </span>
+                    )}
+                    {plan.dni.length === 0 ? (
+                      <span className="font-bold text-[#B8321A]">Ten zakres jest już za nami — dyspozycję wpisuje się od dziś.</span>
+                    ) : (
+                      <span data-wolne-plan>
+                        Zapisze się: <b>{plan.doZapisu.length + plan.nadpisze.length}</b> z {plan.dni.length}{" "}
+                        {plan.dni.length === 1 ? "dnia" : "dni"}
+                        {plan.nadpisze.length > 0 && ` (w tym ${plan.nadpisze.length} zamiast niewysłanego szkicu pracownika — dostanie wiadomość)`}
+                        {plan.juz.length > 0 && ` · bez zmian (już tak jest): ${plan.juz.length}`}
+                        {plan.pominiete.length > 0 &&
+                          ` · pominięte (pracownik wysłał swoją dyspozycję, zmienia ją tylko on): ${plan.pominiete.map(dzienKrotki).join(", ")}`}
+                      </span>
+                    )}
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <button type="button" className={btnObrysCls} onClick={() => setWolneForm(null)}>
+                    Wróć do zmiany
                   </button>
-                ))}
+                  <button
+                    type="button"
+                    className={btnGlownyCls}
+                    disabled={saving || !zakresOk || !!bladG || (dysp && (!plan || nicDoZapisu))}
+                    title={dysp && nicDoZapisu ? "W tych dniach nie ma czego zmienić" : ""}
+                    onClick={async () => {
+                      setSaving(true);
+                      await onAddAbsence({ user, ...wolneForm });
+                      setSaving(false);
+                    }}
+                  >
+                    {wolneForm.typ === "urlop" ? "Zapisz urlop" : "Zapisz w dyspozycji"}
+                  </button>
+                </div>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <label className="flex flex-col gap-1">
-                  <span className={etykietaCls}>Od dnia</span>
-                  <input
-                    type="date"
-                    value={wolneForm.od}
-                    onChange={(e) => setWolneForm({ ...wolneForm, od: e.target.value })}
-                    className="h-11 border-[2px] border-[#171714] rounded-md px-2 bg-white"
-                  />
-                </label>
-                <label className="flex flex-col gap-1">
-                  <span className={etykietaCls}>Do dnia</span>
-                  <input
-                    type="date"
-                    value={wolneForm.doDnia}
-                    onChange={(e) => setWolneForm({ ...wolneForm, doDnia: e.target.value })}
-                    className="h-11 border-[2px] border-[#171714] rounded-md px-2 bg-white"
-                  />
-                </label>
-              </div>
-              <input
-                type="text"
-                value={wolneForm.note}
-                onChange={(e) => setWolneForm({ ...wolneForm, note: e.target.value })}
-                placeholder="Notatka (opcjonalnie)"
-                className="h-11 border-[2px] border-[#171714] rounded-md px-3 bg-white"
-              />
-              <span className="text-[13px] text-[#6E6E66]">
-                {wolneForm.typ === "urlop"
-                  ? "Urlop od razu zapisze się jako godziny (8 h za dzień roboczy), a pracownik dostanie powiadomienie."
-                  : "Wpisze się do dyspozycji pracownika jako „Nie mogę” (bez godzin): Grafik nie pozwoli wpisać zmiany w te dni, o jeden dzień można zapytać. Dni, które pracownik sam zaznaczył, zostają bez zmian."}
-              </span>
-              <div className="flex gap-2">
-                <button type="button" className={btnObrysCls} onClick={() => setWolneForm(null)}>
-                  Wróć do zmiany
-                </button>
-                <button
-                  type="button"
-                  className={btnGlownyCls}
-                  disabled={saving || !wolneForm.od || !wolneForm.doDnia || wolneForm.doDnia < wolneForm.od}
-                  onClick={async () => {
-                    setSaving(true);
-                    await onAddAbsence({ user, ...wolneForm });
-                    setSaving(false);
-                  }}
-                >
-                  Zapisz wolne
-                </button>
-              </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
 
         <div className="flex flex-wrap items-center gap-2 px-4 md:px-5 py-3 border-t-[2px] border-[#171714] pb-[max(12px,env(safe-area-inset-bottom))]">
@@ -969,7 +1071,7 @@ export default function GrafikZmianaModal({
               type="button"
               disabled={!user}
               title={user ? "" : "Najpierw wybierz osobę"}
-              onClick={() => setWolneForm({ typ: "urlop", od: date, doDnia: date, note: "" })}
+              onClick={() => setWolneForm({ typ: "urlop", od: date, doDnia: date, note: "", od1: "", do1: "", od2: "", do2: "", drugi: false })}
               className="text-sm font-bold underline underline-offset-[3px] text-[#171714] disabled:opacity-40 w-full md:w-auto text-left"
             >
               Wolne / urlop

@@ -5,6 +5,22 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.83.0 — 2026-11-04
+
+- **„Wolne / urlop” w Grafiku zapisuje dyspozycję naprawdę.** Do tej pory
+  „Nie może” z tego okna pomijało dni, w których pracownik miał w kalendarzu
+  własny, jeszcze niewysłany szkic — wpis kierownika nic nie zmieniał, Grafik
+  dalej pozwalał wpisać zmianę, a drugie „Zapisz” mówiło „Nic do zapisania”.
+  Dziś wpis kierownika zastępuje taki szkic (pracownik dostaje wiadomość).
+  Dyspozycji, którą pracownik już wysłał, dalej zmienia tylko on.
+- **Nowa opcja „Może w godzinach”** obok „Urlop” i „Nie może” — z jednym albo
+  dwoma przedziałami godzin, na jeden dzień albo cały zakres.
+- **Okno pokazuje przed zapisem, co już jest w dyspozycji** w wybranych dniach
+  i co się zapisze, a po zapisie mówi wprost, co zapisano, co pominięto i
+  dlaczego.
+- **Wpis kierownika o sobie samym** (kierownik też pracuje) wiąże Grafik tak
+  samo jak wpis o innych.
+
 ## 0.82.0 — 2026-10-22
 
 - **Prośba o zwolnienie ze zmiany.** Pracownik, który ma już zmianę w grafiku,

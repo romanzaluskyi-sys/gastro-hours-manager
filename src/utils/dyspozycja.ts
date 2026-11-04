@@ -282,36 +282,129 @@ export const wyslijMiesiac = async ({ user, miesiac, pozostale, dzis, dyspozycja
   };
 };
 
-// Kierownik wpisuje „Nie mogę” w imieniu pracownika (0.81.0 — zastępuje dawne
-// „Niedostępność” z panelu zmiany w Grafiku). Wpis kierownika wiąże od razu.
-// ⚠️ Dni, które pracownik zaznaczył SAM, zostają bez zmian — trigger
-// `dyspozycja_autor` i tak by ich nie przepuścił; wracają w `pominiete`.
-// Zwraca { dyspozycja, zapisane: [dni], pominiete: [dni] }.
-export const tekstNieMogeOdKierownika = (kto, od, doDnia) => {
-  const f = (d) => `${d.slice(8, 10)}.${d.slice(5, 7)}`;
-  return `Kierownik wpisał Ci w dyspozycji „Nie mogę”: ${od === doDnia ? f(od) : `${f(od)}–${f(doDnia)}`}.${kto ? ` Wpisał(a): ${kto}.` : ""}`;
+// Kierownik wpisuje dyspozycję w imieniu pracownika na zakres dni — z panelu
+// „Wolne / urlop” w Grafiku: „Nie może” (0.81.0) albo „Może w godzinach”
+// (0.83.0). Wpis kierownika wiąże od razu.
+//
+// Co się dzieje z dniem, na którym coś już jest (`planWpisuZaPracownika`):
+//   * pusto albo wpis kierownika → zapis (`doZapisu`);
+//   * SZKIC pracownika (miesiąc niewysłany) → zapis w miejsce szkicu
+//     (`nadpisze`). Szkic nie wiąże, więc do 0.82.0 pominięcie go znaczyło, że
+//     „Nie może” kierownika nie zmieniało w Grafiku NIC, a ekran mówił
+//     „Nic do zapisania”. Wymaga migracji 0052 (trigger);
+//   * WYSŁANA dyspozycja pracownika albo prośba o zwolnienie → bez zmian
+//     (`pominiete`) — zmienia ją tylko on, kierownik może „Zapytać”;
+//   * dzień, w którym jest już dokładnie to samo i to wiąże → `juz`.
+const tenSamWpis = (w, nowy) =>
+  !!w &&
+  w.stan === nowy.stan &&
+  trimTime(w.od1) === trimTime(nowy.od1) &&
+  trimTime(w.do1) === trimTime(nowy.do1) &&
+  trimTime(w.od2) === trimTime(nowy.od2) &&
+  trimTime(w.do2) === trimTime(nowy.do2) &&
+  (w.notatka || null) === (nowy.notatka || null);
+
+export const planWpisuZaPracownika = ({ user, od, doDnia, dzis, stan, godziny = {}, notatka, dyspozycja, miesiace }) => {
+  const plan = { dni: [], doZapisu: [], nadpisze: [], pominiete: [], juz: [] };
+  if (!user || !od || !doDnia || doDnia < od) return plan;
+  for (let d = dzis && od < dzis ? dzis : od; d <= doDnia; d = addDaysYMD(d, 1)) plan.dni.push(d);
+  plan.dni.forEach((d) => {
+    const w = dyspozycjaNa(dyspozycja, user, d);
+    const nowy = wierszDnia({ user, dateStr: d, stan, notatka, ...godziny });
+    if (!w || w.autor !== "pracownik") {
+      (tenSamWpis(w, nowy) ? plan.juz : plan.doZapisu).push(d);
+      return;
+    }
+    const chroniony = miesiacWyslany(miesiace, user, miesiacDnia(d)) || !!w.zwolnienie_z;
+    if (!chroniony) plan.nadpisze.push(d);
+    else if (tenSamWpis(w, nowy)) plan.juz.push(d);
+    else plan.pominiete.push(d);
+  });
+  return plan;
 };
-export const wpiszNieMogeZaPracownika = async ({ user, od, doDnia, notatka, dzis, dyspozycja, kierownik }) => {
-  const dni = [];
-  for (let d = od < dzis ? dzis : od; d <= doDnia; d = addDaysYMD(d, 1)) dni.push(d);
-  const pominiete = dni.filter((d) => {
-    const w = dyspozycjaNa(dyspozycja, user, d);
-    return w && w.autor === "pracownik" && w.stan !== "nie";
-  });
-  const juzNie = dni.filter((d) => {
-    const w = dyspozycjaNa(dyspozycja, user, d);
-    return w && w.autor === "pracownik" && w.stan === "nie";
-  });
-  const doZapisu = dni.filter((d) => !pominiete.includes(d) && !juzNie.includes(d));
-  const lista = doZapisu.length ? await zapiszDni({ user, dni: doZapisu, stan: "nie", notatka, dyspozycja }) : dyspozycja;
-  if (doZapisu.length) {
+
+// Zdania zaczynają się od „Kierownik wpisał Ci w dyspozycji” — rozpoznają je
+// opisWiadomosci (employeeSessionShared.tsx) i api/_lib/wiadomosci.js.
+export const tekstNieMogeOdKierownika = (kto, od, doDnia, wpis = null) => {
+  const f = (d) => `${d.slice(8, 10)}.${d.slice(5, 7)}`;
+  return `Kierownik wpisał Ci w dyspozycji „${wpis ? opisDyspozycji(wpis) : "Nie mogę"}”: ${od === doDnia ? f(od) : `${f(od)}–${f(doDnia)}`}.${kto ? ` Wpisał(a): ${kto}.` : ""}`;
+};
+
+// Zwraca { dyspozycja, zapisane, nadpisane, pominiete, juz, bledy, niewiazace }.
+// Dni zapisują się po kolei, każdy osobno: błąd jednego (np. trigger na bazie
+// bez 0052 przy szkicu pracownika) nie gubi reszty, która już weszła do bazy.
+// `niewiazace` = zapisane, które baza i tak oznaczyła jako wpis pracownika
+// (baza bez 0052) — Grafik ich nie weźmie pod uwagę i ekran ma to powiedzieć.
+export const wpiszDyspozycjeZaPracownika = async ({
+  user,
+  od,
+  doDnia,
+  stan = "nie",
+  godziny = {},
+  notatka,
+  dzis,
+  dyspozycja,
+  miesiace,
+  kierownik,
+}) => {
+  const plan = planWpisuZaPracownika({ user, od, doDnia, dzis, stan, godziny, notatka, dyspozycja, miesiace });
+  let lista = [...(dyspozycja || [])];
+  const zapisane = [];
+  const bledy = [];
+  for (const d of [...plan.doZapisu, ...plan.nadpisze].sort()) {
     try {
-      await createEmployeeNotification(user.name, tekstNieMogeOdKierownika(kierownik, doZapisu[0], doZapisu[doZapisu.length - 1]), "dyspozycja");
+      lista = await zapiszDni({ user, dni: [d], stan, godziny, notatka, dyspozycja: lista });
+      zapisane.push(d);
+    } catch (e) {
+      bledy.push({ dzien: d, blad: (e && e.message) || "nieznany błąd" });
+    }
+  }
+  const niewiazace = zapisane.filter((d) => {
+    const w = dyspozycjaNa(lista, user, d);
+    return w && w.autor === "pracownik" && !wiazeDyspozycja(w, miesiace);
+  });
+  if (zapisane.length) {
+    try {
+      const wzor = dyspozycjaNa(lista, user, zapisane[0]);
+      await createEmployeeNotification(
+        user.name,
+        tekstNieMogeOdKierownika(kierownik, zapisane[0], zapisane[zapisane.length - 1], wzor),
+        "dyspozycja"
+      );
     } catch (e) {
       // wpis jest zapisany i widać go w Dyspozycji — wiadomość best-effort
     }
   }
-  return { dyspozycja: lista, zapisane: doZapisu, pominiete };
+  return {
+    dyspozycja: lista,
+    zapisane,
+    nadpisane: plan.nadpisze.filter((d) => zapisane.includes(d)),
+    pominiete: plan.pominiete,
+    juz: plan.juz,
+    bledy,
+    niewiazace,
+  };
+};
+
+// Zgodność wstecz (harnessy, stare wywołania).
+export const wpiszNieMogeZaPracownika = (args) => wpiszDyspozycjeZaPracownika({ ...args, stan: "nie" });
+
+const ileDni = (n) => `${n} ${n === 1 ? "dzień" : "dni"}`;
+
+// Jedno zdanie po zapisie z panelu. `ok` = czy coś faktycznie obowiązuje.
+export const opisWynikuWpisu = (w, etykieta) => {
+  const czesci = [];
+  if (w.zapisane.length) czesci.push(`Zapisano „${etykieta}” na ${ileDni(w.zapisane.length)}.`);
+  if (w.nadpisane.length) czesci.push(`W tym ${ileDni(w.nadpisane.length)} w miejsce niewysłanego szkicu pracownika.`);
+  if (w.juz.length) czesci.push(`${w.juz.length === 1 ? "Jeden dzień już był" : `${ileDni(w.juz.length)} już było`} tak wpisane.`);
+  if (w.pominiete.length)
+    czesci.push(`Pominięto ${ileDni(w.pominiete.length)} — pracownik wysłał tam swoją dyspozycję (zmienia ją tylko on; w Grafiku możesz zapytać o zmianę).`);
+  if (w.bledy.length) czesci.push(`Nie zapisano ${ileDni(w.bledy.length)}: ${w.bledy[0].blad}`);
+  if (w.niewiazace.length)
+    czesci.push(`⚠ Baza oznaczyła ${ileDni(w.niewiazace.length)} jako wpis pracownika i Grafik go nie uwzględni — potrzebna migracja 0052.`);
+  if (!czesci.length) czesci.push("Wybrany zakres jest już za nami — nie ma czego wpisać.");
+  const ok = (w.zapisane.length > 0 || w.juz.length > 0) && w.bledy.length === 0 && w.niewiazace.length === 0;
+  return { tekst: czesci.join(" "), ok };
 };
 
 // Podsumowanie miesiąca przed wysłaniem (kafle „Mogę / Nie mogę / Urlop”).
@@ -466,8 +559,9 @@ export const powiadomOKonfliktachSzkicu = async (lista, user) => {
 };
 
 // Dyspozycja w karcie pracownika (0.82.0): kierownik ustawia jeden dzień —
-// pusty albo wpisany wcześniej przez kierownika. Dnia wpisanego przez
-// pracownika nie zmienia (trigger i tak by nie przepuścił) — tam zostaje
+// pusty, wpisany wcześniej przez kierownika albo (od 0.83.0, migracja 0052)
+// NIEWYSŁANY szkic pracownika. Wysłanej dyspozycji pracownika i prośby o
+// zwolnienie nie zmienia (trigger i tak by nie przepuścił) — tam zostaje
 // „Zapytaj” w Grafiku. Zdania zaczynają się jak `tekstNieMogeOdKierownika`,
 // więc rozpoznają je te same miejsca (opisWiadomosci, api/_lib/wiadomosci.js).
 export const tekstDyspozycjiOdKierownika = (kto, dateStr, wpis) => {
@@ -478,12 +572,15 @@ export const tekstDyspozycjiOdKierownika = (kto, dateStr, wpis) => {
     : `Kierownik usunął wpis z Twojej dyspozycji: ${f}.${podpis}`;
 };
 
-export const moznaZmienicZaPracownika = (wpis) => !wpis || wpis.autor === "kierownik";
+export const moznaZmienicZaPracownika = (wpis, miesiace = []) =>
+  !wpis ||
+  wpis.autor !== "pracownik" ||
+  (!wpis.zwolnienie_z && !miesiacWyslany(miesiace, { id: wpis.user_id }, miesiacDnia(wpis.date)));
 
-export const ustawDzienZaPracownika = async ({ user, dateStr, stan, godziny = {}, notatka, dyspozycja, kierownik }) => {
+export const ustawDzienZaPracownika = async ({ user, dateStr, stan, godziny = {}, notatka, dyspozycja, miesiace = [], kierownik }) => {
   const istniejacy = dyspozycjaNa(dyspozycja, user, dateStr);
-  if (!moznaZmienicZaPracownika(istniejacy)) {
-    throw new Error("Ten dzień wpisał pracownik — zmienia go tylko on. W Grafiku możesz zapytać o jedną zmianę („Zapytaj”).");
+  if (!moznaZmienicZaPracownika(istniejacy, miesiace)) {
+    throw new Error("Ten dzień pracownik wpisał i wysłał — zmienia go tylko on. W Grafiku możesz zapytać o jedną zmianę („Zapytaj”).");
   }
   const lista = await zapiszDni({ user, dni: [dateStr], stan, godziny, notatka, dyspozycja });
   const nowy = dyspozycjaNa(lista, user, dateStr);

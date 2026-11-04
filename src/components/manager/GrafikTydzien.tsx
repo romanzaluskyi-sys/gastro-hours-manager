@@ -71,7 +71,9 @@ import {
   prosbyOZwolnienie,
   przeszkodaDyspozycji,
   wiazeDyspozycja,
-  wpiszNieMogeZaPracownika,
+  wpiszDyspozycjeZaPracownika,
+  opisWynikuWpisu,
+  opisDyspozycji,
 } from "../../utils/dyspozycja";
 import { podmienProsbe, prosbyDnia, stanProsby, wycofaj as wycofajProsbe, wygasaDla, zapytaj } from "../../utils/prosby";
 import { ostrzezeniaKodeksu } from "../../utils/kodeks";
@@ -1737,27 +1739,33 @@ export default function GrafikTydzien({
   };
 
   // Wolne/urlop wpisane wprost z grafiku (utils/absences.ts).
-  const handleAddAbsence = async ({ user, typ, od, doDnia, note }) => {
-    // „Nie może” (0.81.0) to dyspozycja wpisana przez kierownika, nie stara
-    // niedostępność w `absences` — jedno pojęcie zamiast dwóch (docs/DYSPOZYCJA.md, D4).
-    if (typ === "niedostepnosc") {
+  const handleAddAbsence = async ({ user, typ, od, doDnia, note, od1, do1, od2, do2 }) => {
+    // „Nie może” (0.81.0) i „Może w godzinach” (0.83.0) to dyspozycja wpisana
+    // przez kierownika, nie `absences` — jedno pojęcie zamiast dwóch
+    // (docs/DYSPOZYCJA.md, D4). Co z dniami, na których już coś jest, mówi
+    // `planWpisuZaPracownika`.
+    if (typ === "niedostepnosc" || typ === "godziny") {
+      const stan = typ === "godziny" ? "godziny" : "nie";
+      const godziny = stan === "godziny" ? { od1, do1, od2, do2 } : {};
       try {
-        const w = await wpiszNieMogeZaPracownika({
+        const w = await wpiszDyspozycjeZaPracownika({
           user,
           od,
           doDnia,
+          stan,
+          godziny,
           notatka: note,
           dzis: dzisYMD,
           dyspozycja,
+          miesiace: dyspozycjaMiesiace,
           kierownik: currentUser?.name,
         });
-        if (setDyspozycja) setDyspozycja(w.dyspozycja);
-        setModalCtx(null);
-        showMsg(
-          (w.zapisane.length ? `Zapisano „Nie może” na ${w.zapisane.length} ${w.zapisane.length === 1 ? "dzień" : "dni"}.` : "Nic do zapisania.") +
-            (w.pominiete.length ? ` Pominięto ${w.pominiete.length} — tam pracownik sam zaznaczył, że może.` : "")
-        );
-        return true;
+        if (setDyspozycja && w.zapisane.length) setDyspozycja(w.dyspozycja);
+        const etykieta = stan === "nie" ? "Nie może" : opisDyspozycji({ stan, ...godziny }).replace(/^Mogę/, "Może");
+        const { tekst, ok } = opisWynikuWpisu(w, etykieta);
+        if (ok) setModalCtx(null);
+        showMsg(tekst, ok ? "success" : "error");
+        return ok;
       } catch (err) {
         showMsg(`Błąd zapisu dyspozycji: ${err.message || "nieznany błąd"}`, "error");
         return false;
@@ -2065,6 +2073,9 @@ export default function GrafikTydzien({
           onClose={() => setModalCtx(null)}
           prosby={widoczneProsby}
           onZapytaj={handleZapytaj}
+          dyspozycja={dyspozycja}
+          dyspozycjaMiesiace={dyspozycjaMiesiace}
+          dzis={dzisYMD}
         />
       )}
       <GrafikBlokadaModal powod={blokada} onClose={() => setBlokada(null)} onNotify={handleNotify} />

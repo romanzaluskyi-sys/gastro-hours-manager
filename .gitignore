@@ -4,3 +4,6 @@
 
 # Rejestr klientów — dane operacyjne, nie kod (wzór: klienci.example.json)
 klienci.json
+
+# Zrzuty baz (scripts/eksport-bazy.py) — dane osobowe, nigdy do gita
+kopie/

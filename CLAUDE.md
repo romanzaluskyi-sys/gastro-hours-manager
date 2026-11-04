@@ -215,7 +215,13 @@ trzy miejsca.
 
 ## Dyspozycja — od 0.79.0 (migracje `0047`–`0051`)
 
-### Wdrożenie D1–D4 (0.78.0–0.82.0) — przeczytaj PRZED mergem
+### Wdrożenie D1–D4 (0.78.0–0.83.0) — przeczytaj PRZED mergem
+
+⚠️ **Od 0.83.0 na tej samej gałęzi jest szósty commit i migracja `0052`**
+(trigger `dyspozycja_autor`: kierownik zastępuje NIEWYSŁANY szkic pracownika,
+wpis kierownika o sobie = autor `kierownik`). Puść ją razem z `0047`–`0051`;
+kolejność dowolna, to sama podmiana funkcji. Bez niej „Wolne / urlop” w
+Grafiku przy szkicu pracownika pokaże błąd z triggera (nie udaje sukcesu).
 
 Pięć commitów na gałęziach STOSOWYCH: `claude/poziomy-stanowisk` (D1, 0.78.0,
 `0047`) ⊂ `claude/dyspozycja` (D2, 0.79.0, `0048`) ⊂ `claude/zapytaj` (D3,
@@ -297,8 +303,15 @@ Dyspozycja, blok `WOLNE`); sprawdzian `harness-dyspozycja.html`.
 - ⚠️ **Raport kierownika mailem NIE liczy próśb o zwolnienie** w „Wymaga
   decyzji” (`api/_lib/raport.js`) — tak samo jak wydarzeń do rozliczenia.
   Znaczek w aplikacji liczy.
-- ⚠️ **`autor` ustawia trigger `dyspozycja_autor`**, a wpisu pracownika
-  kierownik nie zmieni nawet z pominięciem aplikacji. Polityki: po jednej na
+- ⚠️ **`autor` ustawia trigger `dyspozycja_autor`**, a WYSŁANEJ dyspozycji
+  pracownika (i prośby o zwolnienie) kierownik nie zmieni nawet z pominięciem
+  aplikacji. **Od 0.83.0 (`0052`) niewysłany SZKIC pracownika kierownik
+  zastępuje** — szkic nie wiąże, więc do 0.82.0 „Nie może” z Grafiku było przy
+  nim martwe, a ekran mówił „Nic do zapisania” (zgłoszenie 04.11.2026). Każdy
+  zapis kierownika (także o sobie) = autor `kierownik`. Panel „Wolne / urlop”:
+  Urlop / Nie może / Może w godzinach, podgląd i zapis przez
+  `planWpisuZaPracownika` + `wpiszDyspozycjeZaPracownika` (dni po kolei, błąd
+  jednego nie gubi reszty; `niewiazace` = baza bez `0052`). Polityki: po jednej na
   polecenie (`ludzie_mojej_dyspozycji()`), x4 na obu tabelach w inwentarzu
   `pg_policies` to norma.
 - ⚠️ **Nowa tabela → `demoDane.js`**: `dyspozycja`, `dyspozycja_miesiace`,
