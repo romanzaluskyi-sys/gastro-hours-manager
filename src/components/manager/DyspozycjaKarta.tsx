@@ -85,9 +85,9 @@ export default function DyspozycjaKarta({
     if (d < dzis) return;
     const s = stan(d);
     if (s.urlop) return showMsg?.(`${dzienKrotki(d)}: urlop — zmienia się go w sekcji „Urlop i dni wolne”.`, "error");
-    if (!moznaZmienicZaPracownika(s.wpis)) {
+    if (!moznaZmienicZaPracownika(s.wpis, miesiace)) {
       setDzien(null);
-      return showMsg?.(`${dzienKrotki(d)}: wpisał pracownik — zmiana tylko przez „Zapytaj” w Grafiku.`, "error");
+      return showMsg?.(`${dzienKrotki(d)}: pracownik wpisał i wysłał — zmiana tylko przez „Zapytaj” w Grafiku.`, "error");
     }
     setDzien(d);
     setGodziny({ od1: trimTime(s.wpis?.od1) || "", do1: trimTime(s.wpis?.do1) || "" });
@@ -107,6 +107,7 @@ export default function DyspozycjaKarta({
         stan: nowyStan,
         godziny,
         dyspozycja,
+        miesiace,
         kierownik,
       });
       setDyspozycja && setDyspozycja(lista);

@@ -1814,7 +1814,7 @@ const poprzedniMiesiac = (h) => {
             await czekaj(150);
             sprawdz("„Nie może” mówi, że wpisze się do dyspozycji", /do dyspozycji pracownika jako „Nie mogę”/.test(panel().querySelector("[data-wolne-panelu]").textContent));
             const przedNieMoze = window.__zapisy.length;
-            [...panel().querySelector("[data-wolne-panelu]").querySelectorAll("button")].find((b) => b.textContent.trim() === "Zapisz wolne")
+            [...panel().querySelector("[data-wolne-panelu]").querySelectorAll("button")].find((b) => b.textContent.trim() === "Zapisz w dyspozycji")
               .dispatchEvent(new MouseEvent("click", { bubbles: true }));
             await czekaj(400);
             const noweNM = window.__zapisy.slice(przedNieMoze);

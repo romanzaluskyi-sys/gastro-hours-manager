@@ -24,10 +24,13 @@ window.__zapisy = [];
 const ATRAPA_API = URL.createObjectURL(new Blob([`
   export const api = {
     get: async (t) => (window.__tabele[t] || []).slice(),
-    post: async (t, d) => { window.__zapisy.push(["post", t, d]); const w = { id: "id-" + window.__zapisy.length, ...d };
+    // window.__autorZapisu udaje trigger \`dyspozycja_autor\` (0052: zapis kierownika = 'kierownik').
+    post: async (t, d) => { window.__zapisy.push(["post", t, d]); const w = { id: "id-" + window.__zapisy.length, ...d,
+        ...(t === "dyspozycja" && window.__autorZapisu ? { autor: window.__autorZapisu } : {}) };
       (window.__tabele[t] = window.__tabele[t] || []).push(w); return w; },
     patch: async (t, id, d) => { window.__zapisy.push(["patch", t, id, d]); const l = window.__tabele[t] || [];
-      const i = l.findIndex((w) => w.id === id); const w = { ...(l[i] || {}), id, ...d }; if (i >= 0) l[i] = w; return w; },
+      const i = l.findIndex((w) => w.id === id); const w = { ...(l[i] || {}), id, ...d,
+        ...(t === "dyspozycja" && window.__autorZapisu ? { autor: window.__autorZapisu } : {}) }; if (i >= 0) l[i] = w; return w; },
     delete: async (t, id) => { window.__zapisy.push(["delete", t, id]); window.__tabele[t] = (window.__tabele[t] || []).filter((w) => w.id !== id); return true; },
     patchByFilter: async () => true, rpc: async () => null,
     dodajBezOdczytu: async (t, d) => { window.__zapisy.push(["dodaj", t, d]); (window.__tabele[t] = window.__tabele[t] || []).push(d); return true; },
@@ -293,26 +296,72 @@ const J = (x) => JSON.stringify(x);
 
     log("");
     log("— „Nie może” od kierownika (wpiszNieMogeZaPracownika) —");
-    window.__tabele = { dyspozycja: [] }; window.__zapisy = [];
+    window.__tabele = { dyspozycja: [] }; window.__zapisy = []; window.__autorZapisu = "kierownik";
     const wlasne = [
       { id: "w1", user_id: "a", user_name: "Ala", date: "2026-11-12", stan: "moge", autor: "pracownik" },
       { id: "w2", user_id: "a", user_name: "Ala", date: "2026-11-13", stan: "nie", autor: "pracownik" },
       { id: "w3", user_id: "a", user_name: "Ala", date: "2026-11-14", stan: "godziny", od1: "16:00", do1: "22:00", autor: "kierownik" },
     ];
+    // Miesiąc NIEWYSŁANY: wpisy pracownika to szkic — kierownik je zastępuje (0.83.0, migracja 0052).
     window.__tabele.dyspozycja = wlasne.map((x) => ({ ...x }));
     const nm = await D.wpiszNieMogeZaPracownika({ user: ala, od: "2026-11-09", doDnia: "2026-11-14", notatka: "chorobowe",
-      dzis: "2026-11-11", dyspozycja: wlasne, kierownik: "Roman" });
+      dzis: "2026-11-11", dyspozycja: wlasne, miesiace: [], kierownik: "Roman" });
     sprawdz("dni miniony pominięte, zakres od dziś", !nm.zapisane.includes("2026-11-10") && nm.zapisane[0] === "2026-11-11", J(nm.zapisane));
-    sprawdz("dzień, w którym pracownik sam „może”, zostaje (pominiete)", J(nm.pominiete) === J(["2026-11-12"]));
-    sprawdz("dzień, w którym pracownik sam „nie może”, nie jest nadpisywany", !nm.zapisane.includes("2026-11-13"));
-    sprawdz("wpis kierownika („tylko 16–22”) zmienia się na „nie”",
-      nm.zapisane.includes("2026-11-14") && D.dyspozycjaNa(nm.dyspozycja, ala, "2026-11-14").stan === "nie");
-    sprawdz("zapisane: 11 i 14", J(nm.zapisane) === J(["2026-11-11", "2026-11-14"]));
+    sprawdz("szkic pracownika („może”, „nie może”) zastąpiony — nadpisane 12 i 13",
+      J(nm.nadpisane) === J(["2026-11-12", "2026-11-13"]) && nm.pominiete.length === 0, J(nm));
+    sprawdz("po zapisie wszystkie dni wiążą (autor kierownik, stan nie)",
+      ["2026-11-11", "2026-11-12", "2026-11-13", "2026-11-14"].every((d) => {
+        const w = D.dyspozycjaNa(nm.dyspozycja, ala, d);
+        return w && w.stan === "nie" && D.wiazeDyspozycja(w, []);
+      }));
+    sprawdz("zapisane: 11–14, bez błędów i bez „niewiążących”",
+      J(nm.zapisane) === J(["2026-11-11", "2026-11-12", "2026-11-13", "2026-11-14"]) && nm.bledy.length === 0 && nm.niewiazace.length === 0, J(nm.zapisane));
     const wiad = (window.__tabele.notifications || [])[0] || {};
     sprawdz("wiadomość „Kierownik wpisał Ci w dyspozycji „Nie mogę”” z zakresem i kto",
       wiad.type === "dyspozycja" && /^Kierownik wpisał Ci w dyspozycji „Nie mogę”: 11\.11–14\.11\. Wpisał\(a\): Roman\.$/.test(wiad.message), wiad.message);
-    const pusto = await D.wpiszNieMogeZaPracownika({ user: ala, od: "2026-11-12", doDnia: "2026-11-12", dzis: "2026-11-11", dyspozycja: wlasne, kierownik: "Roman" });
-    sprawdz("nic do zapisania = bez wiadomości", pusto.zapisane.length === 0 && (window.__tabele.notifications || []).length === 1);
+    sprawdz("opis wyniku: zapisano + szkic, bez ostrzeżeń",
+      D.opisWynikuWpisu(nm, "Nie może").ok && /Zapisano „Nie może” na 4 dni\. W tym 2 dni w miejsce niewysłanego szkicu/.test(D.opisWynikuWpisu(nm, "Nie może").tekst),
+      D.opisWynikuWpisu(nm, "Nie może").tekst);
+
+    // Miesiąc WYSŁANY: wpisy pracownika chronione; to samo „nie” = już jest.
+    window.__tabele = { dyspozycja: wlasne.map((x) => ({ ...x })) };
+    const plW = D.planWpisuZaPracownika({ user: ala, od: "2026-11-12", doDnia: "2026-11-14", dzis: "2026-11-11", stan: "nie",
+      dyspozycja: wlasne, miesiace: wyslany });
+    sprawdz("wysłany miesiąc: „może” pracownika pominięte, jego „nie” = już jest, wpis kierownika do zapisu",
+      J(plW.pominiete) === J(["2026-11-12"]) && J(plW.juz) === J(["2026-11-13"]) && J(plW.doZapisu) === J(["2026-11-14"]) && plW.nadpisze.length === 0, J(plW));
+    const plZw = D.planWpisuZaPracownika({ user: ala, od: "2026-11-20", doDnia: "2026-11-20", dzis: "2026-11-11", stan: "nie",
+      dyspozycja: [{ id: "zw", user_id: "a", date: "2026-11-20", stan: "nie", notatka: "egzamin", autor: "pracownik", zwolnienie_z: "g1" }], miesiace: [] });
+    sprawdz("prośba o zwolnienie (szkic) zostaje nietknięta", plZw.nadpisze.length === 0 && plZw.pominiete.length === 1, J(plZw));
+    const pusto = await D.wpiszNieMogeZaPracownika({ user: ala, od: "2026-11-13", doDnia: "2026-11-13", dzis: "2026-11-11", dyspozycja: wlasne, miesiace: wyslany, kierownik: "Roman" });
+    sprawdz("nic do zapisania = bez wiadomości i bez zapisów", pusto.zapisane.length === 0 && pusto.juz.length === 1 && (window.__tabele.notifications || []).length === 0);
+    sprawdz("opis: „już było” liczy się jako ok", D.opisWynikuWpisu(pusto, "Nie może").ok && /już był/.test(D.opisWynikuWpisu(pusto, "Nie może").tekst),
+      D.opisWynikuWpisu(pusto, "Nie może").tekst);
+    const przeszlosc = D.planWpisuZaPracownika({ user: ala, od: "2026-11-01", doDnia: "2026-11-05", dzis: "2026-11-11", stan: "nie", dyspozycja: [], miesiace: [] });
+    sprawdz("zakres w przeszłości: zero dni", przeszlosc.dni.length === 0);
+
+    log("— „Może w godzinach” od kierownika (0.83.0) —");
+    window.__tabele = { dyspozycja: [] }; window.__zapisy = [];
+    const mg = await D.wpiszDyspozycjeZaPracownika({ user: ala, od: "2026-11-16", doDnia: "2026-11-18", stan: "godziny",
+      godziny: { od1: "16:00", do1: "22:00", od2: "", do2: "" }, dzis: "2026-11-11", dyspozycja: [], miesiace: [], kierownik: "Roman" });
+    const w16 = D.dyspozycjaNa(mg.dyspozycja, ala, "2026-11-16");
+    sprawdz("trzy dni „godziny” 16–22, bez drugiego przedziału",
+      mg.zapisane.length === 3 && w16.stan === "godziny" && w16.od1 === "16:00" && w16.do1 === "22:00" && w16.od2 === null, J(w16));
+    sprawdz("blokuje zmianę 10–18, przepuszcza 17–21",
+      !!D.przeszkodaDyspozycji({ dyspozycja: mg.dyspozycja, miesiace: [], user: ala, date: "2026-11-17", start_time: "10:00", end_time: "18:00" }) &&
+        !D.przeszkodaDyspozycji({ dyspozycja: mg.dyspozycja, miesiace: [], user: ala, date: "2026-11-17", start_time: "17:00", end_time: "21:00" }));
+    const wiadG = (window.__tabele.notifications || [])[0] || {};
+    sprawdz("wiadomość „Kierownik wpisał Ci w dyspozycji „Mogę 16–22”: 16.11–18.11”",
+      /^Kierownik wpisał Ci w dyspozycji „Mogę 16–22”: 16\.11–18\.11\. Wpisał\(a\): Roman\.$/.test(wiadG.message || ""), wiadG.message);
+    const jeszczeRaz = D.planWpisuZaPracownika({ user: ala, od: "2026-11-16", doDnia: "2026-11-18", dzis: "2026-11-11", stan: "godziny",
+      godziny: { od1: "16:00", do1: "22:00" }, dyspozycja: mg.dyspozycja, miesiace: [] });
+    sprawdz("te same godziny drugi raz = już jest", jeszczeRaz.juz.length === 3 && jeszczeRaz.doZapisu.length === 0, J(jeszczeRaz));
+
+    log("— baza bez 0052: zapis oznaczony jako pracownika —");
+    window.__tabele = { dyspozycja: [] }; window.__zapisy = []; window.__autorZapisu = "pracownik";
+    const bez52 = await D.wpiszNieMogeZaPracownika({ user: ala, od: "2026-11-20", doDnia: "2026-11-20", dzis: "2026-11-11", dyspozycja: [], miesiace: [], kierownik: "Roman" });
+    const opB = D.opisWynikuWpisu(bez52, "Nie może");
+    sprawdz("„niewiążące” wykryte i ekran o tym mówi (nie ok)", bez52.niewiazace.length === 1 && !opB.ok && /migracja 0052/.test(opB.tekst), opB.tekst);
+    window.__autorZapisu = undefined;
 
     log("");
     log("— D4 (0.82.0): prośba o zwolnienie ze zmiany —");
@@ -385,9 +434,11 @@ const J = (x) => JSON.stringify(x);
     const karta = [{ id: "k1", user_id: "a", user_name: "Ala", date: "2026-11-12", stan: "moge", autor: "pracownik" }];
     let bladKarty = "";
     try {
-      await D.ustawDzienZaPracownika({ user: ala, dateStr: "2026-11-12", stan: "nie", dyspozycja: karta, kierownik: "Roman" });
+      await D.ustawDzienZaPracownika({ user: ala, dateStr: "2026-11-12", stan: "nie", dyspozycja: karta, miesiace: wyslany, kierownik: "Roman" });
     } catch (e) { bladKarty = e.message; }
-    sprawdz("dzień pracownika: odmowa z „Zapytaj”", /Zapytaj/.test(bladKarty) && window.__zapisy.length === 0, bladKarty);
+    sprawdz("dzień pracownika (wysłany): odmowa z „Zapytaj”", /Zapytaj/.test(bladKarty) && window.__zapisy.length === 0, bladKarty);
+    sprawdz("szkic pracownika w karcie da się zmienić (0.83.0)",
+      D.moznaZmienicZaPracownika(karta[0], []) && !D.moznaZmienicZaPracownika(karta[0], wyslany) && D.moznaZmienicZaPracownika(null, wyslany));
     const pk = await D.ustawDzienZaPracownika({ user: ala, dateStr: "2026-11-13", stan: "godziny", godziny: { od1: "08:00", do1: "14:00" },
       dyspozycja: karta, kierownik: "Roman" });
     const wiadK = (window.__tabele.notifications || [])[0] || {};

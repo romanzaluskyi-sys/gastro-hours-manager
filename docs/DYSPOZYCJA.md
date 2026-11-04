@@ -86,8 +86,11 @@ uniemożliwiłaby nawet przesunięcie godziny.
 
 **RLS:** jedna polityka na polecenie, `ludzie_mojej_dyspozycji()` = ja +
 (kierownik albo tablet) `moi_ludzie()`; właściciel wszystko. Kierownik nie
-zmieni ani nie usunie wpisu pracownika — trigger `dyspozycja_autor` rzuca
-wyjątek, także z pominięciem aplikacji.
+zmieni ani nie usunie WYSŁANEJ dyspozycji pracownika ani prośby o zwolnienie
+— trigger `dyspozycja_autor` rzuca wyjątek, także z pominięciem aplikacji.
+Od 0.83.0 (migracja `0052`) niewysłany szkic pracownika kierownik może
+zastąpić albo usunąć, a każdy jego zapis (także o sobie) dostaje autora
+`kierownik`.
 
 **Sprawdziany:**
 
@@ -139,10 +142,15 @@ Decyzja właściciela (22.10.2026): stara „niedostępność” (`absences.type
 'niedostepnosc'`) i „Nie mogę” z Dyspozycji to TO SAMO.
 
 - **Kierownik wpisuje „Nie może” do `dyspozycja`** (panel zmiany → „Wolne /
-  urlop” → „Nie może”, `wpiszNieMogeZaPracownika`), nie do `absences`. Wpis
-  kierownika wiąże od razu. Dni, które pracownik zaznaczył SAM, zostają bez
-  zmian (trigger i tak by ich nie przepuścił); jego własne „nie” też nie jest
-  nadpisywane. Dawne `addNiedostepnoscDirectly` usunięte.
+  urlop” → „Nie może”), nie do `absences`. Wpis kierownika wiąże od razu.
+  Od 0.83.0 w tym samym oknie jest też „Może w godzinach”, a zapis idzie
+  przez `planWpisuZaPracownika` / `wpiszDyspozycjeZaPracownika`: dzień pusty
+  albo kierownika → zapis; SZKIC pracownika (miesiąc niewysłany) → zapis w
+  jego miejsce (`0052`); wysłana dyspozycja pracownika albo prośba o
+  zwolnienie → pominięte (zmienia je tylko on); to samo, co już wiąże → bez
+  zmian. Okno pokazuje to przed zapisem. Do 0.82.0 szkic był pomijany, więc
+  wpis kierownika nie zmieniał w Grafiku nic, a drugie „Zapisz” mówiło „Nic
+  do zapisania”. Dawne `addNiedostepnoscDirectly` usunięte.
 - **Stara niedostępność daje „Zapytaj”** — `przeszkodaDnia` zwraca dla niej
   `dyspozycja: true`, więc kandydat trafia do grupy „tylko Zapytaj”, a nie jest
   po prostu wyłączony. Urlop dalej blokuje bez pytania.
