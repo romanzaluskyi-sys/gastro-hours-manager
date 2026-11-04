@@ -25,10 +25,16 @@
 // przeszłości. Na początku miesiąca to nieprawda: 01.10.2026 harness padał w
 // CI bez żadnej zmiany w kodzie ("wczoraj" było już wrześniem). Środek
 // miesiąca daje ten sam wynik każdego dnia. Musi stać PRZED innymi skryptami.
+// ⚠️ Dokładnie: CZWARTEK najbliższy 15. (12.–18.). Sprawdziany Grafiku
+// potrzebują dni minionych I przyszłych w oglądanym tygodniu — 15.11.2026
+// wypadło w niedzielę, po której tydzień nie ma już przyszłych dni, i
+// „Zapytaj” padało w CI bez zmiany w kodzie (04.11.2026).
 (() => {
   const Prawdziwa = Date;
   const t = new Prawdziwa();
-  const cel = new Prawdziwa(t.getFullYear(), t.getMonth(), 15, t.getHours(), t.getMinutes(), t.getSeconds());
+  const dzien15 = new Prawdziwa(t.getFullYear(), t.getMonth(), 15).getDay();
+  const doCzwartku = ((4 - dzien15 + 7 + 3) % 7) - 3; // −3…+3
+  const cel = new Prawdziwa(t.getFullYear(), t.getMonth(), 15 + doCzwartku, t.getHours(), t.getMinutes(), t.getSeconds());
   const przesuniecie = cel.getTime() - t.getTime();
   class Data extends Prawdziwa {
     constructor(...a) { if (a.length === 0) super(Prawdziwa.now() + przesuniecie); else super(...a); }
