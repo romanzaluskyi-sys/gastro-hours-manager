@@ -213,44 +213,22 @@ trzy miejsca.
 ⚠️ **Nowa tabela, której potrzebuje ekran → dane w `demoDane.js`** (tu:
 `wydarzenia`, `wydarzenia_uczestnicy` w `KOLEJNOSC`).
 
-## Dyspozycja — od 0.79.0 (migracje `0047`–`0051`)
+## Dyspozycja — od 0.79.0 (migracje `0047`–`0052`)
 
-### Wdrożenie D1–D4 (0.78.0–0.83.0) — przeczytaj PRZED mergem
+### Stan wdrożenia
 
-⚠️ **Od 0.83.0 na tej samej gałęzi jest szósty commit i migracja `0052`**
-(trigger `dyspozycja_autor`: kierownik zastępuje NIEWYSŁANY szkic pracownika,
-wpis kierownika o sobie = autor `kierownik`). Puść ją razem z `0047`–`0051`;
-kolejność dowolna, to sama podmiana funkcji. Bez niej „Wolne / urlop” w
-Grafiku przy szkicu pracownika pokaże błąd z triggera (nie udaje sukcesu).
-
-Pięć commitów na gałęziach STOSOWYCH: `claude/poziomy-stanowisk` (D1, 0.78.0,
-`0047`) ⊂ `claude/dyspozycja` (D2, 0.79.0, `0048`) ⊂ `claude/zapytaj` (D3,
-0.80.0, `0049`) ⊂ `claude/d4-konflikty` (D4, 0.81.0 `0050` + 0.82.0 `0051`).
-Każda gałąź zawiera poprzednie.
-- ⚠️ **Merge'ujemy JEDNĄ gałąź — `claude/d4-konflikty` → `main`.** Niesie
-  wszystkie pięć commitów; PR-y D1–D3 GitHub sam oznaczy jako zmerge'owane
-  (ich ostatni commit jest już w `main`). Merge pośrednich osobno też zadziała,
-  ale to cztery deploye produkcji zamiast jednego. PR z gałęzi stosowej do
-  `main` dostaje tytuł PIERWSZEGO commitu (D1) — popraw go ręcznie.
-- ⚠️ **Migracje `0047`–`0051` PRZED merge'em i przed testem Preview** (Preview
-  chodzi na bazie produkcyjnej). Wszystkie są addytywne (nowe kolumny, tabele,
-  funkcje; podmiana triggera `dyspozycja_autor` w `0051`), więc stary front na
-  nowej bazie działa. Kolejność wg numerów; `0050` jest powtarzalna
-  (`on conflict do nothing`). Stan bazy mówi `scripts/migrate.py` (suchy
-  przebieg = lista brakujących) — NIE ten plik.
-- ⚠️ **Wszystkie bazy, także demo** (`scripts/migrate.py --wszyscy`). Demo bez
-  `0048`–`0051` po nocnym resecie wywróci się na kolumnach z `demoDane.js`.
-- Po migracji inwentarz `pg_policies` (koniec `0032`): `dyspozycja`,
-  `dyspozycja_miesiace` po x4, `prosby_o_zmiane` x3 — to norma (po jednej
-  polityce na polecenie).
-- **Sprawdzenie na Preview** (najkrótsza ścieżka): karta pracownika → poziom
-  na stanowisku; telefon/tablet → Więcej → Dyspozycja (zaznacz, wyślij);
-  Grafik → panel przypisania → osoba „nie może” w grupie „Zapytaj”, pytanie →
-  pracownik odpowiada „Mogę” → zmiana w grafiku; pracownik dotyka dnia ze
-  zmianą → prośba o zwolnienie → „Do decyzji” → „Zdejmij zmianę”.
+D1–D4 (0.78.0–0.82.0) i 0.83.0 są w `main` od 2026-11-04 (PR #70), migracje
+`0047`–`0052` stoją na emka i demo. Czy dana baza je ma — `scripts/migrate.py`
+(suchy przebieg), nie ten plik. Nowy klient dostaje je razem z resztą łańcucha.
+- Po migracji ruszającej polityki inwentarz `pg_policies` (koniec `0032`):
+  `dyspozycja`, `dyspozycja_miesiace` po x4, `prosby_o_zmiane` x3 — to norma.
 - Następny etap: **D5** (termin w ustawieniach lokalu i przypomnienia) — opis
   w docs/DYSPOZYCJA.md. Mail z przypomnieniami → do istniejącego dobowego
   crona owiniętego `zPrzebiegiem` (limit 12 funkcji Vercela, patrz „PIN-y”).
+- ⚠️ **Wpisy kierownika o sobie zapisane PRZED `0052`** mają autora
+  `pracownik` i nie wiążą; listę daje ostatnie zapytanie w `0052`. Karta
+  pracownika podpisuje je „Twój wpis — NIE wiąże”. Lekarstwo: wpisać dzień
+  jeszcze raz (albo skasować wiersz).
 
 ### Jak to działa
 
