@@ -320,7 +320,7 @@ const J = (x) => JSON.stringify(x);
     sprawdz("wiadomość „Kierownik wpisał Ci w dyspozycji „Nie mogę”” z zakresem i kto",
       wiad.type === "dyspozycja" && /^Kierownik wpisał Ci w dyspozycji „Nie mogę”: 11\.11–14\.11\. Wpisał\(a\): Roman\.$/.test(wiad.message), wiad.message);
     sprawdz("opis wyniku: zapisano + szkic, bez ostrzeżeń",
-      D.opisWynikuWpisu(nm, "Nie może").ok && /Zapisano „Nie może” na 4 dni\. W tym 2 dni w miejsce niewysłanego szkicu/.test(D.opisWynikuWpisu(nm, "Nie może").tekst),
+      D.opisWynikuWpisu(nm, "Nie może").ok && /Zapisano „Nie może” na 4 dni\. W tym 2 dni w miejsce niezatwierdzonego wpisu/.test(D.opisWynikuWpisu(nm, "Nie może").tekst),
       D.opisWynikuWpisu(nm, "Nie może").tekst);
 
     // Miesiąc WYSŁANY: wpisy pracownika chronione; to samo „nie” = już jest.
@@ -427,6 +427,63 @@ const J = (x) => JSON.stringify(x);
         user: ala, dzis: "2026-11-10" }).length === 1);
     sprawdz("tekst dla kierownika", /^Konflikt z wersją roboczą grafiku: Ala — tylko 16–22, a w wersji roboczej ma zmianę/.test(
       D.tekstKonfliktuSzkicu("Ala", szkic, kon.s1)), D.tekstKonfliktuSzkicu("Ala", szkic, kon.s1));
+
+    log("");
+    log("— 0.84.0: zatwierdzanie dyspozycji (0053) —");
+    window.__tabele = { dyspozycja: [] }; window.__zapisy = [];
+    const MI = "2026-11-01";
+    const wysl = [{ id: "mz", user_id: "a", miesiac: MI, wyslano_at: "2026-11-02T10:00:00Z", pozostale: "bez" }];
+    const zaw = [
+      { id: "z1", user_id: "a", user_name: "Ala", date: "2026-11-12", stan: "nie", autor: "pracownik", zatwierdzono_at: null, zmieniono_at: "2026-11-02T10:00:00Z" },
+      { id: "z2", user_id: "a", user_name: "Ala", date: "2026-11-13", stan: "godziny", od1: "16:00", do1: "22:00", autor: "pracownik", zatwierdzono_at: null },
+      { id: "z3", user_id: "a", user_name: "Ala", date: "2026-11-14", stan: "moge", autor: "pracownik", zatwierdzono_at: null },
+      { id: "z4", user_id: "a", user_name: "Ala", date: "2026-11-15", stan: "nie", autor: "pracownik", zatwierdzono_at: "2026-11-03T09:00:00Z" },
+      { id: "z5", user_id: "a", user_name: "Ala", date: "2026-11-16", stan: "nie", autor: "pracownik", zatwierdzono_at: null, zwolnienie_z: "g9" },
+      { id: "z6", user_id: "a", user_name: "Ala", date: "2026-11-10", stan: "nie", autor: "pracownik", zatwierdzono_at: null },
+    ];
+    window.__tabele.dyspozycja = zaw.map((x) => ({ ...x }));
+    sprawdz("czeka: wysłane „nie” bez zatwierdzenia nie wiąże", D.czekaNaZatwierdzenie(zaw[0], wysl) && !D.wiazeDyspozycja(zaw[0], wysl));
+    sprawdz("„Mogę cały dzień” nie czeka", !D.czekaNaZatwierdzenie(zaw[2], wysl) && D.wiazeDyspozycja(zaw[2], wysl));
+    sprawdz("zatwierdzone wiąże i jest chronione", D.wiazeDyspozycja(zaw[3], wysl) && D.wpisChroniony(zaw[3], wysl) && !D.moznaZmienicZaPracownika(zaw[3], wysl));
+    sprawdz("prośba o zwolnienie: nie czeka, chroniona", !D.czekaNaZatwierdzenie(zaw[4], wysl) && D.wpisChroniony(zaw[4], wysl));
+    sprawdz("niezatwierdzone kierownik może zastąpić", D.moznaZmienicZaPracownika(zaw[0], wysl));
+    sprawdz("szkic (miesiąc niewysłany) nie czeka", !D.czekaNaZatwierdzenie(zaw[0], []));
+    sprawdz("blokada: niezatwierdzone „nie” nie blokuje zmiany",
+      !D.przeszkodaDyspozycji({ dyspozycja: zaw, miesiace: wysl, user: ala, date: "2026-11-12", start_time: "10:00", end_time: "18:00" }));
+    sprawdz("blokada: zatwierdzone „nie” blokuje",
+      !!D.przeszkodaDyspozycji({ dyspozycja: zaw, miesiace: wysl, user: ala, date: "2026-11-15", start_time: "10:00", end_time: "18:00" }));
+    sprawdz("baza bez 0053 (brak kolumny): wysłane wiąże jak dawniej",
+      D.wiazeDyspozycja({ user_id: "a", date: "2026-11-12", stan: "nie", autor: "pracownik" }, wysl) &&
+        !D.czekaNaZatwierdzenie({ user_id: "a", date: "2026-11-12", stan: "nie", autor: "pracownik" }, wysl));
+    const grupy = D.dyspozycjeDoZatwierdzenia({ dyspozycja: zaw, miesiace: wysl, dzis: "2026-11-11" });
+    sprawdz("kolejka: jedna grupa (Ala, listopad), dni 12 i 13 — bez minionego, „mogę”, zatwierdzonego i prośby",
+      grupy.length === 1 && J(grupy[0].dni.map((w) => w.date)) === J(["2026-11-12", "2026-11-13"]) && grupy[0].klucz === "dysp:a|2026-11-01", J(grupy));
+    const usr = [{ id: "a", name: "Ala", default_lokal: "Ceglana" }];
+    sprawdz("kolejka: lokal spoza dostępu znika, bez lokalu zostaje",
+      D.dyspozycjeDoZatwierdzenia({ dyspozycja: zaw, miesiace: wysl, dzis: "2026-11-11", users: usr, lokalOk: (l) => l === "Sunset" }).length === 0 &&
+        D.dyspozycjeDoZatwierdzenia({ dyspozycja: zaw, miesiace: wysl, dzis: "2026-11-11", users: [{ id: "a", name: "Ala" }], lokalOk: () => false }).length === 1);
+    const plZ = D.planWpisuZaPracownika({ user: ala, od: "2026-11-12", doDnia: "2026-11-15", dzis: "2026-11-11", stan: "nie", dyspozycja: zaw, miesiace: wysl });
+    sprawdz("„Wolne / urlop” z Grafiku: czekające zastępuje, wysłane „mogę” pomija, zatwierdzone „nie” = już jest",
+      J(plZ.nadpisze) === J(["2026-11-12", "2026-11-13"]) && J(plZ.pominiete) === J(["2026-11-14"]) && J(plZ.juz) === J(["2026-11-15"]), J(plZ));
+    // Decyzja: 12 zatwierdzone, 13 odrzucone.
+    const wz = await D.zatwierdzDyspozycje({ grupa: grupy[0], odrzucone: ["z2"], powod: "brak ludzi w środy", kierownik: "Roman", dyspozycja: zaw });
+    sprawdz("decyzja: 12 zatwierdzone (patch), 13 usunięte (delete)",
+      J(wz.zatwierdzone) === J(["2026-11-12"]) && J(wz.odrzucone) === J(["2026-11-13"]) &&
+        window.__zapisy.some((z) => z[0] === "patch" && z[2] === "z1" && z[3].zatwierdzono_at && z[3].zatwierdzil === "Roman") &&
+        window.__zapisy.some((z) => z[0] === "delete" && z[2] === "z2"), J(window.__zapisy));
+    sprawdz("po decyzji: 12 wiąże, 13 nie ma, kolejka pusta",
+      D.wiazeDyspozycja(D.dyspozycjaNa(wz.dyspozycja, ala, "2026-11-12"), wysl) && !D.dyspozycjaNa(wz.dyspozycja, ala, "2026-11-13") &&
+        D.dyspozycjeDoZatwierdzenia({ dyspozycja: wz.dyspozycja, miesiace: wysl, dzis: "2026-11-11" }).length === 0);
+    const wiadZ = (window.__tabele.notifications || [])[0] || {};
+    sprawdz("wiadomość: „Kierownik nie przyjął części…” z dniem, powodem i decyzją",
+      wiadZ.type === "dyspozycja" &&
+        wiadZ.message === "Kierownik nie przyjął części Twojej dyspozycji na listopad 2026: 13.11 — te dni są wolne do planowania. Powód: brak ludzi w środy. Pozostałe dni zatwierdzone. Decyzja: Roman.",
+      wiadZ.message);
+    sprawdz("wiadomość przy pełnym zatwierdzeniu",
+      D.tekstZatwierdzeniaDyspozycji({ miesiac: MI, kto: "Roman" }) === "Kierownik zatwierdził Twoją dyspozycję na listopad 2026. Decyzja: Roman.");
+    sprawdz("wiadomość przy pełnym odrzuceniu",
+      /^Kierownik nie przyjął Twojej dyspozycji na listopad 2026: 12\.11, 13\.11 — te dni są wolne do planowania\.$/.test(
+        D.tekstZatwierdzeniaDyspozycji({ miesiac: MI, odrzucone: ["2026-11-12", "2026-11-13"] })));
 
     log("");
     log("— D4 (0.82.0): dyspozycja w karcie pracownika —");

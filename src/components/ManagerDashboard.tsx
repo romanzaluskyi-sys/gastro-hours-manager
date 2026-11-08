@@ -5,7 +5,7 @@ import { nowyUuid } from "../utils/uuid";
 import { ustawHasloPracownika } from "../api/auth";
 import { poprawnyPin } from "../utils/piny";
 import { bazaZnaPoziomy, poziomyDoZapisu } from "../utils/poziomy";
-import { przeszkodaDyspozycji, prosbyOZwolnienie } from "../utils/dyspozycja";
+import { przeszkodaDyspozycji, prosbyOZwolnienie, dyspozycjeDoZatwierdzenia } from "../utils/dyspozycja";
 import { sendToGoogleSheets } from "../api/googleSheets";
 import { createEmployeeNotification } from "../api/notifications";
 import { formatNotificationText } from "../utils/format";
@@ -565,11 +565,21 @@ const ManagerDashboard = ({
   const zwolnieniaDoDecyzji = prosbyOZwolnienie({ planShifts, dyspozycja, dzis: toLocalYMD(new Date()) }).filter((p) =>
     hasAccessToLokal(p.zmiana.lokal)
   );
+  // Dyspozycja czekająca na zatwierdzenie (0.84.0) — jedna sprawa na (osoba,
+  // miesiąc); ta sama funkcja co karta w „Do decyzji” i sprawa na Pulpicie.
+  const dyspozycjeDoDecyzji = dyspozycjeDoZatwierdzenia({
+    dyspozycja,
+    miesiace: dyspozycjaMiesiace,
+    dzis: toLocalYMD(new Date()),
+    users,
+    lokalOk: hasAccessToLokal,
+  });
 
   const shellBadges = {
     zatwierdzanie:
       wydarzeniaDoRozliczenia.length +
       zwolnieniaDoDecyzji.length +
+      dyspozycjeDoDecyzji.length +
       pendingCorrections.length +
       pendingAbsences.length +
       pendingSwaps.length +
@@ -1298,6 +1308,7 @@ const ManagerDashboard = ({
             wydarzeniaUczestnicy={wydarzeniaUczestnicy}
             calaSiec={jestWlascicielem}
             dyspozycja={dyspozycja}
+            dyspozycjaMiesiace={dyspozycjaMiesiace}
             showMsg={showMsg}
             tasks={tasks}
             taskBlocks={taskBlocks}
@@ -1576,6 +1587,7 @@ const ManagerDashboard = ({
             calaSiec={jestWlascicielem}
             dyspozycja={dyspozycja}
             setDyspozycja={setDyspozycja}
+            dyspozycjaMiesiace={dyspozycjaMiesiace}
             shiftSwaps={shiftSwaps}
           />
         )}

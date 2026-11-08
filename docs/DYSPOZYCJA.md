@@ -39,6 +39,27 @@ Wdrażane etapami. Każdy etap jest osobnym PR-em z Preview:
 - Poziom: klucz = **nazwa** stanowiska, kolumna jawna w `users_widok`, brak =
   „nieustawiony”.
 
+## Zatwierdzanie dyspozycji (0.84.0, migracja `0053`)
+
+Decyzja właściciela (06.11.2026) — **zmienia** punkt „Grafik ważniejszy niż
+dyspozycja” wyżej w jednym miejscu: wysłane „Nie mogę” i „Mogę w godzinach”
+pracownika NIE wiążą od razu, tylko po zatwierdzeniu przez kierownika.
+
+- Jedna karta w „Do decyzji” na (osoba, miesiąc): „Zatwierdź” albo dotknięcie
+  dnia → „nie przyjmuję” (opcjonalny powód). Odrzucony dzień znika (wolny do
+  planowania), pracownik dostaje jedną wiadomość o całej decyzji.
+- Do decyzji Grafik pokazuje podpowiedź „czeka: nie może”, bez blokady.
+- „Mogę cały dzień” niczego nie blokuje, więc nie czeka.
+- Dyspozycje wysłane przed 0.84.0 są zatwierdzone (migracja).
+- Zatwierdzenie jest per dzień: pracownik, który zmieni zatwierdzony dzień,
+  wysyła do kierownika TEN dzień — reszta miesiąca zostaje zatwierdzona.
+- Kierownik może zastąpić niezatwierdzony wpis (z Grafiku albo z karty);
+  zatwierdzonego nie zmienia — od tego jest „Zapytaj”.
+- Kod: `czekaNaZatwierdzenie`, `dyspozycjeDoZatwierdzenia`,
+  `zatwierdzDyspozycje`, `wpisChroniony` w `utils/dyspozycja.ts`; trigger
+  `dyspozycja_autor` w `0053`. Sprawdzian: `harness-dyspozycja.html`
+  („0.84.0: zatwierdzanie”).
+
 ## D2 — jak to działa
 
 **Dane** (migracja `0048`):

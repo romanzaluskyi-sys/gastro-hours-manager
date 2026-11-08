@@ -50,7 +50,14 @@ import {
 import { countWorkdays, URLOP_HOURS_PER_DAY } from "../../utils/absences";
 import { trimTime, shiftHours, toLocalYMD, publishedShiftsFor } from "../../utils/grafik";
 import { monthPlanHours, typWymiany, wzajemnaZmiana, wycofajOfertyDlaZmian } from "../../utils/swaps";
-import { prosbyOZwolnienie, rozstrzygnijZwolnienie } from "../../utils/dyspozycja";
+import {
+  prosbyOZwolnienie,
+  rozstrzygnijZwolnienie,
+  dyspozycjeDoZatwierdzenia,
+  zatwierdzDyspozycje,
+  opisDyspozycji,
+  nazwaMiesiacaPl,
+} from "../../utils/dyspozycja";
 import { zmianyBezOdbicia, rozliczBrakOdbicia } from "../../utils/odbicia";
 import { zmianyPorzucone, rozliczPorzucona } from "../../utils/porzucone";
 import { czekaNaKoniecOdKierownika } from "../../utils/wpisy";
@@ -314,6 +321,13 @@ const GRUPY = [
     opis: "Pracownik zaznaczył w dyspozycji „Nie mogę” na dzień, na który ma już zmianę. Grafik obowiązuje — zmiana stoi, dopóki jej nie zdejmiesz. Po zdjęciu uzupełnij obsadę w Grafiku.",
   },
   {
+    typ: "dyspozycja",
+    Icon: CalendarDays,
+    tytul: "Dyspozycja do zatwierdzenia",
+    tab: "Dyspozycja",
+    opis: "Pracownik wysłał, kiedy nie może albo może tylko w godzinach. Do Twojej decyzji Grafik to tylko podpowiada — po zatwierdzeniu blokuje. Dotknij dnia, żeby go nie przyjąć: dzień zostaje wolny do planowania, a pracownik dostaje wiadomość.",
+  },
+  {
     typ: "wolne",
     Icon: Palmtree,
     tytul: "Wnioski o wolne",
@@ -368,6 +382,7 @@ export default function ZatwierdzanieZmian({
   calaSiec = false,
   dyspozycja = [],
   setDyspozycja,
+  dyspozycjaMiesiace = [],
   shiftSwaps = [],
 }) {
   // ⚠️ Zamek na REF, nie na stanie. Wszystkie decyzje na tej stronie pilnował
@@ -396,6 +411,10 @@ export default function ZatwierdzanieZmian({
   // Kogo NIE było na wydarzeniu: { [wydarzenieId]: { [userId]: true } }.
   // Domyślnie wszyscy obecni (makieta: „domyślnie wszyscy”).
   const [nieobecni, setNieobecni] = useState({});
+  // Dyspozycja (0.84.0): dni, których kierownik NIE przyjmuje, i powód —
+  // { [kluczGrupy]: { [idWiersza]: true } }, { [kluczGrupy]: "..." }.
+  const [dyspOdrzucone, setDyspOdrzucone] = useState({});
+  const [dyspPowod, setDyspPowod] = useState({});
   // Otwarty panel "Popraw" korekty: { id, date, lokal, stanowisko, start,
   // end, reason, miejsce (czy pokazać datę/lokal/stanowisko) }.
   const [edycja, setEdycja] = useState(null);
@@ -431,6 +450,16 @@ export default function ZatwierdzanieZmian({
   const zwolnienia = prosbyOZwolnienie({ planShifts, dyspozycja, dzis: toLocalYMD(new Date()) }).filter((p) =>
     hasAccessToLokal(p.zmiana.lokal)
   );
+
+  // Dyspozycja czekająca na zatwierdzenie (0.84.0) — ta sama funkcja daje
+  // znaczek w menu i sprawę na Pulpicie.
+  const dyspozycjeCzekajace = dyspozycjeDoZatwierdzenia({
+    dyspozycja,
+    miesiace: dyspozycjaMiesiace,
+    dzis: toLocalYMD(new Date()),
+    users,
+    lokalOk: hasAccessToLokal,
+  });
 
   const rows = issues
     .filter((iss) => iss.type === "correction" && iss.status === "nowe")
@@ -600,6 +629,22 @@ export default function ZatwierdzanieZmian({
     zwolnij(k);
   };
 
+  // „Zatwierdź” dyspozycję na miesiąc — dni z `odrzucone` znikają (wolne do
+  // planowania), reszta jest zatwierdzana; pracownik dostaje jedną wiadomość.
+  const rozliczDyspozycje = async (grupa, odrzucone, powod) => {
+    const k = grupa.klucz;
+    if (!zajmij(k)) return;
+    try {
+      const wynik = await zatwierdzDyspozycje({ grupa, odrzucone, powod, kierownik: currentUser.name, dyspozycja });
+      if (setDyspozycja) setDyspozycja(wynik.dyspozycja);
+      if (wynik.bledy.length)
+        showMsg(`${grupa.user_name}: nie zapisano ${wynik.bledy.length} z ${grupa.dni.length} dni — ${wynik.bledy[0].blad}`, "error");
+    } catch (e) {
+      showMsg(`${grupa.user_name}: ${e.message || "błąd zapisu"}`, "error");
+    }
+    zwolnij(k);
+  };
+
   // -------------------------------------------------------------------------
   // Decyzje odłożone o 6 s ("Cofnij") — mechanizm i jego pułapki opisuje
   // odlozoneDecyzje.tsx; ten sam działa na Pulpicie.
@@ -614,6 +659,7 @@ export default function ZatwierdzanieZmian({
     decyzjaOGieldzie,
     rozliczWyd,
     rozliczZwolnienie,
+    rozliczDyspozycje,
   });
   // Decyzja zdejmuje też zaznaczenie — inaczej pasek "Zatwierdź N" liczyłby
   // karty, których już nie widać.
@@ -1134,6 +1180,120 @@ export default function ZatwierdzanieZmian({
                 }
               >
                 <Check size={18} /> Zdejmij zmianę
+              </button>
+            </>
+          }
+        />
+      ),
+    });
+  }
+
+  // --- Dyspozycja do zatwierdzenia (0.84.0) ---
+  // Jedna karta na (osoba, miesiąc). Dzień dotknięty = „nie przyjmuję”.
+  // Hurtem („Zatwierdź N”) idą z tym, co aktualnie odznaczone na karcie.
+  for (const g of dyspozycjeCzekajace) {
+    const klucz = g.klucz;
+    const odrz = dyspOdrzucone[klucz] || {};
+    const odrzIds = g.dni.filter((w) => odrz[w.id]).map((w) => w.id);
+    const ileTak = g.dni.length - odrzIds.length;
+    const powod = dyspPowod[klucz] || "";
+    const tak = { klucz, zadanie: ["rozliczDyspozycje", [g, odrzIds, powod]] };
+    const opisTak = odrzIds.length
+      ? `Dyspozycja: ${g.user_name} · zatwierdzono ${ileTak}, nie przyjęto ${odrzIds.length}`
+      : `Zatwierdzono dyspozycję: ${g.user_name} · ${nazwaMiesiacaPl(g.miesiac)}`;
+    const przelacz = (id) =>
+      setDyspOdrzucone((prev) => ({ ...prev, [klucz]: { ...(prev[klucz] || {}), [id]: !(prev[klucz] || {})[id] } }));
+    const wiek = dniOd(g.wyslano_at || g.dni[0].zmieniono_at);
+    sprawy.push({
+      klucz,
+      typ: "dyspozycja",
+      kto: g.user_name,
+      wiek,
+      tak,
+      opisTak,
+      karta: (z, onZ) => (
+        <Karta
+          key={klucz}
+          kto={g.user_name}
+          meta={`${nazwaMiesiacaPl(g.miesiac)}${g.wyslano_at ? ` · wysłano ${dzienKrotki(toLocalYMD(new Date(g.wyslano_at)))}` : ""}`}
+          ostrzezenia={<Czeka dni={wiek} />}
+          zaznaczone={z}
+          onZaznacz={onZ}
+          moznaZaznaczyc
+          szczegoly={
+            <Kv etykieta="Przyjmujesz">
+              <span className="whitespace-nowrap">
+                {ileTak} z {g.dni.length}
+              </span>
+            </Kv>
+          }
+          pod={
+            <div className="px-4 md:pl-[64px] md:pr-5 pb-4 -mt-1 flex flex-col gap-2.5" data-dyspozycja-do-zatwierdzenia={klucz}>
+              <p className={etykietaCls}>Dotknij dnia, żeby go nie przyjąć</p>
+              <span className="flex flex-wrap gap-1.5">
+                {g.dni.map((w) => {
+                  const przyjety = !odrz[w.id];
+                  const wGrafiku = (planShifts || []).find(
+                    (s) => s.date === w.date && !s.deleted_at && String(s.user_id) === String(w.user_id)
+                  );
+                  return (
+                    <button
+                      key={w.id}
+                      type="button"
+                      onClick={() => przelacz(w.id)}
+                      aria-pressed={przyjety}
+                      className={chipCls(przyjety)}
+                      title={[w.notatka ? `Notatka: ${w.notatka}` : "", wGrafiku ? `W grafiku: ${trimTime(wGrafiku.start_time)}–${trimTime(wGrafiku.end_time)}${wGrafiku.published_at ? "" : " (szkic)"}` : ""].filter(Boolean).join(" · ")}
+                      data-dzien-dyspozycji-decyzja={w.date}
+                    >
+                      {przyjety ? <Check size={14} className="mr-1" /> : <X size={14} className="mr-1" />}
+                      <span className={przyjety ? "" : "line-through"}>
+                        {dzienKrotki(w.date)} · {opisDyspozycji(w).replace(/^Mogę /, "może ").replace(/^Nie mogę$/, "nie może")}
+                      </span>
+                      {wGrafiku && <span className={`ml-1.5 ${przyjety ? "opacity-75" : "text-[#8A5300]"}`}>· w grafiku</span>}
+                    </button>
+                  );
+                })}
+              </span>
+              {g.dni.some((w) => w.notatka) && (
+                <p className="text-[13px] text-[#6E6E66]">
+                  {g.dni.filter((w) => w.notatka).map((w) => `${dzienKrotki(w.date)}: ${w.notatka}`).join(" · ")}
+                </p>
+              )}
+              {odrzIds.length > 0 && (
+                <input
+                  value={powod}
+                  onChange={(e) => setDyspPowod((prev) => ({ ...prev, [klucz]: e.target.value }))}
+                  placeholder="Powód · opcjonalnie, zobaczy go pracownik"
+                  className="h-11 w-full max-w-[520px] px-3 border-[2px] border-[#171714] rounded-md bg-white text-[15px]"
+                  data-powod-dyspozycji
+                />
+              )}
+            </div>
+          }
+          akcje={
+            <>
+              <button
+                type="button"
+                className={btnObrysCls}
+                data-odrzuc-dyspozycje={klucz}
+                onClick={() =>
+                  decyduj(
+                    [{ klucz, zadanie: ["rozliczDyspozycje", [g, g.dni.map((w) => w.id), powod]] }],
+                    `Nie przyjęto dyspozycji: ${g.user_name} · ${nazwaMiesiacaPl(g.miesiac)}`
+                  )
+                }
+              >
+                <X size={18} className="hidden md:block" /> Nie przyjmuj
+              </button>
+              <button
+                type="button"
+                className={btnGlownyCls}
+                disabled={ileTak === 0}
+                data-zatwierdz-dyspozycje={klucz}
+                onClick={() => decyduj([tak], opisTak)}
+              >
+                <Check size={18} /> Zatwierdź{odrzIds.length ? ` (${ileTak})` : ""}
               </button>
             </>
           }

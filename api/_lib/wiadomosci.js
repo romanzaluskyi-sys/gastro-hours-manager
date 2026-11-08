@@ -297,6 +297,11 @@ const opisz = (n, user, grafik, dzis) => {
       // 0.81.0 — „Nie może” wpisane przez kierownika (tekstNieMogeOdKierownika).
       if (/^Kierownik wpisał Ci w dyspozycji „Nie mogę”/.test(t))
         return { ton: "info", ikona: "✳", etykieta: "Dyspozycja", tytul: "Kierownik wpisał Ci „Nie mogę”", lead: S.esc(t), cta: CTA.dyspozycja };
+      // 0.84.0 — decyzja o wysłanej dyspozycji (tekstZatwierdzeniaDyspozycji).
+      if (/^Kierownik zatwierdził Twoją dyspozycję/.test(t))
+        return { ton: "ok", ikona: "✓", etykieta: "Dyspozycja", tytul: "Dyspozycja zatwierdzona", lead: S.esc(t), cta: CTA.dyspozycja };
+      if (/^Kierownik nie przyjął/.test(t))
+        return { ton: "warn", ikona: "!", etykieta: "Dyspozycja", tytul: "Dyspozycja nie w pełni przyjęta", lead: S.esc(t), cta: CTA.dyspozycja };
       // 0.82.0 — dzień ustawiony w karcie pracownika (tekstDyspozycjiOdKierownika).
       if (/^Kierownik (wpisał Ci w dyspozycji|usunął wpis z Twojej dyspozycji)/.test(t))
         return { ton: "info", ikona: "✳", etykieta: "Dyspozycja", tytul: "Kierownik zmienił Twoją dyspozycję", lead: S.esc(t), cta: CTA.dyspozycja };

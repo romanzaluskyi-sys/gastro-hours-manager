@@ -405,6 +405,9 @@ export const opisWiadomosci = (n) => {
       if (/^Kierownik wycofał pytanie/.test(t)) return w("grafik", "info", "grafik", "Pytanie o zmianę wycofane");
       // 0.81.0 — „Nie może” wpisane przez kierownika (utils/dyspozycja.ts, tekstNieMogeOdKierownika).
       if (/^Kierownik wpisał Ci w dyspozycji „Nie mogę”/.test(t)) return w("kor", "info", "wolne", "Kierownik wpisał Ci „Nie mogę”", "dyspozycja");
+      // 0.84.0 — decyzja o wysłanej dyspozycji (tekstZatwierdzeniaDyspozycji).
+      if (/^Kierownik zatwierdził Twoją dyspozycję/.test(t)) return w("kor", "ok", "wolne", "Dyspozycja zatwierdzona", "dyspozycja");
+      if (/^Kierownik nie przyjął/.test(t)) return w("kor", "warn", "wolne", "Dyspozycja nie w pełni przyjęta", "dyspozycja");
       // 0.82.0 — dzień ustawiony w karcie pracownika (tekstDyspozycjiOdKierownika).
       if (/^Kierownik (wpisał Ci w dyspozycji|usunął wpis z Twojej dyspozycji)/.test(t))
         return w("kor", "info", "wolne", "Kierownik zmienił Twoją dyspozycję", "dyspozycja");

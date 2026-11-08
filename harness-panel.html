@@ -479,6 +479,10 @@ const poprzedniMiesiac = (h) => {
       ]);
       window.__ustawDyspozycje = setDyspozycja;
       window.__dyspozycja = dyspozycja;
+      // Wysłane miesiące (0.84.0) — stan, żeby test mógł postawić dyspozycję
+      // „do zatwierdzenia” w trakcie przebiegu.
+      const [dyspMiesiace, setDyspMiesiace] = useState([]);
+      window.__ustawMiesiace = setDyspMiesiace;
       // Jedno nieprzeczytane powiadomienie kierownika — Skrzynka → Informacje
       // ma je sama oznaczyć jako przeczytane po 3 s (0.58.0).
       const [notifications, setNotifications] = useState(() => [
@@ -691,7 +695,7 @@ const poprzedniMiesiac = (h) => {
             status: "approved" },
         ],
         dyspozycja, setDyspozycja,
-        dyspozycjaMiesiace: [],
+        dyspozycjaMiesiace: dyspMiesiace,
         prosby, setProsby,
         // Dwie oczekujące decyzje z giełdy: zwykłe przejęcie i ZAMIANA.
         // Przy zamianie kierownik zatwierdza dwa przepisania naraz, więc karta

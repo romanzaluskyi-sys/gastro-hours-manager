@@ -55,7 +55,7 @@ import {
 import { zmianyBezOdbicia } from "../../utils/odbicia";
 import { zmianyPorzucone, zmianaTrwa } from "../../utils/porzucone";
 import { probniDoDecyzji } from "../../utils/probni";
-import { prosbyOZwolnienie } from "../../utils/dyspozycja";
+import { prosbyOZwolnienie, dyspozycjeDoZatwierdzenia, nazwaMiesiacaPl } from "../../utils/dyspozycja";
 import { czekaNaKoniecOdKierownika } from "../../utils/wpisy";
 import {
   resolveCorrection,
@@ -286,6 +286,7 @@ export default function PulpitHome({
   wydarzenia = [],
   wydarzeniaUczestnicy = [],
   dyspozycja = [],
+  dyspozycjaMiesiace = [],
   calaSiec = false,
 }) {
   const teraz = useTeraz();
@@ -499,6 +500,17 @@ export default function PulpitHome({
       wiek: dniOd(wpis.zmieniono_at || wpis.created_at),
     });
   }
+  // Dyspozycja czekająca na zatwierdzenie (0.84.0) — decyzja w „Do decyzji”.
+  for (const g of dyspozycjeDoZatwierdzenia({ dyspozycja, miesiace: dyspozycjaMiesiace, dzis: dzisStr, users, lokalOk: matchesFilter })) {
+    sprawy.push({
+      klucz: g.klucz,
+      typ: "dyspozycja",
+      kto: g.user_name,
+      tag: { ton: "info", Icon: CalendarDays, tekst: "Dyspozycja" },
+      meta: `${nazwaMiesiacaPl(g.miesiac)} · ${g.dni.length} ${odmiana(g.dni.length, ["dzień", "dni", "dni"])} do zatwierdzenia`,
+      wiek: dniOd(g.wyslano_at || g.dni[0].zmieniono_at),
+    });
+  }
   for (const a of absences.filter((x) => x.status === "pending" && matchesFilter(x.lokal))) {
     const dni = countWorkdays(a.start_date, a.end_date);
     sprawy.push({
@@ -576,6 +588,7 @@ export default function PulpitHome({
     gielda: ["zamiana z giełdy", "zamiany z giełdy", "zamian z giełdy"],
     wydarzenie: ["wydarzenie do rozliczenia", "wydarzenia do rozliczenia", "wydarzeń do rozliczenia"],
     zwolnienie: ["prośba o zwolnienie", "prośby o zwolnienie", "próśb o zwolnienie"],
+    dyspozycja: ["dyspozycja do zatwierdzenia", "dyspozycje do zatwierdzenia", "dyspozycji do zatwierdzenia"],
     wolne: ["wniosek o wolne", "wnioski o wolne", "wniosków o wolne"],
     korekta: ["korekta", "korekty", "korekt"],
     duplikat: ["możliwy duplikat", "możliwe duplikaty", "możliwych duplikatów"],

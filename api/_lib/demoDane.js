@@ -840,6 +840,8 @@ const generuj = ({ dzis = C.ymd(), teraz = new Date() } = {}) => {
       id: noweId("dyspozycja"), user_id: osoba.id, user_name: osoba.name, date: d, stan,
       od1, do1, od2: null, do2: null, notatka, autor: "pracownik", autor_name: osoba.name,
       zmieniono_at: terazIso, created_at: terazIso,
+      // 0.84.0: wpis pracownika czeka na zatwierdzenie kierownika (0053).
+      zatwierdzono_at: null, zatwierdzil: null,
     });
   const studentka = osoby[K.KONTA[2].imie];
   if (studentka) {
@@ -906,6 +908,7 @@ const generuj = ({ dzis = C.ymd(), teraz = new Date() } = {}) => {
       stan: "nie", od1: null, do1: null, od2: null, do2: null, notatka: "wizyta u lekarza", autor: "pracownik",
       autor_name: doZwolnienia.user_name, zmieniono_at: kiedy, created_at: kiedy, zwolnienie_z: doZwolnienia.id,
       rozstrzygnieto_at: null, rozstrzygnal: null, rozstrzygniecie: null,
+      zatwierdzono_at: null, zatwierdzil: null,
     });
     const opis = `${DNI_KR[C.dzienTygodnia(doZwolnienia.date)]} ${dd}.${mm}, ${doZwolnienia.start_time}–${doZwolnienia.end_time}, ${doZwolnienia.stanowisko} · ${doZwolnienia.lokal}`;
     T.notifications.push({

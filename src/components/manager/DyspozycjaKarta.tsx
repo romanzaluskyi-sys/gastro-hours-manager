@@ -26,6 +26,7 @@ import {
   urlopNa,
   ustawDzienZaPracownika,
   wiazeDyspozycja,
+  czekaNaZatwierdzenie,
   wpisMiesiaca,
   zmianaOpublikowanaNa,
 } from "../../utils/dyspozycja";
@@ -89,7 +90,8 @@ export default function DyspozycjaKarta({
     if (!w) return "";
     if (w.autor === "kierownik") return "wpisał kierownik";
     if (w.zwolnienie_z) return "prośba pracownika o zwolnienie";
-    if (wiazeDyspozycja(w, miesiace)) return "wysłane przez pracownika";
+    if (czekaNaZatwierdzenie(w, miesiace)) return "wysłane przez pracownika — czeka na zatwierdzenie w „Do decyzji” (możesz zmienić)";
+    if (wiazeDyspozycja(w, miesiace)) return "zatwierdzona dyspozycja pracownika";
     if (kierownik && user.name === kierownik) return "Twój wpis — NIE wiąże (baza bez migracji 0052)";
     return "szkic pracownika (nie wiąże, możesz zmienić)";
   };
@@ -100,7 +102,7 @@ export default function DyspozycjaKarta({
     if (s.urlop) return showMsg?.(`${dzienKrotki(d)}: urlop — zmienia się go w sekcji „Urlop i dni wolne”.`, "error");
     if (!moznaZmienicZaPracownika(s.wpis, miesiace)) {
       setDzien(null);
-      return showMsg?.(`${dzienKrotki(d)}: pracownik wpisał i wysłał — zmiana tylko przez „Zapytaj” w Grafiku.`, "error");
+      return showMsg?.(`${dzienKrotki(d)}: zatwierdzona dyspozycja pracownika — zmiana tylko przez „Zapytaj” w Grafiku.`, "error");
     }
     setDzien(d);
     setGodziny({ od1: trimTime(s.wpis?.od1) || "", do1: trimTime(s.wpis?.do1) || "" });
@@ -209,7 +211,7 @@ export default function DyspozycjaKarta({
         })}
       </div>
       <p className="text-[12px] text-[#6E6E66]">
-        K — wpisał kierownik · kropka — zmiana w grafiku. Dyspozycję, którą pracownik wysłał, zmienia tylko on; jego niewysłany szkic możesz zastąpić.
+        K — wpisał kierownik · kropka — zmiana w grafiku. Zatwierdzoną dyspozycję pracownika zmienia tylko on; szkic i wpis czekający na zatwierdzenie możesz zastąpić.
       </p>
       {wybrany && (
         <div className="rounded-lg bg-[#F6F5F1] p-3 flex flex-col gap-2" data-edycja-dnia-karty={dzien}>

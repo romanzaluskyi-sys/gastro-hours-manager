@@ -5,6 +5,22 @@ ekranie logowania (`Shiftro · {nazwa sieci} · wersja {APP_VERSION}` — stała
 `src/config.ts`). Zasady wersjonowania i kto aktualizuje ten plik: patrz
 CLAUDE.md, sekcja "Wersjonowanie i CHANGELOG".
 
+## 0.84.0 — 2026-11-06
+
+- **Dyspozycję pracownika zatwierdza kierownik.** Wysłane „Nie mogę” i „Mogę w
+  godzinach” trafiają do „Do decyzji” — jedna karta na osobę i miesiąc:
+  „Zatwierdź” albo dotknięcie dnia, żeby go nie przyjąć (z powodem). Dopiero
+  zatwierdzony dzień blokuje Grafik; do tego czasu w kratce stoi niebieska
+  podpowiedź „czeka: nie może”. Odrzucony dzień jest wolny do planowania, a
+  pracownik dostaje wiadomość. Dyspozycje wysłane wcześniej są zatwierdzone.
+- **Pracownik widzi, co czeka.** W Dyspozycji pasek mówi, ile dni czeka na
+  kierownika, a dzień ma niebieską kropkę. Zmiana zatwierdzonego dnia wraca do
+  kierownika.
+- **Jedno „nie może” w Grafiku.** Stara niedostępność (sprzed 0.81.0) wyglądała
+  inaczej niż „Nie mogę” z dyspozycji i blokowała dzień nawet po zmianie w
+  karcie na „Może cały dzień”. Teraz przyszłe dni żyją tylko w dyspozycji i
+  wyglądają tak samo.
+
 ## 0.83.0 — 2026-11-04
 
 - **„Wolne / urlop” w Grafiku zapisuje dyspozycję naprawdę.** Do tej pory
