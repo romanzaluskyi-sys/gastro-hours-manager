@@ -213,7 +213,7 @@ trzy miejsca.
 ⚠️ **Nowa tabela, której potrzebuje ekran → dane w `demoDane.js`** (tu:
 `wydarzenia`, `wydarzenia_uczestnicy` w `KOLEJNOSC`).
 
-## Dyspozycja — od 0.79.0 (migracje `0047`–`0052`)
+## Dyspozycja — od 0.79.0 (migracje `0047`–`0053`)
 
 ### Stan wdrożenia
 
@@ -229,6 +229,42 @@ D1–D4 (0.78.0–0.82.0) i 0.83.0 są w `main` od 2026-11-04 (PR #70), migracje
   `pracownik` i nie wiążą; listę daje ostatnie zapytanie w `0052`. Karta
   pracownika podpisuje je „Twój wpis — NIE wiąże”. Lekarstwo: wpisać dzień
   jeszcze raz (albo skasować wiersz).
+- ⚠️ **0.84.0 (`0053`) — puść migrację RAZEM z deployem.** Stary front na
+  bazie z `0053`: wysłana dyspozycja pracownika przestaje blokować do
+  zatwierdzenia, a karty do zatwierdzenia nie ma. Nowy front na bazie bez
+  `0053` zachowuje się jak 0.83.0 (brak kolumny = zatwierdzone).
+
+### Zatwierdzanie dyspozycji — od 0.84.0 (migracja `0053`)
+
+Decyzja właściciela (06.11.2026), zmienia zasadę z 22.10: **wysłane „Nie mogę”
+i „Mogę w godzinach” pracownika czekają na kierownika**, zanim zablokują
+Grafik. „Mogę cały dzień” zatwierdzenia nie potrzebuje.
+- **Jedna sprawa w „Do decyzji” na (osoba, miesiąc)** —
+  `dyspozycjeDoZatwierdzenia` liczy ją dla TRZECH miejsc: grupa „dyspozycja”
+  w `ZatwierdzanieZmian`, `shellBadges`, `sprawy` w PulpitHome. Dotknięcie dnia
+  = nie przyjmuję; „Zatwierdź” zapisuje resztę (`zatwierdzDyspozycje`:
+  zatwierdzenie = PATCH `zatwierdzono_at`, odrzucenie = DELETE wiersza → dzień
+  wolny do planowania) i wysyła JEDNĄ wiadomość („Kierownik zatwierdził
+  Twoją dyspozycję…” / „Kierownik nie przyjął…”) — rozpoznają ją
+  `opisWiadomosci` i `api/_lib/wiadomosci.js`.
+- **Do decyzji Grafik podpowiada, nie blokuje** — niebieska kratka „czeka: nie
+  może” (`czekaNaZatwierdzenie`, `data-dyspozycja-czeka`).
+- ⚠️ **Zatwierdzenie żyje na WIERSZU dnia, nie na miesiącu**: zapis pracownika
+  (także tabletu) zawsze czyści `zatwierdzono_at` w triggerze, więc zmieniony
+  dzień wraca do kierownika sam, bez reszty miesiąca.
+- ⚠️ **Kierownik nie zmieni wpisu pracownika, który jest chroniony**
+  (`wpisChroniony` = lustro triggera): zatwierdzony, prośba o zwolnienie, albo
+  „Mogę cały dzień” z wysłanego miesiąca. Niezatwierdzony (szkic, czekający)
+  — zastępuje go z Grafiku i z karty.
+- ⚠️ **Baza bez `0053` = brak kolumny w wierszu** → `wpisZatwierdzony` daje
+  `true` i wszystko działa jak w 0.83.0 (ta sama sztuczka co `bazaZnaPoziomy`).
+  Harnessy ze starymi fikstrami (bez pola) testują dawne zachowanie.
+- ⚠️ **Stara niedostępność (`absences`) w przyszłości już nie istnieje** —
+  `0053` skraca/usuwa jej przyszłe dni (każdy ma kopię w dyspozycji z `0050`).
+  Do tego w kratce Grafiku wygląda jak „nie może” z dyspozycji i ma „+ dodaj”
+  (→ „Zapytaj”). Do 0.83.0 rysowała się szarym blokiem i blokowała dzień nawet
+  po „Może cały dzień” w karcie.
+- **Raport kierownika mailem NIE liczy tych spraw** (jak próśb o zwolnienie).
 
 ### Jak to działa
 
@@ -253,8 +289,9 @@ Dyspozycja, blok `WOLNE`); sprawdzian `harness-dyspozycja.html`.
   rozstrzygnięcia (trigger). Konflikt z wersją roboczą: `konfliktySzkicu`
   (znacznik w kratce). Dyspozycja w karcie: `manager/DyspozycjaKarta.tsx`.
   Szczegóły: docs/DYSPOZYCJA.md, „D4 — konflikty z grafikiem”.
-- ⚠️ **Wiąże tylko wysłany miesiąc albo wpis kierownika** (`wiazeDyspozycja`).
-  Szkic leży w bazie (zapis od razu), ale Grafik go nie widzi.
+- ⚠️ **Wiąże wpis kierownika albo wysłany I zatwierdzony wpis pracownika**
+  (`wiazeDyspozycja`; „Mogę cały dzień” i prośba o zwolnienie — sam wysłany
+  miesiąc). Szkic leży w bazie (zapis od razu), ale Grafik go nie widzi.
 - ⚠️ **Blokada idzie przez TE SAME miejsca co urlop**: `przeszkodaDnia`
   (GrafikTydzien), `buildCopyFromPreviousWeek` i `przepiszZmiany` (parametr
   `przeszkodaDodatkowa` — `grafik.ts` nie może importować `dyspozycja.ts`, bo

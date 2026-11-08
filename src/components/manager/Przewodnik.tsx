@@ -27,6 +27,15 @@ import { pageTitleCls, sectionCardCls, sectionHeaderCls } from "./designTokens";
 
 const CHANGELOG = [
   {
+    version: "0.84.0",
+    date: "2026-11-06",
+    items: [
+      "Dyspozycja pracownika czeka na zatwierdzenie w „Do decyzji” — jedna karta na osobę i miesiąc, dni można nie przyjąć.",
+      "Do zatwierdzenia Grafik pokazuje „czeka: nie może”, ale nie blokuje.",
+      "Stara niedostępność wygląda w Grafiku tak samo jak „Nie może” i da się ją zdjąć w karcie pracownika.",
+    ],
+  },
+  {
     version: "0.83.0",
     date: "2026-11-04",
     items: [

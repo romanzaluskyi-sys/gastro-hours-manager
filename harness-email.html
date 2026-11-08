@@ -511,6 +511,8 @@ const USERS = [
       ["Zwolnienie: zdjęta", { type: "dyspozycja", message: "Kierownik zdjął Twoją zmianę z grafiku: pt 13.11, 16:00–22:00, Kelner · Ceglana. Decyzja: Roman." }],
       ["Zwolnienie: zostaje", { type: "dyspozycja", message: "Kierownik zostawił Twoją zmianę w grafiku: pt 13.11, 16:00–22:00, Kelner · Ceglana. Decyzja: Roman." }],
       ["Dyspozycja z karty", { type: "dyspozycja", message: "Kierownik wpisał Ci w dyspozycji „Mogę 8–14”: 12.11. Wpisał(a): Roman." }],
+      ["Dyspozycja zatwierdzona", { type: "dyspozycja", message: "Kierownik zatwierdził Twoją dyspozycję na listopad 2026. Decyzja: Roman." }],
+      ["Dyspozycja nie w pełni", { type: "dyspozycja", message: "Kierownik nie przyjął części Twojej dyspozycji na listopad 2026: 13.11 — te dni są wolne do planowania. Pozostałe dni zatwierdzone. Decyzja: Roman." }],
       ["Nieznany typ", { type: "cos_nowego", message: "Zwykła wiadomość." }],
     ];
     const GRAFIK_ALI = [
@@ -521,6 +523,10 @@ const USERS = [
     for (const [nazwa, n] of PRZYKLADY) {
       const m = W.mailPracownika({ n, user: ala, grafik: GRAFIK_ALI, dzis: "2026-09-30" });
       galeria(`Pracownik — ${nazwa}`, m.html);
+      if (nazwa === "Dyspozycja zatwierdzona")
+        sprawdz("dyspozycja zatwierdzona: własny tytuł (nie „Kierownik pyta”)", m.temat === "Dyspozycja zatwierdzona", m.temat);
+      if (nazwa === "Dyspozycja nie w pełni")
+        sprawdz("dyspozycja nie przyjęta: własny tytuł (nie „Kierownik pyta”)", m.temat === "Dyspozycja nie w pełni przyjęta", m.temat);
       if (nazwa === "Grafik") {
         sprawdz("grafik: tytuł z miesiącem najbliższej zmiany", m.temat === "Grafik na październik jest gotowy", m.temat);
         sprawdz("grafik: „Masz 2 zmiany w październiku”", m.html.includes("<b>2 zmiany</b> w październiku"));

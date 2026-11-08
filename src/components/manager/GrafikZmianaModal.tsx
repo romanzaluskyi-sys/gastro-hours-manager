@@ -1014,7 +1014,7 @@ export default function GrafikZmianaModal({
                       <span>
                         <b>Teraz w dyspozycji:</b>{" "}
                         {obecne
-                          .map(({ d, w }) => `${dzienKrotki(d)} — ${opisDyspozycji(w)}${w.autor === "pracownik" ? (plan.nadpisze.includes(d) ? " (szkic pracownika)" : " (wysłane przez pracownika)") : " (kierownik)"}`)
+                          .map(({ d, w }) => `${dzienKrotki(d)} — ${opisDyspozycji(w)}${w.autor === "pracownik" ? (plan.nadpisze.includes(d) ? " (pracownik, niezatwierdzone)" : " (pracownik, zatwierdzone)") : " (kierownik)"}`)
                           .join(" · ")}
                       </span>
                     )}
@@ -1024,10 +1024,10 @@ export default function GrafikZmianaModal({
                       <span data-wolne-plan>
                         Zapisze się: <b>{plan.doZapisu.length + plan.nadpisze.length}</b> z {plan.dni.length}{" "}
                         {plan.dni.length === 1 ? "dnia" : "dni"}
-                        {plan.nadpisze.length > 0 && ` (w tym ${plan.nadpisze.length} zamiast niewysłanego szkicu pracownika — dostanie wiadomość)`}
+                        {plan.nadpisze.length > 0 && ` (w tym ${plan.nadpisze.length} zamiast niezatwierdzonego wpisu pracownika — dostanie wiadomość)`}
                         {plan.juz.length > 0 && ` · bez zmian (już tak jest): ${plan.juz.length}`}
                         {plan.pominiete.length > 0 &&
-                          ` · pominięte (pracownik wysłał swoją dyspozycję, zmienia ją tylko on): ${plan.pominiete.map(dzienKrotki).join(", ")}`}
+                          ` · pominięte (zatwierdzona dyspozycja pracownika, zmienia ją tylko on): ${plan.pominiete.map(dzienKrotki).join(", ")}`}
                       </span>
                     )}
                   </div>

@@ -11,9 +11,11 @@
 //
 // ⚠️ Kiedy dyspozycja WIĄŻE kierownika (`wiazeDyspozycja`):
 //   * wpis kierownika (w imieniu pracownika) — zawsze;
-//   * wpis pracownika — gdy jego miesiąc jest WYSŁANY. Przed wysłaniem to
-//     szkic: zapisany w bazie (nic nie ginie, gdy tablet zgubi wi-fi), ale
-//     Grafik go nie bierze pod uwagę.
+//   * wpis pracownika — gdy jego miesiąc jest WYSŁANY i (od 0.84.0, migracja
+//     0053) kierownik go ZATWIERDZIŁ. Przed wysłaniem to szkic, po wysłaniu
+//     — sprawa w „Do decyzji” (`dyspozycjeDoZatwierdzenia`). Jedno i drugie
+//     leży w bazie, ale Grafik tylko je podpowiada, nie blokuje.
+//     „Mogę cały dzień” zatwierdzenia nie potrzebuje — niczego nie blokuje.
 // Wiążące „Nie mogę” i godziny spoza „Mogę w godzinach” blokują wpisanie
 // zmiany (Grafik, giełda, przepisanie na następcę) — tak samo jak urlop.
 //
@@ -58,8 +60,38 @@ export const wpisMiesiaca = (miesiace, user, miesiac) =>
 
 export const miesiacWyslany = (miesiace, user, miesiac) => !!wpisMiesiaca(miesiace, user, miesiac)?.wyslano_at;
 
+// Baza bez 0053 nie ma kolumny `zatwierdzono_at` — wtedy wiersz zachowuje się
+// jak przed 0.84.0 (wysłany = wiąże). Ta sama sztuczka co `bazaZnaPoziomy`.
+const znaZatwierdzanie = (row) => !!row && "zatwierdzono_at" in row;
+export const wpisZatwierdzony = (row) => !znaZatwierdzanie(row) || !!row.zatwierdzono_at;
+
 export const wiazeDyspozycja = (row, miesiace) =>
-  !!row && (row.autor === "kierownik" || miesiacWyslany(miesiace, { id: row.user_id }, miesiacDnia(row.date)));
+  !!row &&
+  (row.autor === "kierownik" ||
+    (miesiacWyslany(miesiace, { id: row.user_id }, miesiacDnia(row.date)) &&
+      (row.stan === "moge" || !!row.zwolnienie_z || wpisZatwierdzony(row))));
+
+// Wysłany wpis pracownika czekający na decyzję kierownika (0.84.0).
+// Prośba o zwolnienie ma własną kolejkę, „Mogę cały dzień” nie czeka.
+export const czekaNaZatwierdzenie = (row, miesiace) =>
+  !!row &&
+  row.autor === "pracownik" &&
+  row.stan !== "moge" &&
+  !row.zwolnienie_z &&
+  znaZatwierdzanie(row) &&
+  !row.zatwierdzono_at &&
+  miesiacWyslany(miesiace, { id: row.user_id }, miesiacDnia(row.date));
+
+// Wpis pracownika, którego kierownik NIE zmieni (lustro triggera
+// `dyspozycja_autor` z 0053): zatwierdzony, prośba o zwolnienie albo „Mogę
+// cały dzień” z wysłanego miesiąca. Na bazie bez 0053 — każdy wysłany (0052).
+export const wpisChroniony = (w, miesiace) => {
+  if (!w || w.autor !== "pracownik") return false;
+  if (w.zwolnienie_z) return true;
+  const wyslany = miesiacWyslany(miesiace, { id: w.user_id }, miesiacDnia(w.date));
+  if (!znaZatwierdzanie(w)) return wyslany;
+  return !!w.zatwierdzono_at || (w.stan === "moge" && wyslany);
+};
 
 // Przedziały „Mogę w godzinach” w minutach doby. Koniec 00:00 = północ (1440).
 export const przedzialyDnia = (row) =>
@@ -288,12 +320,12 @@ export const wyslijMiesiac = async ({ user, miesiac, pozostale, dzis, dyspozycja
 //
 // Co się dzieje z dniem, na którym coś już jest (`planWpisuZaPracownika`):
 //   * pusto albo wpis kierownika → zapis (`doZapisu`);
-//   * SZKIC pracownika (miesiąc niewysłany) → zapis w miejsce szkicu
-//     (`nadpisze`). Szkic nie wiąże, więc do 0.82.0 pominięcie go znaczyło, że
-//     „Nie może” kierownika nie zmieniało w Grafiku NIC, a ekran mówił
-//     „Nic do zapisania”. Wymaga migracji 0052 (trigger);
-//   * WYSŁANA dyspozycja pracownika albo prośba o zwolnienie → bez zmian
-//     (`pominiete`) — zmienia ją tylko on, kierownik może „Zapytać”;
+//   * NIEZATWIERDZONY wpis pracownika (szkic albo czekający w „Do decyzji”)
+//     → zapis w jego miejsce (`nadpisze`). Taki wpis nie wiąże, więc do 0.82.0
+//     pominięcie go znaczyło, że „Nie może” kierownika nie zmieniało w
+//     Grafiku NIC, a ekran mówił „Nic do zapisania”. Migracje 0052/0053;
+//   * chroniony wpis pracownika (`wpisChroniony`: zatwierdzony, prośba o
+//     zwolnienie) → bez zmian (`pominiete`) — zmienia go tylko on;
 //   * dzień, w którym jest już dokładnie to samo i to wiąże → `juz`.
 const tenSamWpis = (w, nowy) =>
   !!w &&
@@ -315,8 +347,7 @@ export const planWpisuZaPracownika = ({ user, od, doDnia, dzis, stan, godziny = 
       (tenSamWpis(w, nowy) ? plan.juz : plan.doZapisu).push(d);
       return;
     }
-    const chroniony = miesiacWyslany(miesiace, user, miesiacDnia(d)) || !!w.zwolnienie_z;
-    if (!chroniony) plan.nadpisze.push(d);
+    if (!wpisChroniony(w, miesiace)) plan.nadpisze.push(d);
     else if (tenSamWpis(w, nowy)) plan.juz.push(d);
     else plan.pominiete.push(d);
   });
@@ -395,10 +426,10 @@ const ileDni = (n) => `${n} ${n === 1 ? "dzień" : "dni"}`;
 export const opisWynikuWpisu = (w, etykieta) => {
   const czesci = [];
   if (w.zapisane.length) czesci.push(`Zapisano „${etykieta}” na ${ileDni(w.zapisane.length)}.`);
-  if (w.nadpisane.length) czesci.push(`W tym ${ileDni(w.nadpisane.length)} w miejsce niewysłanego szkicu pracownika.`);
+  if (w.nadpisane.length) czesci.push(`W tym ${ileDni(w.nadpisane.length)} w miejsce niezatwierdzonego wpisu pracownika.`);
   if (w.juz.length) czesci.push(`${w.juz.length === 1 ? "Jeden dzień już był" : `${ileDni(w.juz.length)} już było`} tak wpisane.`);
   if (w.pominiete.length)
-    czesci.push(`Pominięto ${ileDni(w.pominiete.length)} — pracownik wysłał tam swoją dyspozycję (zmienia ją tylko on; w Grafiku możesz zapytać o zmianę).`);
+    czesci.push(`Pominięto ${ileDni(w.pominiete.length)} — tam stoi zatwierdzona dyspozycja pracownika (zmienia ją tylko on; w Grafiku możesz zapytać o zmianę).`);
   if (w.bledy.length) czesci.push(`Nie zapisano ${ileDni(w.bledy.length)}: ${w.bledy[0].blad}`);
   if (w.niewiazace.length)
     czesci.push(`⚠ Baza oznaczyła ${ileDni(w.niewiazace.length)} jako wpis pracownika i Grafik go nie uwzględni — potrzebna migracja 0052.`);
@@ -572,15 +603,12 @@ export const tekstDyspozycjiOdKierownika = (kto, dateStr, wpis) => {
     : `Kierownik usunął wpis z Twojej dyspozycji: ${f}.${podpis}`;
 };
 
-export const moznaZmienicZaPracownika = (wpis, miesiace = []) =>
-  !wpis ||
-  wpis.autor !== "pracownik" ||
-  (!wpis.zwolnienie_z && !miesiacWyslany(miesiace, { id: wpis.user_id }, miesiacDnia(wpis.date)));
+export const moznaZmienicZaPracownika = (wpis, miesiace = []) => !wpisChroniony(wpis, miesiace);
 
 export const ustawDzienZaPracownika = async ({ user, dateStr, stan, godziny = {}, notatka, dyspozycja, miesiace = [], kierownik }) => {
   const istniejacy = dyspozycjaNa(dyspozycja, user, dateStr);
   if (!moznaZmienicZaPracownika(istniejacy, miesiace)) {
-    throw new Error("Ten dzień pracownik wpisał i wysłał — zmienia go tylko on. W Grafiku możesz zapytać o jedną zmianę („Zapytaj”).");
+    throw new Error("Ten dzień to zatwierdzona dyspozycja pracownika — zmienia go tylko on. W Grafiku możesz zapytać o jedną zmianę („Zapytaj”).");
   }
   const lista = await zapiszDni({ user, dni: [dateStr], stan, godziny, notatka, dyspozycja });
   const nowy = dyspozycjaNa(lista, user, dateStr);
@@ -590,4 +618,111 @@ export const ustawDzienZaPracownika = async ({ user, dateStr, stan, godziny = {}
     // wpis zapisany i widoczny w Dyspozycji — wiadomość best-effort
   }
   return lista;
+};
+
+
+// ── Zatwierdzanie dyspozycji (0.84.0, migracja 0053) ────────────────────────
+// Decyzja właściciela (06.11.2026): wysłane „Nie mogę” / „Mogę w godzinach”
+// pracownika czeka na kierownika. Jedna sprawa w „Do decyzji” na (osoba,
+// miesiąc) — „Zatwierdź wszystko”, pojedyncze dni można odrzucić. Kolejka
+// LICZONA z wierszy (jak prośby o zwolnienie), więc liczą ją te same trzy
+// miejsca: ZatwierdzanieZmian (grupa „dyspozycja”), shellBadges, PulpitHome.
+// Odrzucony dzień = usunięty wiersz (dzień wolny do planowania) + wiadomość.
+
+const MIESIACE_PL = [
+  "styczeń", "luty", "marzec", "kwiecień", "maj", "czerwiec",
+  "lipiec", "sierpień", "wrzesień", "październik", "listopad", "grudzień",
+];
+export const nazwaMiesiacaPl = (miesiac) => `${MIESIACE_PL[Number(String(miesiac).slice(5, 7)) - 1]} ${String(miesiac).slice(0, 4)}`;
+
+// Lokale osoby: macierzysty i dopisane w karcie. Osoba bez żadnego lokalu
+// (albo spoza listy `users`) zostaje widoczna — RLS i tak wydaje tylko
+// „moich ludzi”, a sprawa, której nie widzi nikt, wisi w nieskończoność.
+const lokaleOsoby = (u) =>
+  [u?.default_lokal, ...(Array.isArray(u?.allowed_lokale) ? u.allowed_lokale : String(u?.allowed_lokale || "").split(","))]
+    .map((x) => String(x || "").trim())
+    .filter(Boolean);
+
+export const dyspozycjeDoZatwierdzenia = ({ dyspozycja, miesiace, dzis, users = null, lokalOk = null }) => {
+  const grupy = {};
+  const widac = (w) => {
+    if (!lokalOk || !users) return true;
+    const u = users.find((x) => String(x.id) === String(w.user_id));
+    const l = lokaleOsoby(u);
+    return !l.length || l.some((x) => lokalOk(x));
+  };
+  (dyspozycja || [])
+    .filter((w) => (!dzis || w.date >= dzis) && czekaNaZatwierdzenie(w, miesiace) && widac(w))
+    .forEach((w) => {
+      const miesiac = miesiacDnia(w.date);
+      const klucz = `${w.user_id}|${miesiac}`;
+      if (!grupy[klucz]) {
+        const m = wpisMiesiaca(miesiace, { id: w.user_id }, miesiac);
+        grupy[klucz] = {
+          klucz: `dysp:${klucz}`,
+          user_id: w.user_id,
+          user_name: w.user_name,
+          miesiac,
+          wyslano_at: m?.wyslano_at || null,
+          dni: [],
+        };
+      }
+      grupy[klucz].dni.push(w);
+    });
+  return Object.values(grupy)
+    .map((g) => ({ ...g, dni: g.dni.sort((a, b) => (a.date < b.date ? -1 : 1)) }))
+    .sort((a, b) => ((a.wyslano_at || "") < (b.wyslano_at || "") ? -1 : (a.wyslano_at || "") > (b.wyslano_at || "") ? 1 : a.dni[0].date < b.dni[0].date ? -1 : 1));
+};
+
+const ddmm = (d) => `${d.slice(8, 10)}.${d.slice(5, 7)}`;
+
+// Zdania rozpoznają opisWiadomosci (employeeSessionShared.tsx) i
+// api/_lib/wiadomosci.js — zmieniając je tu, popraw tamte dwa miejsca.
+export const tekstZatwierdzeniaDyspozycji = ({ miesiac, odrzucone = [], zatwierdzone = 0, powod, kto }) => {
+  const m = nazwaMiesiacaPl(miesiac);
+  const podpis = kto ? ` Decyzja: ${kto}.` : "";
+  const pow = powod && String(powod).trim() ? ` Powód: ${String(powod).trim()}.` : "";
+  if (!odrzucone.length) return `Kierownik zatwierdził Twoją dyspozycję na ${m}.${podpis}`;
+  const dni = odrzucone.map(ddmm).join(", ");
+  return zatwierdzone
+    ? `Kierownik nie przyjął części Twojej dyspozycji na ${m}: ${dni} — te dni są wolne do planowania.${pow} Pozostałe dni zatwierdzone.${podpis}`
+    : `Kierownik nie przyjął Twojej dyspozycji na ${m}: ${dni} — te dni są wolne do planowania.${pow}${podpis}`;
+};
+
+// Decyzja w „Do decyzji”. `odrzucone` = id wierszy do odrzucenia (reszta
+// grupy jest zatwierdzana). Dni idą po kolei, błąd jednego nie gubi reszty.
+// Zwraca { dyspozycja, zatwierdzone: [dni], odrzucone: [dni], bledy }.
+export const zatwierdzDyspozycje = async ({ grupa, odrzucone = [], powod, kierownik, dyspozycja }) => {
+  let lista = [...(dyspozycja || [])];
+  const ok = [];
+  const nie = [];
+  const bledy = [];
+  const teraz = new Date().toISOString();
+  for (const w of grupa.dni) {
+    try {
+      if (odrzucone.includes(w.id)) {
+        await api.delete("dyspozycja", w.id);
+        lista = lista.filter((x) => x.id !== w.id);
+        nie.push(w.date);
+      } else {
+        const zapisany = await api.patch("dyspozycja", w.id, { zatwierdzono_at: teraz, zatwierdzil: kierownik || null });
+        lista = lista.map((x) => (x.id === w.id ? { ...x, zatwierdzono_at: teraz, zatwierdzil: kierownik || null, ...(zapisany || {}) } : x));
+        ok.push(w.date);
+      }
+    } catch (e) {
+      bledy.push({ dzien: w.date, blad: (e && e.message) || "nieznany błąd" });
+    }
+  }
+  if (ok.length || nie.length) {
+    try {
+      await createEmployeeNotification(
+        grupa.user_name,
+        tekstZatwierdzeniaDyspozycji({ miesiac: grupa.miesiac, odrzucone: nie, zatwierdzone: ok.length, powod, kto: kierownik }),
+        "dyspozycja"
+      );
+    } catch (e) {
+      // decyzja zapisana — wiadomość best-effort
+    }
+  }
+  return { dyspozycja: lista, zatwierdzone: ok, odrzucone: nie, bledy };
 };

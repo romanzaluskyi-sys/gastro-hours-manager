@@ -40,6 +40,7 @@ import {
   zwolnieniaOsoby,
   noweKonfliktySzkicu,
   powiadomOKonfliktachSzkicu,
+  czekaNaZatwierdzenie,
 } from "../utils/dyspozycja";
 import { ostatnieOdpowiedzi, prosbyDoOdpowiedzi } from "../utils/prosby";
 
@@ -114,6 +115,10 @@ export default function DyspozycjaEkran({
   const miesiacWidoku = widok === "miesiac" ? miesiac : miesiacDnia(addDaysYMD(tydzien, 3));
   const wpisM = wpisMiesiaca(miesiace, employee, miesiacWidoku);
   const wyslany = !!wpisM?.wyslano_at;
+  // Dni wysłanego miesiąca czekające na zatwierdzenie kierownika (0.84.0).
+  const czekaNaKierownika = dniMiesiaca(miesiacWidoku).filter((d) =>
+    czekaNaZatwierdzenie(dyspozycjaNa(dyspozycja, employee, d), miesiace)
+  );
 
   const stanDnia = (d) => {
     const wpis = dyspozycjaNa(dyspozycja, employee, d);
@@ -310,7 +315,7 @@ export default function DyspozycjaEkran({
       setMiesiace(wynik.miesiace);
       dajZnacKierownikowi({ dyspozycja, miesiace }, wynik);
       setWysylka(null);
-      showMsg(`Dyspozycja na ${nazwaMiesiaca(miesiacWidoku)} wysłana.`);
+      showMsg(`Dyspozycja na ${nazwaMiesiaca(miesiacWidoku)} wysłana — „Nie mogę” i godziny czekają na zatwierdzenie kierownika.`);
     } catch (err) {
       showMsg(`Nie udało się wysłać: ${err.message || "nieznany błąd"}`, "error");
     }
@@ -353,6 +358,9 @@ export default function DyspozycjaEkran({
           <span className="absolute top-1 right-1 text-[9px] font-extrabold" title="wpisał kierownik">
             K
           </span>
+        )}
+        {czekaNaKierownika.includes(d) && (
+          <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#1D5FA8]" title="czeka na zatwierdzenie kierownika" data-czeka-na-zatwierdzenie />
         )}
         {czekajace.some((p) => p.date === d) && (
           <span
@@ -406,6 +414,9 @@ export default function DyspozycjaEkran({
             <span className="flex-1 text-[15px] font-semibold">
               {s.urlop ? (s.urlop.status === "approved" ? "Urlop · zatwierdzony" : "Urlop · czeka") : s.stara ? "Nie mogę" : opisDyspozycji(s.wpis)}
               {(s.wpis?.autor === "kierownik" || s.stara) && <small className="block text-[12px] font-medium">wpisał kierownik</small>}
+              {czekaNaZatwierdzenie(s.wpis, miesiace) && (
+                <small className="block text-[12px] font-medium text-[#1D5FA8]">czeka na zatwierdzenie kierownika</small>
+              )}
             </span>
             {s.zmiana && (
               <span className="inline-flex items-center gap-1 text-[13px] font-bold">
@@ -788,7 +799,9 @@ export default function DyspozycjaEkran({
           </span>
           <span className="text-[14px] text-[#6E6E66]" data-stan-wysylki>
             {wyslany
-              ? `Wysłano ${dataKrotka(wpisM.wyslano_at)} · zmiany zapisują się od razu`
+              ? czekaNaKierownika.length
+                ? `Wysłano ${dataKrotka(wpisM.wyslano_at)} · ${czekaNaKierownika.length} ${czekaNaKierownika.length === 1 ? "dzień czeka" : "dni czeka"} na zatwierdzenie kierownika`
+                : `Wysłano ${dataKrotka(wpisM.wyslano_at)} · zatwierdzona. Zmiana dnia wraca do kierownika do zatwierdzenia`
               : "Jeszcze nie wysłano · zapisujemy na bieżąco, kierownik zobaczy po wysłaniu"}
           </span>
         </div>

@@ -71,6 +71,7 @@ import {
   prosbyOZwolnienie,
   przeszkodaDyspozycji,
   wiazeDyspozycja,
+  czekaNaZatwierdzenie,
   wpiszDyspozycjeZaPracownika,
   opisWynikuWpisu,
   opisDyspozycji,
@@ -630,6 +631,8 @@ function LokalSection({
     // Prośby „Zapytaj” tej osoby w tym lokalu i dniu — nie liczą się do obsady.
     const prosbyOsoby = prosbyDnia(prosbyZapytaj, lokal, dateStr).filter((p) => String(p.user_id) === String(user.id));
     const dysp = dyspWpis && dyspWpis.stan !== "moge" && wiazeDyspozycja(dyspWpis, dyspozycjaMiesiace) ? dyspWpis : null;
+    // Wysłana, ale jeszcze NIEZATWIERDZONA (0.84.0): podpowiedź, nie blokada.
+    const dyspCzeka = !dysp && dyspWpis && czekaNaZatwierdzenie(dyspWpis, dyspozycjaMiesiace) ? dyspWpis : null;
     // Płatne wydarzenia tej osoby (0.75.0, makieta ScheduleEvents): kreskowany
     // blok w jej kratce — czas pracy, ale NIE zmiana (nie liczy się do obsady).
     const wydOsoby = wydarzeniaNaDzien(wydarzenia, null, dateStr).filter(
@@ -640,10 +643,15 @@ function LokalSection({
     return (
       <div className="flex flex-col gap-[5px] min-h-[56px]">
         {abs && !cokolwiek ? (
+          // Stara niedostępność (absences, sprzed 0.81.0) to TO SAMO „nie
+          // może” co dyspozycja — ten sam wzór, inaczej Grafik pokazywał jedno
+          // pojęcie na dwa sposoby (zgłoszenie 06.11.2026).
           <div
             className={`rounded-md px-1.5 py-1.5 text-[12px] font-bold text-center ${
-              abs.type === "urlop" ? "bg-[#E3EEFB] text-[#1D5FA8]" : "bg-[#ECEBE6] text-[#6E6E66]"
+              abs.type === "urlop" ? "bg-[#E3EEFB] text-[#1D5FA8]" : "text-[#6E6E66] border-[1.5px] border-dashed border-[#B7B6AE]"
             }`}
+            style={abs.type === "urlop" ? undefined : { background: "repeating-linear-gradient(135deg,rgba(23,23,20,.06) 0 5px,transparent 5px 10px)" }}
+            title={abs.type === "urlop" ? "Urlop" : `Nie może${abs.note ? ` · ${abs.note}` : ""}`}
             data-nieobecnosc
           >
             {abs.type === "urlop" ? "urlop" : "nie może"}
@@ -686,6 +694,15 @@ function LokalSection({
             data-dyspozycja-w-kratce={dysp.stan}
           >
             {krotkoDyspozycji(dysp)}
+          </div>
+        ) : null}
+        {dyspCzeka && !cokolwiek ? (
+          <div
+            className="rounded-md px-1.5 py-1 text-[11px] leading-[14px] font-bold text-center text-[#1D5FA8] border-[1.5px] border-dashed border-[#9DBBE0] bg-[#E3EEFB]/40"
+            title={`Dyspozycja czeka na Twoje zatwierdzenie („Do decyzji”): ${dyspCzeka.stan === "nie" ? "nie może" : `może tylko ${krotkoDyspozycji(dyspCzeka).replace(/^tylko /, "")}`}${dyspCzeka.notatka ? ` · ${dyspCzeka.notatka}` : ""}. Do decyzji nie blokuje.`}
+            data-dyspozycja-czeka={dyspCzeka.stan}
+          >
+            czeka: {dyspCzeka.stan === "nie" ? "nie może" : krotkoDyspozycji(dyspCzeka)}
           </div>
         ) : null}
         {own.map((s) => chipZmiany(s, user, dateStr))}
@@ -755,9 +772,10 @@ function LokalSection({
             </W>
           );
         })}
-        {/* Komórki z urlopem/niedostępnością świadomie bez "+ dodaj" — tam
-            nie wolno nikogo obsadzić. */}
-        {edycja && !(abs && !cokolwiek) && (
+        {/* Komórki z urlopem świadomie bez "+ dodaj" — tam nie wolno nikogo
+            obsadzić. Stara niedostępność to „nie może” jak w dyspozycji (0.84.0):
+            „+ dodaj” prowadzi do panelu z „Zapytaj”. */}
+        {edycja && !(abs && !cokolwiek && abs.type === "urlop") && (
           <button
             type="button"
             onClick={() => onCellClick(user, dateStr, null)}
